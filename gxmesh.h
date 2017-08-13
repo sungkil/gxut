@@ -15,27 +15,30 @@
 //*******************************************************************
 
 #pragma once
-#include "gxmath.h"
+#ifndef __GX_MESH__
+#define __GX_MESH__
 
-//*******************************************************************
+#include "gxmath.h" // the only necessary header for gxmesh
+
+//***********************************************
+// forward declarations
+namespace gl { struct Buffer; struct VertexArray; struct Texture;}											// OpenGL forward decl.
+struct ID3D10Buffer; struct ID3D11Buffer; struct ID3D10ShaderResourceView; struct ID3D11ShaderResourceView; // D3DX forward decl.
+struct geometry; struct object; struct mesh;																// mesh forward decl.
+
+//***********************************************
 // General sampler interface (e.g., lens sampler, ray sampler, etc.): vec4(x,y,z,weight) in unit circle/sphere
 struct ISampler
 {
-	std::array<vec4,1024>	data;
-	uint					crc;	// crc32c coding, which can easily detect the change of samples using data callback
-	uint					n=1;	// number of samples
+	std::array<vec4,65536>	data;
+	uint					n=0;	// number of samples
+	uint					crc;	// crc32c to detect the change of samples
 	
-	inline bool			empty() const { return data.empty(); }
+	inline bool			empty() const { return n==0; }
 	inline uint			size() const { return n; }
-	inline uint			max_size() const { return uint(data.max_size()); }
-	inline vec4&		operator[]( int i ){ return data[i]; }
-	inline const vec4&	operator[]( int i ) const { return data[i]; }
-	inline vec4&		operator[]( uint i ){ return data[i]; }
-	inline const vec4&	operator[]( uint i ) const { return data[i]; }
-#ifdef _M_X64
+	constexpr uint		max_size() const { return uint(data.max_size()); }
 	inline vec4&		operator[]( size_t i ){ return data[i]; }
 	inline const vec4&	operator[]( size_t i ) const { return data[i]; }
-#endif
 	inline vec4*		ptr( size_t i=0u ){ return empty()?nullptr:&data[i]; }
 	inline const vec4*	ptr( size_t i=0u ) const { return empty()?nullptr:&data[i]; }
 	inline operator const vec4* () const { return empty()?nullptr:&data[0]; }
@@ -43,66 +46,69 @@ struct ISampler
 	inline operator const float* () const { return empty()?nullptr:(float*)&data[0]; }
 	inline operator float* () { return empty()?nullptr:(float*)&data[0]; }
 
-	inline uint		max_samples() const { return uint(data.max_size()); }
+	constexpr uint	max_samples() const { return uint(data.max_size()); }
 	inline float	sample_dist() const { float s=0.0f; const vec4* p=ptr(); for(uint k=0;k<n;k++){float m=FLT_MAX;for(uint j=0;j<n;j++) if(k!=j) m=min(m,(p[k].xyz-p[j].xyz).length2() );s+=sqrtf(m);} return s/float(max(1u,n)); } // mean distance of pairwise samples
 	inline void		normalize(){ if(empty())return;dvec3 m=dvec3(0,0,0);vec4* p=ptr();for(uint k=0;k<n;k++)m+=dvec3(p[k].x,p[k].y,p[k].z);m/=double(n);vec3 f=vec3(float(-m.x),float(-m.y),float(-m.z));for(uint k=0;k<n;k++)p[k].xyz+=f; } // make the center position of samples to the origin
 };
 
-//*******************************************************************
-struct Light
+//***********************************************
+struct light_t
 {
+	enum model { NONE=0, BLINN_PHONG=1, PHONG=2, COOK_TORRANCE=3, };
 	vec4	position;
 	vec4	ambient;
 	vec4	diffuse;
-	vec4	specular;
-	float	powerScale;		// power of material shininess
-};
-
-//*******************************************************************
-// ray
-struct ray
-{
-	union
-	{
-		struct { vec3 pos, dir; vec4 tex; };						// lens system rays (with texcoord)
-		struct { vec3 o, d; float tnear, tfar, time; int depth; };	// pbrt-like rays (tnear/tfar = parameters of the nearest/farthest intersections)
-	};
+	vec4	specular; // specular.a = user-defined scale of beta (specular power) in Blinn-Phong shading
 	
-	ray():tnear(0.0f),tfar(FLT_MAX),time(0.0f),depth(0){}
-	ray( const vec3& _pos, const vec3& _dir, float _tnear=0.0f, float _tfar=FLT_MAX ):ray(){ pos=_pos; dir=_dir; tnear=_tnear; tfar=_tfar; }
+	// light transform
+	vec4	ecpos( const mat4& view_matrix ){ return position.a==0?vec4(mat3(view_matrix)*position.xyz,0.0f):view_matrix*position; }
 };
 
-//*******************************************************************
-// forward declaration
-struct geometry;
-struct object;
-struct mesh;
+//***********************************************
+// ray
+template <class T=float> struct tray // template used to avoid non-trivial constructors in unions (can be avoided with templates)
+{
+	union{struct{tvec3<T> pos,dir;tvec4<T> tex;};struct{tvec3<T> o,d;float t,tfar,time;int depth;};}; // lens system rays (with texcoord) or pbrt-like rays (tnear/tfar = parameters of the nearest/farthest intersections)
+	tray():t(0.0f),tfar(FLT_MAX),time(0.0f),depth(0){}
+	tray( const tvec3<T>& _pos, const tvec3<T>& _dir, float _tnear=0.0f, float _tfar=FLT_MAX ):tray(){ pos=_pos; dir=_dir; t=_tnear; tfar=_tfar; }
+};
+using ray = tray<float>;
 
-//*******************************************************************
+//***********************************************
 // intersection
 struct isect
 {
-	geometry* g=nullptr;
-	vec3 pos;				// position at intersection
-	vec3 norm;				// normal at intersection
-	vec2 bc;				// barycentric coordinates at t
-	float t=FLT_MAX;		// nearest intersection
-	float tfar=FLT_MAX;		// fartheset intersection
-	bool hit=false;			// is intersected?
+	vec3	pos;			// position at intersection
+	vec3	norm;			// normal at intersection
+	vec2	bc;				// barycentric coordinates at t
+	float	t=FLT_MAX;		// (nearest,farthest) intersections
+	float	tfar=FLT_MAX;	// (nearest,farthest) intersections
+	uint	g=-1;			// index of an intersected geometry
+	bool	hit=0, _[3];	// is intersected? and padding
 };
 
-//*******************************************************************
-// bounding box
+//***********************************************
+// bounding box: 16-bytes aligned for std140 layout
+#ifndef __cplusplus
+struct bbox { vec4 m; vec4 M; }; // bounding box in std140 layout
+#else
 struct bbox
 {
-	vec3 m, M;
+	alignas(16) vec3 m;
+	alignas(16) vec3 M;
 
-	bbox(){ M=-(m=FLT_MAX*0.01f); }
-	bbox( const vec3& v0 ):m(v0),M(v0){}
+	bbox(){ clear(); }
+	bbox( const vec3& v0 ){ m=M=v0; }
+	bbox( bbox&& b ) = default;
+	bbox( const bbox& b ){ m=b.m; M=b.M; }
 	bbox( const vec3& v0, const vec3& v1 ){ m=vec3(min(v0.x,v1.x),min(v0.y,v1.y),min(v0.z,v1.z)); M=vec3(max(v0.x,v1.x),max(v0.y,v1.y),max(v0.z,v1.z)); }
 	bbox( const vec3& v0, const vec3& v1, const vec3& v2 ){ m=vec3(min(min(v0.x,v1.x),v2.x),min(min(v0.y,v1.y),v2.y),min(min(v0.z,v1.z),v2.z)); M=vec3(max(max(v0.x,v1.x),v2.x),max(max(v0.y,v1.y),v2.y),max(max(v0.z,v1.z),v2.z)); }
 	bbox( const bbox& b0, const bbox& b1 ){ m=vec3(min(b0.m.x,b1.m.x),min(b0.m.y,b1.m.y),min(b0.m.z,b1.m.z)); M=vec3(max(b0.M.x,b1.M.x),max(b0.M.y,b1.M.y),max(b0.M.z,b1.M.z)); }
 	inline void clear(){ M=-(m=FLT_MAX*0.0001f); }
+
+	// assignment
+	bbox& operator=( bbox&& b ) = default;
+	bbox& operator=( const bbox& b ) = default;
 
 	// array access
 	inline const vec3& operator[]( int i) const { return (&m)[i]; }
@@ -136,7 +142,7 @@ struct bbox
 	inline const bbox& expand( const bbox& b ){ m=vec3(min(m.x,b.m.x),min(m.y,b.m.y),min(m.z,b.m.z)); M=vec3(max(M.x,b.M.x),max(M.y,b.M.y),max(M.z,b.M.z)); return *this; }
 	inline const bbox& expand( const vec3& v ){ m=vec3(min(m.x,v.x),min(m.y,v.y),min(m.z,v.z)); M=vec3(max(M.x,v.x),max(M.y,v.y),max(M.z,v.z)); return *this; }
 	inline const bbox& expand( const vec3& v0, const vec3& v1, const vec3& v2 ){ m=vec3(min(min(m.x,v0.x),min(v1.x,v2.x)),min(min(m.y,v0.y),min(v1.y,v2.y)),min(min(m.z,v0.z),min(v1.z,v2.z))); M=vec3(max(max(M.x,v0.x),max(v1.x,v2.x)),max(max(M.y,v0.y),max(v1.y,v2.y)),max(max(M.z,v0.z),max(v1.z,v2.z))); return *this; }
-	inline const bbox& expand( const mat4& mtx ){ auto c=corners(); clear(); for( uint k=0;k<c.size();k++) expand(mtx*c[k]); return *this; }
+	inline const bbox& expand( const mat4& m ){ auto c=corners(); clear(); for( uint k=0;k<c.size();k++) expand(m*c[k]); return *this; }
 	
 	// transformation
 	inline const bbox& scale( float s ){ vec3 c=center(); m=c+(m-c)*s; M=c+(M-c)*s; return *this; }
@@ -148,245 +154,382 @@ struct bbox
 };
 
 inline bbox operator*( const mat4& m, const bbox& b ){ bbox b1=b; return b1.expand(m); }
+#endif
 
-//*******************************************************************
+//***********************************************
 // Thin-lens camera definition
-struct camera
+#ifndef __cplusplus
+struct camera_t // std140 layout for OpenGL uniform buffer objects
 {
-	mat4	viewMatrix, projectionMatrix;		// matrices
-	vec3	eye, center, up, dir;				// look at params; dir = center - eye (view direction vector)
-	float	fovy, aspectRatio, dNear, dFar;		// projection params
-	vec4	frustum_planes[6];					// for view frustum culling: left, right, top, bottom, near, far
-	float	F, fn, df;							// focal distance, f-number, focusing depth (in object distance)
-	
-	inline mat4		perspectiveDX() const { mat4 m=projectionMatrix; m._33=dFar/(dNear-dFar); m._34*=0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
-	inline vec2		frustum_size() const {float fh=tan(deg2rad(fovy)*0.5f)*2.0f; return vec2(fh*aspectRatio,fh); } // view frustum (width,height) at depth=-1 (i.e., in NDC cube)
-	inline float	lens_radius() const { return F/fn*0.5f; }
-	inline void		update_frustum_planes(){ const mat4 m=projectionMatrix*viewMatrix; for( int k=0;k<6;k++){ vec4& p=frustum_planes[k]; p=m.rvec4(k/2)*float(k%2==0?1:-1)+m.rvec4(3); p/=p.xyz.length(); }} // left, right, bottom, top, near, far
-	inline void		update_depth_clips( const bbox* bound ){ if(!bound) return; bbox b=viewMatrix*(*bound); vec2 z(max(0.001f,-b.M.z),max(0.001f,-b.m.z)); dNear=max(max(bound->radius()*0.00001f,50.0f),z.x*0.99f); dFar=max(max(dNear+1.0f,dNear*1.01f),z.y*1.01f); }
+	mat4	view_matrix, projection_matrix;
+	float	fovy, aspect, dnear, dfar;
+	vec3	eye, center, up;
+}
+#else
+struct camera_t // aligned with std140 layout
+{
+	mat4		view_matrix, projection_matrix;
+	union {		vec4 pp; struct { union { float fovy, height; }; float aspect, dnear, dfar; }; }; // pp: perspective params; fov in radians; height for orthographic projection
+	alignas(16)	vec3 eye, center, up; // lookAt params (16-bytes aligned for std140 layout)
+
+	camera_t() = default;
+	camera_t( camera_t&& c ) = default;
+	camera_t( const camera_t& c ) = default;
+	camera_t& operator=( camera_t&& c ) = default;
+	camera_t& operator=( const camera_t& c ) = default;
+
+	mat4	inverse_view_matrix() const { return mat4::lookAtInverse(eye,center,up); } // works without eye, center, up
+};
+#endif
+
+struct camera : public camera_t
+{
+	vec3		dir;			// dir = center - eye (view direction vector)
+	float		F, fn, df;		// focal distance, f-number, focusing depth (in object distance)
+	vec4		frustum[6];		// view frustum planes: left, right, top, bottom, near, far
+	camera_t	prev;			// camera at the previous frame (formerly, cam0); initialized at the Camera plugin
+
+	mat4	perspective_dx() const { mat4 m=projection_matrix; m._33=dfar/(dnear-dfar); m._34*=0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
+	vec2	frustum_size() const {float fh=tan(fovy*0.5f)*2.0f; return vec2(fh*aspect,fh); }	// view frustum (width,height) at depth=-1 (i.e., in NDC cube)
+	void	update_frustum(){ const mat4 m=projection_matrix*view_matrix;for(int k=0;k<6;k++){vec4& p=frustum[k];p=m.rvec4(k>>1)*float(1-(k&1)*2)+m.rvec4(3);p/=p.xyz.length();}} // left, right, bottom, top, near, far
+	void	update_depth_clips( const bbox* bound ){ if(!bound) return; bbox b=view_matrix*(*bound); vec2 z(max(0.001f,-b.M.z),max(0.001f,-b.m.z)); dnear=max(max(bound->radius()*0.00001f,50.0f),z.x*0.99f); dfar=max(max(dnear+1.0f,dnear*1.01f),z.y*1.01f); }
+	float	lens_radius() const { return F/fn*0.5f; }
+	bool	vfc( bbox& b ) const { vec4 pv(0,0,0,1.0f); for(int c=0;c<6;c++){ for(int j=0;j<3;j++) pv[j]=frustum[c][j]>0?b.M[j]:b.m[j]; if(pv.dot(frustum[c])<0) return true; } return false; }
 };
 
-//*******************************************************************
+//***********************************************
 // vertex definition
-#if (_MSC_VER>=1900/*VS2015*/) && (__cplusplus>199711L)
+#if (_MSC_VER>=1900/*VS2015*/) || (__cplusplus>199711L)
 struct alignas(32) vertex { vec3 pos; vec3 norm; vec2 tex; };
 #else
 struct vertex { vec3 pos; vec3 norm; vec2 tex; };
 #endif
 
-//*******************************************************************
-// material definition
+//***********************************************
+// material definition (std140 layout, aligned at 16-byte/vec4 boundaries)
 struct material
 {
-	const uint		ID;
-	char			name[_MAX_PATH];
-	bool			bShade;
-	vec4			ambient, diffuse, specular;
-	float			power, alpha, refractiveIndex, bump_scale;
-	wchar_t			diffuseMapPath[_MAX_PATH],bumpMapPath[_MAX_PATH],normalMapPath[_MAX_PATH],cubeMapPath[_MAX_PATH],alphaMapPath[_MAX_PATH];
-	void			*diffuseTexture,*normalTexture,*cubeTexture,*alphaTexture;	// placeholders for ID3D1*ShaderResourceView or gl::Texture
-	int				diffuse_slice, normal_slice, alpha_slice;					// placeholders for slide indices of textures when they are merged into a single array texture
-	material( uint id ):ID(id),bShade(true),bump_scale(1.0f),diffuseTexture(nullptr),normalTexture(nullptr),cubeTexture(nullptr),alphaTexture(nullptr),diffuse_slice(-1),normal_slice(-1),alpha_slice(-1){ memset(name,0,sizeof(name)); memset(diffuseMapPath,0,sizeof(diffuseMapPath)); memset(bumpMapPath,0,sizeof(bumpMapPath)); memset(normalMapPath,0,sizeof(normalMapPath)); memset(cubeMapPath,0,sizeof(cubeMapPath)); memset(alphaMapPath,0,sizeof(alphaMapPath));};
+	vec4	ambient;		// ambient.a = ambient occlusion
+	vec4	diffuse;		// diffuse.a = alpha
+	vec4	specular;		// specular.a = power/beta in Blinn-Phong)
+	uvec2	TEX;			// GPU handle to TEX; TEX.a = alpha texture;
+	uvec2	NRM;			// GPU handle to NORM
+	uvec2	CUB;			// GPU handle to CUBE
+	uint	model;			// illumination model (light_t::model)
+	float	n;				// refractive_index
 };
 
-//*******************************************************************
-// cull data definition
-struct Cull // 16-bytes reserved
+struct material_impl : public material
 {
-	enum TYPE { USER, REF, VFC, CHCPP, WOC, NOHC, CULL_TYPE_RESERVED6, CULL_TYPE_RESERVED7, NUM_CULL_TYPE };
+	const uint	ID;
+	char		name[_MAX_PATH]={0};
+	float		bump_scale=1.0f;
+	union
+	{
+		struct { gl::Texture				*diffuse, *normal, *cube, *alpha; };
+		struct { ID3D10ShaderResourceView	*diffuse, *normal, *cube, *alpha; } d3d10;
+		struct { ID3D11ShaderResourceView	*diffuse, *normal, *cube, *alpha; } d3d11;
+	} texture = {0};
+	struct
+	{
+		wchar_t diffuse[_MAX_PATH];
+		wchar_t bump[_MAX_PATH];
+		wchar_t normal[_MAX_PATH];
+		wchar_t cube[_MAX_PATH];
+		wchar_t alpha[_MAX_PATH];
+	} path = {0};
 
-	uint	data:7;			bool	occluder:1;		// current frame: bits of the corresponding culling types are set, occluder=1/occludee=0
-	uint	duration:14;	// how many frames the previous state lasted? For instance, if the last frame was just changed, duration=1. potential: is this one of the potential occluders?
-	bool	potential:1;	// the frame number of the last access to this
-	bool	disable:1;		// set this bit to force culling anyway
-	int		access;			// frame index accessed the last time
-	int		reserved[2];	// 8-bytes reserved for further revision
-
-	inline Cull(){ clear(true); }
-	inline Cull( TYPE type ):Cull(){ set_bit(type,true); }
-	inline void	clear( bool bClearAttrib=false ){ if(bClearAttrib) memset(this,0,sizeof(Cull)); else data=0; }
-	inline void	set_bit( TYPE type, bool b=true ){ uchar bit=(1<<type); data=b?data|bit:data&(~bit); }
-	inline bool	get_bit( TYPE type ){ uchar bit=(1<<type); return (data&bit)!=0; }
-	inline bool operator()() const { return data!=0&&!disable; }
-	inline operator bool() const { return data!=0&&!disable; }
-	inline Cull& operator=( TYPE type ){ set_bit(type,true); return *this; }
+	material_impl( uint id ):ID(id){ model=light_t::model::BLINN_PHONG; memset(&TEX,0,sizeof(uvec2)); memset(&NRM,0,sizeof(uvec2)); memset(&CUB,0,sizeof(uvec2)); }
 };
 
-//*******************************************************************
-// Bounding volume hierarchy
-struct BVH	// two-level hierarchy: mesh or geometry
+//***********************************************
+// acceleration structures
+struct acc_t
 {
+	enum { NONE, BVH, KDTREE } model = NONE;
 	mesh*		pMesh = nullptr;	// should be set to mesh
 	uint		geom = -1;			// should be set for geometry BVH, -1 for mesh BVH
+	virtual bool intersect( const ray& r, std::vector<uint>* hit_prim_list=nullptr )=0; // return primitive ids
+	virtual bool intersect( const ray& r, isect* pi )=0;
+	virtual void release()=0;
+};
+
+//***********************************************
+// Bounding volume hierarchy
+struct bvh_t : public acc_t // two-level hierarchy: mesh or geometry
+{
 	struct node { bbox box; uint parent; uint nprims; union { uint idx:30, second:30; }; uint axis:2;  };	// idx: primitive index in index buffer; second: offset to right child of interiod node; axis==3 (leaf node)
 	std::vector<node> nodes;
-	inline bool intersect( const ray& r, std::vector<uint>* hit_prim_list=nullptr );			// return primitive ids
-	inline bool intersect( const ray& r, isect* pi=nullptr, bool use_backface=false );
-	virtual void release()=0;
 };
 
-//*******************************************************************
+//***********************************************
 // KDtree
-struct KDtree // for two-level hierarchy: mesh or geometry
+struct kdtree_t : public acc_t // two-level hierarchy: mesh or geometry
 {
-	mesh*		pMesh = nullptr;	// should be set to mesh
-	uint		geom = -1;			// should be set for geometry BVH, -1 for mesh BVH
 	struct node { float pos; uint parent; uint second:29, has_left:1, axis:2; __forceinline bool is_leaf(){return axis==3;} };
 	std::vector<node> nodes;
-	inline bool intersect( const ray& r, std::vector<uint>* hit_prim_list=nullptr ){ return false; }	// TODL: not implemented yet
-	inline bool intersect( const ray& r, isect* pi=nullptr ){ return false; }	// TODO: not implemented yet
-	virtual void release()=0;
 };
 
-//*******************************************************************
-// geometry group: differentiated by material and grouping
-struct geometry
+//***********************************************
+// cull data definition
+struct cull_t
 {
-	uint		ID;
-	object*		parent;
-	material*	mat;
-	uint		indexStart;
-	uint		indexCount;		// index buffer indicator
-	bbox		box;			// bounding box
-	uint		level;			// LOD level represented by this geometry
-	uint		instance;		// instance ID
-	Cull		cull;			// culling info
-	BVH*		bvh;			// geometry-level bounding volume hierarchy
-	KDtree*		kd;				// geometry-level KD-tree
-	
-	geometry():ID(-1),parent(nullptr),mat(nullptr),indexStart(0),indexCount(0),level(0),instance(0),bvh(nullptr),kd(nullptr){ cull.clear(); }
-	geometry( object* _parent,material* _mat,uint _indexStart,uint _indexCount,bbox& _box,uint _level=0):ID(-1),parent(_parent),mat(_mat),indexStart(_indexStart),indexCount(_indexCount),box(_box),level(_level),instance(0),bvh(nullptr),kd(nullptr){ cull.clear(); }
-	~geometry(){ if(bvh) bvh->release(); if(kd) kd->release(); }
-	inline mat4& mtx();
-	inline const char* name();
-	inline uint num_faces(){ return uint(indexCount/3); }
-	inline bool intersect( const ray& r, isect* pi=nullptr, bool use_backface=false ); // linear intersection
-	inline float surface_area();
+	enum model { NONE=0, USER=1<<0, REF=1<<1, VFC=1<<2, CHCPP=1<<3, WOC=1<<4, RESERVED5=1<<5, RESERVED6=1<<6, RESERVED7=1<<7 };
+	uchar data = 0 ; // bits of the corresponding culling types are set (bitwise OR-ed)
+
+	inline operator bool() const { return data!=0; }
+	inline bool operator()( uint m ) const { return (data&m)!=0; }
+	inline cull_t& reset( uchar m=0xff ){ data=(m==0xff)?0:(data&~m); return *this; }
+	inline cull_t& set( uchar m ){ data|=m; return *this;}
 };
 
-//*******************************************************************
-// object: set of geometries
+//***********************************************
+// geometry: 144-bytes aligned; differentiated by material and grouping
+#ifndef __cplusplus
+struct geometry // std430 layout for OpenGL shader storage buffers
+{
+	uint	count, instance_count, first_index, base_vertex, base_instance; // DrawElementsIndirectCommand
+	uint	material_index, object_index, pad[5]; // material index and other C++ members (hidden padding in shaders)
+	bbox	box;
+	mat4	mtx;
+};
+#else
+struct geometry 
+{
+	uint	count=0;			// start of DrawElementsIndirectCommand: number of indices
+	uint	instance_count=1;	// default: 1
+	uint	first_index=0;		// first index
+	uint	base_vertex=0;		// default: 0
+	uint	ID=-1;				// ID shared with base_instance (typically 0)
+	uint	material_index=-1;
+	uint	object_index=-1;	// object index to avoid pointer changes with vector reallocation
+	ushort	instance=0;			// host-side instance ID (up to 2^16: 65536)
+	cull_t	cull;				// 8-bit cull mask
+	bool	bg=false;			// is it background object?
+	mesh*	root=nullptr;		// pointer to the mesh
+	acc_t*	acc=nullptr;		// BVH or KD-tree build on geometry level
+	bbox	box;				// transform-unbaked bounding box
+	mat4	shader_matrix;		// do not use in C++; reserved for shader usage; use mesh::update_matrix() to fetch from object matrix
+	
+	geometry() = delete; // no default ctor to enforce to assign root
+	geometry( mesh* p_mesh ):root(p_mesh){}
+	geometry( mesh* p_mesh, uint id, uint obj_index, uint start_index, uint index_count, bbox* box, uint mat_index ):root(p_mesh),ID(id),object_index(obj_index),first_index(start_index),count(index_count),material_index(mat_index){ if(box) this->box=*box; }
+	~geometry(){ if(acc) acc->release(); }
+
+	inline object* parent() const;
+	inline const char* name() const;
+	inline mat4 matrix() const;
+	inline void* offset() const { return (void*)(ID*sizeof(geometry)); } // for rendering commands
+
+	inline uint face_count() const { return uint(count/3); }
+	inline float surface_area() const ;
+	inline bool intersect( const ray& r, isect* pi=nullptr ) const; // linear intersection
+};
+#endif
+
+//***********************************************
+// a set of geometries for batch control (not related to the rendering)
 struct object
 {
-	uint	ID;
-	mesh*	parent;
-	char	name[_MAX_PATH];
-	mat4	mtx;
-	bbox	box;
-	float	LOD;			// current LOD
-	uint	instance;		// instance ID
+	mat4	matrix;				// group transformation
+	bbox	box;				// transformation-baked bounding box (expanded by geometry box and transformation) 
+	uint	ID=-1;
+	float	level=0;			// real-number LOD
+	uint	instance=0;
+	struct { bool dynamic=false, bg=false; } attrib; // dynamic: potential matrix changes; background: backdrops such as floor/ground; set in other plugins (e.g., AnimateMesh)
+	char	name[_MAX_PATH]={0};
+	mesh*	root=nullptr;
 	
-	// temporary data
-	void*	data;	// reserved for user data
+	object() = delete;  // no default ctor to enforce to assign parent
+	object( mesh* p_mesh ):root(p_mesh){}
+	object( mesh* p_mesh, uint id, const char* name, bbox* box=nullptr ):ID(id),root(p_mesh){ strcpy(this->name,name); if(box) this->box=*box; }
 	
-	object():ID(-1),parent(nullptr),LOD(0.0f),instance(0),data(nullptr){mtx.setIdentity();memset(name,0,sizeof(name));}
-	inline void setLOD( float level );
-	inline uint num_geometries();
-	inline std::vector<geometry*> find_geometries( int level=0 );
-	inline uint num_faces( int level=0 );
+	// face/geometry query
+	inline bool empty() const;
+	inline uint face_count() const;
+	inline uint geometry_count() const;
+	inline geometry* find_geometry( uint index ) const;
+	inline std::vector<geometry*> find_geometries() const;
+
+	// create helpers
+	inline geometry* create_geometry( size_t first_index, size_t index_count=0, bbox* box=nullptr, size_t mat_index=-1 );
+	inline geometry* create_geometry( const geometry& other );
 };
 
-//*******************************************************************
-// mesh: set of vertices, indices, objects, materials
+//***********************************************
+// a set of vertices, indices, objects, geometries, materials
 struct mesh
 {
-	// core data
-	std::vector<vertex>		vertices;
-	std::vector<uint>		indices;
-	std::vector<geometry>	geometries;		// if LODs are found, multiple copies at different levels (level>0) are consecutively stored here
-	std::vector<object*>	objects;
-	std::vector<material*>	materials;
+	std::vector<vertex>			vertices;
+	std::vector<uint>			indices;
+	std::vector<object>			objects;
+	std::vector<geometry>		geometries;		// if LODs are found, multiple copies at different levels (level>0) are consecutively stored here
+	std::vector<material_impl>	materials;
 
-	// space for GPU buffers
-	union { void* vertex_buffer; void* vertex_array; };	// vertex buffer for D3DX and vertex array for OpenGL
-	void*	index_buffer;	// index buffer for D3DX and nullptr for OpenGL
-	void*	command_buffer;	// indirect command buffer, filled with DrawElementsIndirectCommand
-	void*	count_buffer;	// indirect count buffer, holding GL_PARAMETER_BUFFER_ARB 
+	// volitile spaces for GPU buffers
+	union {
+		struct { gl::VertexArray* vertex; gl::Buffer *geometry, *count; }; // vertex array, geometry/command buffer, count buffer for OpenGL
+		struct { ID3D10Buffer *vertex, *index; } d3d10; // vertex/index buffers for D3D
+		struct { ID3D11Buffer *vertex, *index; } d3d11; // vertex/index buffers for D3D
+	} buffer={0};
 
-	// spatial acceleration structures
-	BVH*		bvh;			// bounding volume hierarchy
-	KDtree*		kd;				// KD-tree
+	// acceleration and dynamics
+	bbox		box;
+	acc_t*		acc=nullptr;		// BVH or KD-tree
 
 	// LOD and instancing
-	uint		num_LOD;			// number of detail levels
-	uint		num_instance;		// number of instances. The instances are physically added into objects
+	uint		levels=1;			// LOD levels
+	uint		instance_count=1;	// number of instances. The instances are physically added into objects
 
 	// auxiliary information
-	wchar_t*	file_path	= (wchar_t*)malloc(_MAX_PATH*sizeof(wchar_t));	// mesh file path
-	wchar_t*	mtl_path	= (wchar_t*)malloc(_MAX_PATH*sizeof(wchar_t));	// material file path (e.g., *.mtl)
-	bbox		box;
+	wchar_t		file_path[_MAX_PATH]={0};	// mesh file path
+	wchar_t		mtl_path[_MAX_PATH]={0};	// material file path (e.g., *.mtl)
 
-	mesh():vertex_buffer(nullptr),index_buffer(nullptr),command_buffer(nullptr),count_buffer(nullptr),bvh(nullptr),kd(nullptr),num_LOD(1),num_instance(1){file_path[0]=mtl_path[0]=L'\0';};
-	void release(){ if(file_path) free(file_path); file_path=nullptr; if(mtl_path) free(mtl_path); mtl_path=nullptr; if(!vertices.empty()){ vertices.clear(); vertices.shrink_to_fit(); } if(!indices.empty()){ indices.clear(); indices.shrink_to_fit(); } if(!geometries.empty()){ geometries.clear(); geometries.shrink_to_fit(); } for(uint i=0;i<objects.size();i++) delete objects[i]; objects.clear(); objects.shrink_to_fit(); for(uint i=0;i<materials.size();i++) delete materials[i]; materials.clear(); materials.shrink_to_fit(); if(bvh){ bvh->release(); bvh=nullptr; } if(kd){ kd->release(); kd=nullptr; } }
+	// constructor
+	mesh(){ vertices.reserve(1<<20); indices.reserve(1<<20); objects.reserve(1<<16); geometries.reserve(1<<16); materials.reserve(1<<16); }
+	inline mesh( mesh&& other ){ operator=(std::move(other)); } // move constructor
+	inline mesh& operator=( mesh&& other ); // move assignment operator
 
-	// query
-	uint num_base_geometries(){ return uint(geometries.size())/num_LOD; }
-	uint num_faces( int level=0 ){ uint ng=num_base_geometries(); geometry* pg=&geometries[0]+ng*level; uint n=0;for(uint k=0;k<ng;k++) n+=pg[k].num_faces(); return n; }
-	object*	find_object( const char* name ){ for(uint k=0;k<objects.size();k++)if(_stricmp(objects[k]->name,name)==0) return objects[k];return nullptr;}
+	// release/memory
+	void release(){ if(!vertices.empty()){ vertices.clear(); vertices.shrink_to_fit(); } if(!indices.empty()){ indices.clear(); indices.shrink_to_fit(); } if(!geometries.empty()){ geometries.clear(); geometries.shrink_to_fit(); } objects.clear(); objects.shrink_to_fit(); materials.clear(); materials.shrink_to_fit(); if(acc){ acc->release(); acc=nullptr; } }
+	mesh* shrink_to_fit(){ vertices.shrink_to_fit(); indices.shrink_to_fit(); objects.shrink_to_fit(); geometries.shrink_to_fit(); materials.shrink_to_fit(); return this; }
 
-	// bound
+	// face/object/proxy/material helpers
+	uint face_count( int level=0 ) const { uint kn=uint(geometries.size())/levels; auto* g=&geometries[kn*level];uint f=0;for(uint k=0;k<kn;k++,g++)f+=g->count;return f/3;}
+	object* create_object( const char* name, bbox* _box=nullptr ){ objects.push_back(object(this,uint(objects.size()),name,_box)); return &objects.back(); }
+	object* create_object( const object& o ){ objects.push_back(o); auto& o1=objects.back(); o1.root=this; o1.ID=uint(objects.size())-1; return &o1; }
+	object*	find_object( const char* name ){ for(uint k=0;k<objects.size();k++)if(_stricmp(objects[k].name,name)==0) return &objects[k];return nullptr;}
+	inline mesh* create_proxy( bool use_quads=false, bool double_sided=false ); // proxy mesh helpers: e.g., bounding box
+	std::vector<material> pack_materials() const { std::vector<material> p; auto& m=materials; if(p.size()!=m.size()) p.resize(m.size()); for(size_t k=0, kn=p.size(); k<kn; k++) p[k]=m[k]; return p; }
+
+	// update for matrix/bound
+	inline bool is_dynamic() const { for( size_t k=0, kn=objects.size()/instance_count; k<kn; k++ ) if(objects[k].attrib.dynamic) return true; return false; }
+	inline void update_matrix( bool transpose=false ){ if(!transpose) for(auto& g:geometries) g.shader_matrix=objects[g.object_index].matrix; else for(auto& g:geometries) g.shader_matrix=objects[g.object_index].matrix.transpose(); }
 	inline void update_bound( bool bRecalcTris=false );
 
-	// linear intersections
-	inline bool intersect( const ray& r, std::vector<uint>* hit_prim_list=nullptr );
-	inline bool intersect( const ray& r, isect* pi=nullptr, bool use_backface=false );
+	// intersection
+	inline bool intersect( const ray& r, std::vector<uint>* hit_prim_list=nullptr ) const;
+	inline bool intersect( const ray& r, isect* pi=nullptr ) const;
 };
 
-inline void mesh::update_bound( bool bRecalcTris )
-{
-	for(uint k=0,kn=uint(objects.size());k<kn;k++) objects[k]->box.clear();
-	geometry* g = &geometries[0]; for(uint k=0,kn=uint(geometries.size()),gn=kn/num_instance;k<kn;k++,g++)
-	{
-		if(g->instance>0) g->box = geometries[k%gn].box;
-		else if(bRecalcTris){ g->box.clear(); vertex* V=&vertices[0]; uint* I=&indices[0]; for(uint j=g->indexStart,jn=j+g->indexCount;g->instance==0&&j<jn;j+=3) g->box.expand(V[I[j+0]].pos,V[I[j+1]].pos,V[I[j+2]].pos); }
-		g->parent->box.expand( g->parent->mtx*g->box );
-	}
-	box.clear(); for( uint k=0, kn=uint(objects.size()); k<kn; k++ ) box.expand( objects[k]->box );
-}
-
-//*******************************************************************
+//***********************************************
 // Volume data format
 struct volume
 {
-	wchar_t	filePath[260];
+	wchar_t	file_path[_MAX_PATH]={0};
 	uint	width, height, depth;
-	vec3	voxelSize;		// size of a unit voxel
+	vec3	voxel_size;		// size of a unit voxel
 	uint	format;			// GL_R32F or GL_RGBA32F
 	bbox	box;			// bounding box
 	float*	data;			// voxel data array: cast by format
 	vec4	table[256];		// transfer function: usually 256 size
 };
 
-//*******************************************************************
-// late implementations for objects/geometry
-inline mat4& geometry::mtx(){ return parent->mtx; }
-inline const char* geometry::name(){ return parent->name; }
-inline float geometry::surface_area(){ if(indexCount==0||parent==nullptr||parent->parent==nullptr) return 0.0f; mesh* pMesh = parent->parent; if(pMesh->vertices.empty()||pMesh->indices.empty()) return 0.0f; vertex* v = &pMesh->vertices[0]; uint* i = &pMesh->indices[0]; float sa = 0.0f; for( uint k=indexStart, kn=k+indexCount; k<kn; k+=3 ) sa += (v[i[k+1]].pos-v[i[k+0]].pos).cross(v[i[k+2]].pos-v[i[k+0]].pos).length()*0.5f; return sa; }
-inline void object::setLOD( float level ){ LOD=clamp(level,0.0f,float(parent->num_LOD-1)); }
-inline uint object::num_geometries(){ uint n=0; geometry* pg=&parent->geometries[0]; for( uint k=0, kn=uint(parent->geometries.size()); k<kn; k++ ) if(pg[k].level==0&&pg[k].parent==this) n++; return n; }
-inline std::vector<geometry*> object::find_geometries( int level ){ geometry* pg=&parent->geometries[0]; std::vector<geometry*> gl; for( uint k=0,kn=uint(parent->geometries.size()); k<kn; k++ ) if(pg[k].level==level&&pg[k].parent==this) gl.push_back(&pg[k]); return gl; }
-inline uint object::num_faces( int level ){ geometry* pg=&parent->geometries[0]; uint f=0; for( uint k=0,kn=uint(parent->geometries.size()); k<kn; k++ ) if(pg[k].level==level&&pg[k].parent==this) f+=pg[k].num_faces(); return f; }
+//***********************************************
+// late implementations for geometry
 
-//*******************************************************************
+inline object* geometry::parent() const { return root&&object_index<root->objects.size()?&root->objects[object_index]:nullptr; }
+inline mat4 geometry::matrix() const { return parent()?parent()->matrix:mat4::identity(); }
+inline const char* geometry::name() const { return parent()?parent()->name:""; }
+inline float geometry::surface_area() const { if(count==0) return 0.0f; if(root->vertices.empty()||root->indices.empty()) return 0.0f; vertex* v=&root->vertices[0]; uint* i=&root->indices[0]; float sa = 0.0f; for( uint k=first_index, kn=k+count; k<kn; k+=3 ) sa += (v[i[k+1]].pos-v[i[k+0]].pos).cross(v[i[k+2]].pos-v[i[k+0]].pos).length()*0.5f; return sa; }
+
+//***********************************************
+// late implementations for object
+
+inline bool object::empty() const { auto* g=&root->geometries[0]; for( uint k=0,kn=uint(root->geometries.size()); k<kn; k++, g++ ) if(g->parent()==this) return false; return true; }
+inline uint object::geometry_count() const { uint n=0; for( auto& g : root->geometries ) if(g.parent()==this) n++; return n; }
+inline uint object::face_count() const { auto* g=&root->geometries[0]; uint f=0; for( uint k=0,kn=uint(root->geometries.size()); k<kn; k++ ) if(g[k].parent()==this) f+=g[k].face_count(); return f; }
+inline geometry* object::find_geometry( uint index ) const { auto* g=&root->geometries[0]; uint n=0; for( uint k=0,kn=uint(root->geometries.size()); k<kn; k++, g++ ) if(g->parent()==this&&(n++)==index) return g; return nullptr; }
+inline std::vector<geometry*> object::find_geometries() const { auto* g=&root->geometries[0]; std::vector<geometry*> gl; for( uint k=0,kn=uint(root->geometries.size()); k<kn; k++, g++ ) if(g->parent()==this) gl.push_back(g); return std::move(gl); }
+inline geometry* object::create_geometry( size_t first_index, size_t index_count, bbox* box, size_t mat_index ){ auto& g=root->geometries; g.push_back(geometry(root,uint(g.size()),this->ID,uint(first_index),uint(index_count),box,uint(mat_index))); return &g.back(); }
+inline geometry* object::create_geometry( const geometry& other ){ auto& g=root->geometries; g.push_back(other); auto* p=&g.back(); p->ID=uint(g.size())-1; return p; }
+
+//***********************************************
+// late implementations for mesh
+
+inline mesh& mesh::operator=( mesh&& other ) // move assignment operator
+{
+	vertices = std::move(other.vertices);
+	indices = std::move(other.indices);
+	geometries = std::move(other.geometries);
+	objects = std::move(other.objects);
+	materials = std::move(other.materials);
+	size_t offset = sizeof(decltype(vertices))+sizeof(decltype(indices))+sizeof(decltype(geometries))+sizeof(decltype(objects))+sizeof(decltype(materials));
+	memcpy( ((char*)this)+offset, ((char*)&other)+offset, sizeof(mesh)-offset );
+	if(acc) acc->pMesh=this; for(auto& o:objects ) o.root=this; for(auto& g:geometries ){ g.root=this; if(g.acc) g.acc->pMesh=this; }
+	return *this;
+}
+
+inline void mesh::update_bound( bool bRecalcTris )
+{
+	box.clear(); for(auto& obj:objects) obj.box.clear();
+	for( size_t k=0, kn=geometries.size(), gn=kn/instance_count; k<kn; k++ )
+	{
+		auto& g=geometries[k], g0=geometries[k%gn];
+		if(g.instance>0) g.box=g0.box; else if(bRecalcTris){ g.box.clear(); vertex* V=&vertices[0]; uint* I=&indices[0]; for(uint j=g.first_index,jn=j+g.count;j<jn;j+=3) g.box.expand(V[I[j+0]].pos,V[I[j+1]].pos,V[I[j+2]].pos); }
+		g.parent()->box.expand( g.matrix()*g.box );
+	}
+	for( auto& obj : objects ) box.expand( obj.box );
+}
+
+inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
+{
+	mesh* proxy = new mesh();
+
+	// direct copy
+	proxy->objects = objects;
+	proxy->materials.clear();	// proxy not use materials
+	proxy->box = box;
+	proxy->acc = acc;			// use the same acceleration structures
+	proxy->instance_count = instance_count;
+	wcscpy( proxy->file_path, file_path );
+
+	// correction of mesh pointers
+	for( auto& o : proxy->objects ) o.root = proxy;
+
+	// index definitions (CCW: counterclockwise by default)
+	std::vector<uint> i0;
+	if(use_quads)	i0 = { 0,3,2,1, /*bottom*/ 4,5,6,7, /*top*/ 0,1,5,4, /*left*/ 2,3,7,6, /*right*/ 1,2,6,5, /*front*/ 3,0,4,7 /*back*/ };
+	else			i0 = { 0,2,1,0,3,2, /*bottom*/ 4,5,6,4,6,7, /*top*/ 0,1,5,0,5,4, /*left*/ 2,3,6,3,7,6, /*right*/ 1,2,6,1,6,5, /*front*/ 0,4,3,3,4,7 /*back*/ };
+	if(double_sided){ for(size_t k=0,f=use_quads?4:3,kn=i0.size()/f;k<kn;k++) for(size_t j=0;j<f;j++) i0.push_back(i0[(k+1)*f-j-1]); } // insert indices (for CW)
+
+	// default corner/vertex definition
+	bbox cv(-1.0f,1.0f); vec4 corners[8]; for(uint k=0;k<8;k++) corners[k] = vec4(cv.corner(k),1.0f);
+	vertex v = { vec3(0.0f), vec3(0.0f), vec2(0.0f) };
+
+	// create vertices/geometries
+	auto& i=proxy->indices; for( auto& g : geometries )
+	{
+		proxy->objects[g.object_index].create_geometry( i.size(), i0.size(), &g.box );
+		for(auto& j:i0) i.push_back(j+uint(proxy->vertices.size()));
+		mat4 m = mat4::translate(g.box.center())*mat4::scale(g.box.size()*0.5f);
+		for(uint k=0;k<8;k++){ v.pos=(m*corners[k]).xyz; proxy->vertices.push_back(v); }
+	}
+
+	return proxy;
+}
+
+//***********************************************
 // intersection implementations
+
 inline ray gen_primary_ray( camera* pCam, float x, float y )	// (x,y) in [0,1]
 {
 	const vec3& eye=pCam->eye, center=pCam->center, up=pCam->up;
-	float fh = tan(deg2rad(pCam->fovy)*0.5f)*2.0f, fw=fh*pCam->aspectRatio;	// frustum height/width in NDC; you may use pCam->frustum_size()
-	vec3 epos = vec3( fw*(x-0.5f), fh*(y-0.5f), -1.0f );					// pixel position on the image plane: make sure to have negative depth
-	mat4 I = mat4::lookAtInv(eye,center,up);								// inverse view matrix
-	return ray( eye, (I*epos-eye).normalize(), 0.0f, FLT_MAX );
+	float fh = tan(pCam->fovy*0.5f)*2.0f, fw=fh*pCam->aspect;		// frustum height/width in NDC; you may use pCam->frustum_size()
+	vec3 epos = vec3( fw*(x-0.5f), fh*(y-0.5f), -1.0f );			// pixel position on the image plane: make sure to have negative depth
+	mat4 I = mat4::lookAtInverse(eye,center,up);					// inverse view matrix
+	ray r; r.o=eye; r.d=(I*epos-eye).normalize(); r.t=0.0f; r.tfar=FLT_MAX; return r;
 }
 
-// triangle intersection
-inline bool intersect( const ray& r, const vec3& v0, const vec3& v1, const vec3& v2, isect* pi=nullptr, bool use_backface=false )	// iset=(pos,t), bc=(s,t)
+// triangle intersection: isect=(pos,t), bc=(s,t)
+inline bool intersect( const ray& r, const vec3& v0, const vec3& v1, const vec3& v2, isect* pi=nullptr )
 {
 	// http://geomalgorithms.com/a06-_intersect-2.html#intersect3D_RayTriangle
 	if(pi) pi->hit = false;
 
 	vec3 u=v1-v0, v=v2-v0, n=u.cross(v); if(n.length()==0) return false;	// degenerate case: non-triangle
-	float b=dot(n,r.dir); if(!use_backface&&b>-0.00001f) return false;		// skip backfaces or rays lying on the plane
-	float t=dot(n,v0-r.pos)/b; if(t<r.tnear||t>r.tfar) return false;		// out of range of [tnear,tfar]
+	float b=dot(n,r.dir); if(b>-0.000001f) return false;					// skip backfaces or rays lying on the plane
+	float t=dot(n,v0-r.pos)/b; if(t<r.t||t>r.tfar) return false;		// out of range of [tnear,tfar]
 	vec3 ipos=r.pos+t*r.dir, w=ipos-v0;
 	
 	// barycentric coord test
@@ -396,7 +539,7 @@ inline bool intersect( const ray& r, const vec3& v0, const vec3& v1, const vec3&
 
 	if(pi)
 	{
-		pi->pos = ipos.xyz;
+		pi->pos = ipos;
 		pi->norm = n.normalize();
 		pi->bc = vec2(bs,bt);
 		pi->t = t;
@@ -412,7 +555,7 @@ inline bool bbox::intersect( const ray& r, isect* pi )
 {
 	if(pi) pi->hit = false;
 
-	float t0=r.tnear, t1=r.tfar;
+	float t0=r.t, t1=r.tfar;
 	for( int k=0; k < 3; k++ )
 	{
 		float i=1.0f/r.d[k];
@@ -431,49 +574,32 @@ inline bool bbox::intersect( const ray& r, isect* pi )
 	return true;
 }
 
-inline bool geometry::intersect( const ray& r, isect* pi, bool use_backface )
+inline bool geometry::intersect( const ray& r, isect* pi ) const
 {
-	if(pi) pi->hit = false;
-	mesh* pMesh=parent->parent;
-	isect m;
-
-	const mat4& gm=this->mtx();
-	const vertex* V = &pMesh->vertices[0];
-	const uint* I = &pMesh->indices[indexStart];
-	for( uint k=0, kn=indexCount; k<kn; k+=3 )
-	{
-		const vertex& v0=V[I[k+0]], v1=V[I[k+1]], v2=V[I[k+2]];
-		isect i; if(!::intersect(r,gm*v0.pos,gm*v1.pos,gm*v2.pos,&i,use_backface)||i.t>m.t) continue;
-		m=i;
-	}
+	isect i, t; i.hit=false;
+	mat4 m = matrix();
+	const vertex* V = &root->vertices[0];
+	const uint* I = &root->indices[first_index];
+	for( uint k=0, kn=count/3; k<kn; k++, I+=3 )
+		if(::intersect(r,m*V[I[0]].pos,m*V[I[1]].pos,m*V[I[2]].pos,&t)&&t.t<i.t) i=t;
 	
-	if(pi&&m.hit)
-	{
-		pi->g = this;
-		pi->pos = m.pos;
-		pi->norm = m.norm;
-		pi->bc = m.bc;
-		pi->t = m.t;
-		pi->tfar = m.tfar;
-		pi->hit = true;
-	}
-
-	return m.hit;
+	if(pi&&i.hit){ *pi=i; pi->g=this->ID; }
+	return i.hit;
 }
 
-inline bool mesh::intersect( const ray& r, std::vector<uint>* hit_prim_list )
+inline bool mesh::intersect( const ray& r, std::vector<uint>* hit_prim_list ) const
 {
 	std::vector<uint> m;
 	for( uint k=0, kn=uint(geometries.size()); k<kn; k++ )
 	{
-		if(!(geometries[k].mtx()*geometries[k].box).intersect(r,nullptr)) continue;
+		if(!(geometries[k].matrix()*geometries[k].box).intersect(r,nullptr)) continue;
 		m.push_back(uint(k));
 	}
 	if(hit_prim_list) *hit_prim_list = m;
 	return !m.empty();
 }
 
-inline bool mesh::intersect( const ray& r, isect* pi, bool use_backface )
+inline bool mesh::intersect( const ray& r, isect* pi ) const
 {
 	isect m;
 	std::vector<uint> hit_prim_list;
@@ -481,7 +607,7 @@ inline bool mesh::intersect( const ray& r, isect* pi, bool use_backface )
 
 	for( uint k=0; k < uint(hit_prim_list.size()); k++ )
 	{
-		isect i; if(!geometries[hit_prim_list[k]].intersect(r,&i,use_backface)||i.t>m.t) continue;
+		isect i; if(!geometries[hit_prim_list[k]].intersect(r,&i)||i.t>m.t) continue;
 		m=i;
 	}
 	if(m.hit&&pi) *pi = m;
@@ -489,65 +615,45 @@ inline bool mesh::intersect( const ray& r, isect* pi, bool use_backface )
 	return m.hit;
 }
 
-inline bool BVH::intersect( const ray& r, std::vector<uint>* hit_prim_list )
+//***********************************************
+// line clipping by Liang Barsky algorithm
+inline bool clip_line( vec2 p, vec2 q, vec2 lb, vec2 rt, vec2* p1=nullptr, vec2* q1=nullptr )
 {
-	// prepare the traversal
-	std::vector<uint> m;
-	uchar3 neg = { uchar(r.d.x<0.0f?1:0), uchar(r.d.y<0.0f?1:0), uchar(r.d.z<0.0f?1:0) };
-
-	uint stack[512];
-	for( int s=stack[0]=0, n=0; s>=0; s-- )	// s: stack pointer, n: node id
+	vec2 d=q-p, t=vec2(0,1);
+	vec2 vs[4] = { {-d.x,p.x-lb.x}, {d.x,rt.x-p.x}, {-d.y,p.y-lb.y}, {d.y,rt.y-p.y} };
+	for( int k=0; k<4; k++ )
 	{
-		BVH::node& b = nodes[n=stack[s]];
-		if(!b.box.intersect(r))	continue;	// no intersection: process next stack element
-		else if( b.nprims==0 ){ stack[s+neg[b.axis]]=n+1; stack[s+!neg[b.axis]]=b.second; s+=2; }	// intersection on interior: push the children
-		else m.push_back(b.idx);			// add the leaf nodes
+		vec2 v = vs[k];
+		float f=v.y/v.x;
+		if(v.x<0){		if(f>t.y) return true; if(f>t.x) t.x=f; }
+		else if(v.x>0){	if(f<t.x) return true; if(f<t.y) t.y=f; }
+		else if(v.x==0&&v.y<0) return true;
 	}
-	if(hit_prim_list) *hit_prim_list = m;
-	return !m.empty();
-}
-
-inline bool BVH::intersect( const ray& r, isect* pi, bool use_backface )
-{
-	if(pi) pi->hit = false;
 	
-	std::vector<uint> hit_prim_list;
-	if(geom!=-1) hit_prim_list.push_back(geom);
-	else if(!intersect( r, &hit_prim_list )) return false;
-
-	// traverse the primitive-level BVH on hit geometries
-	isect	m;
-	uchar3	neg = { uchar(r.d.x<0.0f?1:0), uchar(r.d.y<0.0f?1:0), uchar(r.d.z<0.0f?1:0) };
-	const vertex*	V = &pMesh->vertices[0];
-	const uint*		I = &pMesh->indices[0];
-
-	uint stack[512];
-	for( uint k=0, kn=uint(hit_prim_list.size()); k<kn; k++ )
-	{
-		geometry* g = &pMesh->geometries[0]+hit_prim_list[k];
-		
-		// perform normal intersection test
-		if(g->bvh==nullptr){ isect i; if(g->intersect(r,&i,use_backface)&&i.t<m.t){ m=i; m.g=g; } continue; } 
-
-		// BVH intersection test
-		BVH::node* B = &(g->bvh->nodes[0]);
-		const mat4& gm = g->mtx();
-		for( int s=stack[0]=0, n=0; s>=0; s-- )	// s: stack pointer, n: node id
-		{
-			BVH::node& b = B[n=stack[s]];
-			if(!b.box.intersect(r))	continue;	// no intersection: process next stack element
-			else if( b.nprims==0 ){ stack[s+neg[b.axis]]=n+1; stack[s+!neg[b.axis]]=b.second; s+=2; } // intersection on interior: push the children
-			else // intersection on leaf nodes
-			{
-				const vertex& v0=V[I[b.idx+0]], v1=V[I[b.idx+1]], v2=V[I[b.idx+2]];
-				isect i; if(!::intersect(r,gm*v0.pos,gm*v1.pos,gm*v2.pos,&i,use_backface)||i.t>m.t) continue;
-				m = i;
-				m.g = g;
-			}
-		}
-	}
-
-	if(pi) *pi = m;
-
-	return m.hit;
+	if(p1&&t.x>0.0f) *p1=lerp(p,q,t.x);		// new p
+	if(q1&&t.y<1.0f) *q1=lerp(p,q,t.y);		// new q
+	return false;
 }
+
+//***********************************************
+// mesh utilities
+inline mesh* create_box_mesh( const char* name="box", bool use_quads=false, bool double_sided=false, float half_size=1.0f )
+{
+	mesh* m = new mesh();
+	bbox box( vec3(-half_size), vec3(half_size) );
+
+	// vertex definitions
+	for( uint k=0; k < 8; k++ ) m->vertices.push_back({ box.corner(k), vec3(0.0f), vec2(0.0f) });
+
+	// index definitions (CCW: counterclockwise by default)
+	if(use_quads)	m->indices = { 0,3,2,1, /*bottom*/ 4,5,6,7, /*top*/ 0,1,5,4, /*left*/ 2,3,7,6, /*right*/ 1,2,6,5, /*front*/ 3,0,4,7 /*back*/ };
+	else			m->indices = { 0,2,1,0,3,2, /*bottom*/ 4,5,6,4,6,7, /*top*/ 0,1,5,0,5,4, /*left*/ 2,3,6,3,7,6, /*right*/ 1,2,6,1,6,5, /*front*/ 0,4,3,3,4,7 /*back*/ };
+	if(double_sided){ auto& i=m->indices; for(size_t k=0,f=use_quads?4:3,kn=i.size()/f;k<kn;k++) for(size_t j=0;j<f;j++) i.push_back(i[(k+1)*f-j-1]); } // insert indices (for CW)
+
+	// create object and geometry
+	m->create_object(name,&box)->create_geometry(0,uint(m->indices.size()),&box,-1);
+
+	return m;
+}
+
+#endif // __GX_MESH__

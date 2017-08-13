@@ -18,12 +18,16 @@
 #ifndef __GX_STRING_H__
 #define __GX_STRING_H__
 //###################################################################
-// COMMON HEADERS for GXUT
+// begin COMMON HEADERS for GXUT
+#pragma warning( disable: 4996 ) // suppress MS security warning for pre-included headers; this is standard only for C11-compatible compilers
 #ifndef _CRT_SECURE_NO_WARNINGS
-#define _CRT_SECURE_NO_WARNINGS
+	#define _CRT_SECURE_NO_WARNINGS
 #endif
 // C standard
 #include <float.h>
+#include <direct.h>		// directory control
+#include <inttypes.h>	// defines int64_t, uint64_t
+#include <io.h>			// low-level io functions
 #include <limits.h>
 #include <math.h>
 #include <stdarg.h>
@@ -34,12 +38,14 @@
 // STL
 #include <algorithm>
 #include <array>
+#include <deque>
+#include <iterator>
 #include <map>
 #include <set>
 #include <string>
 #include <vector>
 // C++11
-#if (_MSC_VER>=1600/*VS2010*/) || (__cplusplus>199711L)
+#if (__cplusplus>199711L) || (_MSC_VER>=1600/*VS2010*/)
 	#include <chrono>
 	#include <functional>
 	#include <thread>
@@ -49,25 +55,30 @@
 	#include <unordered_set>
 	using namespace std::placeholders;
 #endif
-// windows
-#if !defined(__GNUC__)&&(defined(_WIN32)||defined(_WIN64))
+#if defined(_WIN32)||defined(_WIN64) // Windows
 	#include <windows.h>
 	#include <wchar.h>
-	#include <stdint.h>
-#elif !defined(__forceinline) // GCC and clang
-	#define __forceinline inline __attribute__((__always_inline__))
-	#include <inttypes.h> // defines int64_t, uint64_t
 #endif
-#if defined(__clang__) // clang-specific preprocessor
-	#pragma clang diagnostic ignored "-Wmissing-braces"				// ignore excessive warning for initialzer
-	#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"	// ignore non-virtual destructor
+// platform-specific
+#ifndef GX_PLATFORM
+	#if defined _M_IX86
+		#define GX_PLATFORM "x86"
+	#elif defined _M_X64
+		#define GX_PLATFORM "x64"
+	#endif
+#endif
+#ifdef _MSC_VER	// Visual Studio
+#else			// GCC or Clang
+	#ifdef __GNUC__
+		#ifndef __forceinline
+			#define __forceinline inline __attribute__((__always_inline__))
+		#endif
+	#elif defined(__clang__)
+		#pragma clang diagnostic ignored "-Wmissing-braces"				// ignore excessive warning for initialzer
+		#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"	// ignore non-virtual destructor
+	#endif
 #endif
 // common macros
-#ifndef __REDIR_WIDE_STDIO
-	#define __REDIR_WIDE_STDIO
-	inline int __wprintf_r( const wchar_t* fmt,... ){va_list a; va_start(a,fmt);int len=_vscwprintf(fmt,a);static int l=0;static wchar_t* w=nullptr;if(l<len)w=(wchar_t*)realloc(w,((l=len)+1)*sizeof(wchar_t));vswprintf_s(w,len+1,fmt,a); va_end(a);int mblen=WideCharToMultiByte(CP_ACP,0,w,-1,0,0,0,0);static int m=0;static char* b=nullptr;if(m<mblen)b=(char*)realloc(b,((m=mblen)+1)*sizeof(char));WideCharToMultiByte(CP_ACP,0,w,-1,b,mblen,nullptr,nullptr);return fputs(b,stdout);}
-	#define wprintf(...)	__wprintf_r(__VA_ARGS__)
-#endif
 #ifndef SAFE_RELEASE
 	#define SAFE_RELEASE(a) {if(a){a->Release();a=nullptr;}}
 #endif
@@ -80,24 +91,27 @@
 // user types
 #ifndef __TARRAY__
 #define __TARRAY__
-template <class T> struct _tarray2 { union{ struct { T r, g; }; struct { T x, y; }; }; __forceinline T& operator[]( int i ){ return (&x)[i]; } __forceinline const T& operator[]( int i ) const { return (&x)[i]; } };
-template <class T> struct _tarray3 { union{ struct { T r, g, b; }; struct { T x, y, z; }; union{ _tarray2<T> xy; _tarray2<T> rg; struct { T _x; union{ _tarray2<T> yz; _tarray2<T> gb; }; }; }; }; __forceinline T& operator[]( int i ){ return (&x)[i]; } __forceinline const T& operator[]( int i ) const { return (&x)[i]; } };
-template <class T> struct _tarray4 { union{ struct { T r, g, b, a; }; struct { T x, y, z, w; }; struct { union{ _tarray2<T> xy; _tarray2<T> rg; }; union{ _tarray2<T> zw; _tarray2<T> ba; }; }; union{ _tarray3<T> xyz; _tarray3<T> rgb; }; struct { T _x; union{ _tarray3<T> yzw; _tarray3<T> gba; _tarray2<T> yz; _tarray2<T> gb; }; }; }; __forceinline T& operator[]( int i ){ return (&x)[i]; } __forceinline const T& operator[]( int i ) const { return (&x)[i]; } };
-template <class T> struct _tarray9 { union{ T a[9]; struct {T _11,_12,_13,_21,_22,_23,_31,_32,_33;}; }; __forceinline T& operator[]( int i ){ return a[i]; } __forceinline const T& operator[]( int i ) const { return a[i]; } };
-template <class T> struct _tarray16{ union{ T a[16]; struct {T _11,_12,_13,_14,_21,_22,_23,_24,_31,_32,_33,_34,_41,_42,_43,_44;}; }; __forceinline T& operator[]( int i ){ return a[i]; } __forceinline const T& operator[]( int i ) const { return a[i]; } };
-#endif
-using uint		=  unsigned int;		using uchar		= unsigned char;		using ushort	= unsigned short;
-using float2	=  _tarray2<float>;		using float3	= _tarray3<float>;		using float4	= _tarray4<float>;
-using double2	=  _tarray2<double>;	using double3	= _tarray3<double>;		using double4	= _tarray4<double>;
-using int2		=  _tarray2<int>;		using int3		= _tarray3<int>;		using int4		= _tarray4<int>;
-using uint2		=  _tarray2<uint>;		using uint3		= _tarray3<uint>;		using uint4		= _tarray4<uint>;
-using short2	=  _tarray2<short>;		using short3	= _tarray3<short>;		using short4	= _tarray4<short>;
-using ushort2	=  _tarray2<ushort>;	using ushort3	= _tarray3<ushort>;		using ushort4	= _tarray4<ushort>;
-using char2		=  _tarray2<char>;		using char3		= _tarray3<char>;		using char4		= _tarray4<char>;
-using uchar2	=  _tarray2<uchar>;		using uchar3	= _tarray3<uchar>;		using uchar4	= _tarray4<uchar>;
-using bool2		=  _tarray2<bool>;		using bool3		= _tarray3<bool>;		using bool4		= _tarray4<bool>;
-using float9	=  _tarray9<float>;		using float16	= _tarray16<float>;
-using double9	=  _tarray9<double>;	using double16	= _tarray16<double>;
+template <class T, int D> struct tarray { static const int N=D; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline T& operator[]( int i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( int i ) const { return ((T*)this)[i]; } __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } __forceinline bool operator==( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))==0; } __forceinline bool operator!=( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))!=0; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+D; } constexpr size_t size() const { return D; } };
+#define default_ctors(c) __forceinline c()=default;__forceinline c(c&&)=default;__forceinline c(const c&)=default;__forceinline c(std::initializer_list<T> l){T* p=&x;for(auto i:l)(*p++)=i;}
+#define default_assns(c) __forceinline c& operator=(c&&)=default;__forceinline c& operator=(const c&)=default; __forceinline c& operator=(T a){ for(auto& it:*this) it=a; return *this; }
+template <class T> struct tarray2	: public tarray<T,2> {	union{struct{T x,y;};struct{T r,g;};}; default_ctors(tarray2); default_assns(tarray2); };
+template <class T> struct tarray3	: public tarray<T,3> {	using V2=tarray2<T>; union{struct{T x,y,z;};struct{T r,g,b;};union{V2 xy,rg;};struct{T _x;union{V2 yz,gb;};};}; default_ctors(tarray3); default_assns(tarray3); };
+template <class T> struct tarray4	: public tarray<T,4> {	using V2=tarray2<T>; using V3=tarray3<T>; union{struct{T x,y,z,w;};struct{T r,g,b,a;};struct{union{V2 xy,rg;};union{V2 zw,ba;};};union{V3 xyz,rgb;};struct{T _x;union{V3 yzw,gba;V2 yz,gb;};};}; default_ctors(tarray4); default_assns(tarray4); };
+template <class T> struct tarray9	: public tarray<T,9> {	union{T a[9];struct{T _11,_12,_13,_21,_22,_23,_31,_32,_33;};}; };
+template <class T> struct tarray16	: public tarray<T,16> {	union{T a[16];struct{T _11,_12,_13,_14,_21,_22,_23,_24,_31,_32,_33,_34,_41,_42,_43,_44;}; }; };
+#endif // __TARRAY__
+using uint		= unsigned int;		using uchar		= unsigned char;	using ushort	= unsigned short;
+using float2	= tarray2<float>;	using float3	= tarray3<float>;	using float4	= tarray4<float>;
+using double2	= tarray2<double>;	using double3	= tarray3<double>;	using double4	= tarray4<double>;
+using int2		= tarray2<int>;		using int3		= tarray3<int>;		using int4		= tarray4<int>;
+using uint2		= tarray2<uint>;	using uint3		= tarray3<uint>;	using uint4		= tarray4<uint>;
+using short2	= tarray2<short>;	using short3	= tarray3<short>;	using short4	= tarray4<short>;
+using ushort2	= tarray2<ushort>;	using ushort3	= tarray3<ushort>;	using ushort4	= tarray4<ushort>;
+using char2		= tarray2<char>;	using char3		= tarray3<char>;	using char4		= tarray4<char>;
+using uchar2	= tarray2<uchar>;	using uchar3	= tarray3<uchar>;	using uchar4	= tarray4<uchar>;
+using bool2		= tarray2<bool>;	using bool3		= tarray3<bool>;	using bool4		= tarray4<bool>;
+using float9	= tarray9<float>;	using float16	= tarray16<float>;
+using double9	= tarray9<double>;	using double16	= tarray16<double>;
 // end COMMON HEADERS for GXUT
 //###################################################################
 
@@ -110,12 +124,12 @@ static const unsigned char BOM_UTF8[3]={0xEF,0xBB,0xBF};
 static const unsigned char BOM_UTF16[2]={0xFF,0xFE};			// little endian
 static const unsigned char BOM_UTF32[4]={0xFF,0xFE,0x00,0x00};	// little endian
 
-//*******************************************************************
+//***********************************************
 // 0. overloaded string functions for wchar_t
-inline wchar_t* strcpy( wchar_t* _Dest, const wchar_t* _Source ){ return wcscpy(_Dest,_Source); }
-inline wchar_t* strncpy( wchar_t* _Dest, const wchar_t* _Source, size_t _Count ){ return wcsncpy(_Dest,_Source,_Count); }
-inline wchar_t* strcat( wchar_t* _Dest, const wchar_t* _Source ){ return wcscat(_Dest,_Source); }
-inline wchar_t* strncat( wchar_t* _Dest, const wchar_t* _Source, size_t _Count ){ return wcsncat(_Dest,_Source,_Count); }
+inline wchar_t* strcpy( wchar_t* _Dest, const wchar_t* _Src ){ return wcscpy(_Dest,_Src); }
+inline wchar_t* strncpy( wchar_t* _Dest, const wchar_t* _Src, size_t _Count ){ return wcsncpy(_Dest,_Src,_Count); }
+inline wchar_t* strcat( wchar_t* _Dest, const wchar_t* _Src ){ return wcscat(_Dest,_Src);  }
+inline wchar_t* strncat( wchar_t* _Dest, const wchar_t* _Src, size_t _Count ){ return wcsncat(_Dest,_Src,_Count); }
 inline int strcmp( const wchar_t* _Str1, const wchar_t* _Str2 ){ return wcscmp(_Str1,_Str2); }
 inline int strncmp( const wchar_t* _Str1, const wchar_t* _Str2, size_t _MaxCount ){ return wcsncmp(_Str1,_Str2,_MaxCount); }
 inline const wchar_t* strchr( const wchar_t* _Str, int _Val ){ return wcschr(_Str,_Val); }
@@ -129,16 +143,16 @@ inline size_t strlen( const wchar_t* _Str ){ return wcslen(_Str); }
 inline const wchar_t * strpbrk( const wchar_t* _Str, const wchar_t* _Control ){ return wcspbrk(_Str,_Control); }
 inline wchar_t * strpbrk( wchar_t* _Str, const wchar_t* _Control ){ return wcspbrk(_Str,_Control); }
 // 0.1 VC extensions
-inline wchar_t* _strlwr( wchar_t* _Str ){ return _wcslwr(_Str); } 
-inline wchar_t* _strupr( wchar_t* _Str ){ return _wcsupr(_Str); }
+inline wchar_t* _strlwr( wchar_t* _Str ){ return _wcslwr(_Str); return _Str; } 
+inline wchar_t* _strupr( wchar_t* _Str ){ return _wcsupr(_Str); return _Str; }
 inline int _stricmp( const wchar_t* _Str1, const wchar_t* _Str2 ){ return _wcsicmp(_Str1,_Str2); }
 // 0.2 slee extensions
 template <class T> inline size_t _strrspn( const T* _Str, const T* _Control ){size_t L=strlen(_Str),C=strlen(_Control),k=0,j=0;for(k=0;k<L;k++){for(j=0;j<C;j++)if(_Str[L-1-k]==_Control[j])break;if(j==C)break;}return k;}
-inline const char* _stristr( const char* _Str1, const char* _Str2 ){ char* s1=_strlwr(_strdup(_Str1)); char* s2=_strlwr(_strdup(_Str2)); const char* r=strstr(s1,s2); if(r)r=_Str1+(r-s1); free(s1); free(s2); return r; }
-inline const wchar_t* _stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ wchar_t* s1=_wcslwr(_wcsdup(_Str1)); wchar_t* s2=_wcslwr(_wcsdup(_Str2)); const wchar_t* r=wcsstr(s1,s2); if(r)r=_Str1+(r-s1); free(s1); free(s2); return r; }
-inline const wchar_t* _wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ wchar_t* s1=_wcslwr(_wcsdup(_Str1)); wchar_t* s2=_wcslwr(_wcsdup(_Str2)); const wchar_t* r=wcsstr(s1,s2); if(r)r=_Str1+(r-s1); free(s1); free(s2); return r; }
+inline const char* _stristr( const char* _Str1, const char* _Str2 ){ char* s1=_strdup(_Str1);_strlwr(s1); char* s2=_strdup(_Str2);_strlwr(s2); const char* r=strstr(s1,s2); if(r)r=_Str1+(r-s1); free(s1); free(s2); return r; }
+inline const wchar_t* _wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ wchar_t* s1=_wcsdup(_Str1); _wcslwr(s1); wchar_t* s2=_wcsdup(_Str2); _wcslwr(s2); const wchar_t* r=wcsstr(s1,s2); if(r)r=_Str1+(r-s1); free(s1); free(s2); return r; }
+inline const wchar_t* _stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return _wcsistr(_Str1,_Str2); }
 
-//*******************************************************************
+//***********************************************
 // 0.3 case-insensitive comparison for std::map/set, std::unordered_map/set
 namespace nocase
 {
@@ -170,33 +184,33 @@ namespace nocase
 	template <class T, class V> using	unordered_map = std::unordered_map<T,V,std::hash<T>,nocase::equal_to<T>>;
 }
 
-//*******************************************************************
+//***********************************************
 // 1. shared circular buffers
 template <class T> inline T* __tstrbuf( size_t len ){static T* C[SHARED_CIRCULAR_BUFFER_SIZE]={0};static uint cid=0;T*& p=C[cid=((cid+1)%SHARED_CIRCULAR_BUFFER_SIZE)];p=(T*)realloc(p,sizeof(T)*(len+1));p[len]=0;return p;}
 template <class T> inline T* __tstrdup( const T* s,size_t slen=-1 ){ if(slen==-1)slen=strlen(s); return (T*)memcpy(__tstrbuf<T>(slen),s,sizeof(T)*slen); }
 inline char* _strbuf( size_t len ){ return __tstrbuf<char>(len); }
 inline wchar_t* _wcsbuf( size_t len ){ return __tstrbuf<wchar_t>(len); }
 
-//*******************************************************************
+//***********************************************
 // 2. format
 inline const char* vformat( va_list a, const char* fmt ){ size_t len=size_t(_vscprintf(fmt,a)); char* buffer=_strbuf(len); vsprintf_s(buffer,len+1,fmt,a); return buffer; }
 inline const wchar_t* vformat( va_list a, const wchar_t* fmt ){ size_t len=size_t(_vscwprintf(fmt,a)); wchar_t* bufferW=_wcsbuf(len); vswprintf_s(bufferW,len+1,fmt,a); return bufferW; }
 inline const char* format( const char* fmt,... ){ va_list a; va_start(a,fmt); size_t len=size_t(_vscprintf(fmt,a)); char* buffer=_strbuf(len); vsprintf_s(buffer,len+1,fmt,a); va_end(a); return buffer; }
 inline const wchar_t* format( const wchar_t* fmt,... ){ va_list a; va_start(a,fmt); size_t len=size_t(_vscwprintf(fmt,a)); wchar_t* bufferW=_wcsbuf(len); vswprintf_s(bufferW,len+1,fmt,a); va_end(a); return bufferW; }
 
-//*******************************************************************
+//***********************************************
 // 3. case conversion
 template <class T> inline const T* tolower( const T* src ){ return _strlwr(__tstrdup(src)); }
 template <class T> inline const T* toupper( const T* src ){ return _strupr(__tstrdup(src)); }
 inline const char* tovarname( const char* src ){ if(!src||!*src) return ""; char *s=(char*)src,*dst=__tstrbuf<char>(strlen(src)+2), *d=dst; if(!isalpha(*s)&&(*s)!='_') *(d++)='_'; for(;*s;s++,d++) *d=isalnum(*s)?(*s):'_'; *d='\0'; return dst; }
 
-//*******************************************************************
+//***********************************************
 // 4. conversion between const wchar_t* and const char*
 template <class T,class I> const T* _strcvt( const I* s ){size_t len=strlen(s);T* buff=__tstrbuf<T>(len);for(uint k=0;k<len;k++)buff[k]=T(s[k]);return buff;}
 inline const wchar_t* atow( const char* a ){int wlen=MultiByteToWideChar(CP_ACP,0,a,-1,0,0);wchar_t* wbuff=_wcsbuf(wlen);MultiByteToWideChar(CP_ACP,0,a,-1,wbuff,wlen);return wbuff;}
 inline const char* wtoa( const wchar_t* w ){int mblen=WideCharToMultiByte(CP_ACP,0,w,-1,0,0,0,0);char* buff=_strbuf(mblen);WideCharToMultiByte(CP_ACP,0,w,-1,buff,mblen,nullptr,nullptr);return buff;}
 
-//*******************************************************************
+//***********************************************
 // 5. conversion to string types
 inline const char* btoa( bool b ){ return b?"1":"0"; }
 inline const char* itoa( int i ){static const char* fmt="%d";size_t size=size_t(_scprintf(fmt,i));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,i);return buff;}
@@ -233,7 +247,7 @@ inline const char* dtoa( const double4& v ){static const char* fmt="%g %g %g %g"
 inline const char* dtoa( const double9& v ){static const char* fmt="%g %g %g %g %g %g %g %g %g";size_t size=size_t(_scprintf(fmt,v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],v[8]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],v[8]);return buff;}
 inline const char* dtoa( const double16& v ){static const char* fmt="%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g";size_t size=size_t(_scprintf(fmt,v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],v[8],v[9],v[10],v[11],v[12],v[13],v[14],v[15]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],v[8],v[9],v[10],v[11],v[12],v[13],v[14],v[15]);return buff;}
 
-//*******************************************************************
+//***********************************************
 // 5.2 Special-purpose functions
 
 // conversion int to string with commas
@@ -246,7 +260,7 @@ inline const char* itoasep( int n )
 	return format("%s%s",n>0?"":"-",&v[0]);
 }
 
-//*******************************************************************
+//***********************************************
 // 6. conversion to wstring types
 inline const wchar_t* btow( bool b ){			return atow(btoa(b)); }
 inline const wchar_t* itow( int i ){			return atow(itoa(i)); }
@@ -283,28 +297,50 @@ inline const wchar_t* dtow( const double4& v ){	return atow(dtoa(v)); }
 inline const wchar_t* dtow( const double9& m ){	return atow(dtoa(m)); }
 inline const wchar_t* dtow( const double16& m ){return atow(dtoa(m)); }
 
-//*******************************************************************
+//***********************************************
 // 7. conversion from string to user types
+
+__forceinline float __atof( const char *p ) // fast atof: taken from fast_atof.c (nearly 5x faster than crt atof())
+{
+	while(*p==' '||*p=='\t') p++; // skip leading white spaces
+	bool sign=true; if(*p=='-'){ sign=false; p++; } else if(*p=='+') p++; // get sign
+	double value=0.0; for(; *p>='0'&&*p<='9'; p++ ) value=value*10.0+double(*p-'0'); // get digits before decimal point or exponent
+	if(*p=='.'){ double pow10=0.1; p++; while(*p>='0'&&*p<='9'){ value+=(*p-'0')*pow10; pow10*=0.1; p++; } } // get digits after decimal point
+	if(*p!='e'&&*p!='E') return float(sign?value:-value);
+
+	// Handle exponent
+	bool frac=false; p++; if(*p=='-'){ frac=true; p++; } else if(*p=='+') p++; // get sign of exponent
+	uint expon; for(expon=0; *p>='0'&&*p<='9'; p++ ) expon=expon*10+(*p-'0'); if(expon>308) expon=308;	// get digits of exponent
+
+	// Calculate scaling factor
+	double scale = 1.0;
+	while(expon >= 50){ scale *= 1E50; expon -= 50; }
+	while(expon >=  8){ scale *= 1E8;  expon -=  8; }
+	while(expon >   0){ scale *= 10.0; expon -=  1; }
+	value = float(frac?(value/scale):(value*scale));
+	return float(sign?value:-value);
+}
+
 inline bool atob( const char* a ){ return _stricmp(a,"true")==0||atoi(a)!=0; }
-inline uint atou( const char* a ){uint v;sscanf(a,"%u",&v);return v; }
-inline uint atou( const wchar_t* a ){uint v;swscanf(a,L"%u",&v);return v; }
-inline uint64_t atoull( const char* a ){uint64_t v;sscanf(a,"%llu",&v); return v; }
-inline int2 atoi2( const char* a ){int2 v;sscanf(a,"%d %d",&v[0],&v[1]);return v; }
-inline int3 atoi3( const char* a ){int3 v;sscanf(a,"%d %d %d",&v[0],&v[1],&v[2]);return v; }
-inline int4 atoi4( const char* a ){int4 v;sscanf(a,"%d %d %d %d",&v[0],&v[1],&v[2],&v[3]);return v; }
-inline uint2 atou2( const char* a ){uint2 v;sscanf(a,"%u %u",&v[0],&v[1]);return v; }
-inline uint3 atou3( const char* a ){uint3 v;sscanf(a,"%u %u %u",&v[0],&v[1],&v[2]);return v; }
-inline uint4 atou4( const char* a ){uint4 v;sscanf(a,"%u %u %u %u",&v[0],&v[1],&v[2],&v[3]);return v; }
-inline float2 atof2( const char* a ){float2 v; sscanf(a,"%f %f",&v[0],&v[1]);return v;}
-inline float3 atof3( const char* a ){float3 v; sscanf(a,"%f %f %f",&v[0],&v[1],&v[2]);return v;}
-inline float4 atof4( const char* a ){float4 v; sscanf(a,"%f %f %f %f",&v[0],&v[1],&v[2],&v[3]);return v;}
-inline float9 atof9( const char* a ){float9 v; sscanf(a,"%f %f %f %f %f %f %f %f %f",&v[0],&v[1],&v[2],&v[3],&v[4],&v[5],&v[6],&v[7],&v[8]);return v; }
-inline float16 atof16( const char* a ){float16 v; sscanf(a,"%f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f",&v[0],&v[1],&v[2],&v[3],&v[4],&v[5],&v[6],&v[7],&v[8],&v[9],&v[10],&v[11],&v[12],&v[13],&v[14],&v[15]);return v; }
-inline double2 atod2( const char* a ){double2 v; sscanf(a,"%lf %lf",&v[0],&v[1]);return v;}
-inline double3 atod3( const char* a ){double3 v; sscanf(a,"%lf %lf %lf",&v[0],&v[1],&v[2]);return v;}
-inline double4 atod4( const char* a ){double4 v; sscanf(a,"%lf %lf %lf %lf",&v[0],&v[1],&v[2],&v[3]);return v;}
-inline double9 atod9( const char* a ){double9 v; sscanf(a,"%lf %lf %lf %lf %lf %lf %lf %lf %lf",&v[0],&v[1],&v[2],&v[3],&v[4],&v[5],&v[6],&v[7],&v[8]);return v; }
-inline double16 atod16( const char* a ){double16 v; sscanf(a,"%lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf",&v[0],&v[1],&v[2],&v[3],&v[4],&v[5],&v[6],&v[7],&v[8],&v[9],&v[10],&v[11],&v[12],&v[13],&v[14],&v[15]);return v; }
+inline uint atou( const char* a ){ char* e=nullptr;uint v=(uint)strtoul(a,&e,10); return v; }
+inline uint atou( const wchar_t* w ){ wchar_t* e=nullptr;uint v=(uint)wcstoul(w,&e,10); return v; }
+inline uint64_t atoull( const char* a ){ char* e=nullptr;uint64_t v=strtoull(a,&e,10); return v; }
+inline int2 atoi2( const char* a ){ int2 v;char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=(int)strtol(a,&e,10); return v; }
+inline int3 atoi3( const char* a ){ int3 v;char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=(int)strtol(a,&e,10); return v; }
+inline int4 atoi4( const char* a ){ int4 v;char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=(int)strtol(a,&e,10); return v; }
+inline uint2 atou2( const char* a ){ uint2 v;char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=strtoul(a,&e,10); return v; }
+inline uint3 atou3( const char* a ){ uint3 v;char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=strtoul(a,&e,10); return v; }
+inline uint4 atou4( const char* a ){ uint4 v;char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=strtoul(a,&e,10); return v; }
+inline float2 atof2( const char* a ){ float2 v;char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=strtof(a,&e); return v; }
+inline float3 atof3( const char* a ){ float3 v;char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=strtof(a,&e); return v; }
+inline float4 atof4( const char* a ){ float4 v;char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=strtof(a,&e); return v; }
+inline float9 atof9( const char* a ){ float9 v;char* e=nullptr;for(int k=0;k<9;k++,a=e) v[k]=strtof(a,&e); return v; }
+inline float16 atof16( const char* a ){ float16 v;char* e=nullptr;for(int k=0;k<16;k++,a=e) v[k]=strtof(a,&e); return v; }
+inline double2 atod2( const char* a ){ double2 v;char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=strtod(a,&e); return v; }
+inline double3 atod3( const char* a ){ double3 v;char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=strtod(a,&e); return v; }
+inline double4 atod4( const char* a ){ double4 v;char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=strtod(a,&e); return v; }
+inline double9 atod9( const char* a ){ double9 v;char* e=nullptr;for(int k=0;k<9;k++,a=e) v[k]=strtod(a,&e); return v; }
+inline double16 atod16( const char* a ){ double16 v;char* e=nullptr;for(int k=0;k<16;k++,a=e) v[k]=strtod(a,&e); return v; }
 
 inline bool atob( const std::string& s ){ return atob(s.c_str()); }
 inline int atoi( const std::string& s ){ return int(atoi(s.c_str())); }
@@ -328,7 +364,7 @@ inline double4 atod4( const std::string& s ){ return atod4(s.c_str()); }
 inline double9 atod9( const std::string& s ){ return atod9(s.c_str()); }
 inline double16 atod16( const std::string& s ){ return atod16(s.c_str()); }
 
-//*******************************************************************
+//***********************************************
 // 8. conversion from wstring to user types
 inline int atoi( const wchar_t* w ){		return int(_wtoi(w)); }
 inline float atof( const wchar_t* w ){		return float(_wtof(w)); }
@@ -377,7 +413,7 @@ inline double4 wtod4( const std::wstring& w ){	return wtod4(w.c_str()); }
 inline double9 wtod9( const std::wstring& w ){	return wtod9(w.c_str()); }
 inline double16 wtod16( const std::wstring& w ){return wtod16(w.c_str()); }
 
-//*******************************************************************
+//***********************************************
 // 9. trim
 template <class T>
 inline const T* trim( const T* src, const T* junk=_strcvt<T>(" \t\n") )
@@ -399,7 +435,7 @@ inline const T* trim_comment( const T* src, const T* commentMark=_strcvt<T>("#")
 	return trim(s);
 }
 
-//*******************************************************************
+//***********************************************
 // 10. explode
 template <class T>
 inline std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T> > >
@@ -465,7 +501,7 @@ inline std::vector<const T*> explode_conservative( const T* _Src, T _Delim )
 	return vs;
 }
 
-//*******************************************************************
+//***********************************************
 // 11. replace
 template <class T>
 inline const T* str_replace( const T* _Src, const T* _Find, const T* _Replace )
@@ -493,5 +529,5 @@ inline const T* str_ireplace( const T* _Src, const T* _Find, const T* _Replace )
 	return __tstrdup(&buff[0],buff.size());
 }
 
-//*******************************************************************
-#endif __GX_STRING_H__
+//***********************************************
+#endif // __GX_STRING_H__

@@ -18,12 +18,16 @@
 #ifndef __GX_MEMORY_H__
 #define __GX_MEMORY_H__
 //###################################################################
-// COMMON HEADERS for GXUT
+// begin COMMON HEADERS for GXUT
+#pragma warning( disable: 4996 ) // suppress MS security warning for pre-included headers; this is standard only for C11-compatible compilers
 #ifndef _CRT_SECURE_NO_WARNINGS
-#define _CRT_SECURE_NO_WARNINGS
+	#define _CRT_SECURE_NO_WARNINGS
 #endif
 // C standard
 #include <float.h>
+#include <direct.h>		// directory control
+#include <inttypes.h>	// defines int64_t, uint64_t
+#include <io.h>			// low-level io functions
 #include <limits.h>
 #include <math.h>
 #include <stdarg.h>
@@ -34,12 +38,14 @@
 // STL
 #include <algorithm>
 #include <array>
+#include <deque>
+#include <iterator>
 #include <map>
 #include <set>
 #include <string>
 #include <vector>
 // C++11
-#if (_MSC_VER>=1600/*VS2010*/) || (__cplusplus>199711L)
+#if (__cplusplus>199711L) || (_MSC_VER>=1600/*VS2010*/)
 	#include <chrono>
 	#include <functional>
 	#include <thread>
@@ -49,25 +55,30 @@
 	#include <unordered_set>
 	using namespace std::placeholders;
 #endif
-// windows
-#if !defined(__GNUC__)&&(defined(_WIN32)||defined(_WIN64))
+#if defined(_WIN32)||defined(_WIN64) // Windows
 	#include <windows.h>
 	#include <wchar.h>
-	#include <stdint.h>
-#elif !defined(__forceinline) // GCC and clang
-	#define __forceinline inline __attribute__((__always_inline__))
-	#include <inttypes.h> // defines int64_t, uint64_t
 #endif
-#if defined(__clang__) // clang-specific preprocessor
-	#pragma clang diagnostic ignored "-Wmissing-braces"				// ignore excessive warning for initialzer
-	#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"	// ignore non-virtual destructor
+// platform-specific
+#ifndef GX_PLATFORM
+	#if defined _M_IX86
+		#define GX_PLATFORM "x86"
+	#elif defined _M_X64
+		#define GX_PLATFORM "x64"
+	#endif
+#endif
+#ifdef _MSC_VER	// Visual Studio
+#else			// GCC or Clang
+	#ifdef __GNUC__
+		#ifndef __forceinline
+			#define __forceinline inline __attribute__((__always_inline__))
+		#endif
+	#elif defined(__clang__)
+		#pragma clang diagnostic ignored "-Wmissing-braces"				// ignore excessive warning for initialzer
+		#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"	// ignore non-virtual destructor
+	#endif
 #endif
 // common macros
-#ifndef __REDIR_WIDE_STDIO
-	#define __REDIR_WIDE_STDIO
-	inline int __wprintf_r( const wchar_t* fmt,... ){va_list a; va_start(a,fmt);int len=_vscwprintf(fmt,a);static int l=0;static wchar_t* w=nullptr;if(l<len)w=(wchar_t*)realloc(w,((l=len)+1)*sizeof(wchar_t));vswprintf_s(w,len+1,fmt,a); va_end(a);int mblen=WideCharToMultiByte(CP_ACP,0,w,-1,0,0,0,0);static int m=0;static char* b=nullptr;if(m<mblen)b=(char*)realloc(b,((m=mblen)+1)*sizeof(char));WideCharToMultiByte(CP_ACP,0,w,-1,b,mblen,nullptr,nullptr);return fputs(b,stdout);}
-	#define wprintf(...)	__wprintf_r(__VA_ARGS__)
-#endif
 #ifndef SAFE_RELEASE
 	#define SAFE_RELEASE(a) {if(a){a->Release();a=nullptr;}}
 #endif
@@ -80,31 +91,39 @@
 // user types
 #ifndef __TARRAY__
 #define __TARRAY__
-template <class T> struct _tarray2 { union{ struct { T r, g; }; struct { T x, y; }; }; __forceinline T& operator[]( int i ){ return (&x)[i]; } __forceinline const T& operator[]( int i ) const { return (&x)[i]; } };
-template <class T> struct _tarray3 { union{ struct { T r, g, b; }; struct { T x, y, z; }; union{ _tarray2<T> xy; _tarray2<T> rg; struct { T _x; union{ _tarray2<T> yz; _tarray2<T> gb; }; }; }; }; __forceinline T& operator[]( int i ){ return (&x)[i]; } __forceinline const T& operator[]( int i ) const { return (&x)[i]; } };
-template <class T> struct _tarray4 { union{ struct { T r, g, b, a; }; struct { T x, y, z, w; }; struct { union{ _tarray2<T> xy; _tarray2<T> rg; }; union{ _tarray2<T> zw; _tarray2<T> ba; }; }; union{ _tarray3<T> xyz; _tarray3<T> rgb; }; struct { T _x; union{ _tarray3<T> yzw; _tarray3<T> gba; _tarray2<T> yz; _tarray2<T> gb; }; }; }; __forceinline T& operator[]( int i ){ return (&x)[i]; } __forceinline const T& operator[]( int i ) const { return (&x)[i]; } };
-template <class T> struct _tarray9 { union{ T a[9]; struct {T _11,_12,_13,_21,_22,_23,_31,_32,_33;}; }; __forceinline T& operator[]( int i ){ return a[i]; } __forceinline const T& operator[]( int i ) const { return a[i]; } };
-template <class T> struct _tarray16{ union{ T a[16]; struct {T _11,_12,_13,_14,_21,_22,_23,_24,_31,_32,_33,_34,_41,_42,_43,_44;}; }; __forceinline T& operator[]( int i ){ return a[i]; } __forceinline const T& operator[]( int i ) const { return a[i]; } };
-#endif
-using uint		=  unsigned int;		using uchar		= unsigned char;		using ushort	= unsigned short;
-using float2	=  _tarray2<float>;		using float3	= _tarray3<float>;		using float4	= _tarray4<float>;
-using double2	=  _tarray2<double>;	using double3	= _tarray3<double>;		using double4	= _tarray4<double>;
-using int2		=  _tarray2<int>;		using int3		= _tarray3<int>;		using int4		= _tarray4<int>;
-using uint2		=  _tarray2<uint>;		using uint3		= _tarray3<uint>;		using uint4		= _tarray4<uint>;
-using short2	=  _tarray2<short>;		using short3	= _tarray3<short>;		using short4	= _tarray4<short>;
-using ushort2	=  _tarray2<ushort>;	using ushort3	= _tarray3<ushort>;		using ushort4	= _tarray4<ushort>;
-using char2		=  _tarray2<char>;		using char3		= _tarray3<char>;		using char4		= _tarray4<char>;
-using uchar2	=  _tarray2<uchar>;		using uchar3	= _tarray3<uchar>;		using uchar4	= _tarray4<uchar>;
-using bool2		=  _tarray2<bool>;		using bool3		= _tarray3<bool>;		using bool4		= _tarray4<bool>;
-using float9	=  _tarray9<float>;		using float16	= _tarray16<float>;
-using double9	=  _tarray9<double>;	using double16	= _tarray16<double>;
+template <class T, int D> struct tarray { static const int N=D; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline T& operator[]( int i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( int i ) const { return ((T*)this)[i]; } __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } __forceinline bool operator==( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))==0; } __forceinline bool operator!=( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))!=0; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+D; } constexpr size_t size() const { return D; } };
+#define default_ctors(c) __forceinline c()=default;__forceinline c(c&&)=default;__forceinline c(const c&)=default;__forceinline c(std::initializer_list<T> l){T* p=&x;for(auto i:l)(*p++)=i;}
+#define default_assns(c) __forceinline c& operator=(c&&)=default;__forceinline c& operator=(const c&)=default; __forceinline c& operator=(T a){ for(auto& it:*this) it=a; return *this; }
+template <class T> struct tarray2	: public tarray<T,2> {	union{struct{T x,y;};struct{T r,g;};}; default_ctors(tarray2); default_assns(tarray2); };
+template <class T> struct tarray3	: public tarray<T,3> {	using V2=tarray2<T>; union{struct{T x,y,z;};struct{T r,g,b;};union{V2 xy,rg;};struct{T _x;union{V2 yz,gb;};};}; default_ctors(tarray3); default_assns(tarray3); };
+template <class T> struct tarray4	: public tarray<T,4> {	using V2=tarray2<T>; using V3=tarray3<T>; union{struct{T x,y,z,w;};struct{T r,g,b,a;};struct{union{V2 xy,rg;};union{V2 zw,ba;};};union{V3 xyz,rgb;};struct{T _x;union{V3 yzw,gba;V2 yz,gb;};};}; default_ctors(tarray4); default_assns(tarray4); };
+template <class T> struct tarray9	: public tarray<T,9> {	union{T a[9];struct{T _11,_12,_13,_21,_22,_23,_31,_32,_33;};}; };
+template <class T> struct tarray16	: public tarray<T,16> {	union{T a[16];struct{T _11,_12,_13,_14,_21,_22,_23,_24,_31,_32,_33,_34,_41,_42,_43,_44;}; }; };
+#endif // __TARRAY__
+using uint		= unsigned int;		using uchar		= unsigned char;	using ushort	= unsigned short;
+using float2	= tarray2<float>;	using float3	= tarray3<float>;	using float4	= tarray4<float>;
+using double2	= tarray2<double>;	using double3	= tarray3<double>;	using double4	= tarray4<double>;
+using int2		= tarray2<int>;		using int3		= tarray3<int>;		using int4		= tarray4<int>;
+using uint2		= tarray2<uint>;	using uint3		= tarray3<uint>;	using uint4		= tarray4<uint>;
+using short2	= tarray2<short>;	using short3	= tarray3<short>;	using short4	= tarray4<short>;
+using ushort2	= tarray2<ushort>;	using ushort3	= tarray3<ushort>;	using ushort4	= tarray4<ushort>;
+using char2		= tarray2<char>;	using char3		= tarray3<char>;	using char4		= tarray4<char>;
+using uchar2	= tarray2<uchar>;	using uchar3	= tarray3<uchar>;	using uchar4	= tarray4<uchar>;
+using bool2		= tarray2<bool>;	using bool3		= tarray3<bool>;	using bool4		= tarray4<bool>;
+using float9	= tarray9<float>;	using float16	= tarray16<float>;
+using double9	= tarray9<double>;	using double16	= tarray16<double>;
 // end COMMON HEADERS for GXUT
 //###################################################################
 
+#include "gxfilesystem.h"
+
 #if defined(__SSE4_2__)||!defined(__clang__)
+	#include <intrin.h>
 	#include <nmmintrin.h>
 #endif
 
+#ifndef __GX_MEM_T__
+#define __GX_MEM_T__
 struct mem_t
 {
 	void*		ptr = nullptr;
@@ -120,8 +139,10 @@ struct mem_t
 	__forceinline int strcmp( const char* src ){ return ::memcmp((char*)ptr,src,::strlen(src)); }
 	__forceinline int wcscmp( const wchar_t* src ){ return ::memcmp((wchar_t*)ptr,src,::wcslen(src)*sizeof(wchar_t)); }
 	__forceinline bool operator==( const mem_t& m ) const { if(size!=m.size) return false; return memcmp(ptr,m.ptr,size)==0; }
+	__forceinline operator bool() const { return ptr!=nullptr&&size>0; }
 	template <class T> __forceinline operator T* (){ return (T*) ptr; }
 };
+#endif
 
 template <class T> class mmap // memory-mapped file (similarly to virtual memory)
 {
@@ -129,11 +150,11 @@ template <class T> class mmap // memory-mapped file (similarly to virtual memory
 	HANDLE	hFileMap = INVALID_HANDLE_VALUE;	// handle to the file mapping
 	size_t	_chunk=(1<<16); public: size_t size=0;
 
-	static const wchar_t* _uname(){ static wchar_t fileName[256]; SYSTEMTIME s; GetSystemTime( &s ); wsprintf( fileName, L"%p%02d%02d%02d%02d%04d%05d", GetCurrentThreadId(), s.wDay, s.wHour, s.wMinute, s.wSecond, s.wMilliseconds, rand() ); return fileName; } // make unique file name
-	mmap( size_t n, size_t chunk=(1<<16) ):size(n),_chunk(chunk){ hFileMap=CreateFileMappingW( INVALID_HANDLE_VALUE /* use pagefile */, nullptr, PAGE_READWRITE, 0, DWORD(size*sizeof(T)), _uname() ); }
-	mmap( const wchar_t* file_path, size_t n=0, size_t chunk=(1<<16) ):size(n),_chunk(chunk) /* if n>0 or n != existing file size, a new file with n is created */ { struct _stat s={0}; if(_waccess(file_path,0)==0) _wstat(file_path,&s); size_t file_size=s.st_size; bool b_open = file_size>0&&(n==0||n==file_size); if(b_open) size = file_size; hFile = CreateFileW( file_path, GENERIC_READ|GENERIC_WRITE, 0, nullptr, b_open?OPEN_EXISTING:CREATE_ALWAYS, FILE_FLAG_RANDOM_ACCESS, nullptr ); if(hFile==INVALID_HANDLE_VALUE){ size=0; _chunk=0; return; } hFileMap=CreateFileMappingW( hFile, nullptr, PAGE_READWRITE, 0, uint(size*sizeof(T)), nullptr ); if(hFileMap==INVALID_HANDLE_VALUE){ size=0; _chunk=0; CloseHandle(hFile); return; } }
+	static const wchar_t* _uname(){ static wchar_t fileName[256]; SYSTEMTIME s; GetSystemTime( &s ); wsprintfW( fileName, L"%p%02d%02d%02d%02d%04d%05d", GetCurrentThreadId(), s.wDay, s.wHour, s.wMinute, s.wSecond, s.wMilliseconds, rand() ); return fileName; } // make unique file name
+	mmap( size_t n, size_t chunk=(1<<16) ):size(n),_chunk(chunk){ size_t s=size*sizeof(T); hFileMap=CreateFileMappingW( INVALID_HANDLE_VALUE /* use pagefile */, nullptr, PAGE_READWRITE, DWORD(s>>32), DWORD(s&0xffffffff), _uname() ); }
+	mmap( const wchar_t* file_path, size_t n=0, size_t chunk=(1<<16) ):size(n),_chunk(chunk) /* if n>0 or n != existing file size, a new file with n is created */ { struct _stat st={0}; bool file_exists=_waccess(file_path,0)==0; if(file_exists) _wstat(file_path,&st); size_t file_size=st.st_size; bool b_open = file_size>0&&(n==0||n==file_size); if(b_open) size=file_size/sizeof(T); else if(file_exists) _wunlink(file_path); hFile = CreateFileW( file_path, GENERIC_READ|GENERIC_WRITE, 0, nullptr, b_open?OPEN_EXISTING:CREATE_ALWAYS, FILE_FLAG_RANDOM_ACCESS, nullptr ); if(hFile==INVALID_HANDLE_VALUE){ size=0; _chunk=0; return; } size_t memsize=sizeof(T)*size; hFileMap=CreateFileMappingW( hFile, nullptr, PAGE_READWRITE, DWORD(uint64_t(memsize)>>32), DWORD(memsize&0xffffffff), nullptr ); if(hFileMap==INVALID_HANDLE_VALUE){ size=0; _chunk=0; CloseHandle(hFile); return; } }
 	~mmap(){ if(hFile!=INVALID_HANDLE_VALUE) CloseHandle(hFile); hFile=INVALID_HANDLE_VALUE; if(hFileMap!=INVALID_HANDLE_VALUE) CloseHandle(hFileMap); hFileMap=INVALID_HANDLE_VALUE; }
-	T* map( size_t offset=0, size_t n=0 ){ return n==0&&size==0?nullptr:(T*)MapViewOfFile( hFileMap, FILE_MAP_READ|FILE_MAP_WRITE, 0, DWORD(offset*sizeof(T)), (n?n:size)*sizeof(T) ); }
+	T* map( size_t offset=0, size_t n=0 ){ size_t s=offset*sizeof(T); return n==0&&size==0?nullptr:(T*)MapViewOfFile( hFileMap, FILE_MAP_READ|FILE_MAP_WRITE, DWORD(uint64_t(s)>>32), DWORD(s&0xffffffff), (n?n:size)*sizeof(T) ); }
 	void unmap( T* p ){ if(p){FlushViewOfFile(p,0);UnmapViewOfFile(p);} }
 
 	// chunk implementation
@@ -163,7 +184,11 @@ struct izip_t	// common interface to zip, 7zip, ...
 	virtual bool load() = 0;
 	virtual bool extract_to_files( path dir, const wchar_t* name=nullptr ) = 0;	// if name==nullptr, extract all files. otherwise, extract a single file with the name
 	virtual bool extract_to_memory( const wchar_t* name=nullptr ) = 0;			// if name==nullptr, extract all files. otherwise, extract a single file with the name
-	virtual entry* find( const wchar_t* name ){ for(auto& e:entries){ if(_wcsicmp(e.name,name)==0) return &e; } return nullptr; }
+#ifdef UNICODE
+	virtual entry* find( const TCHAR* name ){ for(auto& e:entries){ if(_wcsicmp(e.name,name)==0) return &e; } return nullptr; }
+#else
+	virtual entry* find( const TCHAR* name ){ for(auto& e:entries){ if(_stricmp(e.name,name)==0) return &e; } return nullptr; }
+#endif
 };
 
 #ifdef _unzip_H
@@ -178,10 +203,16 @@ struct zip_t : public izip_t
 	virtual void release(){ for( auto& e : entries ) SAFE_FREE(e.ptr); entries.clear(); if(hzip){ CloseZipU(hzip); hzip=nullptr; } }
 	virtual bool load(){ if(!hzip) return false; entry e; GetZipItem(hzip,-1,&e ); for(int k=0, kn=e.index;k<kn;k++){ GetZipItem( hzip, k, (ZIPENTRY*) &e); e.ptr=nullptr; e.size=0; if(!e.is_dir()) entries.push_back(e); } return true; }
 	virtual bool extract_to_files( path dir, const wchar_t* name=nullptr ){ bool b=false; if(!hzip) return b; for(size_t k=0;k<entries.size();k++){ auto& e=entries[k]; if(e.is_dir()||(name&&_wcsicmp(name,e.name)!=0)) continue; path p=dir+e.name; if(!p.dir().exists()) p.dir().mkdir(); UnzipItem( hzip, e.index, p ); b=true; } return b; }
-	virtual bool extract_to_memory( const wchar_t* name=nullptr ){ if(!hzip) return false; for(size_t k=0;k<entries.size();k++)
-	{ auto& e=entries[k]; if(e.is_dir()||e.ptr||(name&&_wcsicmp(name,e.name)!=0)) continue;
-	UnzipItem( hzip, e.index, e.ptr=malloc(e.unc_size),
-		uint(e.size=uint(e.unc_size)) ); } return true; }
+	virtual bool extract_to_memory( const wchar_t* name=nullptr )
+	{
+		if(!hzip) return false;
+		for(size_t k=0;k<entries.size();k++)
+		{
+			auto& e=entries[k]; if(e.is_dir()||e.ptr||(name&&_wcsicmp(name,e.name)!=0)) continue;
+			UnzipItem( hzip, e.index, e.ptr=malloc(e.unc_size), uint(e.size=uint(e.unc_size)) );
+		}
+		return true;
+	}
 
 	static bool cmp_signature( void* ptr ){ static uchar s[4]={0x50,0x4b,0x03,0x04}; return memcmp(ptr,s,4)==0; }
 };
@@ -202,7 +233,7 @@ struct szip_t : public izip_t
 
 	virtual void release(){ for( auto& e : entries ) SAFE_FREE(e.ptr); entries.clear(); if(db) SzArEx_Free( db, &alloc_impl ); SAFE_DELETE(look_stream); if(archive_stream){ File_Close( &archive_stream->file );SAFE_DELETE(archive_stream); } SAFE_DELETE(mem_stream); }
 	virtual bool load(){ if(!look_in_stream()) return false; SzArEx_Init( db = new CSzArEx() ); if( SzArEx_Open( db, look_in_stream(), &alloc_impl, &alloc_temp ) != SZ_OK ){ wprintf( L"unable to SzArEx_Open(%s)\n", file_path.c_str() ); release(); return false; } for( uint k=0, kn=db->db.NumFiles; k<kn; k++ ){ const CSzFileItem* f = db->db.Files+k; if(f->IsDir) continue; entry e; memset(&e,0,sizeof(e)); e.index=k; if(f->AttribDefined)e.attr=f->Attrib; if(f->MTimeDefined) memcpy(&e.mtime,&f->MTime,sizeof(FILETIME)); SzArEx_GetFileNameUtf16(db,k,(ushort*)e.name); entries.push_back(e); } return true; }
-	virtual bool extract_to_files( path dir, const wchar_t* name=nullptr ){ uchar* ob=nullptr; uint bl=-1; for( size_t k=0, kn=entries.size(),of=0,obs=0,os=0; k<kn; k++ ){ auto& e=entries[k]; if(e.is_dir()||(name&&_wcsicmp(name,e.name)!=0)) continue; path p=dir+e.name; if(!p.dir().exists()) p.dir().mkdir(); if( SZ_OK!=SzArEx_Extract(db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){wprintf(L"unable to SzArEx_Extract(%s)\n",e.name);return false;} FILE* fp=_wfopen(p,L"wb"); if(!fp){wprintf( L"unable to fopen(%s)\n",p.c_str()); return false; } fwrite(ob+of,os,1,fp );fclose(fp); if(e.attr) SetFileAttributesW(p,e.attr); p.setFileTime(nullptr,nullptr,&e.mtime); } if(ob) alloc_impl.Free(&alloc_impl,ob); return true; }
+	virtual bool extract_to_files( path dir, const wchar_t* name=nullptr ){ uchar* ob=nullptr; uint bl=-1; for( size_t k=0, kn=entries.size(),of=0,obs=0,os=0; k<kn; k++ ){ auto& e=entries[k]; if(e.is_dir()||(name&&_wcsicmp(name,e.name)!=0)) continue; path p=dir+e.name; if(!p.dir().exists()) p.dir().mkdir(); if( SZ_OK!=SzArEx_Extract(db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){wprintf(L"unable to SzArEx_Extract(%s)\n",e.name);return false;} FILE* fp=_wfopen(p,L"wb"); if(!fp){wprintf( L"unable to fopen(%s)\n",p.c_str()); return false; } fwrite(ob+of,os,1,fp );fclose(fp); if(e.attr) SetFileAttributesW(p,e.attr); p.set_filetime(nullptr,nullptr,&e.mtime); } if(ob) alloc_impl.Free(&alloc_impl,ob); return true; }
 	virtual bool extract_to_memory( const wchar_t* name=nullptr ){ if(!db||!look_in_stream()) return false; uchar* ob=nullptr; uint bl=-1; for(size_t k=0,kn=entries.size(),of=0,obs=0,os=0;k<kn;k++){ auto& e=entries[k]; if(e.is_dir()||e.ptr||(name&&_wcsicmp(name,e.name)!=0)) continue; if( SZ_OK!=SzArEx_Extract(db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){wprintf(L"unable to SzArEx_Extract(%s)\n",e.name);return false;} memcpy(e.ptr=malloc(os),ob+of,e.size=os); } if(ob) alloc_impl.Free(&alloc_impl,ob); return true; }
 
 	static bool cmp_signature( void* ptr ){ static uchar s[6]={'7','z',0xBC,0xAF,0x27,0x1C}; return memcmp(ptr,s,6)==0; }
@@ -231,7 +262,7 @@ struct resource_t : public mem_t
 	__forceinline bool load( int res_id ){ return find(res_id)&&load(); }
 
 	// loading for specific types
-	__forceinline std::wstring load_wstring(){ if(type!=RT_STRING||!load()) return L""; std::wstring w; w.resize(size/sizeof(wchar_t)); memcpy((void*)w.c_str(),ptr,size); return w; }
+	__forceinline std::wstring load_wstring(){ if(type!=MAKEINTRESOURCEW(6/*string 6*/)||!load()) return L""; std::wstring w; w.resize(size/sizeof(wchar_t)); memcpy((void*)w.c_str(),ptr,size); return w; }
 	__forceinline izip_t* load_zip()
 	{
 		if(!load()||!ptr||size<6) return nullptr;
@@ -247,7 +278,54 @@ struct resource_t : public mem_t
 };
 #endif // MAKEINTRESOURCEW
 
-//*******************************************************************
+//***********************************************
+// zlib in-memory compression/decompression
+
+#ifdef ZLIB_H
+namespace zlib
+{
+	inline size_t capacity( size_t size ){ return size+(((size+16383)>>16)*5)+6; }
+	inline int compress( void* src, size_t src_size, void* dst, size_t dst_capacity )
+	{
+		int ret			= -1; // size of compression (failure: -1)
+		z_stream zInfo	= {0};
+		zInfo.total_in	= zInfo.avail_in  = (uint)src_size;
+		zInfo.total_out	= zInfo.avail_out = (uint)dst_capacity;
+		zInfo.next_in	= (BYTE*)src;
+		zInfo.next_out	= (BYTE*)dst;
+
+		if(Z_OK!=deflateInit(&zInfo,Z_DEFAULT_COMPRESSION)||Z_STREAM_END!=deflate(&zInfo,Z_FINISH)){ deflateEnd(&zInfo); return ret; }
+		else{ ret=zInfo.total_out; deflateEnd(&zInfo); return ret; }
+	}
+
+	inline int decompress( void* src, size_t src_size, void* dst, size_t dst_capacity )
+	{
+		int ret			= -1; // size of compression (failure: -1)
+		z_stream zInfo	= {0};
+		zInfo.total_in	= zInfo.avail_in  = (uint)src_size;
+		zInfo.total_out	= zInfo.avail_out = (uint)dst_capacity;
+		zInfo.next_in	= (BYTE*)src;
+		zInfo.next_out	= (BYTE*)dst;
+
+		if(Z_OK!=inflateInit(&zInfo)||Z_STREAM_END!=inflate(&zInfo,Z_FINISH)){ inflateEnd(&zInfo); return ret; }
+		else{ ret=zInfo.total_out; inflateEnd(&zInfo); return ret; }
+	}
+
+	inline bool unittest( void* src, size_t src_size )
+	{
+		size_t c_capacity = capacity(src_size);
+		uchar* c = (uchar*) malloc(c_capacity);
+		uchar* d = (uchar*) malloc(src_size);
+		int r = compress( src, src_size, c, c_capacity );
+		decompress( c, r, d, src_size );
+		bool b = memcmp( src, d, src_size )==0;
+		free(c); free(d);
+		return b;
+	}
+} // namespace zlib
+#endif
+
+//***********************************************
 // CRC32 implementation with 4-batch parallel construction (taken from zlib)
 template <unsigned int poly> inline unsigned int tcrc32( const unsigned char* buff, size_t size, unsigned int crc0 )
 {
@@ -280,7 +358,7 @@ inline unsigned int crc32c_hw( const void* buff, size_t size, unsigned int crc0 
 	uint64_t c = ~uint64_t(crc0);
 	for(;size && ((ptrdiff_t)b&7);size--,b++) c=_mm_crc32_u8(uint32_t(c),*b); // move forward to the 8-byte aligned boundary
 	for(;size>=sizeof(uint64_t);size-=sizeof(uint64_t),b+=sizeof(uint64_t)) c=_mm_crc32_u64(c,*(uint64_t*)b);
-#else defined(_M_IX86)
+#elif defined(_M_IX86)
 	uint32_t c = ~crc0;
 	for(;size && ((ptrdiff_t)b&7);size--,b++) c=_mm_crc32_u8(uint32_t(c),*b); // move forward to the 8-byte aligned boundary
 #endif
@@ -290,17 +368,21 @@ inline unsigned int crc32c_hw( const void* buff, size_t size, unsigned int crc0 
 
 	return uint32_t(~c);
 }
-inline bool has_sse42(){ static bool b=false,h; if(b) return h; b=true; int regs[4]={0}; __cpuid(regs,1); return h=((regs[2]>>20)&1)==1; }
-inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){	return has_sse42()?crc32c_hw(buff,size,crc0):tcrc32<0x82f63b78UL>((const unsigned char*)buff,size,crc0); }
+#ifdef _MSC_VER
+inline bool has_sse42(){ static bool b=false,h=true; if(b) return h; b=true; int regs[4]={0}; __cpuid(regs,1); return h=((regs[2]>>20)&1)==1; }
 #else
-inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){	return tcrc32<0x82f63b78UL>((const unsigned char*)buff,size,crc0); }
+inline bool has_sse42(){ return true; }
+#endif
+inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ return has_sse42()?crc32c_hw(buff,size,crc0):tcrc32<0x82f63b78UL>((const unsigned char*)buff,size,crc0); }
+#else
+inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0x82f63b78UL>((const unsigned char*)buff,size,crc0); }
 #endif
 
 // crc32c wrappers
 inline unsigned int crc32c( const char* s ){ return crc32c((void*)s,strlen(s)); }
 inline unsigned int crc32c( const wchar_t* s ){ return crc32c((void*)s,wcslen(s)*sizeof(wchar_t)); }
 
-//*******************************************************************
+//***********************************************
 // MD5 implementation
 class md5
 {
@@ -378,7 +460,7 @@ inline void md5::finalize( unsigned char* result )
 	result[9] = c >> 8; result[10] = c >> 16; result[11] = c >> 24; result[12] = d; result[13] = d >> 8; result[14] = d >> 16; result[15] = d >> 24;
 }
 
-//*******************************************************************
+//***********************************************
 // augmentation of filesystem
 #ifdef __GX_FILESYSTEM_H__
 
@@ -409,7 +491,74 @@ inline uint path::crc32c() const
 	return c;
 }
 
+#endif // __GX_FILESYSTEM_H__
+
+//***********************************************
+namespace gx {
+//***********************************************
+
+struct binary_cache
+{
+	FILE* fp = nullptr;
+	bool b_read;
+
+	~binary_cache(){ if(fp) fclose(fp); fp=nullptr; }
+
+	virtual path cache_path() = 0;
+	virtual path zip_path(){ return cache_path()+L".zip"; }
+	virtual std::string signature() = 0;
+
+	void writef( const char* fmt, ... ){ if(!fp) return; va_list a; va_start(a,fmt); vfprintf_s(fp,fmt,a); va_end(a); }
+	void readf( const char* fmt, ... ){ if(!fp) return; va_list a; va_start(a,fmt); vfscanf_s(fp,fmt,a); va_end(a); }
+	void write( void* ptr, size_t size ){ if(fp) fwrite( ptr, size, 1, fp ); }
+	void read( void* ptr, size_t size ){ if(fp) fread(ptr,size,1,fp); }
+	void close(){ if(fp){ fclose(fp); fp=nullptr; } if(b_read&&zip_path().exists()) cache_path().rmfile(); else if(!b_read) compress(); }
+	bool open( bool read=true )
+	{
+		b_read = read;
+		uint64_t sig = uint64_t(std::hash<std::string>{}(std::string(__TIMESTAMP__)+signature()));
+		path cpath = cache_path(), zpath = zip_path();
+		if(b_read)
+		{
+			if(zpath.exists()&&!decompress()) return false;
+			fp = _wfopen( cpath, L"rb" ); if(!fp){ if(zpath.exists()) cpath.rmfile(); return false; }
+			uint64_t s; fscanf( fp, "%*s = %llu\n", &s ); if(sig!=s){ fclose(fp); return false; }
+		}
+		else
+		{
+			if(!cpath.dir().exists()) cpath.dir().mkdir();
+			fp = _wfopen( cpath, L"wb" ); if(!fp) return false;
+			fprintf( fp, "signature = %llu\n", sig );
+		}
+		return true;
+	}
+
+	std::vector<uchar> pack_bits( std::vector<bool>& v ){ std::vector<uchar> b((v.size()+7)>>3,0); for(size_t k=0,kn=v.size();k<kn;k++) if(v[k]) b[k>>3] |= (1<<uchar(k&7)); return b; }
+	std::vector<bool> unpack_bits( std::vector<uchar>& b, size_t max_count=0xffffffff ){ std::vector<bool> v(min(b.size()*8,max_count),0); for(size_t k=0,kn=v.size();k<kn;k++) if(b[k>>3]&(1<<uchar(k&7))) v[k]=true; return v; }
+
+	bool compress( bool rm_src=true );
+	bool decompress();
+};
+
+#if defined(_zip_H) && defined(_unzip_H)
+inline bool binary_cache::compress( bool rm_src )
+{
+	if(!cache_path().exists()) return false;
+	HZIP hZip = CreateZip( zip_path(), nullptr );
+	if(ZR_OK==ZipAdd( hZip, cache_path().name(), cache_path() )){ CloseZip(hZip); if(rm_src) cache_path().rmfile(); return true; }
+	else { wprintf( L"Unable to compress %s\n", cache_path().name() ); CloseZip( hZip ); return false; }
+}
+
+inline bool binary_cache::decompress()
+{
+	if(!zip_path().exists()) return false;
+	zip_t zip_file(zip_path()); return zip_file.load()&&!zip_file.entries.empty()&&zip_file.extract_to_files(zip_path().dir());
+}
 #endif
 
-//*******************************************************************
-#endif __GX_MEMORY__
+//***********************************************
+} // namespace gx
+//***********************************************
+
+//***********************************************
+#endif // __GX_MEMORY__
