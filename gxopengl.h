@@ -430,13 +430,21 @@ namespace gl {
 		};
 
 		Program( GLuint ID, const char* name ) : GLObject(ID,name,GL_PROGRAM){ getInstanceSet().insert(this); }
-		virtual void release(){ if(!ID) return; glDeleteProgram(ID); cache.clear(); getInstanceSet().erase(this); }
-		GLuint bind( bool bBind=true ){ GLuint b0=binding(); if(!bBind||b0!=ID) glUseProgram(bBind?ID:0); if(!bBind) return b0; if(cache.empty()) updateUniformCache(); else if( Texture::bTextureDeleted() ){ std::set<Program*>& s=getInstanceSet(); for( auto it=s.begin(); it!=s.end(); it++ ) (*it)->updateUniformCache(); Texture::bTextureDeleted() = false; } for( auto it=cache.begin(); it!=cache.end(); it++ ){ Uniform& u=it->second;if(u.texture&&u.textureID>-1){glActiveTexture(GL_TEXTURE0+u.textureID); u.texture->bind();} } return b0; }
+		virtual void release(){ if(!ID) return; glDeleteProgram(ID); uniform_cache.clear(); invalid_uniform_cache.clear(); getInstanceSet().erase(this); }
+		GLuint bind( bool bBind=true ){ GLuint b0=binding(); if(!bBind||b0!=ID) glUseProgram(bBind?ID:0); if(!bBind) return b0; if(uniform_cache.empty()) updateUniformCache(); else if( Texture::bTextureDeleted() ){ std::set<Program*>& s=getInstanceSet(); for( auto it=s.begin(); it!=s.end(); it++ ) (*it)->updateUniformCache(); Texture::bTextureDeleted() = false; } for( auto it=uniform_cache.begin(); it!=uniform_cache.end(); it++ ){ Uniform& u=it->second;if(u.texture&&u.textureID>-1){glActiveTexture(GL_TEXTURE0+u.textureID); u.texture->bind();} } return b0; }
 		static void unbind(){ glUseProgram(0); }
 
-		// in-program uniform variables
-		Uniform* getUniform( const char* name ){ auto it=cache.find(name); if(it!=cache.end()) return &it->second; return nullptr; }
-		template <class T> void setUniform( const char* name, T* v, GLsizei count=1 ){ Uniform* u=getUniform(name); if(u) u->update(ID,v,count); }
+		// getUniform: in-program uniform variables
+		Uniform* getUniform( const char* name )
+		{
+			auto it=uniform_cache.find(name); if(it!=uniform_cache.end()) return &it->second;
+			auto it2=invalid_uniform_cache.find(name); if(it2!=invalid_uniform_cache.end()) return nullptr;
+			printf( "[Warning] %s.getUniform(%s): not found\n",this->name, name ); invalid_uniform_cache.insert(name); return nullptr;
+		}
+		
+		// setUniform
+		template <class T>
+		void setUniform( const char* name, T* v, GLsizei count=1 ){				Uniform* u=getUniform(name); if(u) u->update(ID,v,count); }
 		void setUniform( const char* name, const float& v, GLsizei count=1 ){	Uniform* u=getUniform(name); if(u) u->update(ID,(float*)&v,count); }
 		void setUniform( const char* name, const vec2& v, GLsizei count=1 ){	Uniform* u=getUniform(name); if(u) u->update(ID,(float*)&v,count); }
 		void setUniform( const char* name, const vec3& v, GLsizei count=1 ){	Uniform* u=getUniform(name); if(u) u->update(ID,(float*)&v,count); }
@@ -475,7 +483,8 @@ namespace gl {
 		GLuint get_uniform_block_binding( const char* name ){ auto* ub=get_uniform_block(name); return ub?ub->get_binding():-1; }
 		GLuint get_shader_storage_block_binding( const char* name ){ const GLenum prop = GL_BUFFER_BINDING; GLint binding;glGetProgramResourceiv(ID,GL_SHADER_STORAGE_BLOCK,glGetProgramResourceIndex(ID,GL_SHADER_STORAGE_BLOCK,name),1,&prop,1,nullptr,&binding); return binding; }
 
-		std::map<std::string,Uniform> cache;
+		std::map<std::string,Uniform> uniform_cache;
+		std::set<std::string> invalid_uniform_cache;
 		std::map<std::string,UniformBlock> uniform_block_map;
 		static std::set<Program*>& getInstanceSet(){ static std::set<Program*> instanceSet; return instanceSet; }
 	};
@@ -489,9 +498,9 @@ namespace gl {
 		for(int k=0,texID=0,n=gxGetProgramiv( ID, GL_ACTIVE_UNIFORMS );k<n;k++)
 		{
 			Uniform u; GLsizei l; glGetActiveUniform(ID,k,std::extent<decltype(u.name)>::value-1,&l,&u.arraySize,&u.type,u.name); if(strstr(u.name,"gl_")) continue;
-			u.textureID=-1; u.texture=nullptr; u.ID = glGetUniformLocation(ID,u.name); bool bTexture=gxIsSamplerType(u.type); if(bTexture) u.textureID=texID++; cache[u.name]=u; if(u.arraySize==1) continue;
+			u.textureID=-1; u.texture=nullptr; u.ID = glGetUniformLocation(ID,u.name); bool bTexture=gxIsSamplerType(u.type); if(bTexture) u.textureID=texID++; uniform_cache[u.name]=u; if(u.arraySize==1) continue;
 			GLchar name[256]; strcpy(name,u.name); GLint loc=0; GLchar* bracket=strchr(name,'['); if(bracket) bracket[0]='\0';
-			for( GLint loc=bracket?1:0;loc<u.arraySize;loc++){ Uniform u1=u;sprintf(u1.name,"%s[%d]",name,loc);u1.ID=glGetUniformLocation(ID,u1.name);if(u1.ID==-1)continue;u1.arraySize=u.arraySize-loc;if(bTexture)u1.textureID=texID++;cache[u1.name]=u1; }
+			for( GLint loc=bracket?1:0;loc<u.arraySize;loc++){ Uniform u1=u;sprintf(u1.name,"%s[%d]",name,loc);u1.ID=glGetUniformLocation(ID,u1.name);if(u1.ID==-1)continue;u1.arraySize=u.arraySize-loc;if(bTexture)u1.textureID=texID++;uniform_cache[u1.name]=u1; }
 		}
 	}
 

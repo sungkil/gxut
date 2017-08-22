@@ -115,26 +115,19 @@ using double9	= tarray9<double>;	using double16	= tarray16<double>;
 // end COMMON HEADERS for GXUT
 //###################################################################
 
-#ifndef PI
-#define PI 3.141592653589793f
-#endif
-#ifndef min
-	#define min(a,b) ((a)<(b)?(a):(b))
-#endif
-#ifndef max
-	#define max(a,b) ((a)>(b)?(a):(b))
-#endif
-#if !defined(clamp)&&defined(min)
-	#define clamp(value,vmin,vmax) max(vmin,min(vmax,value))
-#elif !defined(clamp)
-	#define clamp(value,vmin,vmax) std::max(vmin,std::min(vmax,value))
-#endif
-#ifndef isnan
-	#define	isnan(x) (x!=x)
-#endif
-
 #pragma warning( push )
 #pragma warning( disable: 4244 )	// diable double to float conversion
+
+#ifndef PI
+	static const double PI = 3.141592653589793;
+#endif
+#if !defined(max) && !defined(min)
+	#define max(a,b) ((a)>(b)?(a):(b))
+	#define min(a,b) ((a)<(b)?(a):(b))
+#endif
+#ifndef clamp
+	#define clamp(v,vmin,vmax) min(max(v,vmin),vmax)
+#endif
 
 //***********************************************
 // template type_traits helpers
@@ -350,6 +343,31 @@ using bvec2 = tvec2<bool>;		using bvec3 = tvec3<bool>;		using bvec4 = tvec4<bool
 using svec2 = tvec2<size_t>;	using svec3 = tvec3<size_t>;	using svec4 = tvec4<size_t>;
 
 //***********************************************
+// std::hash support here
+
+#ifdef _M_X64
+template <class T> struct bitwise_hash { size_t operator()(const T v) const noexcept { size_t h = 14695981039346656037ULL; const uchar* p = (const uchar*)&v; for (size_t k = 0; k < sizeof(T); k++) { h ^= size_t(p[k]); h *= 1099511628211ULL; } return h; }}; // FNV-1a hash function (from VC2015/2017)
+#elif defined(_M_IX86)
+template <class T> struct bitwise_hash { size_t operator()(const T v) const noexcept { size_t h = 2166136261U; const uchar* p = (const uchar*)&v; for (size_t k = 0; k < sizeof(T); k++) { h ^= size_t(p[k]); h *= 16777619U; } return h; }}; // FNV-1a hash function (from VC2015/2017)
+#endif
+
+namespace std
+{
+	template<> struct hash<int2> :	public bitwise_hash<int2> {};
+	template<> struct hash<int3> :	public bitwise_hash<int3> {};
+	template<> struct hash<int4> :	public bitwise_hash<int4> {};
+	template<> struct hash<uint2> :	public bitwise_hash<uint2> {};
+	template<> struct hash<uint3> :	public bitwise_hash<uint3> {};
+	template<> struct hash<uint4> :	public bitwise_hash<uint4> {};
+	template<> struct hash<ivec2> :	public bitwise_hash<ivec2> {};
+	template<> struct hash<ivec3> :	public bitwise_hash<ivec3> {};
+	template<> struct hash<ivec4> :	public bitwise_hash<ivec4> {};
+	template<> struct hash<uvec2> :	public bitwise_hash<uvec2> {};
+	template<> struct hash<uvec3> :	public bitwise_hash<uvec3> {};
+	template<> struct hash<uvec4> :	public bitwise_hash<uvec4> {};
+}
+
+//***********************************************
 // half-precision float and conversion
 struct half { unsigned short mantissa:10,exponent:5,sign:1; __forceinline operator float() const; };	// IEEE 754-2008 half-precision (16-bit) floating-point storage. // https://github.com/HeliumProject/Helium/blob/master/Math/Float16.cpp
 __forceinline float	htof( half value ){ struct _float32_t {uint mantissa:23,exponent:8,sign:1;}; _float32_t result;result.sign = value.sign;uint exponent=value.exponent,mantissa=value.mantissa; if(exponent==31){result.exponent=255;result.mantissa=0;} else if(exponent==0&&mantissa==0){result.exponent=0;result.mantissa=0;} else if(exponent==0){uint mantissa_shift=10-static_cast<uint>(log2(float(mantissa)));result.exponent=127-(15-1)-mantissa_shift;result.mantissa=mantissa<<(mantissa_shift+23-10);} else{result.exponent=127-15+exponent;result.mantissa=static_cast<uint>(value.mantissa)<<(23-10);} return reinterpret_cast<float&>(result); }
@@ -396,8 +414,9 @@ struct mat2 : public tarray<float,4>
 	__forceinline const mat2& operator+() const { return *this; }
 	__forceinline mat2 operator-() const { return mat2(-_11,-_12,-_21,-_22); }
 
-	// column/row vectors
+	// column/row/diagonal vectors
 	__forceinline vec2 cvec2( int col ) const { return vec2(a[col],a[2+col]); }
+	__forceinline vec2 diag() const { return vec2(_11,_22); }
 	__forceinline const vec2& rvec2( int row ) const { return reinterpret_cast<const vec2&>(a[row*2]); }
 	__forceinline vec2& rvec2( int row ){ return reinterpret_cast<vec2&>(a[row*2]); }
 
@@ -419,10 +438,9 @@ struct mat2 : public tarray<float,4>
 	__forceinline mat2& setIdentity(){ _12=_21=0.0f;_11=_22=1.0f; return *this; }
 	__forceinline mat2 transpose() const { return mat2(_11,_21,_12,_22); }
 
-	// determinant
+	// determinant/trace/inverse
 	__forceinline float det() const { return _11*_22 - _12*_21; }
-	
-	// inverse
+	__forceinline float trace() const { return _11+_22; }
 	__forceinline mat2 inverse() const 
 	{
 		float d=det(), s=1.0f/d; if( d==0 ) printf( "mat2::inverse() might be singular.\n" );
@@ -461,8 +479,9 @@ struct mat3 : public tarray<float,9>
 	__forceinline const mat3& operator+() const { return *this; }
 	__forceinline mat3 operator-() const { return mat3(-_11,-_12,-_13,-_21,-_22,-_23,-_31,-_32,-_33); }
 
-	// column/row vectors
+	// column/row/diagonal vectors
 	__forceinline vec3 cvec3( int col ) const { return vec3(a[col],a[3+col],a[6+col]); }
+	__forceinline vec3 diag() const { return vec3(_11,_22,_33); }
 	__forceinline const vec3& rvec3( int row ) const { return reinterpret_cast<const vec3&>(a[row*3]); }
 	__forceinline vec3& rvec3( int row ){ return reinterpret_cast<vec3&>(a[row*3]); }
 
@@ -484,10 +503,9 @@ struct mat3 : public tarray<float,9>
 	__forceinline mat3& setIdentity(){ _12=_13=_21=_23=_31=_32=0.0f;_11=_22=_33=1.0f; return *this; }
 	__forceinline mat3 transpose() const { return mat3(_11,_21,_31,_12,_22,_32,_13,_23,_33); }
 
-	// determinant
+	// determinant/trace/inverse
 	__forceinline float det() const { return _11*(_22*_33-_23*_32) + _12*(_23*_31-_21*_33) + _13*(_21*_32-_22*_31); }
-
-	// inverse
+	__forceinline float trace() const { return _11+_22+_33; }
 	__forceinline mat3 inverse() const 
 	{
 		float d=det(), s=1.0f/d; if( d==0 ) printf( "mat3::inverse() might be singular.\n" );
@@ -529,9 +547,10 @@ struct mat4 : public tarray<float,16>
 	__forceinline const mat4& operator+() const { return *this; }
 	__forceinline mat4 operator-() const { return mat4(-_11,-_12,-_13,-_14,-_21,-_22,-_23,-_24,-_31,-_32,-_33,-_34,-_41,-_42,-_43,-_44); }
 
-	// column row vectors
+	// column/row/diagonal vectors
 	__forceinline vec4 cvec4( int col ) const { return vec4(a[col],a[4+col],a[8+col],a[12+col]); }
 	__forceinline vec3 cvec3( int col ) const { return vec3(a[col],a[4+col],a[8+col]); }
+	__forceinline vec4 diag() const { return vec4(_11,_22,_33,_44); }
 	__forceinline const vec4& rvec4( int row ) const { return reinterpret_cast<const vec4&>(a[row*4]); }
 	__forceinline vec4& rvec4( int row ){ return reinterpret_cast<vec4&>(a[row*4]); }
 	__forceinline const vec3& rvec3( int row ) const { return reinterpret_cast<const vec3&>(a[row*4]); }
@@ -556,9 +575,10 @@ struct mat4 : public tarray<float,16>
 	__forceinline mat4& setIdentity(){ _12=_13=_14=_21=_23=_24=_31=_32=_34=_41=_42=_43=0.0f;_11=_22=_33=_44=1.0f; return *this; }
 	__forceinline mat4 transpose() const { return mat4(_11,_21,_31,_41,_12,_22,_32,_42,_13,_23,_33,_43,_14,_24,_34,_44); }
 
-	// determinant and inverse: see below implementations
+	// determinant/trace/inverse
 	__forceinline vec4 _xdet() const;	// support function for det() and inverse()
 	__forceinline float mat4::det() const { return cvec4(3).dot(_xdet()); }
+	__forceinline float trace() const { return _11+_22+_33+_44; }
 	mat4 inverse() const;
 
 	// static row-major transformations
@@ -711,7 +731,7 @@ __forceinline float rsqrt( float x ){ float y=0.5f*x; int i=*(int*)&x; i=0x5f375
 
 //***********************************************
 // {GLSL|HLSL}-like shader intrinsic functions
-__forceinline float saturate( float f ){ return min(max(f,0.0f),1.0f); }
+__forceinline float saturate( float f ){ return clamp(f,0.0f,1.0f); }
 __forceinline vec2 saturate( const vec2& v ){ return vec2(saturate(v.x),saturate(v.y)); }
 __forceinline vec3 saturate( const vec3& v ){ return vec3(saturate(v.x),saturate(v.y),saturate(v.z)); }
 __forceinline vec4 saturate(const  vec4& v ){ return vec4(saturate(v.x),saturate(v.y),saturate(v.z),saturate(v.w)); }

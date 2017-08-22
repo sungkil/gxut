@@ -52,16 +52,18 @@ struct ISampler
 };
 
 //***********************************************
+// light info for rendering
 struct light_t
 {
 	enum model { NONE=0, BLINN_PHONG=1, PHONG=2, COOK_TORRANCE=3, };
-	vec4	position;
-	vec4	ambient;
-	vec4	diffuse;
-	vec4	specular; // specular.a = user-defined scale of beta (specular power) in Blinn-Phong shading
+
+	vec4 position;
+	vec4 ambient;
+	vec4 diffuse;
+	vec4 specular; // specular.a = user-defined scale of beta (specular power) in Blinn-Phong shading
 	
 	// light transform
-	vec4	ecpos( const mat4& view_matrix ){ return position.a==0?vec4(mat3(view_matrix)*position.xyz,0.0f):view_matrix*position; }
+	vec4 ecpos( const mat4& view_matrix ){ return position.a==0?vec4(mat3(view_matrix)*position.xyz,0.0f):view_matrix*position; }
 };
 
 //***********************************************
@@ -164,42 +166,43 @@ struct camera_t // std140 layout for OpenGL uniform buffer objects
 	mat4	view_matrix, projection_matrix;
 	float	fovy, aspect, dnear, dfar;
 	vec3	eye, center, up;
-}
+};
+
 #else
-struct camera_t // aligned with std140 layout
+struct camera_t
 {
 	mat4		view_matrix, projection_matrix;
-	union {		vec4 pp; struct { union { float fovy, height; }; float aspect, dnear, dfar; }; }; // pp: perspective params; fov in radians; height for orthographic projection
-	alignas(16)	vec3 eye, center, up; // lookAt params (16-bytes aligned for std140 layout)
+	union {		float fovy, height; }; float aspect, dnear, dfar; // fov in radians; height for orthographic projection
+	alignas(16)	vec3 eye, center, up;	// lookAt params (16-bytes aligned for std140 layout)
 
 	camera_t() = default;
 	camera_t( camera_t&& c ) = default;
 	camera_t( const camera_t& c ) = default;
 	camera_t& operator=( camera_t&& c ) = default;
 	camera_t& operator=( const camera_t& c ) = default;
-
-	mat4	inverse_view_matrix() const { return mat4::lookAtInverse(eye,center,up); } // works without eye, center, up
 };
 #endif
 
 struct camera : public camera_t
 {
-	vec3		dir;			// dir = center - eye (view direction vector)
-	float		F, fn, df;		// focal distance, f-number, focusing depth (in object distance)
-	vec4		frustum[6];		// view frustum planes: left, right, top, bottom, near, far
-	camera_t	prev;			// camera at the previous frame (formerly, cam0); initialized at the Camera plugin
-
-	mat4	perspective_dx() const { mat4 m=projection_matrix; m._33=dfar/(dnear-dfar); m._34*=0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
-	vec2	frustum_size() const {float fh=tan(fovy*0.5f)*2.0f; return vec2(fh*aspect,fh); }	// view frustum (width,height) at depth=-1 (i.e., in NDC cube)
-	void	update_frustum(){ const mat4 m=projection_matrix*view_matrix;for(int k=0;k<6;k++){vec4& p=frustum[k];p=m.rvec4(k>>1)*float(1-(k&1)*2)+m.rvec4(3);p/=p.xyz.length();}} // left, right, bottom, top, near, far
-	void	update_depth_clips( const bbox* bound ){ if(!bound) return; bbox b=view_matrix*(*bound); vec2 z(max(0.001f,-b.M.z),max(0.001f,-b.m.z)); dnear=max(max(bound->radius()*0.00001f,50.0f),z.x*0.99f); dfar=max(max(dnear+1.0f,dnear*1.01f),z.y*1.01f); }
-	float	lens_radius() const { return F/fn*0.5f; }
-	bool	vfc( bbox& b ) const { vec4 pv(0,0,0,1.0f); for(int c=0;c<6;c++){ for(int j=0;j<3;j++) pv[j]=frustum[c][j]>0?b.M[j]:b.m[j]; if(pv.dot(frustum[c])<0) return true; } return false; }
+	vec3		dir;					// dir = center - eye (view direction vector)
+	float		F, fn, df;				// focal distance, f-number, focusing depth (in object distance)
+	int			frame = RAND_MAX;		// frame used for this camera; used in a motion tracer
+	vec4		frustum[6];				// view frustum planes: left, right, top, bottom, near, far
+	camera_t	prev;					// placeholder for the camera at the previous frame
+	
+	mat4		inverse_view_matrix() const { return mat4::lookAtInverse(eye,center,up); } // works without eye, center, up
+	mat4		perspective_dx() const { mat4 m=projection_matrix; m._33=dfar/(dnear-dfar); m._34*=0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
+	vec2		plane_size( float ecd=1.0f ) const { return vec2(2.0f/projection_matrix._11,2.0f/projection_matrix._22)*ecd; } // plane size (width, height) at eye-coordinate distance 1
+	void		update_view_frusta(){ const mat4 m=projection_matrix*view_matrix;for(int k=0;k<6;k++){vec4& p=frustum[k];p=m.rvec4(k>>1)*float(1-(k&1)*2)+m.rvec4(3);p/=p.xyz.length();}} // left, right, bottom, top, near, far
+	void		update_depth_clips( const bbox* bound ){ if(!bound) return; bbox b=view_matrix*(*bound); vec2 z(max(0.001f,-b.M.z),max(0.001f,-b.m.z)); dnear=max(max(bound->radius()*0.00001f,50.0f),z.x*0.99f); dfar=max(max(dnear+1.0f,dnear*1.01f),z.y*1.01f); }
+	bool		vfc( bbox& b ) const { vec4 pv(0,0,0,1.0f); for(int c=0;c<6;c++){ for(int j=0;j<3;j++) pv[j]=frustum[c][j]>0?b.M[j]:b.m[j]; if(pv.dot(frustum[c])<0) return true; } return false; }
+	float		lens_radius() const { return F/fn*0.5f; }
 };
 
 //***********************************************
 // vertex definition
-#if (_MSC_VER>=1900/*VS2015*/) || (__cplusplus>199711L)
+#if (__cplusplus>199711L) || (_MSC_VER>=1900/*VS2015*/)
 struct alignas(32) vertex { vec3 pos; vec3 norm; vec2 tex; };
 #else
 struct vertex { vec3 pos; vec3 norm; vec2 tex; };
@@ -512,10 +515,10 @@ inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
 //***********************************************
 // intersection implementations
 
-inline ray gen_primary_ray( camera* pCam, float x, float y )	// (x,y) in [0,1]
+inline ray gen_primary_ray( camera* cam, float x, float y )	// (x,y) in [0,1]
 {
-	const vec3& eye=pCam->eye, center=pCam->center, up=pCam->up;
-	float fh = tan(pCam->fovy*0.5f)*2.0f, fw=fh*pCam->aspect;		// frustum height/width in NDC; you may use pCam->frustum_size()
+	const vec3& eye=cam->eye, center=cam->center, up=cam->up;
+	float fh = tan(cam->fovy*0.5f)*2.0f, fw=fh*cam->aspect;		// frustum height/width in NDC
 	vec3 epos = vec3( fw*(x-0.5f), fh*(y-0.5f), -1.0f );			// pixel position on the image plane: make sure to have negative depth
 	mat4 I = mat4::lookAtInverse(eye,center,up);					// inverse view matrix
 	ray r; r.o=eye; r.d=(I*epos-eye).normalize(); r.t=0.0f; r.tfar=FLT_MAX; return r;
