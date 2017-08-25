@@ -23,12 +23,16 @@
 #ifndef _CRT_SECURE_NO_WARNINGS
 	#define _CRT_SECURE_NO_WARNINGS
 #endif
+#ifndef _HAS_EXCEPTIONS
+	#define _HAS_EXCEPTIONS 0
+#endif
 // C standard
 #include <float.h>
 #include <direct.h>		// directory control
 #include <inttypes.h>	// defines int64_t, uint64_t
 #include <io.h>			// low-level io functions
 #include <limits.h>
+#include <malloc.h>
 #include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -68,6 +72,7 @@
 	#endif
 #endif
 #ifdef _MSC_VER	// Visual Studio
+	#pragma optimize( "gsy", on )
 #else			// GCC or Clang
 	#ifdef __GNUC__
 		#ifndef __forceinline
@@ -201,7 +206,7 @@ struct zip_t : public izip_t
 	zip_t( void* ptr, size_t size ){ hzip=OpenZip( ptr, uint(size), nullptr ); }
 	
 	virtual void release(){ for( auto& e : entries ) SAFE_FREE(e.ptr); entries.clear(); if(hzip){ CloseZipU(hzip); hzip=nullptr; } }
-	virtual bool load(){ if(!hzip) return false; entry e; GetZipItem(hzip,-1,&e ); for(int k=0, kn=e.index;k<kn;k++){ GetZipItem( hzip, k, (ZIPENTRY*) &e); e.ptr=nullptr; e.size=0; if(!e.is_dir()) entries.push_back(e); } return true; }
+	virtual bool load(){ if(!hzip) return false; entry e; GetZipItem(hzip,-1,&e ); for(int k=0, kn=e.index;k<kn;k++){ GetZipItem( hzip, k, (ZIPENTRY*) &e); e.ptr=nullptr; e.size=0; if(!e.is_dir()) entries.emplace_back(e); } return true; }
 	virtual bool extract_to_files( path dir, const wchar_t* name=nullptr ){ bool b=false; if(!hzip) return b; for(size_t k=0;k<entries.size();k++){ auto& e=entries[k]; if(e.is_dir()||(name&&_wcsicmp(name,e.name)!=0)) continue; path p=dir+e.name; if(!p.dir().exists()) p.dir().mkdir(); UnzipItem( hzip, e.index, p ); b=true; } return b; }
 	virtual bool extract_to_memory( const wchar_t* name=nullptr )
 	{
@@ -232,7 +237,7 @@ struct szip_t : public izip_t
 	szip_t( void* ptr, size_t size ):alloc_impl({SzAlloc,SzFree}),alloc_temp({SzAllocTemp,SzFreeTemp}){ if(!ptr||!size) return; crc_generate_table(); MemInStream_Init(mem_stream = new CMemInStream(),ptr,size); }
 
 	virtual void release(){ for( auto& e : entries ) SAFE_FREE(e.ptr); entries.clear(); if(db) SzArEx_Free( db, &alloc_impl ); SAFE_DELETE(look_stream); if(archive_stream){ File_Close( &archive_stream->file );SAFE_DELETE(archive_stream); } SAFE_DELETE(mem_stream); }
-	virtual bool load(){ if(!look_in_stream()) return false; SzArEx_Init( db = new CSzArEx() ); if( SzArEx_Open( db, look_in_stream(), &alloc_impl, &alloc_temp ) != SZ_OK ){ wprintf( L"unable to SzArEx_Open(%s)\n", file_path.c_str() ); release(); return false; } for( uint k=0, kn=db->db.NumFiles; k<kn; k++ ){ const CSzFileItem* f = db->db.Files+k; if(f->IsDir) continue; entry e; memset(&e,0,sizeof(e)); e.index=k; if(f->AttribDefined)e.attr=f->Attrib; if(f->MTimeDefined) memcpy(&e.mtime,&f->MTime,sizeof(FILETIME)); SzArEx_GetFileNameUtf16(db,k,(ushort*)e.name); entries.push_back(e); } return true; }
+	virtual bool load(){ if(!look_in_stream()) return false; SzArEx_Init( db = new CSzArEx() ); if( SzArEx_Open( db, look_in_stream(), &alloc_impl, &alloc_temp ) != SZ_OK ){ wprintf( L"unable to SzArEx_Open(%s)\n", file_path.c_str() ); release(); return false; } for( uint k=0, kn=db->db.NumFiles; k<kn; k++ ){ const CSzFileItem* f = db->db.Files+k; if(f->IsDir) continue; entry e; memset(&e,0,sizeof(e)); e.index=k; if(f->AttribDefined)e.attr=f->Attrib; if(f->MTimeDefined) memcpy(&e.mtime,&f->MTime,sizeof(FILETIME)); SzArEx_GetFileNameUtf16(db,k,(ushort*)e.name); entries.emplace_back(e); } return true; }
 	virtual bool extract_to_files( path dir, const wchar_t* name=nullptr ){ uchar* ob=nullptr; uint bl=-1; for( size_t k=0, kn=entries.size(),of=0,obs=0,os=0; k<kn; k++ ){ auto& e=entries[k]; if(e.is_dir()||(name&&_wcsicmp(name,e.name)!=0)) continue; path p=dir+e.name; if(!p.dir().exists()) p.dir().mkdir(); if( SZ_OK!=SzArEx_Extract(db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){wprintf(L"unable to SzArEx_Extract(%s)\n",e.name);return false;} FILE* fp=_wfopen(p,L"wb"); if(!fp){wprintf( L"unable to fopen(%s)\n",p.c_str()); return false; } fwrite(ob+of,os,1,fp );fclose(fp); if(e.attr) SetFileAttributesW(p,e.attr); p.set_filetime(nullptr,nullptr,&e.mtime); } if(ob) alloc_impl.Free(&alloc_impl,ob); return true; }
 	virtual bool extract_to_memory( const wchar_t* name=nullptr ){ if(!db||!look_in_stream()) return false; uchar* ob=nullptr; uint bl=-1; for(size_t k=0,kn=entries.size(),of=0,obs=0,os=0;k<kn;k++){ auto& e=entries[k]; if(e.is_dir()||e.ptr||(name&&_wcsicmp(name,e.name)!=0)) continue; if( SZ_OK!=SzArEx_Extract(db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){wprintf(L"unable to SzArEx_Extract(%s)\n",e.name);return false;} memcpy(e.ptr=malloc(os),ob+of,e.size=os); } if(ob) alloc_impl.Free(&alloc_impl,ob); return true; }
 

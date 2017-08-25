@@ -23,12 +23,16 @@
 #ifndef _CRT_SECURE_NO_WARNINGS
 	#define _CRT_SECURE_NO_WARNINGS
 #endif
+#ifndef _HAS_EXCEPTIONS
+	#define _HAS_EXCEPTIONS 0
+#endif
 // C standard
 #include <float.h>
 #include <direct.h>		// directory control
 #include <inttypes.h>	// defines int64_t, uint64_t
 #include <io.h>			// low-level io functions
 #include <limits.h>
+#include <malloc.h>
 #include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -68,6 +72,7 @@
 	#endif
 #endif
 #ifdef _MSC_VER	// Visual Studio
+	#pragma optimize( "gsy", on )
 #else			// GCC or Clang
 	#ifdef __GNUC__
 		#ifndef __forceinline
@@ -154,7 +159,7 @@ template <class T,template <class> class A=tarray2> struct tvec2 : public tarray
 	
 	// casting operators
 	__forceinline operator A<T>&(){ return reinterpret_cast<A<T>&>(*this); }
-	__forceinline operator const A<T>&() const { return reinterpret_cast<A<T>&>(*this); }
+	__forceinline operator const A<T>&() const { return reinterpret_cast<const A<T>&>(*this); }
 
 	// comparison operators
 	__forceinline bool operator!=(const tvec2& v) const { return !operator==(v); }
@@ -215,7 +220,7 @@ template <class T,template <class> class A=tarray3> struct tvec3 : public tarray
 
 	// casting operators
 	__forceinline operator A<T>&(){ return reinterpret_cast<A<T>&>(*this); }
-	__forceinline operator const A<T>&() const { return reinterpret_cast<A<T>&>(*this); }
+	__forceinline operator const A<T>&() const { return reinterpret_cast<const A<T>&>(*this); }
 
 	// comparison operators
 	__forceinline bool operator==(const tvec3& v) const { return x==v.x&&y==v.y&&z==v.z; }
@@ -284,7 +289,7 @@ template <class T,template <class> class A=tarray4> struct tvec4 : public tarray
 
 	// casting operators
 	__forceinline operator A<T>&(){ return reinterpret_cast<A<T>&>(*this); }
-	__forceinline operator const A<T>&() const { return reinterpret_cast<A<T>&>(*this); }
+	__forceinline operator const A<T>&() const { return reinterpret_cast<const A<T>&>(*this); }
 
 	// comparison operators
 	__forceinline bool operator==(const tvec4& v) const { return x==v.x&&y==v.y&&z==v.z&&w==v.w; }
@@ -346,9 +351,9 @@ using svec2 = tvec2<size_t>;	using svec3 = tvec3<size_t>;	using svec4 = tvec4<si
 // std::hash support here
 
 #ifdef _M_X64
-template <class T> struct bitwise_hash { size_t operator()(const T v) const noexcept { size_t h = 14695981039346656037ULL; const uchar* p = (const uchar*)&v; for (size_t k = 0; k < sizeof(T); k++) { h ^= size_t(p[k]); h *= 1099511628211ULL; } return h; }}; // FNV-1a hash function (from VC2015/2017)
+template <class T> struct bitwise_hash { size_t operator()(const T v) const { size_t h = 14695981039346656037ULL; const uchar* p = (const uchar*)&v; for (size_t k = 0; k < sizeof(T); k++) { h ^= size_t(p[k]); h *= 1099511628211ULL; } return h; }}; // FNV-1a hash function (from VC2015/2017)
 #elif defined(_M_IX86)
-template <class T> struct bitwise_hash { size_t operator()(const T v) const noexcept { size_t h = 2166136261U; const uchar* p = (const uchar*)&v; for (size_t k = 0; k < sizeof(T); k++) { h ^= size_t(p[k]); h *= 16777619U; } return h; }}; // FNV-1a hash function (from VC2015/2017)
+template <class T> struct bitwise_hash { size_t operator()(const T v) const { size_t h = 2166136261U; const uchar* p = (const uchar*)&v; for (size_t k = 0; k < sizeof(T); k++) { h ^= size_t(p[k]); h *= 16777619U; } return h; }}; // FNV-1a hash function (from VC2015/2017)
 #endif
 
 namespace std
@@ -404,7 +409,8 @@ struct mat2 : public tarray<float,4>
 
 	// casting operators
 	__forceinline operator float4& (){ return reinterpret_cast<float4&>(*this); }
-
+	__forceinline operator const float4& () const { return reinterpret_cast<const float4&>(*this); }
+	
 	// comparison operators
 	__forceinline bool operator==( const mat2& m ) const { for( int k=0; k<std::extent<decltype(a)>::value; k++ ) if(std::abs(a[k]-m[k])>precision<float>::value()) return false; return true; }
 	__forceinline bool operator!=( const mat2& m ) const { return !operator==(m); }
@@ -469,6 +475,7 @@ struct mat3 : public tarray<float,9>
 
 	// casting operators
 	__forceinline operator float9& (){ return reinterpret_cast<float9&>(*this); }
+	__forceinline operator const float9& () const { return reinterpret_cast<const float9&>(*this); }
 
 	// comparison operators
 	__forceinline bool operator==( const mat3& m ) const { for( int k=0; k<std::extent<decltype(a)>::value; k++ ) if(std::abs(a[k]-m[k])>precision<float>::value()) return false; return true; }
@@ -535,6 +542,7 @@ struct mat4 : public tarray<float,16>
 
 	// casting operators
 	__forceinline operator float16&(){ return reinterpret_cast<float16&>(*this); }
+	__forceinline operator const float16& () const { return reinterpret_cast<const float16&>(*this); }
 	__forceinline operator mat3() const { return mat3(_11,_12,_13,_21,_22,_23,_31,_32,_33); }
 	__forceinline operator mat2() const { return mat2(_11,_12,_21,_22); }
 

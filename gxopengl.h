@@ -134,12 +134,12 @@ namespace gl {
 	struct GLObject
 	{
 		const GLuint	ID;
-		const char*		name;
+		const char		name[64];
 		const GLenum	target;
 		const GLenum	target_binding;
 
-		GLObject( GLuint id, const char* _name, GLenum _target ):ID(id),name(_strdup(_name)),target(_target),target_binding(gxGetTargetBinding(_target)){}
-		~GLObject(){ if(name) free((void*)name); release(); }
+		GLObject( GLuint id, const char* _name, GLenum _target ):ID(id),target(_target),target_binding(gxGetTargetBinding(_target)),name(""){ size_t l=strlen(_name),c=sizeof(name); strncpy((char*)name,_name,l<c?l:c-1);((char*)name)[l]=0; }
+		~GLObject(){ release(); }
 		virtual const char* getName() const { return name; }
 		virtual void release(){}
 		__forceinline GLuint binding( GLenum target1=0 ){ return target1==0?gxGetIntegerv(target_binding):gxGetIntegerv(gxGetTargetBinding(target1)); }
@@ -242,8 +242,9 @@ namespace gl {
 	//***********************************************
 	struct Texture : public GLObject
 	{
-		Texture( GLuint ID, const char* name, GLenum target, GLenum InternalFormat, GLenum Format, GLenum Type, Texture* _parent=nullptr ):GLObject(ID,name,target),_internal_format(InternalFormat),_type(Type),_format(Format),_channels(gxGetTextureChannels(InternalFormat)),_bpp(gxGetTextureBPP(InternalFormat)),_multisamples(1),key(0),parent(_parent),next(nullptr),p_create_view(parent?parent->p_create_view:gxCreateTextureView){}
-		virtual void release(){ if(next) delete next; GLuint id=ID; glDeleteTextures(1,&id); bTextureDeleted()=true; }
+		Texture( GLuint ID, const char* name, GLenum target, GLenum InternalFormat, GLenum Format, GLenum Type, uint64_t _crtheap=_get_heap_handle() ):GLObject(ID,name,target),_internal_format(InternalFormat),_type(Type),_format(Format),_channels(gxGetTextureChannels(InternalFormat)),_bpp(gxGetTextureBPP(InternalFormat)),_multisamples(1),key(0),next(nullptr),crtheap(_crtheap){}
+		virtual void release(){ if(next){ next->~Texture(); HeapFree((void*)next->crtheap,0,next); } glDeleteTextures(1,(GLuint*)&ID); bTextureDeleted()=true; } // use HeapFree() for views
+
 		GLuint bind( bool bBind=true ){ GLuint b0=gxGetIntegerv(target_binding); if(!bBind||ID!=b0) glBindTexture( target, bBind?ID:0 ); return b0; }
 		void bind_image_texture( GLuint unit, GLenum access=GL_READ_ONLY /* or GL_WRITE_ONLY or GL_READ_WRITE */ , GLint level=0, GLenum format=0, bool bLayered=false, GLint layer=0 ){ glBindImageTexture( unit, ID, level, bLayered?GL_TRUE:GL_FALSE, layer, access, format?format:internalFormat() ); }
 
@@ -254,7 +255,7 @@ namespace gl {
 		inline void textureParameterf( GLenum pname, GLfloat param ) const { if(glTextureParameterf) glTextureParameterf(ID,pname,param); else { GLuint b0=gxGetIntegerv(target_binding); glBindTexture(target,ID); glTexParameterf(target,pname,param); glBindTexture(target,b0); } }
 
 		// texture queries
-		GLint mipLevels(){ return isImmutable()?getTextureParameteriv(GL_TEXTURE_VIEW_NUM_LEVELS):getTextureParameteriv(GL_TEXTURE_MAX_LEVEL)-getTextureParameteriv(GL_TEXTURE_BASE_LEVEL)+1; }
+		GLint mipLevels(){ return is_immutable()?getTextureParameteriv(GL_TEXTURE_VIEW_NUM_LEVELS):getTextureParameteriv(GL_TEXTURE_MAX_LEVEL)-getTextureParameteriv(GL_TEXTURE_BASE_LEVEL)+1; }
 		ivec2 mipRange(){ ivec2 range=ivec2(getTextureParameteriv(GL_TEXTURE_BASE_LEVEL),getTextureParameteriv(GL_TEXTURE_MAX_LEVEL)); return ivec2(range.x,range.y-range.x+1); }
 		ivec2 filter(){ return ivec2(getTextureParameteriv(GL_TEXTURE_MIN_FILTER),getTextureParameteriv(GL_TEXTURE_MAG_FILTER)); }
 		ivec3 wrap(){ ivec3 w(getTextureParameteriv(GL_TEXTURE_WRAP_S),getTextureParameteriv(GL_TEXTURE_WRAP_T),0); if(target==GL_TEXTURE_3D||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY) w.z=getTextureParameteriv(GL_TEXTURE_WRAP_R); return w; }
@@ -267,7 +268,7 @@ namespace gl {
 		GLint wrap_r(){		return getTextureParameteriv(GL_TEXTURE_WRAP_R); }
 		GLint minLOD(){		return getTextureParameteriv(GL_TEXTURE_MIN_LOD); }
 		GLint maxLOD(){		return getTextureParameteriv(GL_TEXTURE_MAX_LOD); }
-		bool isImmutable(){	return parent||getTextureParameteriv(GL_TEXTURE_IMMUTABLE_FORMAT)!=0; }
+		bool is_immutable(){return getTextureParameteriv(GL_TEXTURE_IMMUTABLE_FORMAT)!=0; }
 
 		// bindless texture extension
 		GLuint64 handle(){ return glGetTextureHandleARB?glGetTextureHandleARB(ID):0; }
@@ -320,9 +321,9 @@ namespace gl {
 
 		// view-related function: wrapper to createTextureView
 		inline static uint crc( GLuint minlevel, GLuint numlevels, GLuint minlayer, GLuint numlayers, bool force_array=false ){ struct info { GLuint minlevel, numlevels, minlayer, numlayers; bool force_array; }; info i={minlevel,numlevels,minlayer,numlayers,force_array}; return gl_crc32c(&i,sizeof(i)); }
-		inline Texture* view( GLuint minlevel, GLuint numlevels, GLuint minlayer=0, GLuint numlayers=1, GLint internalFormat=0 ){ return p_create_view?p_create_view(this,minlevel,numlevels,minlayer,numlayers,false):nullptr; } // view support (> OpenGL 4.3)
+		inline Texture* view( GLuint minlevel, GLuint numlevels, GLuint minlayer=0, GLuint numlayers=1, GLint internalFormat=0 ){ return gxCreateTextureView(this,minlevel,numlevels,minlayer,numlayers,false); } // view support (> OpenGL 4.3)
 		inline Texture* slice( GLuint layer, GLuint level=0 ){ return view(level,1,layer,1); }
-		inline Texture* array_view(){ return (layers()>1)?this:p_create_view?p_create_view(this,0,mipLevels(),0,layers(),true):nullptr; }
+		inline Texture* array_view(){ return (layers()>1)?this:gxCreateTextureView(this,0,mipLevels(),0,layers(),true); }
 
 		// internal format, type, format
 		GLenum		_internal_format;
@@ -333,10 +334,9 @@ namespace gl {
 		GLsizei		_multisamples;
 
 		// view-related protected members
-		uint		key;	// key of the current view
-		Texture*	parent;
-		Texture*	next;	// next view node (a node of linked list, starting from the parent node )
-		Texture*	(*p_create_view)( Texture* src, GLuint minlevel, GLuint numlevels, GLuint minlayer, GLuint numlayers, bool force_array );	// function pointer to the gxCreateTextureView (required to allocate view across DLL boundaries)
+		uint		key;		// key of the current view
+		Texture*	next;		// next view node: a node of linked list, starting from the parent node
+		uint64_t	crtheap;	// heap handle to the parent, require to allocate view across DLL boundaries
 	};
 
 	inline Texture* Texture::clone( const char* name )
@@ -490,7 +490,7 @@ namespace gl {
 	};
 
 	// template specialization on bool array
-	template<> inline void Program::Uniform::update<bool>( GLuint programID, bool* v, GLsizei count ){ int* i=(int*)malloc(sizeof(int)*count*1); for( int k=0; k < count; k++ ) i[k] = int(v[k]); glProgramUniform1iv( programID, ID, count, i ); free(i); }
+	template<> inline void Program::Uniform::update<bool>( GLuint programID, bool* v, GLsizei count ){ std::vector<int> i(count);for(int k=0;k<count;k++)i[k]=int(v[k]); glProgramUniform1iv( programID, ID, count, &i[0] ); }
 
 	// late implementations of Program
 	inline void Program::updateUniformCache()
@@ -531,7 +531,7 @@ namespace gl {
 		size_t size() const { return programList.size(); }
 		Program* getProgram( const char* programName ) const { for(uint k=0;k<programList.size();k++)if(_stricmp(programList[k]->name,programName)==0) return programList[k]; printf("Unable to find program \"%s\" in effect \"%s\"\n", programName, getName() ); return nullptr; }
 		Program* getProgram( uint index ) const { if(index<programList.size()) return programList[index]; else { printf("[%s] Out-of-bound program index\n", getName() ); return nullptr; } }
-		bool createProgram( const char* prefix, const char* name, const std::map<GLuint,std::string>& shaderSourceMap, const char* pMacro=nullptr, std::vector<const char*>* tfVaryings=nullptr ){ Program* program=gxCreateProgram(prefix,name,shaderSourceMap,pMacro,tfVaryings); if(!program) return false; programList.push_back(program); auto& m=program->uniform_block_map;for(auto it=m.begin();it!=m.end();it++){gl::Program::UniformBlock& ub=it->second;ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size); } return true; }
+		bool createProgram( const char* prefix, const char* name, const std::map<GLuint,std::string>& shaderSourceMap, const char* pMacro=nullptr, std::vector<const char*>* tfVaryings=nullptr ){ Program* program=gxCreateProgram(prefix,name,shaderSourceMap,pMacro,tfVaryings); if(!program) return false; programList.emplace_back(program); auto& m=program->uniform_block_map;for(auto it=m.begin();it!=m.end();it++){gl::Program::UniformBlock& ub=it->second;ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size); } return true; }
 		bool createProgram( const char* prefix, const char* name, const char* vertShaderSource, const char* fragShaderSource, const char* pMacro=nullptr ){ std::map<GLuint,std::string> ssm={std::make_pair(GL_VERTEX_SHADER,vertShaderSource),std::make_pair(GL_FRAGMENT_SHADER,fragShaderSource)}; return createProgram(prefix,name,ssm,pMacro,nullptr); }
 
 		Program::Uniform* getUniform( const char* name ){ return activeProgram?activeProgram->getUniform(name):nullptr; }
@@ -824,8 +824,8 @@ inline gl::VertexArray* gxCreateQuadVertexArray()
 // CRC32C implementation with 4-batch parallel construction (from zlib): 0x82f63b78UL
 inline unsigned int gl_crc32c( const void* ptr, size_t size )
 {
+	if(ptr==nullptr||size==0) return 0;
 	const unsigned char* buff = (const unsigned char*) ptr;
-	if(buff==nullptr||size==0) return 0;
 	static unsigned* t[4]={nullptr};
 	if(!t[0])
 	{
@@ -836,7 +836,7 @@ inline unsigned int gl_crc32c( const void* ptr, size_t size )
 
 	unsigned c = ~0;
 	for(;size&&(((ptrdiff_t)buff)&7);size--,buff++) c=t[0][(c^(*buff))&0xff]^(c>>8);	 // move forward to the 8-byte aligned boundary
-	for(;size>=4;size-=4,buff+=4){c^=*(unsigned*)buff;c=t[3][(c>>0)&0xff]^t[2][(c>>8)&0xff]^t[1][(c>>16)&0xff]^t[0][(c>>24)&0xff]; }
+	for(;size>=4;size-=4,buff+=4){ c^=*(unsigned*)buff; c=t[3][(c>>0)&0xff]^t[2][(c>>8)&0xff]^t[1][(c>>16)&0xff]^t[0][(c>>24)&0xff]; }
 	for(;size;size--,buff++) c=t[0][(c^(*buff))&0xff]^(c>>8);
 	return ~c;
 }
@@ -859,12 +859,11 @@ inline GLuint gxLoadProgramBinary( const char* name, uint crc )
 	size_t crc_size=sizeof(crc), offset=crc_size+sizeof(GLenum);
 	size_t programBinarySize = programBinaryPath.file_size();
 	if(programBinarySize<offset) return 0; // no md5 hash and binary format exists
-	void* buff = malloc( programBinarySize );
-	FILE* fp = _wfopen( programBinaryPath, L"rb"); if(fp==nullptr) return 0; fread( buff, sizeof(char), programBinarySize, fp ); fclose(fp);
-	if( memcmp( buff, &crc, crc_size ) !=0 ) return 0;
-	GLenum binaryFormat=0; memcpy( &binaryFormat, ((char*)buff)+crc_size, sizeof(GLenum) );
-	GLuint ID = glCreateProgram(); glProgramBinary( ID, binaryFormat, ((char*)buff)+offset, GLsizei(programBinarySize-offset) );
-	free(buff);
+	std::vector<char> buff(programBinarySize);
+	FILE* fp = _wfopen( programBinaryPath, L"rb"); if(fp==nullptr) return 0; fread( &buff[0], sizeof(char), programBinarySize, fp ); fclose(fp);
+	if( memcmp( &buff[0], &crc, crc_size ) !=0 ) return 0;
+	GLenum binaryFormat=0; memcpy( &binaryFormat, (&buff[0])+crc_size, sizeof(GLenum) );
+	GLuint ID = glCreateProgram(); glProgramBinary( ID, binaryFormat, (&buff[0])+offset, GLsizei(programBinarySize-offset) );
 	return ID;
 }
 
@@ -894,8 +893,8 @@ inline std::vector<std::pair<size_t,std::string>> gxExplodeShaderSource( const c
 	for( int k=0,kn=int(vs.size()),idx=1; k<kn;k++,idx++ )
 	{
 		const char* s = trim(vs[k]);
-		if(strncmp(s,"#line",5)!=0) v.push_back( std::make_pair(idx,vs[k]) );
-		else {sscanf(str_replace(s,"\t"," "),"#line %d",&idx);v.push_back(std::make_pair(idx--,vs[k]));}
+		if(strncmp(s,"#line",5)!=0) v.emplace_back( std::make_pair(idx,vs[k]) );
+		else {sscanf(str_replace(s,"\t"," "),"#line %d",&idx);v.emplace_back(std::make_pair(idx--,vs[k]));}
 	}
 	return v;
 }
@@ -943,9 +942,9 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 	auto ssm = shaderSourceMap; for( auto it=ssm.begin(); it!=ssm.end(); it++ )
 	{
 		auto v = gxExplodeShaderSource(it->second.c_str());
-		std::vector<std::string> directive_list;	for(auto& j:v){ const char* s=str_replace(trim(j.second.c_str()),"\t"," "); if(strstr(s,"#version")||strstr(s,"#extension")){ directive_list.push_back(j.second); j.second.clear();} }
-		std::vector<std::string> macro_list;		for(auto& j:explode_conservative(macro.c_str(),'\n')) macro_list.push_back(j);
-		std::vector<std::string> layout_list;		if(it->first==GL_FRAGMENT_SHADER) layout_list.push_back("layout(pixel_center_integer) in vec4 gl_FragCoord;");
+		std::vector<std::string> directive_list;	for(auto& j:v){ const char* s=str_replace(trim(j.second.c_str()),"\t"," "); if(strstr(s,"#version")||strstr(s,"#extension")){ directive_list.emplace_back(j.second); j.second.clear();} }
+		std::vector<std::string> macro_list;		for(auto& j:explode_conservative(macro.c_str(),'\n')) macro_list.emplace_back(j);
+		std::vector<std::string> layout_list;		if(it->first==GL_FRAGMENT_SHADER) layout_list.emplace_back("layout(pixel_center_integer) in vec4 gl_FragCoord;");
 
 		// merge all together
 		std::string& s = it->second; s.clear();
@@ -984,7 +983,7 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 		GLuint shaderID = gxCompileShaderSource( shaderType, format("%s",pname), it->second.c_str() );
 
 		if( !it->second.empty() && shaderID==0 ) return nullptr;
-		if( shaderID ){ glAttachShader( program->ID, shaderID ); attachedShaderList.push_back( shaderID ); }
+		if( shaderID ){ glAttachShader( program->ID, shaderID ); attachedShaderList.emplace_back( shaderID ); }
 		if( shaderType == GL_GEOMETRY_SHADER )
 		{
 			int maxGeometryOutputVertices;
@@ -1088,11 +1087,11 @@ struct glfxParserImpl : public glfx::IParser
 		for( int k=0, kn=glfxGetProgramCount(id); k<kn; k++ )
 		{
 			const char* name = glfxGetProgramName( id, k );
-			program_name_list.push_back( name );
+			program_name_list.emplace_back( name );
 			std::map<uint,std::string> shader_map = glfxGetProgramSource( id, name );
-			shader_type_list.push_back(std::vector<uint>()); std::vector<uint>& t=shader_type_list.back();
-			shader_source_list.push_back(std::vector<std::string>()); std::vector<std::string>& s=shader_source_list.back();
-			for( auto it=shader_map.begin(); it!=shader_map.end(); it++ ){ t.push_back( it->first ); s.push_back( it->second ); }
+			shader_type_list.emplace_back(std::vector<uint>()); std::vector<uint>& t=shader_type_list.back();
+			shader_source_list.emplace_back(std::vector<std::string>()); std::vector<std::string>& s=shader_source_list.back();
+			for( auto it=shader_map.begin(); it!=shader_map.end(); it++ ){ t.emplace_back( it->first ); s.emplace_back( it->second ); }
 		}
 		glfxDeleteEffect(id);
 		return true;
@@ -1320,7 +1319,7 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint minlevel, GLui
 	if(numlayers==0){ printf( "%s->view should have more than one layers\n", src->name ); return nullptr; }
 	if((minlevel+numlevels)>GLuint(src->mipLevels())){ printf( "%s->view should have less than %d levels\n", src->name, src->mipLevels() ); return nullptr; }
 	if((minlayer+numlayers)>GLuint(src->layers())){ printf( "%s->view should have less than %d layers\n", src->name, src->layers() ); return nullptr; }
-	if(!src->isImmutable()){ printf("%s(GL_TEXTURE_IMMUTABLE_FORMAT)!=GL_TRUE\n", src->name ); return nullptr; }
+	if(!src->is_immutable()){ printf("%s(GL_TEXTURE_IMMUTABLE_FORMAT)!=GL_TRUE\n", src->name ); return nullptr; }
 
 	// correct the new target
 	GLenum target1=src->target, t=src->target;
@@ -1346,7 +1345,8 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint minlevel, GLui
 	GLint magFilter			= src->getTextureParameteriv( GL_TEXTURE_MAG_FILTER );
 
 	// allocate the new texture using the initial crt heap
-	gl::Texture* t1 = new gl::Texture(ID1,name1,target1,internalFormat,src->format(),src->type(),src);
+	gl::Texture* t1 = (gl::Texture*) HeapAlloc((void*)src->crtheap,0,sizeof(gl::Texture));
+	new(t1) gl::Texture(ID1,name1,target1,internalFormat,src->format(),src->type(),src->crtheap);
 	t1->key = key;
 
 	// multisamples

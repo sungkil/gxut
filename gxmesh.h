@@ -399,8 +399,8 @@ struct mesh
 
 	// face/object/proxy/material helpers
 	uint face_count( int level=0 ) const { uint kn=uint(geometries.size())/levels; auto* g=&geometries[kn*level];uint f=0;for(uint k=0;k<kn;k++,g++)f+=g->count;return f/3;}
-	object* create_object( const char* name, bbox* _box=nullptr ){ objects.push_back(object(this,uint(objects.size()),name,_box)); return &objects.back(); }
-	object* create_object( const object& o ){ objects.push_back(o); auto& o1=objects.back(); o1.root=this; o1.ID=uint(objects.size())-1; return &o1; }
+	object* create_object( const char* name, bbox* _box=nullptr ){ objects.emplace_back(object(this,uint(objects.size()),name,_box)); return &objects.back(); }
+	object* create_object( const object& o ){ objects.emplace_back(o); auto& o1=objects.back(); o1.root=this; o1.ID=uint(objects.size())-1; return &o1; }
 	object*	find_object( const char* name ){ for(uint k=0;k<objects.size();k++)if(_stricmp(objects[k].name,name)==0) return &objects[k];return nullptr;}
 	inline mesh* create_proxy( bool use_quads=false, bool double_sided=false ); // proxy mesh helpers: e.g., bounding box
 	std::vector<material> pack_materials() const { std::vector<material> p; auto& m=materials; if(p.size()!=m.size()) p.resize(m.size()); for(size_t k=0, kn=p.size(); k<kn; k++) p[k]=m[k]; return p; }
@@ -443,9 +443,9 @@ inline bool object::empty() const { auto* g=&root->geometries[0]; for( uint k=0,
 inline uint object::geometry_count() const { uint n=0; for( auto& g : root->geometries ) if(g.parent()==this) n++; return n; }
 inline uint object::face_count() const { auto* g=&root->geometries[0]; uint f=0; for( uint k=0,kn=uint(root->geometries.size()); k<kn; k++ ) if(g[k].parent()==this) f+=g[k].face_count(); return f; }
 inline geometry* object::find_geometry( uint index ) const { auto* g=&root->geometries[0]; uint n=0; for( uint k=0,kn=uint(root->geometries.size()); k<kn; k++, g++ ) if(g->parent()==this&&(n++)==index) return g; return nullptr; }
-inline std::vector<geometry*> object::find_geometries() const { auto* g=&root->geometries[0]; std::vector<geometry*> gl; for( uint k=0,kn=uint(root->geometries.size()); k<kn; k++, g++ ) if(g->parent()==this) gl.push_back(g); return std::move(gl); }
-inline geometry* object::create_geometry( size_t first_index, size_t index_count, bbox* box, size_t mat_index ){ auto& g=root->geometries; g.push_back(geometry(root,uint(g.size()),this->ID,uint(first_index),uint(index_count),box,uint(mat_index))); return &g.back(); }
-inline geometry* object::create_geometry( const geometry& other ){ auto& g=root->geometries; g.push_back(other); auto* p=&g.back(); p->ID=uint(g.size())-1; return p; }
+inline std::vector<geometry*> object::find_geometries() const { auto* g=&root->geometries[0]; std::vector<geometry*> gl; for( uint k=0,kn=uint(root->geometries.size()); k<kn; k++, g++ ) if(g->parent()==this) gl.emplace_back(g); return std::move(gl); }
+inline geometry* object::create_geometry( size_t first_index, size_t index_count, bbox* box, size_t mat_index ){ auto& g=root->geometries; g.emplace_back(geometry(root,uint(g.size()),this->ID,uint(first_index),uint(index_count),box,uint(mat_index))); return &g.back(); }
+inline geometry* object::create_geometry( const geometry& other ){ auto& g=root->geometries; g.emplace_back(other); auto* p=&g.back(); p->ID=uint(g.size())-1; return p; }
 
 //***********************************************
 // late implementations for mesh
@@ -494,7 +494,7 @@ inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
 	std::vector<uint> i0;
 	if(use_quads)	i0 = { 0,3,2,1, /*bottom*/ 4,5,6,7, /*top*/ 0,1,5,4, /*left*/ 2,3,7,6, /*right*/ 1,2,6,5, /*front*/ 3,0,4,7 /*back*/ };
 	else			i0 = { 0,2,1,0,3,2, /*bottom*/ 4,5,6,4,6,7, /*top*/ 0,1,5,0,5,4, /*left*/ 2,3,6,3,7,6, /*right*/ 1,2,6,1,6,5, /*front*/ 0,4,3,3,4,7 /*back*/ };
-	if(double_sided){ for(size_t k=0,f=use_quads?4:3,kn=i0.size()/f;k<kn;k++) for(size_t j=0;j<f;j++) i0.push_back(i0[(k+1)*f-j-1]); } // insert indices (for CW)
+	if(double_sided){ for(size_t k=0,f=use_quads?4:3,kn=i0.size()/f;k<kn;k++) for(size_t j=0;j<f;j++) i0.emplace_back(i0[(k+1)*f-j-1]); } // insert indices (for CW)
 
 	// default corner/vertex definition
 	bbox cv(-1.0f,1.0f); vec4 corners[8]; for(uint k=0;k<8;k++) corners[k] = vec4(cv.corner(k),1.0f);
@@ -504,9 +504,9 @@ inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
 	auto& i=proxy->indices; for( auto& g : geometries )
 	{
 		proxy->objects[g.object_index].create_geometry( i.size(), i0.size(), &g.box );
-		for(auto& j:i0) i.push_back(j+uint(proxy->vertices.size()));
+		for(auto& j:i0) i.emplace_back(j+uint(proxy->vertices.size()));
 		mat4 m = mat4::translate(g.box.center())*mat4::scale(g.box.size()*0.5f);
-		for(uint k=0;k<8;k++){ v.pos=(m*corners[k]).xyz; proxy->vertices.push_back(v); }
+		for(uint k=0;k<8;k++){ v.pos=(m*corners[k]).xyz; proxy->vertices.emplace_back(v); }
 	}
 
 	return proxy;
@@ -596,7 +596,7 @@ inline bool mesh::intersect( const ray& r, std::vector<uint>* hit_prim_list ) co
 	for( uint k=0, kn=uint(geometries.size()); k<kn; k++ )
 	{
 		if(!(geometries[k].matrix()*geometries[k].box).intersect(r,nullptr)) continue;
-		m.push_back(uint(k));
+		m.emplace_back(uint(k));
 	}
 	if(hit_prim_list) *hit_prim_list = m;
 	return !m.empty();
@@ -646,12 +646,12 @@ inline mesh* create_box_mesh( const char* name="box", bool use_quads=false, bool
 	bbox box( vec3(-half_size), vec3(half_size) );
 
 	// vertex definitions
-	for( uint k=0; k < 8; k++ ) m->vertices.push_back({ box.corner(k), vec3(0.0f), vec2(0.0f) });
+	for( uint k=0; k < 8; k++ ) m->vertices.emplace_back(vertex{ box.corner(k), vec3(0.0f), vec2(0.0f) });
 
 	// index definitions (CCW: counterclockwise by default)
 	if(use_quads)	m->indices = { 0,3,2,1, /*bottom*/ 4,5,6,7, /*top*/ 0,1,5,4, /*left*/ 2,3,7,6, /*right*/ 1,2,6,5, /*front*/ 3,0,4,7 /*back*/ };
 	else			m->indices = { 0,2,1,0,3,2, /*bottom*/ 4,5,6,4,6,7, /*top*/ 0,1,5,0,5,4, /*left*/ 2,3,6,3,7,6, /*right*/ 1,2,6,1,6,5, /*front*/ 0,4,3,3,4,7 /*back*/ };
-	if(double_sided){ auto& i=m->indices; for(size_t k=0,f=use_quads?4:3,kn=i.size()/f;k<kn;k++) for(size_t j=0;j<f;j++) i.push_back(i[(k+1)*f-j-1]); } // insert indices (for CW)
+	if(double_sided){ auto& i=m->indices; for(size_t k=0,f=use_quads?4:3,kn=i.size()/f;k<kn;k++) for(size_t j=0;j<f;j++) i.emplace_back(i[(k+1)*f-j-1]); } // insert indices (for CW)
 
 	// create object and geometry
 	m->create_object(name,&box)->create_geometry(0,uint(m->indices.size()),&box,-1);

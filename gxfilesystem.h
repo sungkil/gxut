@@ -23,12 +23,16 @@
 #ifndef _CRT_SECURE_NO_WARNINGS
 	#define _CRT_SECURE_NO_WARNINGS
 #endif
+#ifndef _HAS_EXCEPTIONS
+	#define _HAS_EXCEPTIONS 0
+#endif
 // C standard
 #include <float.h>
 #include <direct.h>		// directory control
 #include <inttypes.h>	// defines int64_t, uint64_t
 #include <io.h>			// low-level io functions
 #include <limits.h>
+#include <malloc.h>
 #include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -68,6 +72,7 @@
 	#endif
 #endif
 #ifdef _MSC_VER	// Visual Studio
+	#pragma optimize( "gsy", on )
 #else			// GCC or Clang
 	#ifdef __GNUC__
 		#ifndef __forceinline
@@ -273,8 +278,8 @@ public:
 	path ext() const { split_info si=split(nullptr,nullptr,nullptr,__wcsbuf()); return (si.ext[0]==0)?path():path(si.ext+1); }
 	path remove_ext() const { split_info si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
 	path parent() const { return dir().remove_backslash().dir(); }
-	std::vector<path> explode() const {std::vector<path> L;wchar_t* ctx;for(wchar_t* t=wcstok_s(wcscpy(__wcsbuf(),data),L"/\\",&ctx);t;t=wcstok_s(0,L"/\\",&ctx))L.push_back(path(t));return L;}
-	std::vector<path> relative_ancestors() const { std::vector<path> a, e=dir().relative().explode(); if(e.empty()) return a; path t=e.front().absolute().add_backslash(); a.push_back(t); for(size_t k=1,kn=e.size();k<kn;k++)a.push_back(t+=e[k].add_backslash()); return a; }
+	std::vector<path> explode() const {std::vector<path> L;wchar_t* ctx;for(wchar_t* t=wcstok_s(wcscpy(__wcsbuf(),data),L"/\\",&ctx);t;t=wcstok_s(0,L"/\\",&ctx))L.emplace_back(path(t));return L;}
+	std::vector<path> relative_ancestors() const { std::vector<path> a, e=dir().relative().explode(); if(e.empty()) return a; path t=e.front().absolute().add_backslash(); a.emplace_back(t); for(size_t k=1,kn=e.size();k<kn;k++)a.emplace_back(t+=e[k].add_backslash()); return a; }
 
 	// is file or directory
 	bool exists() const { if(data[0]==0) return false; return attributes()!=INVALID_FILE_ATTRIBUTES; } // return _waccess(data,0)==0;
@@ -289,7 +294,7 @@ public:
 	// make/copy/delete file/dir operations
 	bool mkdir() const 	// make all super directories
 	{
-		if(exists()) return false; std::vector<path> d; path p=to_backslash().remove_backslash();wchar_t* ctx;for( wchar_t* t=wcstok_s(p,L"\\",&ctx); t; t=wcstok_s(nullptr,L"\\", &ctx) ){ d.push_back((d.empty()?path(L""):d.back())+t+L"\\"); }
+		if(exists()) return false; std::vector<path> d; path p=to_backslash().remove_backslash();wchar_t* ctx;for( wchar_t* t=wcstok_s(p,L"\\",&ctx); t; t=wcstok_s(nullptr,L"\\", &ctx) ){ d.emplace_back((d.empty()?path(L""):d.back())+t+L"\\"); }
 		for(size_t k=0;k<d.size();k++) if(!d[k].exists()&&_wmkdir(d[k].data)!=0) return false; return true;
 	}
 	bool copy_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()) return false; if(dst.exists()&&dst.is_dir()) dst=dst.add_backslash()+name(); if(dst.exists()&&overwrite){ if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } return CopyFileW( data, dst, overwrite?FALSE:TRUE )?true:false; }
@@ -394,9 +399,9 @@ inline void path::_scan( path& dir, path::scan_info& si ) const
 	while(FindNextFileW(h,&fd))
 	{
 		if(f[0]==L'.'&&(!f[1]||(f[1]==L'.'&&!f[2]))) continue;
-		if(fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY){ if(si.recursive||si.inc_dir){wcscat(wcscpy(t,dir),f);size_t l=wcslen(t);t[l]=L'\\';t[l+1]=0;if(si.recursive)child_dirs.push_back(t);if(si.inc_dir)si.result.push_back(t);} continue; }
+		if(fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY){ if(si.recursive||si.inc_dir){wcscat(wcscpy(t,dir),f);size_t l=wcslen(t);t[l]=L'\\';t[l+1]=0;if(si.recursive)child_dirs.emplace_back(t);if(si.inc_dir)si.result.emplace_back(t);} continue; }
 		if(si.inc_dir||(si.ext&&!__wcsiext(si.ext,f))||(si.str&&!__wcsistr(f,si.str))) continue;
-		wcscat(wcscpy(t,dir),f); si.result.push_back(std::move(t));
+		wcscat(wcscpy(t,dir),f); si.result.emplace_back(std::move(t));
 		cache_t& d=si.result.back().cache();d.size=uint64_t(fd.nFileSizeLow)+(uint64_t(fd.nFileSizeHigh)<<32ull);d.attributes=fd.dwFileAttributes;d.mtime=DiscardFileTimeMilliseconds(fd.ftLastWriteTime);
 	}
 	FindClose(h);
@@ -485,7 +490,7 @@ inline void path::canonicalize()
 	for(wchar_t* t=wcstok_s(wcscpy(__wcsbuf(),data),L"\\",&ctx);t;t=wcstok_s(nullptr,L"\\",&ctx))
 	{
 		if(t[0]==L'.'&&t[1]==L'.'&&!L.empty()&&memcmp(L.back(),L"..",sizeof(wchar_t)*2)!=0) L.pop_back();
-		else if(t[0]!=L'.'||t[1]!=0) L.push_back(wcscpy(__wcsbuf(),t));
+		else if(t[0]!=L'.'||t[1]!=0) L.emplace_back(wcscpy(__wcsbuf(),t));
 	}
 
 	// reconstruct the path
@@ -500,12 +505,12 @@ inline void path::canonicalize()
 // nocase/std map/unordered_map extension for path
 namespace nocase
 {
-	template <> struct equal_to<path>:public std::binary_function<path,path,bool> { bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())==0;}};
-	template <> struct not_equal_to<path>:public std::binary_function<path,path,bool> { bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())!=0;}};
-	template <> struct greater<path>:public std::binary_function<path,path,bool> { bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())>0;}};
-	template <> struct less<path>:public std::binary_function<path,path,bool> { bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())<0;}};
-	template <> struct greater_equal<path>:public std::binary_function<path,path,bool> { bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())>=0;}};
-	template <> struct less_equal<path>:public std::binary_function<path,path,bool> { bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())<=0;}};
+	template <> struct equal_to<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())==0;}};
+	template <> struct not_equal_to<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())!=0;}};
+	template <> struct greater<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())>0;}};
+	template <> struct less<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())<0;}};
+	template <> struct greater_equal<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())>=0;}};
+	template <> struct less_equal<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())<=0;}};
 }
 
 namespace std
@@ -515,7 +520,7 @@ namespace std
 
 //***********************************************
 // operating-system utilities
-inline BOOL CALLBACK enum_windows_proc( HWND hwnd , LPARAM pProcessList ){((std::vector<HWND>*)pProcessList)->push_back(hwnd);return TRUE;}
+inline BOOL CALLBACK enum_windows_proc( HWND hwnd , LPARAM pProcessList ){((std::vector<HWND>*)pProcessList)->emplace_back(hwnd);return TRUE;}
 inline std::vector<HWND> enum_windows( const wchar_t* filter=nullptr ){std::vector<HWND> v;EnumWindows(enum_windows_proc,(LPARAM)(&v));return v;}
 #if (__cplusplus>199711L) || (_MSC_VER>=1600/*VS2010*/)
 inline void usleep( int us ){ std::this_thread::sleep_for(std::chrono::microseconds(us)); }

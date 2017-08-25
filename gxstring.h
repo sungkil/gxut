@@ -23,12 +23,16 @@
 #ifndef _CRT_SECURE_NO_WARNINGS
 	#define _CRT_SECURE_NO_WARNINGS
 #endif
+#ifndef _HAS_EXCEPTIONS
+	#define _HAS_EXCEPTIONS 0
+#endif
 // C standard
 #include <float.h>
 #include <direct.h>		// directory control
 #include <inttypes.h>	// defines int64_t, uint64_t
 #include <io.h>			// low-level io functions
 #include <limits.h>
+#include <malloc.h>
 #include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -68,6 +72,7 @@
 	#endif
 #endif
 #ifdef _MSC_VER	// Visual Studio
+	#pragma optimize( "gsy", on )
 #else			// GCC or Clang
 	#ifdef __GNUC__
 		#ifndef __forceinline
@@ -156,26 +161,26 @@ inline const wchar_t* _stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ re
 // 0.3 case-insensitive comparison for std::map/set, std::unordered_map/set
 namespace nocase
 {
-	template <class T> struct equal_to:public std::binary_function<T,T,bool> { bool operator()(const T& a,const T& b)const;};
-	template <class T> struct not_equal_to:public std::binary_function<T,T,bool> { bool operator()(const T& a,const T& b)const;};
-	template <class T> struct greater:public std::binary_function<T,T,bool> { bool operator()(const T& a,const T& b)const;};
-	template <class T> struct less:public std::binary_function<T,T,bool> { bool operator()(const T& a,const T& b)const;};
-	template <class T> struct greater_equal:public std::binary_function<T,T,bool> { bool operator()(const T& a,const T& b)const;};
-	template <class T> struct less_equal:public std::binary_function<T,T,bool> { bool operator()(const T& a,const T& b)const;};
+	template <class T> struct equal_to { bool operator()(const T& a,const T& b)const;};
+	template <class T> struct not_equal_to { bool operator()(const T& a,const T& b)const;};
+	template <class T> struct greater { bool operator()(const T& a,const T& b)const;};
+	template <class T> struct less { bool operator()(const T& a,const T& b)const;};
+	template <class T> struct greater_equal { bool operator()(const T& a,const T& b)const;};
+	template <class T> struct less_equal { bool operator()(const T& a,const T& b)const;};
 
-	template <> struct equal_to<std::string>:public std::binary_function<std::string,std::string,bool> { bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())==0;}};
-	template <> struct not_equal_to<std::string>:public std::binary_function<std::string,std::string,bool> { bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())!=0;}};
-	template <> struct greater<std::string>:public std::binary_function<std::string,std::string,bool> { bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())>0;}};
-	template <> struct less<std::string>:public std::binary_function<std::string,std::string,bool> { bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())<0;}};
-	template <> struct greater_equal<std::string>:public std::binary_function<std::string,std::string,bool> { bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())>=0;}};
-	template <> struct less_equal<std::string>:public std::binary_function<std::string,std::string,bool> { bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())<=0;}};
+	template <> struct equal_to<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())==0;}};
+	template <> struct not_equal_to<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())!=0;}};
+	template <> struct greater<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())>0;}};
+	template <> struct less<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())<0;}};
+	template <> struct greater_equal<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())>=0;}};
+	template <> struct less_equal<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())<=0;}};
 
-	template <> struct equal_to<std::wstring>:public std::binary_function<std::wstring,std::wstring,bool> { bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())==0;}};
-	template <> struct not_equal_to<std::wstring>:public std::binary_function<std::wstring,std::wstring,bool> { bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())!=0;}};
-	template <> struct greater<std::wstring>:public std::binary_function<std::wstring,std::wstring,bool> { bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())>0;}};
-	template <> struct less<std::wstring>:public std::binary_function<std::wstring,std::wstring,bool> { bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())<0;}};
-	template <> struct greater_equal<std::wstring>:public std::binary_function<std::wstring,std::wstring,bool> { bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())>=0;}};
-	template <> struct less_equal<std::wstring>:public std::binary_function<std::wstring,std::wstring,bool> { bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())<=0;}};
+	template <> struct equal_to<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())==0;}};
+	template <> struct not_equal_to<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())!=0;}};
+	template <> struct greater<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())>0;}};
+	template <> struct less<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())<0;}};
+	template <> struct greater_equal<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())>=0;}};
+	template <> struct less_equal<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())<=0;}};
 
 	// template aliases
 	template <class T> using			set = std::set<T,nocase::less<T>>;
@@ -441,9 +446,9 @@ template <class T>
 inline std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T> > >
 explode( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
-	std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T> > > vs;
+	std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T> > > vs; vs.reserve(32);
 	T *ctx, *token = (T*) strtok_s(__tstrdup(src),seps,&ctx);
-	while(token!=nullptr){ vs.push_back(token); token=strtok_s(nullptr,seps,&ctx); }
+	while(token!=nullptr){ vs.emplace_back(token); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }
 
@@ -460,44 +465,44 @@ explode_set( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 template <class T>
 inline std::vector<int> explodei( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
-	std::vector<int> vs;
+	std::vector<int> vs; vs.reserve(32);
 	T *ctx, *token = (T*)strtok_s(__tstrdup(src), seps, &ctx);
-	while(token!=nullptr){ vs.push_back(atoi(token)); token=strtok_s(nullptr,seps,&ctx); }
+	while(token!=nullptr){ vs.emplace_back(atoi(token)); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }
 
 template <class T>
 inline std::vector<unsigned int> explodeu( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
-	std::vector<unsigned int> vs;
+	std::vector<unsigned int> vs; vs.reserve(32);
 	T *ctx, *token = (T*)strtok_s(__tstrdup(src), seps, &ctx);
-	while(token!=nullptr){ vs.push_back(atou(token)); token=strtok_s(nullptr,seps,&ctx); }
+	while(token!=nullptr){ vs.emplace_back(atou(token)); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }
 
 template <class T>
 inline std::vector<float> explodef( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
-	std::vector<float>  vs;
+	std::vector<float>  vs; vs.reserve(32);
 	T *ctx, *token = (T*)strtok_s(__tstrdup(src), seps, &ctx);
-	while(token!=nullptr){ vs.push_back(float(atof(token))); token=strtok_s(nullptr,seps,&ctx); }
+	while(token!=nullptr){ vs.emplace_back(float(atof(token))); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }
 
 template <class T>
 inline std::vector<double> exploded( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
-	std::vector<double>  vs;
+	std::vector<double>  vs; vs.reserve(32);
 	T *ctx, *token = (T*)strtok_s(__tstrdup(src), seps, &ctx);
-	while(token!=nullptr){ vs.push_back(double(atof(token))); token=strtok_s(nullptr,seps,&ctx); }
+	while(token!=nullptr){ vs.emplace_back(double(atof(token))); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }
 
 template <class T>
 inline std::vector<const T*> explode_conservative( const T* _Src, T _Delim )
 {
-	std::vector<const T*> vs; if(_Src==nullptr) return vs;
-	for( T *s=__tstrdup(_Src), *e=s; *s&&*e; s=e+1){ for(e=s; *e!=_Delim && *e; e++ ); vs.push_back( __tstrdup(s,size_t(e-s)) ); }
+	std::vector<const T*> vs; vs.reserve(32); if(_Src==nullptr) return vs;
+	for( T *s=__tstrdup(_Src), *e=s; *s&&*e; s=e+1){ for(e=s; *e!=_Delim && *e; e++ ); vs.emplace_back( __tstrdup(s,size_t(e-s)) ); }
 	return vs;
 }
 
@@ -511,8 +516,8 @@ inline const T* str_replace( const T* _Src, const T* _Find, const T* _Replace )
 	if(slen<flen) return __tstrdup(_Src);	// no change
 	
 	T *s=(T*)_Src, *p=nullptr;
-	std::vector<T> buff; while( (p=(T*)strstr(s,_Find)) ){ buff.insert(buff.end(),s,p); buff.insert(buff.end(),_Replace,_Replace+rlen); s=p+flen; }
-	buff.insert(buff.end(),s,(T*)(_Src+slen));buff.push_back(0);
+	std::vector<T> buff; buff.reserve(slen*2); while( (p=(T*)strstr(s,_Find)) ){ buff.insert(buff.end(),s,p); buff.insert(buff.end(),_Replace,_Replace+rlen); s=p+flen; }
+	buff.insert(buff.end(),s,(T*)(_Src+slen));buff.emplace_back(0);
 	return __tstrdup(&buff[0],buff.size());
 }
 
@@ -524,8 +529,8 @@ inline const T* str_ireplace( const T* _Src, const T* _Find, const T* _Replace )
 	if(slen<flen) return __tstrdup(_Src);	// no change
 	
 	T *s=(T*)_Src, *p=nullptr;
-	std::vector<T> buff; while( p=(T*)_stristr(s,_Find) ){ buff.insert(buff.end(),s,p); buff.insert(buff.end(),_Replace,_Replace+rlen); s=p+flen; }
-	buff.insert(buff.end(),s,(T*)(_Src+slen));buff.push_back(0);
+	std::vector<T> buff; buff.reserve(slen*2); while( p=(T*)_stristr(s,_Find) ){ buff.insert(buff.end(),s,p); buff.insert(buff.end(),_Replace,_Replace+rlen); s=p+flen; }
+	buff.insert(buff.end(),s,(T*)(_Src+slen));buff.emplace_back(0);
 	return __tstrdup(&buff[0],buff.size());
 }
 
