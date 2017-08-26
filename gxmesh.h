@@ -27,8 +27,8 @@ struct ID3D10Buffer; struct ID3D11Buffer; struct ID3D10ShaderResourceView; struc
 struct geometry; struct object; struct mesh;																// mesh forward decl.
 
 //***********************************************
-// General sampler interface (e.g., lens sampler, ray sampler, etc.): vec4(x,y,z,weight) in unit circle/sphere
-struct ISampler
+// sampler interface (e.g., lens sampler, ray sampler, etc.): vec4(x,y,z,weight) in unit circle/sphere
+struct sampler_t
 {
 	std::array<vec4,65536>	data;
 	uint					n=0;	// number of samples
@@ -68,13 +68,13 @@ struct light_t
 
 //***********************************************
 // ray
-template <class T=float> struct tray // template used to avoid non-trivial constructors in unions (can be avoided with templates)
+template <class T=float> struct tray_t // template used to avoid non-trivial constructors in unions (can be avoided with templates)
 {
 	union{struct{tvec3<T> pos,dir;tvec4<T> tex;};struct{tvec3<T> o,d;float t,tfar,time;int depth;};}; // lens system rays (with texcoord) or pbrt-like rays (tnear/tfar = parameters of the nearest/farthest intersections)
-	tray():t(0.0f),tfar(FLT_MAX),time(0.0f),depth(0){}
-	tray( const tvec3<T>& _pos, const tvec3<T>& _dir, float _tnear=0.0f, float _tfar=FLT_MAX ):tray(){ pos=_pos; dir=_dir; t=_tnear; tfar=_tfar; }
+	tray_t():t(0.0f),tfar(FLT_MAX),time(0.0f),depth(0){}
+	tray_t( const tvec3<T>& _pos, const tvec3<T>& _dir, float _tnear=0.0f, float _tfar=FLT_MAX ):tray(){ pos=_pos; dir=_dir; t=_tnear; tfar=_tfar; }
 };
-using ray = tray<float>;
+using ray = tray_t<float>;
 
 //***********************************************
 // intersection
