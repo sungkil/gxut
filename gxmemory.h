@@ -73,6 +73,10 @@
 #endif
 #ifdef _MSC_VER	// Visual Studio
 	#pragma optimize( "gsy", on )
+	#pragma check_stack( off )
+	#pragma runtime_checks( "", off )
+	#pragma strict_gs_check( off )
+	#pragma float_control(except, off)
 #else			// GCC or Clang
 	#ifdef __GNUC__
 		#ifndef __forceinline
@@ -120,11 +124,16 @@ using double9	= tarray9<double>;	using double16	= tarray16<double>;
 // end COMMON HEADERS for GXUT
 //###################################################################
 
-#include "gxfilesystem.h"
-
-#if defined(__SSE4_2__)||!defined(__clang__)
-	#include <intrin.h>
-	#include <nmmintrin.h>
+#if (__cplusplus>=201703L) || (_MSC_VER>=1910/*VS2017*/)
+	#if __has_include( "gxfilesystem.h" )
+		#include "gxfilesystem.h"
+	#endif
+	#if __has_include(<intrin.h>)
+		#include <intrin.h>
+	#endif
+	#if __has_include(<nmmintrin.h>)
+		#include <nmmintrin.h>
+	#endif
 #endif
 
 #ifndef __GX_MEM_T__

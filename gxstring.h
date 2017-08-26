@@ -73,6 +73,10 @@
 #endif
 #ifdef _MSC_VER	// Visual Studio
 	#pragma optimize( "gsy", on )
+	#pragma check_stack( off )
+	#pragma runtime_checks( "", off )
+	#pragma strict_gs_check( off )
+	#pragma float_control(except, off)
 #else			// GCC or Clang
 	#ifdef __GNUC__
 		#ifndef __forceinline
@@ -120,9 +124,8 @@ using double9	= tarray9<double>;	using double16	= tarray16<double>;
 // end COMMON HEADERS for GXUT
 //###################################################################
 
-#ifndef SHARED_CIRCULAR_BUFFER_SIZE
-#define SHARED_CIRCULAR_BUFFER_SIZE 8192
-#endif
+// size of shared circular buffer
+#define SHARED_CIRCULAR_BUFFER_SIZE (1<<14)
 
 // Byte order masks for UTF encoding
 static const unsigned char BOM_UTF8[3]={0xEF,0xBB,0xBF};
@@ -191,10 +194,10 @@ namespace nocase
 
 //***********************************************
 // 1. shared circular buffers
-template <class T> inline T* __tstrbuf( size_t len ){static T* C[SHARED_CIRCULAR_BUFFER_SIZE]={0};static uint cid=0;T*& p=C[cid=((cid+1)%SHARED_CIRCULAR_BUFFER_SIZE)];p=(T*)realloc(p,sizeof(T)*(len+1));p[len]=0;return p;}
-template <class T> inline T* __tstrdup( const T* s,size_t slen=-1 ){ if(slen==-1)slen=strlen(s); return (T*)memcpy(__tstrbuf<T>(slen),s,sizeof(T)*slen); }
-inline char* _strbuf( size_t len ){ return __tstrbuf<char>(len); }
-inline wchar_t* _wcsbuf( size_t len ){ return __tstrbuf<wchar_t>(len); }
+template <class T> __forceinline T* __tstrbuf( size_t len ){ static T* C[SHARED_CIRCULAR_BUFFER_SIZE]={0}; static uint cid=0; cid=(++cid)%(sizeof(C)/sizeof(T*));C[cid]=(T*)realloc(C[cid],sizeof(T)*(len+1)); C[cid][len]=0; return C[cid]; }
+template <class T> __forceinline T* __tstrdup( const T* s,size_t slen=-1 ){ if(slen==-1)slen=strlen(s); return (T*)memcpy(__tstrbuf<T>(slen),s,sizeof(T)*slen); }
+__forceinline char* _strbuf( size_t len ){ return __tstrbuf<char>(len); }
+__forceinline wchar_t* _wcsbuf( size_t len ){ return __tstrbuf<wchar_t>(len); }
 
 //***********************************************
 // 2. format
@@ -207,7 +210,7 @@ inline const wchar_t* format( const wchar_t* fmt,... ){ va_list a; va_start(a,fm
 // 3. case conversion
 template <class T> inline const T* tolower( const T* src ){ return _strlwr(__tstrdup(src)); }
 template <class T> inline const T* toupper( const T* src ){ return _strupr(__tstrdup(src)); }
-inline const char* tovarname( const char* src ){ if(!src||!*src) return ""; char *s=(char*)src,*dst=__tstrbuf<char>(strlen(src)+2), *d=dst; if(!isalpha(*s)&&(*s)!='_') *(d++)='_'; for(;*s;s++,d++) *d=isalnum(*s)?(*s):'_'; *d='\0'; return dst; }
+inline const char* tovarname( const char* src ){ if(!src||!*src) return ""; char *s=(char*)src,*dst=_strbuf(strlen(src)+2), *d=dst; if(!isalpha(*s)&&(*s)!='_') *(d++)='_'; for(;*s;s++,d++) *d=isalnum(*s)?(*s):'_'; *d='\0'; return dst; }
 
 //***********************************************
 // 4. conversion between const wchar_t* and const char*
@@ -261,7 +264,7 @@ inline const char* itoasep( int n )
 	if(n<1000&&n>-1000) return itoa(n);
 	const char* s=itoa(n>0?n:-n); size_t len=strlen(s);
 	std::vector<char> v; v.resize(len+1); memcpy(&v[0],s,len+1);
-	for( uint idx=(len%3?len%3:3); idx<len; idx+=4,len++ ) v.insert(v.begin()+idx,',');
+	for( uint idx=(len%3?len%3:3); idx<len; idx+=4,len++ ) v.emplace(v.begin()+idx,',');
 	return format("%s%s",n>0?"":"-",&v[0]);
 }
 
@@ -458,7 +461,7 @@ explode_set( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::set<std::basic_string<T,std::char_traits<T>,std::allocator<T> > > vs;
 	T *ctx, *token = (T*)strtok_s(__tstrdup(src), seps, &ctx);
-	while(token!=nullptr){ vs.insert(token); token=strtok_s(nullptr,seps,&ctx); }
+	while(token!=nullptr){ vs.emplace(token); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }
 
@@ -501,8 +504,8 @@ inline std::vector<double> exploded( const T* src, const T* seps=_strcvt<T>(" \t
 template <class T>
 inline std::vector<const T*> explode_conservative( const T* _Src, T _Delim )
 {
-	std::vector<const T*> vs; vs.reserve(32); if(_Src==nullptr) return vs;
-	for( T *s=__tstrdup(_Src), *e=s; *s&&*e; s=e+1){ for(e=s; *e!=_Delim && *e; e++ ); vs.emplace_back( __tstrdup(s,size_t(e-s)) ); }
+	std::vector<const T*> vs; vs.reserve(16); if(_Src==nullptr) return vs;
+	for(T *s=__tstrdup(_Src),*e=s;*s&&*e;s=e+1){for(e=s;*e!=_Delim&&*e;e++){}; vs.emplace_back(__tstrdup(s,size_t(e-s))); }
 	return vs;
 }
 
@@ -512,12 +515,11 @@ template <class T>
 inline const T* str_replace( const T* _Src, const T* _Find, const T* _Replace )
 {
 	if(_Find==nullptr||_Find[0]==0) return __tstrdup(_Src);	// no change
-	int slen=int(strlen(_Src)), flen=int(strlen(_Find)), rlen=int(strlen(_Replace));
-	if(slen<flen) return __tstrdup(_Src);	// no change
-	
+	int sl=int(strlen(_Src)), fl=int(strlen(_Find)); if(sl<fl) return __tstrdup(_Src);
+	int rl=int(strlen(_Replace));
 	T *s=(T*)_Src, *p=nullptr;
-	std::vector<T> buff; buff.reserve(slen*2); while( (p=(T*)strstr(s,_Find)) ){ buff.insert(buff.end(),s,p); buff.insert(buff.end(),_Replace,_Replace+rlen); s=p+flen; }
-	buff.insert(buff.end(),s,(T*)(_Src+slen));buff.emplace_back(0);
+	std::vector<T> buff; buff.reserve(sl*2); while( p=(T*)strstr(s,_Find) ){ buff.insert(buff.end(),s,p); buff.insert(buff.end(),_Replace,_Replace+rl); s=p+fl; }
+	buff.insert(buff.end(),s,(T*)(_Src+sl));buff.emplace_back(0);
 	return __tstrdup(&buff[0],buff.size());
 }
 
@@ -525,12 +527,10 @@ template <class T>
 inline const T* str_ireplace( const T* _Src, const T* _Find, const T* _Replace )
 {
 	if(_Find==nullptr||_Find[0]==0) return __tstrdup(_Src);	// no change
-	int slen=int(strlen(_Src)), flen=int(strlen(_Find)), rlen=int(strlen(_Replace));
-	if(slen<flen) return __tstrdup(_Src);	// no change
-	
+	int sl=int(strlen(_Src)), fl=int(strlen(_Find)); if(sl<fl) return __tstrdup(_Src); int rl=int(strlen(_Replace));
 	T *s=(T*)_Src, *p=nullptr;
-	std::vector<T> buff; buff.reserve(slen*2); while( p=(T*)_stristr(s,_Find) ){ buff.insert(buff.end(),s,p); buff.insert(buff.end(),_Replace,_Replace+rlen); s=p+flen; }
-	buff.insert(buff.end(),s,(T*)(_Src+slen));buff.emplace_back(0);
+	std::vector<T> buff; buff.reserve(sl*2); while( p=(T*)_stristr(s,_Find) ){ buff.insert(buff.end(),s,p); buff.insert(buff.end(),_Replace,_Replace+rl); s=p+fl; }
+	buff.insert(buff.end(),s,(T*)(_Src+sl));buff.emplace_back(0);
 	return __tstrdup(&buff[0],buff.size());
 }
 

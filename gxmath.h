@@ -73,6 +73,10 @@
 #endif
 #ifdef _MSC_VER	// Visual Studio
 	#pragma optimize( "gsy", on )
+	#pragma check_stack( off )
+	#pragma runtime_checks( "", off )
+	#pragma strict_gs_check( off )
+	#pragma float_control(except, off)
 #else			// GCC or Clang
 	#ifdef __GNUC__
 		#ifndef __forceinline
@@ -346,6 +350,9 @@ using ivec2 = tvec2<int>;		using ivec3 = tvec3<int>;		using ivec4 = tvec4<int>;
 using uvec2 = tvec2<uint>;		using uvec3 = tvec3<uint>;		using uvec4 = tvec4<uint>;
 using bvec2 = tvec2<bool>;		using bvec3 = tvec3<bool>;		using bvec4 = tvec4<bool>;
 using svec2 = tvec2<size_t>;	using svec3 = tvec3<size_t>;	using svec4 = tvec4<size_t>;
+
+// vertex type for graphics operations
+struct alignas(32) vertex { vec3 pos; vec3 norm; vec2 tex; };
 
 //***********************************************
 // std::hash support here

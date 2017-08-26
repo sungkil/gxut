@@ -15,10 +15,9 @@
 //*******************************************************************
 
 #pragma once
-#include "gxmath.h"
 #include "gxstring.h"
 #include "gxfilesystem.h"
-#include "gxmesh.h"
+#include "gxmath.h"
 
 #if defined(__clang__) // clang-specific preprocessor
 #pragma clang diagnostic ignored "-Wunused-variable"			// supress warning for unused b0
@@ -74,13 +73,13 @@ inline GLenum gxGetTargetBinding( GLenum target )
 		{GL_TIME_ELAPSED,0},
 	};
 	auto it=t.find(target); if(it!=t.end()) return it->second;
-	if(target){ wchar_t buff[256]; swprintf_s(buff,256,L"gxGetTargetBinding(): unable to find target binding for 0x%04X\n",target); MessageBoxW( nullptr, buff, L"OpenGL:error", MB_OK ); }
+	if(target) printf( "gxGetTargetBinding(): unable to find target binding for 0x%04X\n",target);
 	return 0;
 }
 
 //***********************************************
 // query utitlities
-inline bool		gxExtensionExistsImpl( const char* extension ){ static std::unordered_set<std::string> extension_set; if(extension_set.empty()){ int kn; glGetIntegerv(GL_NUM_EXTENSIONS,&kn); for( int k=0; k<kn; k++ ) extension_set.insert((char*)glGetStringi(GL_EXTENSIONS,k)); } return extension_set.find(extension)!=extension_set.end(); }
+inline bool		gxExtensionExistsImpl( const char* extension ){ static std::unordered_set<std::string> extension_set; if(extension_set.empty()){ int kn; glGetIntegerv(GL_NUM_EXTENSIONS,&kn); for( int k=0; k<kn; k++ ) extension_set.emplace((char*)glGetStringi(GL_EXTENSIONS,k)); } return extension_set.find(extension)!=extension_set.end(); }
 #define			gxExtensionExists( extension ) gxExtensionExistsImpl(#extension)
 inline GLuint	gxGetBinding( GLenum target ){ GLint iv; glGetIntegerv(gxGetTargetBinding(target),&iv); return iv; }
 inline GLint	gxGetProgramiv( GLuint program, GLenum pname ){ GLint iv; glGetProgramiv( program, pname, &iv); return iv; }
@@ -429,7 +428,7 @@ namespace gl {
 			}
 		};
 
-		Program( GLuint ID, const char* name ) : GLObject(ID,name,GL_PROGRAM){ getInstanceSet().insert(this); }
+		Program( GLuint ID, const char* name ) : GLObject(ID,name,GL_PROGRAM){ getInstanceSet().emplace(this); }
 		virtual void release(){ if(!ID) return; glDeleteProgram(ID); uniform_cache.clear(); invalid_uniform_cache.clear(); getInstanceSet().erase(this); }
 		GLuint bind( bool bBind=true ){ GLuint b0=binding(); if(!bBind||b0!=ID) glUseProgram(bBind?ID:0); if(!bBind) return b0; if(uniform_cache.empty()) updateUniformCache(); else if( Texture::bTextureDeleted() ){ std::set<Program*>& s=getInstanceSet(); for( auto it=s.begin(); it!=s.end(); it++ ) (*it)->updateUniformCache(); Texture::bTextureDeleted() = false; } for( auto it=uniform_cache.begin(); it!=uniform_cache.end(); it++ ){ Uniform& u=it->second;if(u.texture&&u.textureID>-1){glActiveTexture(GL_TEXTURE0+u.textureID); u.texture->bind();} } return b0; }
 		static void unbind(){ glUseProgram(0); }
@@ -439,7 +438,7 @@ namespace gl {
 		{
 			auto it=uniform_cache.find(name); if(it!=uniform_cache.end()) return &it->second;
 			auto it2=invalid_uniform_cache.find(name); if(it2!=invalid_uniform_cache.end()) return nullptr;
-			printf( "[Warning] %s.getUniform(%s): not found\n",this->name, name ); invalid_uniform_cache.insert(name); return nullptr;
+			printf( "[Warning] %s.getUniform(%s): not found\n",this->name, name ); invalid_uniform_cache.emplace(name); return nullptr;
 		}
 		
 		// setUniform
@@ -798,7 +797,7 @@ inline gl::VertexArray* gxCreateVertexArray( const char* name, vertex* pVertices
 	// use fixed binding (without direct state access)
 	pVertexArray->bind();
 	static const GLuint offset[] = { offsetof(vertex,pos), offsetof(vertex,norm), offsetof(vertex,tex) };
-	static const GLint  size[]	 = { sizeof(vertex().pos)/sizeof(GLfloat), sizeof(vertex().norm)/sizeof(GLfloat), sizeof(vertex().tex)/sizeof(GLfloat) };
+	static const GLint  size[]	 = { sizeof(vertex::pos)/sizeof(GLfloat), sizeof(vertex::norm)/sizeof(GLfloat), sizeof(vertex::tex)/sizeof(GLfloat) };
 	for( GLuint k=0; k<3; k++ ){ glEnableVertexAttribArray( k ); glVertexAttribBinding( k, 0 ); glVertexAttribFormat( k, size[k], GL_FLOAT, GL_FALSE, offset[k] ); }
 	glBindVertexBuffer( 0, pVertexArray->vertexBuffer->ID, 0, sizeof(vertex) );
 	if(pVertexArray->indexBuffer) glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, pVertexArray->indexBuffer->ID );

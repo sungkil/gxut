@@ -73,6 +73,10 @@
 #endif
 #ifdef _MSC_VER	// Visual Studio
 	#pragma optimize( "gsy", on )
+	#pragma check_stack( off )
+	#pragma runtime_checks( "", off )
+	#pragma strict_gs_check( off )
+	#pragma float_control(except, off)
 #else			// GCC or Clang
 	#ifdef __GNUC__
 		#ifndef __forceinline
@@ -120,7 +124,9 @@ using double9	= tarray9<double>;	using double16	= tarray16<double>;
 // end COMMON HEADERS for GXUT
 //###################################################################
 
-#include "gxstring.h"	// make sure to include gxstring for nocase extension
+#if (__cplusplus>=201703L) || (_MSC_VER>=1910/*VS2017*/) || __has_include( "gxstring.h" )
+	#include "gxstring.h"	// make sure to include gxstring for nocase extension
+#endif
 
 //***********************************************
 // Utility for filetime comparison

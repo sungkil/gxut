@@ -201,14 +201,6 @@ struct camera : public camera_t
 };
 
 //***********************************************
-// vertex definition
-#if (__cplusplus>199711L) || (_MSC_VER>=1900/*VS2015*/)
-struct alignas(32) vertex { vec3 pos; vec3 norm; vec2 tex; };
-#else
-struct vertex { vec3 pos; vec3 norm; vec2 tex; };
-#endif
-
-//***********************************************
 // material definition (std140 layout, aligned at 16-byte/vec4 boundaries)
 struct material
 {
@@ -328,7 +320,12 @@ struct geometry
 	inline float surface_area() const ;
 	inline bool intersect( const ray& r, isect* pi=nullptr ) const; // linear intersection
 };
+
+static_assert( sizeof(geometry)%16==0, "sizeof(geometry) should be 16-byte aligned" );
+
 #endif
+
+
 
 //***********************************************
 // a set of geometries for batch control (not related to the rendering)
