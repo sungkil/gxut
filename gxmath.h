@@ -18,7 +18,10 @@
 #ifndef __GX_MATH__
 #define __GX_MATH__
 //###################################################################
-// begin COMMON HEADERS for GXUT
+// COMMON HEADERS for GXUT
+#ifndef __GXUT_COMMON__ 
+#define __GXUT_COMMON__
+
 #pragma warning( disable: 4996 ) // suppress MS security warning for pre-included headers; this is standard only for C11-compatible compilers
 #ifndef _CRT_SECURE_NO_WARNINGS
 	#define _CRT_SECURE_NO_WARNINGS
@@ -27,23 +30,13 @@
 	#define _HAS_EXCEPTIONS 0
 #endif
 // C standard
-#include <float.h>
-#include <direct.h>		// directory control
 #include <inttypes.h>	// defines int64_t, uint64_t
-#include <io.h>			// low-level io functions
-#include <limits.h>
-#include <malloc.h>
-#include <math.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 // STL
 #include <algorithm>
 #include <array>
-#include <deque>
-#include <iterator>
 #include <map>
 #include <set>
 #include <string>
@@ -51,17 +44,12 @@
 // C++11
 #if (__cplusplus>199711L) || (_MSC_VER>=1600/*VS2010*/)
 	#include <chrono>
-	#include <functional>
-	#include <thread>
-	#include <typeindex>
 	#include <type_traits>
 	#include <unordered_map>
 	#include <unordered_set>
-	using namespace std::placeholders;
 #endif
 #if defined(_WIN32)||defined(_WIN64) // Windows
 	#include <windows.h>
-	#include <wchar.h>
 #endif
 // platform-specific
 #ifndef GX_PLATFORM
@@ -77,14 +65,21 @@
 	#pragma runtime_checks( "", off )
 	#pragma strict_gs_check( off )
 	#pragma float_control(except, off)
+	#ifndef __noinline
+		#define __noinline __declspec(noinline)
+	#endif
 #else			// GCC or Clang
 	#ifdef __GNUC__
 		#ifndef __forceinline
 			#define __forceinline inline __attribute__((__always_inline__))
 		#endif
+		#ifndef __noinline
+			#define __noinline __attribute__((noinline))
+		#endif
 	#elif defined(__clang__)
 		#pragma clang diagnostic ignored "-Wmissing-braces"				// ignore excessive warning for initialzer
 		#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"	// ignore non-virtual destructor
+		#define __noinline
 	#endif
 #endif
 // common macros
@@ -98,8 +93,6 @@
 	#define SAFE_FREE(p) {if(p){free(p);p=nullptr;}}
 #endif
 // user types
-#ifndef __TARRAY__
-#define __TARRAY__
 template <class T, int D> struct tarray { static const int N=D; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline T& operator[]( int i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( int i ) const { return ((T*)this)[i]; } __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } __forceinline bool operator==( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))==0; } __forceinline bool operator!=( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))!=0; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+D; } constexpr size_t size() const { return D; } };
 #define default_ctors(c) __forceinline c()=default;__forceinline c(c&&)=default;__forceinline c(const c&)=default;__forceinline c(std::initializer_list<T> l){T* p=&x;for(auto i:l)(*p++)=i;}
 #define default_assns(c) __forceinline c& operator=(c&&)=default;__forceinline c& operator=(const c&)=default; __forceinline c& operator=(T a){ for(auto& it:*this) it=a; return *this; }
@@ -108,7 +101,7 @@ template <class T> struct tarray3	: public tarray<T,3> {	using V2=tarray2<T>; un
 template <class T> struct tarray4	: public tarray<T,4> {	using V2=tarray2<T>; using V3=tarray3<T>; union{struct{T x,y,z,w;};struct{T r,g,b,a;};struct{union{V2 xy,rg;};union{V2 zw,ba;};};union{V3 xyz,rgb;};struct{T _x;union{V3 yzw,gba;V2 yz,gb;};};}; default_ctors(tarray4); default_assns(tarray4); };
 template <class T> struct tarray9	: public tarray<T,9> {	union{T a[9];struct{T _11,_12,_13,_21,_22,_23,_31,_32,_33;};}; };
 template <class T> struct tarray16	: public tarray<T,16> {	union{T a[16];struct{T _11,_12,_13,_14,_21,_22,_23,_24,_31,_32,_33,_34,_41,_42,_43,_44;}; }; };
-#endif // __TARRAY__
+
 using uint		= unsigned int;		using uchar		= unsigned char;	using ushort	= unsigned short;
 using float2	= tarray2<float>;	using float3	= tarray3<float>;	using float4	= tarray4<float>;
 using double2	= tarray2<double>;	using double3	= tarray3<double>;	using double4	= tarray4<double>;
@@ -121,15 +114,20 @@ using uchar2	= tarray2<uchar>;	using uchar3	= tarray3<uchar>;	using uchar4	= tar
 using bool2		= tarray2<bool>;	using bool3		= tarray3<bool>;	using bool4		= tarray4<bool>;
 using float9	= tarray9<float>;	using float16	= tarray16<float>;
 using double9	= tarray9<double>;	using double16	= tarray16<double>;
-// end COMMON HEADERS for GXUT
+#endif // __GXUT_COMMON__
 //###################################################################
+
+#include <limits.h>
+#include <math.h>
 
 #pragma warning( push )
 #pragma warning( disable: 4244 )	// diable double to float conversion
 
-#ifndef PI
-	static const double PI = 3.141592653589793;
+#ifdef PI
+	#undef PI
 #endif
+template <class T=float> constexpr T PI = T(3.141592653589793);
+
 #if !defined(max) && !defined(min)
 	#define max(a,b) ((a)>(b)?(a):(b))
 	#define min(a,b) ((a)<(b)?(a):(b))
@@ -454,11 +452,7 @@ struct mat2 : public tarray<float,4>
 	// determinant/trace/inverse
 	__forceinline float det() const { return _11*_22 - _12*_21; }
 	__forceinline float trace() const { return _11+_22; }
-	__forceinline mat2 inverse() const 
-	{
-		float d=det(), s=1.0f/d; if( d==0 ) printf( "mat2::inverse() might be singular.\n" );
-		return mat2( +_22*s, -_12*s, -_21*s, +_11*s );
-	}
+	__forceinline mat2 inverse() const { float s=1.0f/det(); return mat2( +_22*s, -_12*s, -_21*s, +_11*s ); }
 };
 
 //***********************************************
@@ -520,11 +514,7 @@ struct mat3 : public tarray<float,9>
 	// determinant/trace/inverse
 	__forceinline float det() const { return _11*(_22*_33-_23*_32) + _12*(_23*_31-_21*_33) + _13*(_21*_32-_22*_31); }
 	__forceinline float trace() const { return _11+_22+_33; }
-	__forceinline mat3 inverse() const 
-	{
-		float d=det(), s=1.0f/d; if( d==0 ) printf( "mat3::inverse() might be singular.\n" );
-		return mat3( (_22*_33-_32*_23)*s, (_13*_32-_12*_33)*s, (_12*_23-_13*_22)*s, (_23*_31-_21*_33)*s, (_11*_33-_13*_31)*s, (_21*_13-_11*_23)*s, (_21*_32-_31*_22)*s, (_31*_12-_11*_32)*s, (_11*_22-_21*_12)*s );
-	}
+	__forceinline mat3 inverse() const { float s=1.0f/det(); return mat3( (_22*_33-_32*_23)*s, (_13*_32-_12*_33)*s, (_12*_23-_13*_22)*s, (_23*_31-_21*_33)*s, (_11*_33-_13*_31)*s, (_21*_13-_11*_23)*s, (_21*_32-_31*_22)*s, (_31*_12-_11*_32)*s, (_11*_22-_21*_12)*s ); }
 };
 
 //***********************************************
@@ -591,7 +581,7 @@ struct mat4 : public tarray<float,16>
 	__forceinline mat4 transpose() const { return mat4(_11,_21,_31,_41,_12,_22,_32,_42,_13,_23,_33,_43,_14,_24,_34,_44); }
 
 	// determinant/trace/inverse
-	__forceinline vec4 _xdet() const;	// support function for det() and inverse()
+	vec4 _xdet() const;	// support function for det() and inverse()
 	__forceinline float mat4::det() const { return cvec4(3).dot(_xdet()); }
 	__forceinline float trace() const { return _11+_22+_33+_44; }
 	mat4 inverse() const;
@@ -631,7 +621,7 @@ struct mat4 : public tarray<float,16>
 	__forceinline mat4& setRotateY( float theta ){ return setRotate(vec3(0,1,0),theta); }
 	__forceinline mat4& setRotateZ( float theta ){ return setRotate(vec3(0,0,1),theta); }
 	__forceinline mat4& setRotateVecToVec( const vec3& v0, const vec3& v1 ){ vec3 n=v0.cross(v1); return setRotate( n.normalize(), asin( min(n.length(),0.9999f) ) ); }
-	__forceinline mat4& setRotate( const vec3& axis, float angle )
+	__noinline mat4& setRotate( const vec3& axis, float angle )
 	{
 		float c=cos(angle), s=sin(angle), x=axis.x, y=axis.y, z=axis.z;
 		a[0] = x*x*(1-c)+c;		a[1] = x*y*(1-c)-z*s;		a[2] = x*z*(1-c)+y*s;	a[3] = 0.0f;
@@ -649,7 +639,7 @@ struct mat4 : public tarray<float,16>
 	__forceinline mat4  lookAtInverse() const { vec3 eye=lookAtEye(); return mat4(_11,_21,_31,eye.x,_12,_22,_32,eye.y,_13,_23,_33,eye.z,0,0,0,1); }
 
 	// Canonical view volume in OpenGL: [-1,1]^3
-	__forceinline mat4& setPerspective( float fovy, float aspect, float dn, float df ){ if(fovy>float(PI)) fovy*=float(PI/180.0); /* autofix for fov in degrees */ setIdentity(); _22=1.0f/tanf(fovy*0.5f); _11=_22/aspect; _33=(dn+df)/(dn-df); _34=2.0f*dn*df/(dn-df); _43=-1.0f;  _44=0.0f; return *this; }
+	__forceinline mat4& setPerspective( float fovy, float aspect, float dn, float df ){ if(fovy>PI<float>) fovy*=PI<float>/180.0f; /* autofix for fov in degrees */ setIdentity(); _22=1.0f/tanf(fovy*0.5f); _11=_22/aspect; _33=(dn+df)/(dn-df); _34=2.0f*dn*df/(dn-df); _43=-1.0f;  _44=0.0f; return *this; }
 	__forceinline mat4& setPerspectiveOffCenter( float left, float right, float top, float bottom, float dn, float df ){ setIdentity(); _11=2.0f*dn/(right-left); _22=2.0f*dn/(top-bottom); _13=(right+left)/(right-left); _23=(top+bottom)/(top-bottom); _33=(dn+df)/(dn-df); _34=2.0f*dn*df/(dn-df); _43=-1.0f; _44=0.0f; return *this; }
 	__forceinline mat4& setOrtho( float width, float height, float dn, float df ){ setIdentity(); _11=2.0f/width; _22=2.0f/height;  _33=2.0f/(dn-df); _34=(dn+df)/(dn-df); return *this; }
 	__forceinline mat4& setOrthoOffCenter( float left, float right, float top, float bottom, float dn, float df ){ setOrtho( right-left, top-bottom, dn, df ); _14=(left+right)/(left-right); _24=(bottom+top)/(bottom-top); return *this; }
@@ -661,7 +651,7 @@ struct mat4 : public tarray<float,16>
 	__forceinline mat4& setOrthoOffCenterDX( float left, float right, float top, float bottom, float dn, float df ){ setOrthoOffCenter( left, right, top, bottom, dn, df ); _33*=0.5f; _34=dn/(dn-df); return *this; }
 };
 
-__forceinline vec4 mat4::_xdet() const
+__noinline inline vec4 mat4::_xdet() const
 {
 	return vec4((_41*_32-_31*_42)*_23+(_21*_42-_41*_22)*_33+(_31*_22-_21*_32)*_43,
 				(_31*_42-_41*_32)*_13+(_41*_12-_11*_42)*_33+(_11*_32-_31*_12)*_43,
@@ -670,7 +660,7 @@ __forceinline vec4 mat4::_xdet() const
 }
 
 // http://www.cg.info.hiroshima-cu.ac.jp/~miyazaki/knowledge/teche23.html
-__forceinline mat4 mat4::inverse() const 
+__noinline inline mat4 mat4::inverse() const 
 {
 	vec4 xd=_xdet();
 	return mat4((_32*_43-_42*_33)*_24 + (_42*_23-_22*_43)*_34 + (_22*_33-_32*_23)*_44,
@@ -736,8 +726,8 @@ template <class T> __forceinline tvec3<enable_float_t<T>> cross( const tvec3<T>&
 
 //***********************************************
 // general math functions
-template <class T> __forceinline enable_float_t<T> radians( T f ){ return T(f*PI/180.0); }
-template <class T> __forceinline enable_float_t<T> degrees( T f ){ return T(f*180.0/PI); }
+template <class T> __forceinline enable_float_t<T> radians( T f ){ return f*PI<T>/T(180.0); }
+template <class T> __forceinline enable_float_t<T> degrees( T f ){ return f*T(180.0)/PI<T>; }
 __forceinline bool ispot( uint i ){ return (i&(i-1))==0; }		// http://en.wikipedia.org/wiki/Power_of_two
 __forceinline uint nextpot( uint n ){ int m=int(n)-1; for( uint k=1; k<uint(sizeof(int))*8; k<<=1 ) m=m|m>>k; return m+1; }	// next power-of-two
 __forceinline uint miplevels( uint width, uint height=1 ){ uint l=0; uint s=width>height?width:height; while(s){s=s>>1;l++;} return l; }

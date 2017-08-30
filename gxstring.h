@@ -18,7 +18,10 @@
 #ifndef __GX_STRING_H__
 #define __GX_STRING_H__
 //###################################################################
-// begin COMMON HEADERS for GXUT
+// COMMON HEADERS for GXUT
+#ifndef __GXUT_COMMON__ 
+#define __GXUT_COMMON__
+
 #pragma warning( disable: 4996 ) // suppress MS security warning for pre-included headers; this is standard only for C11-compatible compilers
 #ifndef _CRT_SECURE_NO_WARNINGS
 	#define _CRT_SECURE_NO_WARNINGS
@@ -27,23 +30,13 @@
 	#define _HAS_EXCEPTIONS 0
 #endif
 // C standard
-#include <float.h>
-#include <direct.h>		// directory control
 #include <inttypes.h>	// defines int64_t, uint64_t
-#include <io.h>			// low-level io functions
-#include <limits.h>
-#include <malloc.h>
-#include <math.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 // STL
 #include <algorithm>
 #include <array>
-#include <deque>
-#include <iterator>
 #include <map>
 #include <set>
 #include <string>
@@ -51,17 +44,12 @@
 // C++11
 #if (__cplusplus>199711L) || (_MSC_VER>=1600/*VS2010*/)
 	#include <chrono>
-	#include <functional>
-	#include <thread>
-	#include <typeindex>
 	#include <type_traits>
 	#include <unordered_map>
 	#include <unordered_set>
-	using namespace std::placeholders;
 #endif
 #if defined(_WIN32)||defined(_WIN64) // Windows
 	#include <windows.h>
-	#include <wchar.h>
 #endif
 // platform-specific
 #ifndef GX_PLATFORM
@@ -77,14 +65,21 @@
 	#pragma runtime_checks( "", off )
 	#pragma strict_gs_check( off )
 	#pragma float_control(except, off)
+	#ifndef __noinline
+		#define __noinline __declspec(noinline)
+	#endif
 #else			// GCC or Clang
 	#ifdef __GNUC__
 		#ifndef __forceinline
 			#define __forceinline inline __attribute__((__always_inline__))
 		#endif
+		#ifndef __noinline
+			#define __noinline __attribute__((noinline))
+		#endif
 	#elif defined(__clang__)
 		#pragma clang diagnostic ignored "-Wmissing-braces"				// ignore excessive warning for initialzer
 		#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"	// ignore non-virtual destructor
+		#define __noinline
 	#endif
 #endif
 // common macros
@@ -98,8 +93,6 @@
 	#define SAFE_FREE(p) {if(p){free(p);p=nullptr;}}
 #endif
 // user types
-#ifndef __TARRAY__
-#define __TARRAY__
 template <class T, int D> struct tarray { static const int N=D; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline T& operator[]( int i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( int i ) const { return ((T*)this)[i]; } __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } __forceinline bool operator==( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))==0; } __forceinline bool operator!=( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))!=0; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+D; } constexpr size_t size() const { return D; } };
 #define default_ctors(c) __forceinline c()=default;__forceinline c(c&&)=default;__forceinline c(const c&)=default;__forceinline c(std::initializer_list<T> l){T* p=&x;for(auto i:l)(*p++)=i;}
 #define default_assns(c) __forceinline c& operator=(c&&)=default;__forceinline c& operator=(const c&)=default; __forceinline c& operator=(T a){ for(auto& it:*this) it=a; return *this; }
@@ -108,7 +101,7 @@ template <class T> struct tarray3	: public tarray<T,3> {	using V2=tarray2<T>; un
 template <class T> struct tarray4	: public tarray<T,4> {	using V2=tarray2<T>; using V3=tarray3<T>; union{struct{T x,y,z,w;};struct{T r,g,b,a;};struct{union{V2 xy,rg;};union{V2 zw,ba;};};union{V3 xyz,rgb;};struct{T _x;union{V3 yzw,gba;V2 yz,gb;};};}; default_ctors(tarray4); default_assns(tarray4); };
 template <class T> struct tarray9	: public tarray<T,9> {	union{T a[9];struct{T _11,_12,_13,_21,_22,_23,_31,_32,_33;};}; };
 template <class T> struct tarray16	: public tarray<T,16> {	union{T a[16];struct{T _11,_12,_13,_14,_21,_22,_23,_24,_31,_32,_33,_34,_41,_42,_43,_44;}; }; };
-#endif // __TARRAY__
+
 using uint		= unsigned int;		using uchar		= unsigned char;	using ushort	= unsigned short;
 using float2	= tarray2<float>;	using float3	= tarray3<float>;	using float4	= tarray4<float>;
 using double2	= tarray2<double>;	using double3	= tarray3<double>;	using double4	= tarray4<double>;
@@ -121,8 +114,11 @@ using uchar2	= tarray2<uchar>;	using uchar3	= tarray3<uchar>;	using uchar4	= tar
 using bool2		= tarray2<bool>;	using bool3		= tarray3<bool>;	using bool4		= tarray4<bool>;
 using float9	= tarray9<float>;	using float16	= tarray16<float>;
 using double9	= tarray9<double>;	using double16	= tarray16<double>;
-// end COMMON HEADERS for GXUT
+#endif // __GXUT_COMMON__
 //###################################################################
+
+#include <stdarg.h>
+#include <wchar.h>
 
 // size of shared circular buffer
 #define SHARED_CIRCULAR_BUFFER_SIZE (1<<14)
@@ -164,12 +160,15 @@ inline const wchar_t* _stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ re
 // 0.3 case-insensitive comparison for std::map/set, std::unordered_map/set
 namespace nocase
 {
+#ifndef __NOCASE_BASE_TYPE__
+#define __NOCASE_BASE_TYPE__
 	template <class T> struct equal_to { bool operator()(const T& a,const T& b)const;};
 	template <class T> struct not_equal_to { bool operator()(const T& a,const T& b)const;};
 	template <class T> struct greater { bool operator()(const T& a,const T& b)const;};
 	template <class T> struct less { bool operator()(const T& a,const T& b)const;};
 	template <class T> struct greater_equal { bool operator()(const T& a,const T& b)const;};
 	template <class T> struct less_equal { bool operator()(const T& a,const T& b)const;};
+#endif
 
 	template <> struct equal_to<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())==0;}};
 	template <> struct not_equal_to<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())!=0;}};
@@ -259,7 +258,7 @@ inline const char* dtoa( const double16& v ){static const char* fmt="%g %g %g %g
 // 5.2 Special-purpose functions
 
 // conversion int to string with commas
-inline const char* itoasep( int n )
+__noinline inline const char* itoasep( int n )
 {
 	if(n<1000&&n>-1000) return itoa(n);
 	const char* s=itoa(n>0?n:-n); size_t len=strlen(s);
@@ -308,7 +307,7 @@ inline const wchar_t* dtow( const double16& m ){return atow(dtoa(m)); }
 //***********************************************
 // 7. conversion from string to user types
 
-__forceinline float __atof( const char *p ) // fast atof: taken from fast_atof.c (nearly 5x faster than crt atof())
+__noinline __forceinline float __atof( const char *p ) // fast atof: taken from fast_atof.c (nearly 5x faster than crt atof())
 {
 	while(*p==' '||*p=='\t') p++; // skip leading white spaces
 	bool sign=true; if(*p=='-'){ sign=false; p++; } else if(*p=='+') p++; // get sign
@@ -424,7 +423,7 @@ inline double16 wtod16( const std::wstring& w ){return wtod16(w.c_str()); }
 //***********************************************
 // 9. trim
 template <class T>
-inline const T* trim( const T* src, const T* junk=_strcvt<T>(" \t\n") )
+__noinline inline const T* trim( const T* src, const T* junk=_strcvt<T>(" \t\n") )
 {
 	if(src==nullptr||src[0]==0) return __tstrdup(src,0);
 	size_t slen=strlen(src);
@@ -434,7 +433,7 @@ inline const T* trim( const T* src, const T* junk=_strcvt<T>(" \t\n") )
 }
 
 template <class T>
-inline const T* trim_comment( const T* src, const T* commentMark=_strcvt<T>("#") )
+__noinline inline const T* trim_comment( const T* src, const T* commentMark=_strcvt<T>("#") )
 {
 	if(src==nullptr||src[0]==0) return src;
 	size_t slen=strlen(src),clen=strlen(commentMark),sc=slen-clen+1;
@@ -446,7 +445,7 @@ inline const T* trim_comment( const T* src, const T* commentMark=_strcvt<T>("#")
 //***********************************************
 // 10. explode
 template <class T>
-inline std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T> > >
+__noinline inline std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T> > >
 explode( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T> > > vs; vs.reserve(32);
@@ -456,7 +455,7 @@ explode( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 }
 
 template <class T>
-inline std::set<std::basic_string<T,std::char_traits<T>,std::allocator<T> > >
+__noinline inline std::set<std::basic_string<T,std::char_traits<T>,std::allocator<T> > >
 explode_set( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::set<std::basic_string<T,std::char_traits<T>,std::allocator<T> > > vs;
@@ -466,7 +465,7 @@ explode_set( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 }
 
 template <class T>
-inline std::vector<int> explodei( const T* src, const T* seps=_strcvt<T>(" \t\n") )
+__noinline inline std::vector<int> explodei( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<int> vs; vs.reserve(32);
 	T *ctx, *token = (T*)strtok_s(__tstrdup(src), seps, &ctx);
@@ -475,7 +474,7 @@ inline std::vector<int> explodei( const T* src, const T* seps=_strcvt<T>(" \t\n"
 }
 
 template <class T>
-inline std::vector<unsigned int> explodeu( const T* src, const T* seps=_strcvt<T>(" \t\n") )
+__noinline inline std::vector<unsigned int> explodeu( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<unsigned int> vs; vs.reserve(32);
 	T *ctx, *token = (T*)strtok_s(__tstrdup(src), seps, &ctx);
@@ -484,7 +483,7 @@ inline std::vector<unsigned int> explodeu( const T* src, const T* seps=_strcvt<T
 }
 
 template <class T>
-inline std::vector<float> explodef( const T* src, const T* seps=_strcvt<T>(" \t\n") )
+__noinline inline std::vector<float> explodef( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<float>  vs; vs.reserve(32);
 	T *ctx, *token = (T*)strtok_s(__tstrdup(src), seps, &ctx);
@@ -493,7 +492,7 @@ inline std::vector<float> explodef( const T* src, const T* seps=_strcvt<T>(" \t\
 }
 
 template <class T>
-inline std::vector<double> exploded( const T* src, const T* seps=_strcvt<T>(" \t\n") )
+__noinline inline std::vector<double> exploded( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<double>  vs; vs.reserve(32);
 	T *ctx, *token = (T*)strtok_s(__tstrdup(src), seps, &ctx);
@@ -502,7 +501,7 @@ inline std::vector<double> exploded( const T* src, const T* seps=_strcvt<T>(" \t
 }
 
 template <class T>
-inline std::vector<const T*> explode_conservative( const T* _Src, T _Delim )
+__noinline inline std::vector<const T*> explode_conservative( const T* _Src, T _Delim )
 {
 	std::vector<const T*> vs; vs.reserve(16); if(_Src==nullptr) return vs;
 	for(T *s=__tstrdup(_Src),*e=s;*s&&*e;s=e+1){for(e=s;*e!=_Delim&&*e;e++){}; vs.emplace_back(__tstrdup(s,size_t(e-s))); }
@@ -512,7 +511,7 @@ inline std::vector<const T*> explode_conservative( const T* _Src, T _Delim )
 //***********************************************
 // 11. replace
 template <class T>
-inline const T* str_replace( const T* _Src, const T* _Find, const T* _Replace )
+__noinline inline const T* str_replace( const T* _Src, const T* _Find, const T* _Replace )
 {
 	if(_Find==nullptr||_Find[0]==0) return __tstrdup(_Src);	// no change
 	int sl=int(strlen(_Src)), fl=int(strlen(_Find)); if(sl<fl) return __tstrdup(_Src);
@@ -524,7 +523,7 @@ inline const T* str_replace( const T* _Src, const T* _Find, const T* _Replace )
 }
 
 template <class T>
-inline const T* str_ireplace( const T* _Src, const T* _Find, const T* _Replace )
+__noinline inline const T* str_ireplace( const T* _Src, const T* _Find, const T* _Replace )
 {
 	if(_Find==nullptr||_Find[0]==0) return __tstrdup(_Src);	// no change
 	int sl=int(strlen(_Src)), fl=int(strlen(_Find)); if(sl<fl) return __tstrdup(_Src); int rl=int(strlen(_Replace));

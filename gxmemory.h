@@ -18,7 +18,10 @@
 #ifndef __GX_MEMORY_H__
 #define __GX_MEMORY_H__
 //###################################################################
-// begin COMMON HEADERS for GXUT
+// COMMON HEADERS for GXUT
+#ifndef __GXUT_COMMON__ 
+#define __GXUT_COMMON__
+
 #pragma warning( disable: 4996 ) // suppress MS security warning for pre-included headers; this is standard only for C11-compatible compilers
 #ifndef _CRT_SECURE_NO_WARNINGS
 	#define _CRT_SECURE_NO_WARNINGS
@@ -27,23 +30,13 @@
 	#define _HAS_EXCEPTIONS 0
 #endif
 // C standard
-#include <float.h>
-#include <direct.h>		// directory control
 #include <inttypes.h>	// defines int64_t, uint64_t
-#include <io.h>			// low-level io functions
-#include <limits.h>
-#include <malloc.h>
-#include <math.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 // STL
 #include <algorithm>
 #include <array>
-#include <deque>
-#include <iterator>
 #include <map>
 #include <set>
 #include <string>
@@ -51,17 +44,12 @@
 // C++11
 #if (__cplusplus>199711L) || (_MSC_VER>=1600/*VS2010*/)
 	#include <chrono>
-	#include <functional>
-	#include <thread>
-	#include <typeindex>
 	#include <type_traits>
 	#include <unordered_map>
 	#include <unordered_set>
-	using namespace std::placeholders;
 #endif
 #if defined(_WIN32)||defined(_WIN64) // Windows
 	#include <windows.h>
-	#include <wchar.h>
 #endif
 // platform-specific
 #ifndef GX_PLATFORM
@@ -77,14 +65,21 @@
 	#pragma runtime_checks( "", off )
 	#pragma strict_gs_check( off )
 	#pragma float_control(except, off)
+	#ifndef __noinline
+		#define __noinline __declspec(noinline)
+	#endif
 #else			// GCC or Clang
 	#ifdef __GNUC__
 		#ifndef __forceinline
 			#define __forceinline inline __attribute__((__always_inline__))
 		#endif
+		#ifndef __noinline
+			#define __noinline __attribute__((noinline))
+		#endif
 	#elif defined(__clang__)
 		#pragma clang diagnostic ignored "-Wmissing-braces"				// ignore excessive warning for initialzer
 		#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"	// ignore non-virtual destructor
+		#define __noinline
 	#endif
 #endif
 // common macros
@@ -98,8 +93,6 @@
 	#define SAFE_FREE(p) {if(p){free(p);p=nullptr;}}
 #endif
 // user types
-#ifndef __TARRAY__
-#define __TARRAY__
 template <class T, int D> struct tarray { static const int N=D; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline T& operator[]( int i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( int i ) const { return ((T*)this)[i]; } __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } __forceinline bool operator==( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))==0; } __forceinline bool operator!=( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))!=0; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+D; } constexpr size_t size() const { return D; } };
 #define default_ctors(c) __forceinline c()=default;__forceinline c(c&&)=default;__forceinline c(const c&)=default;__forceinline c(std::initializer_list<T> l){T* p=&x;for(auto i:l)(*p++)=i;}
 #define default_assns(c) __forceinline c& operator=(c&&)=default;__forceinline c& operator=(const c&)=default; __forceinline c& operator=(T a){ for(auto& it:*this) it=a; return *this; }
@@ -108,7 +101,7 @@ template <class T> struct tarray3	: public tarray<T,3> {	using V2=tarray2<T>; un
 template <class T> struct tarray4	: public tarray<T,4> {	using V2=tarray2<T>; using V3=tarray3<T>; union{struct{T x,y,z,w;};struct{T r,g,b,a;};struct{union{V2 xy,rg;};union{V2 zw,ba;};};union{V3 xyz,rgb;};struct{T _x;union{V3 yzw,gba;V2 yz,gb;};};}; default_ctors(tarray4); default_assns(tarray4); };
 template <class T> struct tarray9	: public tarray<T,9> {	union{T a[9];struct{T _11,_12,_13,_21,_22,_23,_31,_32,_33;};}; };
 template <class T> struct tarray16	: public tarray<T,16> {	union{T a[16];struct{T _11,_12,_13,_14,_21,_22,_23,_24,_31,_32,_33,_34,_41,_42,_43,_44;}; }; };
-#endif // __TARRAY__
+
 using uint		= unsigned int;		using uchar		= unsigned char;	using ushort	= unsigned short;
 using float2	= tarray2<float>;	using float3	= tarray3<float>;	using float4	= tarray4<float>;
 using double2	= tarray2<double>;	using double3	= tarray3<double>;	using double4	= tarray4<double>;
@@ -121,10 +114,10 @@ using uchar2	= tarray2<uchar>;	using uchar3	= tarray3<uchar>;	using uchar4	= tar
 using bool2		= tarray2<bool>;	using bool3		= tarray3<bool>;	using bool4		= tarray4<bool>;
 using float9	= tarray9<float>;	using float16	= tarray16<float>;
 using double9	= tarray9<double>;	using double16	= tarray16<double>;
-// end COMMON HEADERS for GXUT
+#endif // __GXUT_COMMON__
 //###################################################################
 
-#if (__cplusplus>=201703L) || (_MSC_VER>=1910/*VS2017*/)
+#if (__cplusplus>=201703L||_MSC_VER>=1910/*VS2017*/)
 	#if __has_include( "gxfilesystem.h" )
 		#include "gxfilesystem.h"
 	#endif
@@ -299,7 +292,7 @@ struct resource_t : public mem_t
 namespace zlib
 {
 	inline size_t capacity( size_t size ){ return size+(((size+16383)>>16)*5)+6; }
-	inline int compress( void* src, size_t src_size, void* dst, size_t dst_capacity )
+	__noinline inline int compress( void* src, size_t src_size, void* dst, size_t dst_capacity )
 	{
 		int ret			= -1; // size of compression (failure: -1)
 		z_stream zInfo	= {0};
@@ -312,7 +305,7 @@ namespace zlib
 		else{ ret=zInfo.total_out; deflateEnd(&zInfo); return ret; }
 	}
 
-	inline int decompress( void* src, size_t src_size, void* dst, size_t dst_capacity )
+	__noinline inline int decompress( void* src, size_t src_size, void* dst, size_t dst_capacity )
 	{
 		int ret			= -1; // size of compression (failure: -1)
 		z_stream zInfo	= {0};
@@ -325,7 +318,7 @@ namespace zlib
 		else{ ret=zInfo.total_out; inflateEnd(&zInfo); return ret; }
 	}
 
-	inline bool unittest( void* src, size_t src_size )
+	__noinline inline bool unittest( void* src, size_t src_size )
 	{
 		size_t c_capacity = capacity(src_size);
 		uchar* c = (uchar*) malloc(c_capacity);
@@ -341,7 +334,8 @@ namespace zlib
 
 //***********************************************
 // CRC32 implementation with 4-batch parallel construction (taken from zlib)
-template <unsigned int poly> inline unsigned int tcrc32( const unsigned char* buff, size_t size, unsigned int crc0 )
+template <unsigned int poly>
+__noinline inline unsigned int tcrc32( const unsigned char* buff, size_t size, unsigned int crc0 )
 {
 	if(buff==nullptr||size==0) return crc0;
 	static unsigned* t[4] = {nullptr};
@@ -364,7 +358,7 @@ inline unsigned int crc32( void* buff, size_t size, unsigned int crc0=0 ){ retur
 
 // CRC32C SSE4.2 implementation up to 8-batch parallel construction (https://github.com/Voxer/sse4_crc32)
 #if defined(__SSE4_2__)||!defined(__clang__)
-inline unsigned int crc32c_hw( const void* buff, size_t size, unsigned int crc0 )
+__noinline inline unsigned int crc32c_hw( const void* buff, size_t size, unsigned int crc0 )
 {
 	if(buff==nullptr||size==0) return crc0;
 	const unsigned char* b = (const unsigned char*) buff;
@@ -407,12 +401,11 @@ class md5
 public:
 	md5( const void* ptr, size_t size ){ memset(buffer,0,sizeof(buffer)); memset(&_digest,0,sizeof(_digest)); if(!ptr||!size) return; update(ptr,size); finalize((unsigned char*)&_digest); for(int k=0;k<16;k++)sprintf((char*)buffer+k*2,"%02x",((unsigned char*)&_digest)[k]); buffer[32]=0; }
 	md5( const char* str ):md5(str,strlen(str)){}
-	md5( const wchar_t* str ):md5(wtoa(str)){}
 	const char* c_str() const { return (const char*)buffer; }
 	const uint4& digest() const { return _digest; }
 };
 
-inline const void* md5::body( const unsigned char* data, size_t size )
+__noinline inline const void* md5::body( const unsigned char* data, size_t size )
 {
 #define MD5_F(x,y,z)				((z)^((x)&((y)^(z))))
 #define MD5_G(x,y,z)				((y)^((z)&((x)^(y))))
@@ -442,7 +435,7 @@ inline const void* md5::body( const unsigned char* data, size_t size )
 	return data;
 }
  
-inline void md5::update( const void* data, size_t size )
+__noinline inline void md5::update( const void* data, size_t size )
 {
 	uint32_t lo0=lo;
 	if((lo = (lo0+size)&0x1fffffff) < lo0) hi++; hi += uint32_t(size) >> 29;
@@ -460,7 +453,7 @@ inline void md5::update( const void* data, size_t size )
 	memcpy(buffer, data, size);
 }
  
-inline void md5::finalize( unsigned char* result )
+__noinline inline void md5::finalize( unsigned char* result )
 {
 	uint32_t used = lo & 0x3f;;
 	buffer[used++] = 0x80;
@@ -478,7 +471,7 @@ inline void md5::finalize( unsigned char* result )
 // augmentation of filesystem
 #ifdef __GX_FILESYSTEM_H__
 
-inline std::string path::md5() const
+__noinline inline std::string path::md5() const
 {
 	mem_t m={0}; if(!exists()) return ""; FILE* fp=_wfopen(data,L"rb"); if(!fp) return "";
 	fseek(fp,0,SEEK_END); m.size=ftell(fp); fseek(fp,0,SEEK_SET); fread(m.ptr=malloc(m.size),m.size,1,fp); fclose(fp);
@@ -487,7 +480,7 @@ inline std::string path::md5() const
 	return s;
 }
 
-inline uint path::crc32() const
+__noinline inline uint path::crc32() const
 {
 	mem_t m={0}; if(!exists()) return 0; FILE* fp=_wfopen(data,L"rb"); if(!fp) return 0;
 	fseek(fp,0,SEEK_END); m.size=ftell(fp); fseek(fp,0,SEEK_SET); fread(m.ptr=malloc(m.size),m.size,1,fp); fclose(fp);
@@ -496,7 +489,7 @@ inline uint path::crc32() const
 	return c;
 }
 
-inline uint path::crc32c() const
+__noinline inline uint path::crc32c() const
 {
 	mem_t m={0}; if(!exists()) return 0; FILE* fp=_wfopen(data,L"rb"); if(!fp) return 0;
 	fseek(fp,0,SEEK_END); m.size=ftell(fp); fseek(fp,0,SEEK_SET); fread(m.ptr=malloc(m.size),m.size,1,fp); fclose(fp);
@@ -527,7 +520,7 @@ struct binary_cache
 	void write( void* ptr, size_t size ){ if(fp) fwrite( ptr, size, 1, fp ); }
 	void read( void* ptr, size_t size ){ if(fp) fread(ptr,size,1,fp); }
 	void close(){ if(fp){ fclose(fp); fp=nullptr; } if(b_read&&zip_path().exists()) cache_path().rmfile(); else if(!b_read) compress(); }
-	bool open( bool read=true )
+	__noinline bool open( bool read=true )
 	{
 		b_read = read;
 		uint64_t sig = uint64_t(std::hash<std::string>{}(std::string(__TIMESTAMP__)+signature()));
@@ -555,7 +548,7 @@ struct binary_cache
 };
 
 #if defined(_zip_H) && defined(_unzip_H)
-inline bool binary_cache::compress( bool rm_src )
+__noinline inline bool binary_cache::compress( bool rm_src )
 {
 	if(!cache_path().exists()) return false;
 	HZIP hZip = CreateZip( zip_path(), nullptr );
@@ -563,7 +556,7 @@ inline bool binary_cache::compress( bool rm_src )
 	else { wprintf( L"Unable to compress %s\n", cache_path().name() ); CloseZip( hZip ); return false; }
 }
 
-inline bool binary_cache::decompress()
+__noinline inline bool binary_cache::decompress()
 {
 	if(!zip_path().exists()) return false;
 	zip_t zip_file(zip_path()); return zip_file.load()&&!zip_file.entries.empty()&&zip_file.extract_to_files(zip_path().dir());

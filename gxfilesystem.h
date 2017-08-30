@@ -18,7 +18,10 @@
 #ifndef __GX_FILESYSTEM_H__
 #define __GX_FILESYSTEM_H__
 //###################################################################
-// begin COMMON HEADERS for GXUT
+// COMMON HEADERS for GXUT
+#ifndef __GXUT_COMMON__ 
+#define __GXUT_COMMON__
+
 #pragma warning( disable: 4996 ) // suppress MS security warning for pre-included headers; this is standard only for C11-compatible compilers
 #ifndef _CRT_SECURE_NO_WARNINGS
 	#define _CRT_SECURE_NO_WARNINGS
@@ -27,23 +30,13 @@
 	#define _HAS_EXCEPTIONS 0
 #endif
 // C standard
-#include <float.h>
-#include <direct.h>		// directory control
 #include <inttypes.h>	// defines int64_t, uint64_t
-#include <io.h>			// low-level io functions
-#include <limits.h>
-#include <malloc.h>
-#include <math.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 // STL
 #include <algorithm>
 #include <array>
-#include <deque>
-#include <iterator>
 #include <map>
 #include <set>
 #include <string>
@@ -51,17 +44,12 @@
 // C++11
 #if (__cplusplus>199711L) || (_MSC_VER>=1600/*VS2010*/)
 	#include <chrono>
-	#include <functional>
-	#include <thread>
-	#include <typeindex>
 	#include <type_traits>
 	#include <unordered_map>
 	#include <unordered_set>
-	using namespace std::placeholders;
 #endif
 #if defined(_WIN32)||defined(_WIN64) // Windows
 	#include <windows.h>
-	#include <wchar.h>
 #endif
 // platform-specific
 #ifndef GX_PLATFORM
@@ -77,14 +65,21 @@
 	#pragma runtime_checks( "", off )
 	#pragma strict_gs_check( off )
 	#pragma float_control(except, off)
+	#ifndef __noinline
+		#define __noinline __declspec(noinline)
+	#endif
 #else			// GCC or Clang
 	#ifdef __GNUC__
 		#ifndef __forceinline
 			#define __forceinline inline __attribute__((__always_inline__))
 		#endif
+		#ifndef __noinline
+			#define __noinline __attribute__((noinline))
+		#endif
 	#elif defined(__clang__)
 		#pragma clang diagnostic ignored "-Wmissing-braces"				// ignore excessive warning for initialzer
 		#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"	// ignore non-virtual destructor
+		#define __noinline
 	#endif
 #endif
 // common macros
@@ -98,8 +93,6 @@
 	#define SAFE_FREE(p) {if(p){free(p);p=nullptr;}}
 #endif
 // user types
-#ifndef __TARRAY__
-#define __TARRAY__
 template <class T, int D> struct tarray { static const int N=D; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline T& operator[]( int i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( int i ) const { return ((T*)this)[i]; } __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } __forceinline bool operator==( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))==0; } __forceinline bool operator!=( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))!=0; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+D; } constexpr size_t size() const { return D; } };
 #define default_ctors(c) __forceinline c()=default;__forceinline c(c&&)=default;__forceinline c(const c&)=default;__forceinline c(std::initializer_list<T> l){T* p=&x;for(auto i:l)(*p++)=i;}
 #define default_assns(c) __forceinline c& operator=(c&&)=default;__forceinline c& operator=(const c&)=default; __forceinline c& operator=(T a){ for(auto& it:*this) it=a; return *this; }
@@ -108,7 +101,7 @@ template <class T> struct tarray3	: public tarray<T,3> {	using V2=tarray2<T>; un
 template <class T> struct tarray4	: public tarray<T,4> {	using V2=tarray2<T>; using V3=tarray3<T>; union{struct{T x,y,z,w;};struct{T r,g,b,a;};struct{union{V2 xy,rg;};union{V2 zw,ba;};};union{V3 xyz,rgb;};struct{T _x;union{V3 yzw,gba;V2 yz,gb;};};}; default_ctors(tarray4); default_assns(tarray4); };
 template <class T> struct tarray9	: public tarray<T,9> {	union{T a[9];struct{T _11,_12,_13,_21,_22,_23,_31,_32,_33;};}; };
 template <class T> struct tarray16	: public tarray<T,16> {	union{T a[16];struct{T _11,_12,_13,_14,_21,_22,_23,_24,_31,_32,_33,_34,_41,_42,_43,_44;}; }; };
-#endif // __TARRAY__
+
 using uint		= unsigned int;		using uchar		= unsigned char;	using ushort	= unsigned short;
 using float2	= tarray2<float>;	using float3	= tarray3<float>;	using float4	= tarray4<float>;
 using double2	= tarray2<double>;	using double3	= tarray3<double>;	using double4	= tarray4<double>;
@@ -121,12 +114,14 @@ using uchar2	= tarray2<uchar>;	using uchar3	= tarray3<uchar>;	using uchar4	= tar
 using bool2		= tarray2<bool>;	using bool3		= tarray3<bool>;	using bool4		= tarray4<bool>;
 using float9	= tarray9<float>;	using float16	= tarray16<float>;
 using double9	= tarray9<double>;	using double16	= tarray16<double>;
-// end COMMON HEADERS for GXUT
+#endif // __GXUT_COMMON__
 //###################################################################
 
-#if (__cplusplus>=201703L) || (_MSC_VER>=1910/*VS2017*/) || __has_include( "gxstring.h" )
-	#include "gxstring.h"	// make sure to include gxstring for nocase extension
-#endif
+#include <direct.h>		// directory control
+#include <io.h>			// low-level io functions
+#include <time.h>
+#include <deque>
+#include <thread>		// usleep
 
 //***********************************************
 // Utility for filetime comparison
@@ -382,7 +377,7 @@ private:
 //***********************************************
 // definitions of long inline member functions
 
-inline std::vector<path> path::scan( bool recursive, const wchar_t* ext_filter, const wchar_t* str_filter ) const
+__noinline inline std::vector<path> path::scan( bool recursive, const wchar_t* ext_filter, const wchar_t* str_filter ) const
 {
 	std::wstring ext_filter1=ext_filter?std::wstring(L";")+std::wstring(ext_filter)+L";":L"";
 	scan_info si={std::vector<path>(),recursive,false,ext_filter?ext_filter1.c_str():nullptr,str_filter};
@@ -390,14 +385,14 @@ inline std::vector<path> path::scan( bool recursive, const wchar_t* ext_filter, 
 	si.result.reserve(65536);_scan(src,si);si.result.shrink_to_fit();return si.result;
 }
 
-inline std::vector<path> path::subdirs( bool recursive ) const
+__noinline inline std::vector<path> path::subdirs( bool recursive ) const
 {
 	scan_info si={std::vector<path>(),recursive,true,nullptr,nullptr};
 	if(!is_dir()) return si.result; path src=(is_relative()?absolute(L".\\"):*this).add_backslash();
 	si.result.reserve(256);_scan(src,si);si.result.shrink_to_fit();return si.result;
 }
 
-inline void path::_scan( path& dir, path::scan_info& si ) const
+__noinline inline void path::_scan( path& dir, path::scan_info& si ) const
 {
 	WIN32_FIND_DATAW fd; HANDLE h=FindFirstFileExW(dir+L"*.*",FindExInfoBasic/*minimal(faster)*/,&fd,FindExSearchNameMatch,0,FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
 	std::vector<path> child_dirs; if(si.recursive) child_dirs.reserve(4);
@@ -414,7 +409,7 @@ inline void path::_scan( path& dir, path::scan_info& si ) const
 	for(auto& c:child_dirs) _scan(c,si);
 }
 
-inline path path::serial( path dir, const wchar_t* prefix, const wchar_t* postfix, int numzero )
+__noinline inline path path::serial( path dir, const wchar_t* prefix, const wchar_t* postfix, int numzero )
 {
 	dir=dir.add_backslash(); if(!dir.exists()) dir.mkdir();
 	int nMaxFiles=1; for(int k=0;k<numzero;k++) nMaxFiles*=10;
@@ -435,7 +430,7 @@ inline path path::global::temp(){ static path t = path::system::temp()+L".gxut\\
 #endif
 
 //***********************************************
-inline path path::temp( const wchar_t* subkey )
+__noinline inline path path::temp( const wchar_t* subkey )
 {
 	static path g=global::temp(),mod=path(L"local\\")+module_dir().key().add_backslash();
 	path key = (subkey&&subkey[0])?path(subkey).key().add_backslash():mod;
@@ -443,7 +438,7 @@ inline path path::temp( const wchar_t* subkey )
 	return t;
 }
 
-inline path path::relative( const wchar_t* from ) const
+__noinline inline path path::relative( const wchar_t* from ) const
 {
 	if(is_relative()) return *this;
 
@@ -467,7 +462,7 @@ inline path path::relative( const wchar_t* from ) const
 	return this->is_dir()?result:result+name();
 }
 
-inline void path::create_process( const wchar_t* arguments, bool bShowWindow, bool bWaitFinish ) const
+__noinline inline void path::create_process( const wchar_t* arguments, bool bShowWindow, bool bWaitFinish ) const
 {
 	wchar_t cmd[4096]; swprintf_s( cmd, 4096, L"\"%s\" %s", data, arguments?arguments:L""  );
 	PROCESS_INFORMATION pi={0}; STARTUPINFOW si={0}; si.cb=sizeof(si); si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=bShowWindow?SW_SHOW:SW_HIDE;
@@ -477,7 +472,7 @@ inline void path::create_process( const wchar_t* arguments, bool bShowWindow, bo
 	CloseHandle( pi.hProcess );   // must release handle
 }
 
-inline void path::canonicalize()
+__noinline inline void path::canonicalize()
 {
 	size_t len = length(); if(len==0) return;
 	for(uint k=0;k<len;k++) if(data[k]==L'/') data[k]=L'\\'; // slash to backslash
@@ -509,8 +504,19 @@ inline void path::canonicalize()
 
 //***********************************************
 // nocase/std map/unordered_map extension for path
+
 namespace nocase
 {
+#ifndef __NOCASE_BASE_TYPE__
+#define __NOCASE_BASE_TYPE__
+	template <class T> struct equal_to { bool operator()(const T& a,const T& b)const;};
+	template <class T> struct not_equal_to { bool operator()(const T& a,const T& b)const;};
+	template <class T> struct greater { bool operator()(const T& a,const T& b)const;};
+	template <class T> struct less { bool operator()(const T& a,const T& b)const;};
+	template <class T> struct greater_equal { bool operator()(const T& a,const T& b)const;};
+	template <class T> struct less_equal { bool operator()(const T& a,const T& b)const;};
+#endif
+
 	template <> struct equal_to<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())==0;}};
 	template <> struct not_equal_to<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())!=0;}};
 	template <> struct greater<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())>0;}};

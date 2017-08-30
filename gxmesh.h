@@ -320,12 +320,8 @@ struct geometry
 	inline float surface_area() const ;
 	inline bool intersect( const ray& r, isect* pi=nullptr ) const; // linear intersection
 };
-
 static_assert( sizeof(geometry)%16==0, "sizeof(geometry) should be 16-byte aligned" );
-
 #endif
-
-
 
 //***********************************************
 // a set of geometries for batch control (not related to the rendering)
@@ -447,7 +443,7 @@ inline geometry* object::create_geometry( const geometry& other ){ auto& g=root-
 //***********************************************
 // late implementations for mesh
 
-inline mesh& mesh::operator=( mesh&& other ) // move assignment operator
+__noinline inline mesh& mesh::operator=( mesh&& other ) // move assignment operator
 {
 	vertices = std::move(other.vertices);
 	indices = std::move(other.indices);
@@ -460,7 +456,7 @@ inline mesh& mesh::operator=( mesh&& other ) // move assignment operator
 	return *this;
 }
 
-inline void mesh::update_bound( bool bRecalcTris )
+__noinline inline void mesh::update_bound( bool bRecalcTris )
 {
 	box.clear(); for(auto& obj:objects) obj.box.clear();
 	for( size_t k=0, kn=geometries.size(), gn=kn/instance_count; k<kn; k++ )
@@ -472,7 +468,7 @@ inline void mesh::update_bound( bool bRecalcTris )
 	for( auto& obj : objects ) box.expand( obj.box );
 }
 
-inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
+__noinline inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
 {
 	mesh* proxy = new mesh();
 
@@ -512,7 +508,7 @@ inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
 //***********************************************
 // intersection implementations
 
-inline ray gen_primary_ray( camera* cam, float x, float y )	// (x,y) in [0,1]
+__noinline inline ray gen_primary_ray( camera* cam, float x, float y )	// (x,y) in [0,1]
 {
 	const vec3& eye=cam->eye, center=cam->center, up=cam->up;
 	float fh = tan(cam->fovy*0.5f)*2.0f, fw=fh*cam->aspect;		// frustum height/width in NDC
@@ -522,7 +518,7 @@ inline ray gen_primary_ray( camera* cam, float x, float y )	// (x,y) in [0,1]
 }
 
 // triangle intersection: isect=(pos,t), bc=(s,t)
-inline bool intersect( const ray& r, const vec3& v0, const vec3& v1, const vec3& v2, isect* pi=nullptr )
+__noinline inline bool intersect( const ray& r, const vec3& v0, const vec3& v1, const vec3& v2, isect* pi=nullptr )
 {
 	// http://geomalgorithms.com/a06-_intersect-2.html#intersect3D_RayTriangle
 	if(pi) pi->hit = false;
@@ -551,7 +547,7 @@ inline bool intersect( const ray& r, const vec3& v0, const vec3& v1, const vec3&
 }
 
 // box intersection
-inline bool bbox::intersect( const ray& r, isect* pi )
+__noinline inline bool bbox::intersect( const ray& r, isect* pi )
 {
 	if(pi) pi->hit = false;
 
@@ -574,7 +570,7 @@ inline bool bbox::intersect( const ray& r, isect* pi )
 	return true;
 }
 
-inline bool geometry::intersect( const ray& r, isect* pi ) const
+__noinline inline bool geometry::intersect( const ray& r, isect* pi ) const
 {
 	isect i, t; i.hit=false;
 	mat4 m = matrix();
@@ -587,7 +583,7 @@ inline bool geometry::intersect( const ray& r, isect* pi ) const
 	return i.hit;
 }
 
-inline bool mesh::intersect( const ray& r, std::vector<uint>* hit_prim_list ) const
+__noinline inline bool mesh::intersect( const ray& r, std::vector<uint>* hit_prim_list ) const
 {
 	std::vector<uint> m;
 	for( uint k=0, kn=uint(geometries.size()); k<kn; k++ )
@@ -599,7 +595,7 @@ inline bool mesh::intersect( const ray& r, std::vector<uint>* hit_prim_list ) co
 	return !m.empty();
 }
 
-inline bool mesh::intersect( const ray& r, isect* pi ) const
+__noinline inline bool mesh::intersect( const ray& r, isect* pi ) const
 {
 	isect m;
 	std::vector<uint> hit_prim_list;
@@ -617,7 +613,7 @@ inline bool mesh::intersect( const ray& r, isect* pi ) const
 
 //***********************************************
 // line clipping by Liang Barsky algorithm
-inline bool clip_line( vec2 p, vec2 q, vec2 lb, vec2 rt, vec2* p1=nullptr, vec2* q1=nullptr )
+__noinline inline bool clip_line( vec2 p, vec2 q, vec2 lb, vec2 rt, vec2* p1=nullptr, vec2* q1=nullptr )
 {
 	vec2 d=q-p, t=vec2(0,1);
 	vec2 vs[4] = { {-d.x,p.x-lb.x}, {d.x,rt.x-p.x}, {-d.y,p.y-lb.y}, {d.y,rt.y-p.y} };
@@ -637,11 +633,10 @@ inline bool clip_line( vec2 p, vec2 q, vec2 lb, vec2 rt, vec2* p1=nullptr, vec2*
 
 //***********************************************
 // mesh utilities
-inline mesh* create_box_mesh( const char* name="box", bool use_quads=false, bool double_sided=false, float half_size=1.0f )
+__noinline inline mesh* create_box_mesh( bbox& box, const char* name="box", bool use_quads=false, bool double_sided=false )
 {
 	mesh* m = new mesh();
-	bbox box( vec3(-half_size), vec3(half_size) );
-
+	
 	// vertex definitions
 	for( uint k=0; k < 8; k++ ) m->vertices.emplace_back(vertex{ box.corner(k), vec3(0.0f), vec2(0.0f) });
 
@@ -654,6 +649,11 @@ inline mesh* create_box_mesh( const char* name="box", bool use_quads=false, bool
 	m->create_object(name,&box)->create_geometry(0,uint(m->indices.size()),&box,-1);
 
 	return m;
+}
+
+inline mesh* create_box_mesh( const char* name="box", bool use_quads=false, bool double_sided=false, float half_size=1.0f )
+{
+	return create_box_mesh( bbox{vec3(-half_size),vec3(half_size)}, name, use_quads, double_sided );
 }
 
 #endif // __GX_MESH__

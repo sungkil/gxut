@@ -15,9 +15,17 @@
 //*******************************************************************
 
 #pragma once
+#ifndef __GX_OPENGL_H__
+#define __GX_OPENGL_H__
+
+#include "gxmath.h"
 #include "gxstring.h"
 #include "gxfilesystem.h"
-#include "gxmath.h"
+#include <malloc.h>
+
+#if (__cplusplus>=201703L||_MSC_VER>=1910/*VS2017*/) && !defined(__gxcorearb_h_) && __has_include( "gxcorearb.h" )
+	#include "gxcorearb.h"
+#endif
 
 #if defined(__clang__) // clang-specific preprocessor
 #pragma clang diagnostic ignored "-Wunused-variable"			// supress warning for unused b0
@@ -182,14 +190,14 @@ namespace gl {
 		// gl::Timer specific implementations
 		virtual void	release(){ GLuint idx[2]={ID,ID1}; glDeleteQueries(2,idx); }
 		inline bool		is_available(){ GLint available; glGetQueryObjectiv(ID1,GL_QUERY_RESULT_AVAILABLE, &available); return complete=(available!=GL_FALSE); }
-		inline void		finish(){ if(complete) return; static int64_t e=epoch(); static const GLenum q=GL_QUERY_RESULT; double& of=offset(); GLuint64 v; glGetQueryObjectui64v(ID,q,&v); x = double(v-e)/1000000.0+of; glGetQueryObjectui64v(ID1,q,&v); y=double(v-e)/1000000.0+of; complete=true; }
+		inline void		finish(){ if(complete) return; static int64_t e=epoch(); static const GLenum q=GL_QUERY_RESULT; GLuint64 v; glGetQueryObjectui64v(ID,q,&v); x = double(v-e)/1000000.0+offset(); glGetQueryObjectui64v(ID1,q,&v); y=double(v-e)/1000000.0+offset(); complete=true; }
 		inline double	latency(){ if(!complete) finish(); return x-qpc.x; }	// difference between CPU time and the time for flushing preceding commands = result.x - qpc.x
 
 		// consistent interface with gxTimer
 		inline void		begin(){ qpc.begin(); glQueryCounter(ID,target); complete=false; }
 		inline void		end(){ glQueryCounter(ID1,target); qpc.end(); complete=false; }
 		inline double	delta(){ if(!complete) finish(); return y-x; }
-		inline double	now(){ double& of=offset(); return (gxGetInteger64v(GL_TIMESTAMP)-epoch())/1000000.0+of; }
+		inline double	now(){ return (gxGetInteger64v(GL_TIMESTAMP)-epoch())/1000000.0+offset(); }
 		inline void		clear(){ qpc.begin();qpc.end();result=qpc.result; complete=true; }
 	};
 	
@@ -436,8 +444,8 @@ namespace gl {
 		// getUniform: in-program uniform variables
 		Uniform* getUniform( const char* name )
 		{
-			auto it=uniform_cache.find(name); if(it!=uniform_cache.end()) return &it->second;
-			auto it2=invalid_uniform_cache.find(name); if(it2!=invalid_uniform_cache.end()) return nullptr;
+			{auto it=uniform_cache.find(name);if(it!=uniform_cache.end()) return &it->second;}
+			{auto it=invalid_uniform_cache.find(name);if(it!=invalid_uniform_cache.end()) return nullptr;}
 			printf( "[Warning] %s.getUniform(%s): not found\n",this->name, name ); invalid_uniform_cache.emplace(name); return nullptr;
 		}
 		
@@ -530,7 +538,7 @@ namespace gl {
 		size_t size() const { return programList.size(); }
 		Program* getProgram( const char* programName ) const { for(uint k=0;k<programList.size();k++)if(_stricmp(programList[k]->name,programName)==0) return programList[k]; printf("Unable to find program \"%s\" in effect \"%s\"\n", programName, getName() ); return nullptr; }
 		Program* getProgram( uint index ) const { if(index<programList.size()) return programList[index]; else { printf("[%s] Out-of-bound program index\n", getName() ); return nullptr; } }
-		bool createProgram( const char* prefix, const char* name, const std::map<GLuint,std::string>& shaderSourceMap, const char* pMacro=nullptr, std::vector<const char*>* tfVaryings=nullptr ){ Program* program=gxCreateProgram(prefix,name,shaderSourceMap,pMacro,tfVaryings); if(!program) return false; programList.emplace_back(program); auto& m=program->uniform_block_map;for(auto it=m.begin();it!=m.end();it++){gl::Program::UniformBlock& ub=it->second;ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size); } return true; }
+		bool createProgram( const char* prefix, const char* name, const std::map<GLuint,std::string>& shaderSourceMap, const char* pMacro=nullptr, std::vector<const char*>* tfVaryings=nullptr ){ Program* program=gxCreateProgram(prefix,name,shaderSourceMap,pMacro,tfVaryings); if(!program) return false; programList.emplace_back(program); auto& m=program->uniform_block_map;for(auto& it:m){gl::Program::UniformBlock& ub=it.second;ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size);} return true; }
 		bool createProgram( const char* prefix, const char* name, const char* vertShaderSource, const char* fragShaderSource, const char* pMacro=nullptr ){ std::map<GLuint,std::string> ssm={std::make_pair(GL_VERTEX_SHADER,vertShaderSource),std::make_pair(GL_FRAGMENT_SHADER,fragShaderSource)}; return createProgram(prefix,name,ssm,pMacro,nullptr); }
 
 		Program::Uniform* getUniform( const char* name ){ return activeProgram?activeProgram->getUniform(name):nullptr; }
@@ -571,7 +579,7 @@ namespace gl {
 		struct depth_key_t { union { struct {uint width:16, height:16, multisamples:8, layers:16, renderbuffer:1, dummy:7;}; uint64_t value; }; depth_key_t():value(0){} };
 
 		Framebuffer( GLuint ID, const char* name ) : GLObject(ID,name,GL_FRAMEBUFFER),bColorMask(true),bDepthMask(true){ memset(activeTargets,0,sizeof(activeTargets)); glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA ); }
-		virtual void release(){ glBindFramebuffer(GL_FRAMEBUFFER,0); glBindRenderbuffer(GL_RENDERBUFFER,0);memset(activeTargets,0,sizeof(activeTargets)); GLuint id=ID; if(ID) glDeleteFramebuffers(1,&id); for( auto it=depthBuffers.begin(); it!=depthBuffers.end(); it++ ){ const depth_key_t& key=reinterpret_cast<const depth_key_t&>(it->first); if(key.renderbuffer) glDeleteRenderbuffers(1,&it->second); else glDeleteTextures(1,&it->second); } depthBuffers.clear(); }
+		virtual void release(){ glBindFramebuffer(GL_FRAMEBUFFER,0); glBindRenderbuffer(GL_RENDERBUFFER,0);memset(activeTargets,0,sizeof(activeTargets)); GLuint id=ID; if(ID) glDeleteFramebuffers(1,&id); for(auto& it:depthBuffers){const depth_key_t& key=reinterpret_cast<const depth_key_t&>(it.first); if(key.renderbuffer) glDeleteRenderbuffers(1,&it.second); else glDeleteTextures(1,&it.second); } depthBuffers.clear(); }
 		GLuint bind( bool bBind=true ){ GLuint b0=binding(); if(!bBind||ID!=b0) glBindFramebuffer( GL_FRAMEBUFFER, bBind?ID:0 ); return b0; }
 
 		void bind( Texture* t0, Texture* t1=nullptr, Texture* t2=nullptr, Texture* t3=nullptr, Texture* t4=nullptr, Texture* t5=nullptr, Texture* t6=nullptr, Texture* t7=nullptr ){ if(ID) bind(t0,0,0,t1,0,0,t2,0,0,t3,0,0,t4,0,0,t5,0,0,t6,0,0,t7,0,0); }
@@ -693,8 +701,8 @@ namespace gl {
 
 		depth_key_t key; key.width=width; key.height=height; key.multisamples=multisample?multisamples:1; key.renderbuffer=layers==1?1:0; key.layers=layers; key.dummy=0;
 
-		GLuint idx; auto it=depthBuffers.find(key.value);
-		if(it!=depthBuffers.end()) idx=it->second;
+		GLuint idx;
+		auto it=depthBuffers.find(key.value); if(it!=depthBuffers.end()) idx=it->second;
 		else if(layers==1)
 		{
 			glBindRenderbuffer( GL_RENDERBUFFER, depthBuffers[key.value] = idx = gxCreateRenderBuffer() );
@@ -938,15 +946,15 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 
 	// 1. combine macro with shader sources, and add layout qualifier
 	std::string macro = pMacro&&pMacro[0]?pMacro:""; if(!macro.empty()&&macro.back()!='\n') macro+='\n';
-	auto ssm = shaderSourceMap; for( auto it=ssm.begin(); it!=ssm.end(); it++ )
+	for( auto& it : shaderSourceMap )
 	{
-		auto v = gxExplodeShaderSource(it->second.c_str());
+		auto v = gxExplodeShaderSource(it.second.c_str());
 		std::vector<std::string> directive_list;	for(auto& j:v){ const char* s=str_replace(trim(j.second.c_str()),"\t"," "); if(strstr(s,"#version")||strstr(s,"#extension")){ directive_list.emplace_back(j.second); j.second.clear();} }
 		std::vector<std::string> macro_list;		for(auto& j:explode_conservative(macro.c_str(),'\n')) macro_list.emplace_back(j);
-		std::vector<std::string> layout_list;		if(it->first==GL_FRAGMENT_SHADER) layout_list.emplace_back("layout(pixel_center_integer) in vec4 gl_FragCoord;");
+		std::vector<std::string> layout_list;		if(it.first==GL_FRAGMENT_SHADER) layout_list.emplace_back("layout(pixel_center_integer) in vec4 gl_FragCoord;");
 
 		// merge all together
-		std::string& s = it->second; s.clear();
+		std::string& s = const_cast<std::string&>(it.second); s.clear();
 		for( auto& j: directive_list ) s+=j+'\n';
 		for( auto& j: layout_list ) s+=j+'\n';
 		for( auto& j: macro_list ) s+=j+'\n';
@@ -954,10 +962,12 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 	}
 
 	// 2. trivial return for the default program
-	auto it=ssm.find(GL_VERTEX_SHADER); if(ssm.find(GL_COMPUTE_SHADER)==ssm.end()&&(it==ssm.end()||it->second.empty())) return new gl::Program(0,name);
+	auto vit=shaderSourceMap.find(GL_VERTEX_SHADER);	bool vertex_shader_exists = vit!=shaderSourceMap.end()&&!vit->second.empty();
+	auto cit=shaderSourceMap.find(GL_COMPUTE_SHADER);	bool compute_shader_exists = cit!=shaderSourceMap.end()&&!cit->second.empty();
+	if(!vertex_shader_exists&&!compute_shader_exists) return new gl::Program(0,name);
 
 	// 3. create md5 hash of shader souces
-	std::string crcsrc=pname; for( auto it=ssm.begin(); it!=ssm.end(); it++ ) crcsrc += it->second;
+	std::string crcsrc=pname; for( auto& it : shaderSourceMap ) crcsrc += it.second;
 	for( size_t k=0; tfVaryings&& k < tfVaryings->size(); k++ ) crcsrc += tfVaryings->at(k);
 	uint crc = gl_crc32c(crcsrc.c_str(),crcsrc.length());
 
@@ -976,12 +986,12 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 
 	// 6. compile and attach shaders
 	std::vector<GLuint> attachedShaderList;
-	for( auto it=ssm.begin(); it!=ssm.end(); it++ )
+	for( auto& it : shaderSourceMap )
 	{
-		GLuint shaderType = it->first;
-		GLuint shaderID = gxCompileShaderSource( shaderType, format("%s",pname), it->second.c_str() );
+		GLuint shaderType = it.first;
+		GLuint shaderID = gxCompileShaderSource( shaderType, format("%s",pname), it.second.c_str() );
 
-		if( !it->second.empty() && shaderID==0 ) return nullptr;
+		if( !it.second.empty() && shaderID==0 ) return nullptr;
 		if( shaderID ){ glAttachShader( program->ID, shaderID ); attachedShaderList.emplace_back( shaderID ); }
 		if( shaderType == GL_GEOMETRY_SHADER )
 		{
@@ -1090,7 +1100,7 @@ struct glfxParserImpl : public glfx::IParser
 			std::map<uint,std::string> shader_map = glfxGetProgramSource( id, name );
 			shader_type_list.emplace_back(std::vector<uint>()); std::vector<uint>& t=shader_type_list.back();
 			shader_source_list.emplace_back(std::vector<std::string>()); std::vector<std::string>& s=shader_source_list.back();
-			for( auto it=shader_map.begin(); it!=shader_map.end(); it++ ){ t.emplace_back( it->first ); s.emplace_back( it->second ); }
+			for( auto& it : shader_map ){ t.emplace_back( it.first ); s.emplace_back( it.second ); }
 		}
 		glfxDeleteEffect(id);
 		return true;
@@ -1367,3 +1377,5 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint minlevel, GLui
 
 	return t1;
 }
+
+#endif // __GX_OPENGL_H__
