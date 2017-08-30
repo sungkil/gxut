@@ -83,6 +83,11 @@
 	#endif
 #endif
 // common macros
+#if (__cplusplus>=201703L||_MSC_VER>=1911/*VS2017*/)
+	#define has_include(file) __has_include(file)
+#else
+	#define has_include(file) 0
+#endif
 #ifndef SAFE_RELEASE
 	#define SAFE_RELEASE(a) {if(a){a->Release();a=nullptr;}}
 #endif
@@ -540,6 +545,8 @@ inline void usleep( int us ){ std::this_thread::sleep_for(std::chrono::microseco
 
 //***********************************************
 // timer
+#ifndef __GX_TIMER__
+#define __GX_TIMER__
 struct gxTimer
 {
 	union { double2 result; struct { double x, y; }; };
@@ -551,6 +558,7 @@ struct gxTimer
 	static double now(){ static double c=0; if(c==0){ int64_t f;QueryPerformanceFrequency((LARGE_INTEGER*)&f);c=1000.0/double(f);} static int64_t e=0; if(e==0){auto* ef=(int64_t(*)()) GetProcAddress(GetModuleHandleW(nullptr),"rex_timer_epoch");if(ef)e=ef();else QueryPerformanceCounter((LARGE_INTEGER*)&e);} int64_t i; QueryPerformanceCounter((LARGE_INTEGER*)&i); return double(i-e)*c; } // if rex found, use its epoch; otherwise, use a local epoch
 	static gxTimer* singleton(){ static gxTimer i; return &i; }
 };
+#endif
 
 //***********************************************
 #endif // __GX_FILESYSTEM__

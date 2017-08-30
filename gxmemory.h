@@ -83,6 +83,11 @@
 	#endif
 #endif
 // common macros
+#if (__cplusplus>=201703L||_MSC_VER>=1911/*VS2017*/)
+	#define has_include(file) __has_include(file)
+#else
+	#define has_include(file) 0
+#endif
 #ifndef SAFE_RELEASE
 	#define SAFE_RELEASE(a) {if(a){a->Release();a=nullptr;}}
 #endif
@@ -117,16 +122,14 @@ using double9	= tarray9<double>;	using double16	= tarray16<double>;
 #endif // __GXUT_COMMON__
 //###################################################################
 
-#if (__cplusplus>=201703L||_MSC_VER>=1910/*VS2017*/)
-	#if __has_include( "gxfilesystem.h" )
-		#include "gxfilesystem.h"
-	#endif
-	#if __has_include(<intrin.h>)
-		#include <intrin.h>
-	#endif
-	#if __has_include(<nmmintrin.h>)
-		#include <nmmintrin.h>
-	#endif
+#if has_include( "gxfilesystem.h" )
+	#include "gxfilesystem.h"
+#endif
+#if has_include(<intrin.h>)
+	#include <intrin.h>
+#endif
+#if has_include(<nmmintrin.h>)
+	#include <nmmintrin.h>
 #endif
 
 #ifndef __GX_MEM_T__

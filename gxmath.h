@@ -83,6 +83,11 @@
 	#endif
 #endif
 // common macros
+#if (__cplusplus>=201703L||_MSC_VER>=1911/*VS2017*/)
+	#define has_include(file) __has_include(file)
+#else
+	#define has_include(file) 0
+#endif
 #ifndef SAFE_RELEASE
 	#define SAFE_RELEASE(a) {if(a){a->Release();a=nullptr;}}
 #endif

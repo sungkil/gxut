@@ -23,7 +23,7 @@
 #include "gxfilesystem.h"
 #include <malloc.h>
 
-#if (__cplusplus>=201703L||_MSC_VER>=1910/*VS2017*/) && !defined(__gxcorearb_h_) && __has_include( "gxcorearb.h" )
+#if !defined(__gxcorearb_h_) && defined(has_include) && has_include( "gxcorearb.h" )
 	#include "gxcorearb.h"
 #endif
 
@@ -171,6 +171,7 @@ namespace gl {
 	};
 
 	//***********************************************
+#ifdef __GX_TIMER__
 	struct Timer : public GLObject
 	{
 		const GLuint	ID1=0;
@@ -200,7 +201,8 @@ namespace gl {
 		inline double	now(){ return (gxGetInteger64v(GL_TIMESTAMP)-epoch())/1000000.0+offset(); }
 		inline void		clear(){ qpc.begin();qpc.end();result=qpc.result; complete=true; }
 	};
-	
+#endif // __GX_TIMER__
+
 	//***********************************************
 	struct Buffer : public GLObject
 	{
