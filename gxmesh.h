@@ -27,44 +27,56 @@ struct ID3D10Buffer; struct ID3D11Buffer; struct ID3D10ShaderResourceView; struc
 struct geometry; struct object; struct mesh;																// mesh forward decl.
 
 //***********************************************
-// sampler interface (e.g., lens sampler, ray sampler, etc.): vec4(x,y,z,weight) in unit circle/sphere
-struct sampler_t
+// sampler interface (for lens/rays): vec4(x,y,z,weight) in a unit surface
+template <size_t max_samples>
+struct tsampler_t
 {
-	std::array<vec4,65536>	data;
-	uint					n=0;	// number of samples
-	uint					crc;	// crc32c to detect the change of samples
+	enum model_t {	SIMPLE, STRATIFIED, POISSON, HAMMERSLEY, HALTON };
+	enum surface_t{	SQUARE, CIRCLE, HEMISPHERE, SPHERE, CYLINDER };
+	using array_t = const std::array<vec4,max_samples>;
 	
-	inline bool			empty() const { return n==0; }
-	inline uint			size() const { return n; }
-	constexpr uint		max_size() const { return uint(data.max_size()); }
-	inline vec4&		operator[]( size_t i ){ return data[i]; }
-	inline const vec4&	operator[]( size_t i ) const { return data[i]; }
-	inline vec4*		ptr( size_t i=0u ){ return empty()?nullptr:&data[i]; }
-	inline const vec4*	ptr( size_t i=0u ) const { return empty()?nullptr:&data[i]; }
-	inline operator const vec4* () const { return empty()?nullptr:&data[0]; }
-	inline operator vec4* () { return empty()?nullptr:&data[0]; }
-	inline operator const float* () const { return empty()?nullptr:(float*)&data[0]; }
-	inline operator float* () { return empty()?nullptr:(float*)&data[0]; }
+	model_t			model;
+	surface_t		surface;
+	uint			seed;	// random seed
+	uint			crc;	// crc32c to detect the change of samples
+	
+	bool			empty() const { return n==0; }
+	uint			size() const { return n; }
+	const vec4*		begin() const { return &data[0]; }
+	const vec4*		end() const { return begin()+n; }
+	uint			capacity() const { return uint(data.max_size()); }
+	const vec4&		operator[]( size_t i ) const { return data[i]; }
+	const vec4&		at( size_t i ) const { return data[i]; }
+	void			resize( uint new_size, bool b_resample=true ){ const_cast<uint&>(n)=min(new_size,max_samples); if(b_resample) resample(); }
+	virtual uint	resample()=0; // return the number of generated samples; implemented in Sampler plugin
 
-	constexpr uint	max_samples() const { return uint(data.max_size()); }
-	inline float	sample_dist() const { float s=0.0f; const vec4* p=ptr(); for(uint k=0;k<n;k++){float m=FLT_MAX;for(uint j=0;j<n;j++) if(k!=j) m=min(m,(p[k].xyz-p[j].xyz).length2() );s+=sqrtf(m);} return s/float(max(1u,n)); } // mean distance of pairwise samples
-	inline void		normalize(){ if(empty())return;dvec3 m=dvec3(0,0,0);vec4* p=ptr();for(uint k=0;k<n;k++)m+=dvec3(p[k].x,p[k].y,p[k].z);m/=double(n);vec3 f=vec3(float(-m.x),float(-m.y),float(-m.z));for(uint k=0;k<n;k++)p[k].xyz+=f; } // make the center position of samples to the origin
+protected:
+
+	array_t			data;
+	const uint		n=1;
 };
+
+using sampler_t = tsampler_t<1<<16>; // up to 64K samples
 
 //***********************************************
-// light info for rendering
+// 16-byte aligned light for direct and virtual point lights
+#ifndef __cplusplus // definition for shaders
+struct light_t { vec4 position, color, normal; }; // normal should use xyz
+#else
 struct light_t
 {
-	enum model { NONE=0, BLINN_PHONG=1, PHONG=2, COOK_TORRANCE=3, };
+	vec4 position;	// directional light (position.a==0) ignores normal
+	vec4 color;		// shared for diffuse/specular
+	vec3 normal;	// direction (the negated vector of position for directional light)
+	uint depth:8;	// vpl bounces (depth>0: VPLs; otherwise, a real light)
+	int	 bind:24;	// ID of object bound to this light (negative means static lights)
 
-	vec4 position;
-	vec4 ambient;
-	vec4 diffuse;
-	vec4 specular; // specular.a = user-defined scale of beta (specular power) in Blinn-Phong shading
-	
-	// light transform
-	vec4 ecpos( const mat4& view_matrix ){ return position.a==0?vec4(mat3(view_matrix)*position.xyz,0.0f):view_matrix*position; }
+	// transformation to camera (eye-coordinate) space
+	vec4 ecpos( mat4& view_matrix ){ return position.a==0?vec4(mat3(view_matrix)*position.xyz,0.0f):view_matrix*position; }
+	vec3 ecnorm( mat4& view_matrix ){ return mat3(view_matrix)*normal; }
 };
+static_assert(sizeof(light_t)%16==0,"size of struct light_t should be aligned at 16-byte boundary" );
+#endif
 
 //***********************************************
 // ray
@@ -181,6 +193,7 @@ struct camera_t
 	camera_t& operator=( camera_t&& c ) = default;
 	camera_t& operator=( const camera_t& c ) = default;
 };
+static_assert(sizeof(camera_t)%16==0,"size of struct camera_t should be aligned at 16-byte boundary" );
 #endif
 
 struct camera : public camera_t
@@ -202,21 +215,28 @@ struct camera : public camera_t
 
 //***********************************************
 // material definition (std140 layout, aligned at 16-byte/vec4 boundaries)
+#ifndef __cplusplus
+struct material { vec4 color; float specular, beta, emissive, n; uvec2 TEX, NRM; };
+#else
 struct material
 {
-	vec4	ambient;		// ambient.a = ambient occlusion
-	vec4	diffuse;		// diffuse.a = alpha
-	vec4	specular;		// specular.a = power/beta in Blinn-Phong)
-	uvec2	TEX;			// GPU handle to TEX; TEX.a = alpha texture;
-	uvec2	NRM;			// GPU handle to NORM
-	uvec2	CUB;			// GPU handle to CUBE
-	uint	model;			// illumination model (light_t::model)
-	float	n;				// refractive_index
+	vec4		color;				// Blinn-Phong diffuse/specular color; color.a = opacity = 1-transmittance
+	float		specular=0.0f;		// specular intensity
+	float		beta=48.0f;			// specular power/shininess
+	float		emissive=0.0f;		// non-zero only for light sources (use color*emissive for its true color)
+	float		n=1.0f;				// refractive index
+	uint64_t	TEX=0;				// GPU handle to a diffuse texture; TEX.a = alpha values
+	uint64_t	NRM=0;				// GPU handle to a normal map
 };
+static_assert(sizeof(material)%16==0,"size of struct material should be aligned at 16-byte boundary" );
+inline float beta_to_roughness( float b ){ return float(sqrtf(2.0f/(b+2.0f))); }  // Beckmann roughness in [0,1] (0:mirror, 1: Lambertian)
+inline float roughness_to_beta( float r ){ return 2.0f/(r*r)-2.0f; }
+#endif
 
 struct material_impl : public material
 {
 	const uint	ID;
+	uint64_t	CUB=0;							// GPU handle to a cube/reflection map
 	char		name[_MAX_PATH]={0};
 	float		bump_scale=1.0f;
 	union
@@ -234,7 +254,8 @@ struct material_impl : public material
 		wchar_t alpha[_MAX_PATH];
 	} path = {0};
 
-	material_impl( uint id ):ID(id){ model=light_t::model::BLINN_PHONG; memset(&TEX,0,sizeof(uvec2)); memset(&NRM,0,sizeof(uvec2)); memset(&CUB,0,sizeof(uvec2)); }
+	material_impl( uint id ):ID(id){color=vec4(0.7f,0.7f,0.7f,1.0f);}
+	float roughness(){ return float(sqrtf(2.0f/(beta+2.0f))); }  // Beckmann roughness in [0,1] (0:mirror, 1: Lambertian)
 };
 
 //***********************************************
@@ -242,7 +263,7 @@ struct material_impl : public material
 struct acc_t
 {
 	enum { NONE, BVH, KDTREE } model = NONE;
-	mesh*		pMesh = nullptr;	// should be set to mesh
+	mesh*		p_mesh = nullptr;	// should be set to mesh
 	uint		geom = -1;			// should be set for geometry BVH, -1 for mesh BVH
 	virtual bool intersect( const ray& r, std::vector<uint>* hit_prim_list=nullptr )=0; // return primitive ids
 	virtual bool intersect( const ray& r, isect* pi )=0;
@@ -396,7 +417,7 @@ struct mesh
 	object* create_object( const object& o ){ objects.emplace_back(o); auto& o1=objects.back(); o1.root=this; o1.ID=uint(objects.size())-1; return &o1; }
 	object*	find_object( const char* name ){ for(uint k=0;k<objects.size();k++)if(_stricmp(objects[k].name,name)==0) return &objects[k];return nullptr;}
 	inline mesh* create_proxy( bool use_quads=false, bool double_sided=false ); // proxy mesh helpers: e.g., bounding box
-	std::vector<material> pack_materials() const { std::vector<material> p; auto& m=materials; if(p.size()!=m.size()) p.resize(m.size()); for(size_t k=0, kn=p.size(); k<kn; k++) p[k]=m[k]; return p; }
+	std::vector<material> pack_materials() const { std::vector<material> p; auto& m=materials; p.resize(m.size()); for(size_t k=0, kn=p.size(); k<kn; k++) p[k]=m[k]; return p; }
 
 	// update for matrix/bound
 	inline bool is_dynamic() const { for( size_t k=0, kn=objects.size()/instance_count; k<kn; k++ ) if(objects[k].attrib.dynamic) return true; return false; }
@@ -452,7 +473,7 @@ __noinline inline mesh& mesh::operator=( mesh&& other ) // move assignment opera
 	materials = std::move(other.materials);
 	size_t offset = sizeof(decltype(vertices))+sizeof(decltype(indices))+sizeof(decltype(geometries))+sizeof(decltype(objects))+sizeof(decltype(materials));
 	memcpy( ((char*)this)+offset, ((char*)&other)+offset, sizeof(mesh)-offset );
-	if(acc) acc->pMesh=this; for(auto& o:objects ) o.root=this; for(auto& g:geometries ){ g.root=this; if(g.acc) g.acc->pMesh=this; }
+	if(acc) acc->p_mesh=this; for(auto& o:objects ) o.root=this; for(auto& g:geometries ){ g.root=this; if(g.acc) g.acc->p_mesh=this; }
 	return *this;
 }
 

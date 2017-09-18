@@ -23,19 +23,8 @@
 #include "gxfilesystem.h"
 #include <malloc.h>
 
-#if !defined(__gxcorearb_h_) && defined(has_include) && has_include( "gxcorearb.h" )
+#if !defined(__gxcorearb_h_) && __has_include( "gxcorearb.h" )
 	#include "gxcorearb.h"
-#endif
-
-#if defined(__clang__) // clang-specific preprocessor
-#pragma clang diagnostic ignored "-Wunused-variable"			// supress warning for unused b0
-#endif
-
-#ifndef SAFE_DELETE
-#define SAFE_DELETE(p) {if(p){delete p;p=nullptr;}}
-#endif
-#ifndef SAFE_FREE
-#define SAFE_FREE(p) {if(p){free(p);p=nullptr;}}
 #endif
 
 //***********************************************
@@ -105,11 +94,7 @@ inline GLint	gxGetTextureChannels( GLint internalFormat ){ switch(gxGetTextureFo
 inline size_t	gxGetTextureBPP( GLint internalFormat ){ size_t s=0; switch(gxGetTextureType(internalFormat)){ case GL_HALF_FLOAT: case GL_SHORT: case GL_UNSIGNED_SHORT: s=sizeof(short); break; case GL_BYTE: case GL_UNSIGNED_BYTE: s=sizeof(char); break; case GL_FLOAT: case GL_INT: case GL_UNSIGNED_INT: s=sizeof(int); break; }; return s*gxGetTextureChannels(internalFormat); }
 inline GLenum	gxGetImageTextureInternalFormat( int depth, int channels ){ if(depth==8) return channels==1?GL_R8:channels==2?GL_RG8:channels==3?GL_RGB8:channels==4?GL_RGBA8:0; else if(depth==16)	return channels==1?GL_R16F:channels==2?GL_RG16F:channels==3?GL_RGB16F:channels==4?GL_RGBA16F:0; else if(depth==32)	return channels==1?GL_R32F:channels==2?GL_RG32F:channels==3?GL_RGB32F:channels==4?GL_RGBA32F:0; return 0; }
 inline bool		gxIsSamplerType( GLenum uniformType ){ GLenum t=uniformType; if(t>=GL_SAMPLER_1D && t<=GL_SAMPLER_2D_SHADOW) return true; if(t>=GL_SAMPLER_1D_ARRAY && t<=GL_SAMPLER_CUBE_SHADOW) return true; if(t>=GL_INT_SAMPLER_1D && t<=GL_UNSIGNED_INT_SAMPLER_2D_ARRAY) return true; if(t>=GL_SAMPLER_2D_RECT && t<=GL_SAMPLER_2D_RECT_SHADOW ) return true; if(t>=GL_SAMPLER_BUFFER && t<=GL_UNSIGNED_INT_SAMPLER_BUFFER ) return true; if(t>=GL_SAMPLER_CUBE_MAP_ARRAY && t<=GL_UNSIGNED_INT_SAMPLER_CUBE_MAP_ARRAY ) return true; if(t>=GL_SAMPLER_2D_MULTISAMPLE && t<=GL_UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE_ARRAY ) return true; /* TODO: if(t>=GL_SAMPLER_RENDERBUFFER_NV && t<=GL_UNSIGNED_INT_SAMPLER_RENDERBUFFER_NV ) return true;*/ return false; }
-#if defined _M_IX86
-inline path		gxGetProgramBinaryPath( const char* name ){ path p=path::temp()+L"glProgramBinary\\x86\\"+atow(name)+L".bin"; if(!p.dir().exists()) p.dir().mkdir(); return p; }
-#elif defined _M_X64
-inline path		gxGetProgramBinaryPath( const char* name ){ path p=path::temp()+L"glProgramBinary\\x64\\"+atow(name)+L".bin"; if(!p.dir().exists()) p.dir().mkdir(); return p; }
-#endif
+inline path		gxGetProgramBinaryPath( const char* name ){ path p=path::temp()+L"glProgramBinary\\"+atow(name)+L".bin"; if(!p.dir().exists()) p.dir().mkdir(); return p; }
 inline int		gxGetMipLevels( int width, int height=1, int depth=1 ){ int l=0,s=uint(max(max(width,height),depth)); while(s){s=s>>1;l++;} return l; }
 inline uint		gxGetMipLevels( uint width, uint height=1, uint depth=1 ){ uint l=0,s=uint(max(max(width,height),depth)); while(s){s=s>>1;l++;} return l; }
 inline GLuint	gxCreateQuery( GLenum target ){ GLuint idx; if(glCreateQueries) glCreateQueries(target,1,&idx); else glGenQueries(1,&idx); return idx; }
@@ -382,7 +367,7 @@ namespace gl {
 	struct VertexArray : public GLObject
 	{
 		VertexArray( GLuint ID, const char* name ):GLObject(ID,name,GL_VERTEX_ARRAY),vertexBuffer(nullptr),indexBuffer(nullptr),numVertex(0),numIndex(0){};
-		virtual void release(){ SAFE_DELETE(vertexBuffer); SAFE_DELETE(indexBuffer); GLuint id=ID; if(id) glDeleteVertexArrays( 1, &id ); }
+		virtual void release(){ if(vertexBuffer){ delete vertexBuffer; vertexBuffer=nullptr; } if(indexBuffer){ delete indexBuffer; indexBuffer=nullptr; } GLuint id=ID; if(id) glDeleteVertexArrays( 1, &id ); }
 		GLuint bind( bool bBind=true ){ GLuint b0=binding(); if(!bBind||b0!=ID) glBindVertexArray( bBind?ID:0 ); return b0; }
 
 		inline void drawArrays( GLint first, GLsizei count, GLenum mode=GL_TRIANGLES ){ GLuint b0=bind(); glDrawArrays( mode, first, count ); }
@@ -530,7 +515,7 @@ namespace gl {
 	struct Effect : public GLObject
 	{
 		Effect( GLuint ID, const char* name ) : GLObject(ID,name,0), activeProgram(nullptr), pQuad(nullptr){ if(!(pQuad=gxCreateQuadVertexArray())) printf("[%s] unable to create quad buffer\n",name); }
-		virtual void release(){ activeProgram=nullptr; SAFE_DELETE(pQuad); for(auto& it:uniformBufferMap){if(it.second){SAFE_DELETE(it.second);}} uniformBufferMap.clear(); for(uint k=0;k<programList.size();k++)programList[k]->release(); programList.clear(); }
+		virtual void release(){ activeProgram=nullptr; if(pQuad){ delete pQuad; pQuad=nullptr; } for(auto& it:uniformBufferMap){if(it.second){ delete it.second; it.second=nullptr; }} uniformBufferMap.clear(); for(uint k=0;k<programList.size();k++)programList[k]->release(); programList.clear(); }
 		static void unbind(){ glUseProgram(0); }
 
 		Program* bind( const char* programName ){ activeProgram=getProgram(programName); if(activeProgram) activeProgram->bind(); else{ activeProgram=nullptr; glUseProgram(0); } return activeProgram; }
@@ -1009,7 +994,7 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 	if(tfVaryings&&!tfVaryings->empty()) glTransformFeedbackVaryings( program->ID, (GLsizei)tfVaryings->size(), &(*tfVaryings)[0], GL_INTERLEAVED_ATTRIBS );
 
 	// 8. first linking of program
-	glLinkProgram( program->ID ); if(!gxCheckProgramLink( pname, program->ID )){ SAFE_DELETE(program); return nullptr; }
+	glLinkProgram( program->ID ); if(!gxCheckProgramLink( pname, program->ID )){ if(program){ delete program; program=nullptr; } return nullptr; }
 
 	// 9. query the active attributes
 	char aname[256] = {0};
@@ -1031,7 +1016,7 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 		}
 
 		// link agin to reflect the changes in binding locations
-		glLinkProgram( program->ID ); if(!gxCheckProgramLink( pname, program->ID )){ SAFE_DELETE(program); return nullptr; }
+		glLinkProgram( program->ID ); if(!gxCheckProgramLink( pname, program->ID )){ if(program){ delete program; program=nullptr; } return nullptr; }
 	}
 
 	// 10. update uniform
@@ -1070,13 +1055,7 @@ inline gl::Effect* gxCreateEffect( const char* name )
 
 //***********************************************
 #ifdef GLFX_PARSER_IMPL
-
-#if defined _M_IX86
-	#pragma comment( lib, "glfx.x86.lib" )
-#elif defined _M_X64
-	#pragma comment( lib, "glfx.lib" )
-#endif
-
+#pragma comment( lib, "glfx.lib" )
 struct glfxParserImpl : public glfx::IParser
 {
 	std::string								log;

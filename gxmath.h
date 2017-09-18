@@ -19,15 +19,18 @@
 #define __GX_MATH__
 //###################################################################
 // COMMON HEADERS for GXUT
+// COMMON HEADERS for GXUT
 #ifndef __GXUT_COMMON__ 
 #define __GXUT_COMMON__
-
-#pragma warning( disable: 4996 ) // suppress MS security warning for pre-included headers; this is standard only for C11-compatible compilers
+// common macros
 #ifndef _CRT_SECURE_NO_WARNINGS
 	#define _CRT_SECURE_NO_WARNINGS
 #endif
 #ifndef _HAS_EXCEPTIONS
 	#define _HAS_EXCEPTIONS 0
+#endif
+#if (__cplusplus<201703L&&_MSC_VER<1911/*VS2017*/)&&!defined(__has_include)
+	#define __has_include(a) 0
 #endif
 // C standard
 #include <inttypes.h>	// defines int64_t, uint64_t
@@ -43,7 +46,6 @@
 #include <vector>
 // C++11
 #if (__cplusplus>199711L) || (_MSC_VER>=1600/*VS2010*/)
-	#include <chrono>
 	#include <type_traits>
 	#include <unordered_map>
 	#include <unordered_set>
@@ -52,19 +54,16 @@
 	#include <windows.h>
 #endif
 // platform-specific
-#ifndef GX_PLATFORM
-	#if defined _M_IX86
-		#define GX_PLATFORM "x86"
-	#elif defined _M_X64
-		#define GX_PLATFORM "x64"
-	#endif
+#if defined _M_IX86
+	#define GX_PLATFORM "x86"
+#elif defined _M_X64
+	#define GX_PLATFORM "x64"
 #endif
 #ifdef _MSC_VER	// Visual Studio
 	#pragma optimize( "gsy", on )
 	#pragma check_stack( off )
-	#pragma runtime_checks( "", off )
 	#pragma strict_gs_check( off )
-	#pragma float_control(except, off)
+	#pragma float_control(except,off)
 	#ifndef __noinline
 		#define __noinline __declspec(noinline)
 	#endif
@@ -79,24 +78,14 @@
 	#elif defined(__clang__)
 		#pragma clang diagnostic ignored "-Wmissing-braces"				// ignore excessive warning for initialzer
 		#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"	// ignore non-virtual destructor
+		#pragma clang diagnostic ignored "-Wunused-variable"			// supress warning for unused b0
 		#define __noinline
 	#endif
 #endif
-// common macros
-#if (__cplusplus>=201703L||_MSC_VER>=1911/*VS2017*/)
-	#define has_include(file) __has_include(file)
-#else
-	#define has_include(file) 0
-#endif
-#ifndef SAFE_RELEASE
-	#define SAFE_RELEASE(a) {if(a){a->Release();a=nullptr;}}
-#endif
-#ifndef SAFE_DELETE
-	#define SAFE_DELETE(p) {if(p){delete p;p=nullptr;}}
-#endif
-#ifndef SAFE_FREE
-	#define SAFE_FREE(p) {if(p){free(p);p=nullptr;}}
-#endif
+// utility functions
+template <class T> void safe_delete( T*& p ){if(p){delete p;p=nullptr;}}
+// nocase base template
+namespace nocase { template <class T> struct less {}; template <class T> struct equal_to {}; };
 // user types
 template <class T, int D> struct tarray { static const int N=D; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline T& operator[]( int i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( int i ) const { return ((T*)this)[i]; } __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } __forceinline bool operator==( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))==0; } __forceinline bool operator!=( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))!=0; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+D; } constexpr size_t size() const { return D; } };
 #define default_ctors(c) __forceinline c()=default;__forceinline c(c&&)=default;__forceinline c(const c&)=default;__forceinline c(std::initializer_list<T> l){T* p=&x;for(auto i:l)(*p++)=i;}
@@ -124,9 +113,6 @@ using double9	= tarray9<double>;	using double16	= tarray16<double>;
 
 #include <limits.h>
 #include <math.h>
-
-#pragma warning( push )
-#pragma warning( disable: 4244 )	// diable double to float conversion
 
 #ifdef PI
 	#undef PI
@@ -361,9 +347,9 @@ struct alignas(32) vertex { vec3 pos; vec3 norm; vec2 tex; };
 // std::hash support here
 
 #ifdef _M_X64
-template <class T> struct bitwise_hash { size_t operator()(const T v) const { size_t h = 14695981039346656037ULL; const uchar* p = (const uchar*)&v; for (size_t k = 0; k < sizeof(T); k++) { h ^= size_t(p[k]); h *= 1099511628211ULL; } return h; }}; // FNV-1a hash function (from VC2015/2017)
+template <class T> struct bitwise_hash {size_t operator()(const T v)const{ size_t h=14695981039346656037ULL;const uchar* p=(const uchar*)&v;for(size_t k=0;k<sizeof(T);k++){h^=size_t(p[k]);h*=1099511628211ULL;}return h;}}; // FNV-1a hash function (from VC2015/2017)
 #elif defined(_M_IX86)
-template <class T> struct bitwise_hash { size_t operator()(const T v) const { size_t h = 2166136261U; const uchar* p = (const uchar*)&v; for (size_t k = 0; k < sizeof(T); k++) { h ^= size_t(p[k]); h *= 16777619U; } return h; }}; // FNV-1a hash function (from VC2015/2017)
+template <class T> struct bitwise_hash {size_t operator()(const T v)const{ size_t h=2166136261U;const uchar* p=(const uchar*)&v;for(size_t k=0;k<sizeof(T);k++){h^=size_t(p[k]);h*=16777619U;}return h;}}; // FNV-1a hash function (from VC2015/2017)
 #endif
 
 namespace std
@@ -374,12 +360,12 @@ namespace std
 	template<> struct hash<uint2> :	public bitwise_hash<uint2> {};
 	template<> struct hash<uint3> :	public bitwise_hash<uint3> {};
 	template<> struct hash<uint4> :	public bitwise_hash<uint4> {};
-	template<> struct hash<ivec2> :	public bitwise_hash<ivec2> {};
-	template<> struct hash<ivec3> :	public bitwise_hash<ivec3> {};
-	template<> struct hash<ivec4> :	public bitwise_hash<ivec4> {};
-	template<> struct hash<uvec2> :	public bitwise_hash<uvec2> {};
-	template<> struct hash<uvec3> :	public bitwise_hash<uvec3> {};
-	template<> struct hash<uvec4> :	public bitwise_hash<uvec4> {};
+	template<> struct hash<ivec2> :	public bitwise_hash<int2> {};
+	template<> struct hash<ivec3> :	public bitwise_hash<int3> {};
+	template<> struct hash<ivec4> :	public bitwise_hash<int4> {};
+	template<> struct hash<uvec2> :	public bitwise_hash<uint2> {};
+	template<> struct hash<uvec3> :	public bitwise_hash<uint3> {};
+	template<> struct hash<uvec4> :	public bitwise_hash<uint4> {};
 }
 
 //***********************************************
@@ -730,14 +716,15 @@ template <class T> __forceinline enable_float_t<T> dot( const tvec4<T>& v1, cons
 template <class T> __forceinline tvec3<enable_float_t<T>> cross( const tvec3<T>& v1, const tvec3<T>& v2){ return v1.cross(v2); }
 
 //***********************************************
-// general math functions
+// general math utility functions
 template <class T> __forceinline enable_float_t<T> radians( T f ){ return f*PI<T>/T(180.0); }
 template <class T> __forceinline enable_float_t<T> degrees( T f ){ return f*T(180.0)/PI<T>; }
 __forceinline bool ispot( uint i ){ return (i&(i-1))==0; }		// http://en.wikipedia.org/wiki/Power_of_two
 __forceinline uint nextpot( uint n ){ int m=int(n)-1; for( uint k=1; k<uint(sizeof(int))*8; k<<=1 ) m=m|m>>k; return m+1; }	// next power-of-two
 __forceinline uint miplevels( uint width, uint height=1 ){ uint l=0; uint s=width>height?width:height; while(s){s=s>>1;l++;} return l; }
-__forceinline float invsqrt( float x ){ float y=0.5f*x; int i=*(int*)&x; i=0x5f3759df-(i>>1); x=*(float*)&i; x=x*(1.5f-y*x*x); return x; }	// Quake3's Fast InvSqrt(): 1/sqrt(x)
-__forceinline float rsqrt( float x ){ float y=0.5f*x; int i=*(int*)&x; i=0x5f3759df-(i>>1); x=*(float*)&i; x=x*(1.5f-y*x*x); return x; }	// Quake3's Fast InvSqrt(): 1/sqrt(x)
+__forceinline float rsqrt( float x ){ float y=0.5f*x; int i=*(int*)&x; i=0x5F375A86-(i>>1); x=*(float*)&i; x=x*(1.5f-y*x*x); x=x*(1.5f-y*x*x); return x; }						// Quake3's Fast InvSqrt(): 1/sqrt(x): magic number changed from 0x5f3759df to 0x5F375A86 for more accuracy; 2 iteration has quite good accuracy
+__forceinline double rsqrt( double x ){ double y=0.5*x; int64_t i=*(int64_t*)&x; i=0x5FE6EB50C7B537A9-(i>>1); x=*(double*)&i; x=x*(1.5-y*x*x); x=x*(1.5-y*x*x); return x; }		// Quake3's Fast InvSqrt(): 1/sqrt(x): 64-bit magic number (0x5FE6EB50C7B537A9) used; 2 iteration has quite good accuracy
+__forceinline uint bitswap( uint n ){ n=((n&0x55555555)<<1)|((n&0xaaaaaaaa)>>1); n=((n&0x33333333)<<2)|((n&0xcccccccc)>>2); n=((n&0x0f0f0f0f)<<4)|((n&0xf0f0f0f0)>>4); n=((n&0x00ff00ff)<<8)|((n&0xff00ff00)>>8); return (n<<16)|(n>>16); }
 
 //***********************************************
 // {GLSL|HLSL}-like shader intrinsic functions
@@ -807,11 +794,12 @@ __forceinline float uintBitsToFloat( uint u ){ return reinterpret_cast<float&>(u
 
 //***********************************************
 // spline interpolations
+#pragma warning( disable: 4244 )
 template <class T> T hermite( T v0, T v1, T v2, T v3, double t, double tension=0.5, double bias=0.0, double continuity=-0.5 )
 {
 	// REF: http://en.wikipedia.org/wiki/Kochanek%E2%80%93Bartels_spline
 	// parameters[-1,1]: tension (round--tight), bias (postshoot--preshoot), continuity (box--inverted corners)
-	double t2=t*t, t3=t*t*t, a[4] = { 2*t3-3*t2+1,t3-2*t2+t,t3-t2,-2*t3+3*t2 };
+	double t2=t*t, t3=t*t*t, a[4]={ 2*t3-3*t2+1,t3-2*t2+t,t3-t2,-2*t3+3*t2 };
 	T m0 = (v1-v0)*(1+bias)*(1-tension)*(1+continuity)*0.5 + (v2-v1)*(1-bias)*(1-tension)*(1-continuity)*0.5;
 	T m1 = (v2-v1)*(1+bias)*(1-tension)*(1-continuity)*0.5 + (v3-v2)*(1-bias)*(1-tension)*(1+continuity)*0.5;
 	return v1*a[0]+m0*a[1]+m1*a[2]+v2*a[3];
@@ -827,9 +815,10 @@ template <class T> T catmull_rom( T v0, T v1, T v2, T v3, double t )
 template <class T> T bezier( T v0, T v1, T v2, T v3, double t )
 {
 	// REF: http://en.wikipedia.org/wiki/Bezier_curve
-	double t2=(1.0-t), a[4] = { t2*t2*t2, 3*t2*t2*t, 3*t2*t*t, t*t*t };
-	return (v0*a[0]+v1*a[1]+v2*a[2]+v3*a[3]);
+	double t2=1.0-t, a[4] = { t2*t2*t2, 3*t2*t2*t, 3*t2*t*t, t*t*t };
+	return v0*a[0]+v1*a[1]+v2*a[2]+v3*a[3];
 }
+#pragma warning( default: 4244 )
 
 //***********************************************
 // pseudo random number generator
@@ -840,9 +829,6 @@ __forceinline float prand(){ return urand()/float(RAND_MAX); }
 __forceinline vec2 prand2(){ return vec2(prand(),prand()); }
 __forceinline vec3 prand3(){ return vec3(prand(),prand(),prand()); }
 __forceinline vec4 prand4(){ return vec4(prand(),prand(),prand(),prand()); }
-
-//***********************************************
-#pragma warning( pop )		// restore the waring : 4244
 
 //***********************************************
 #endif // __GX_MATH__

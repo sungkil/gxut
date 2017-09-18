@@ -17,123 +17,15 @@
 #pragma once
 #ifndef __GX_MEMORY_H__
 #define __GX_MEMORY_H__
-//###################################################################
-// COMMON HEADERS for GXUT
-#ifndef __GXUT_COMMON__ 
-#define __GXUT_COMMON__
 
-#pragma warning( disable: 4996 ) // suppress MS security warning for pre-included headers; this is standard only for C11-compatible compilers
-#ifndef _CRT_SECURE_NO_WARNINGS
-	#define _CRT_SECURE_NO_WARNINGS
-#endif
-#ifndef _HAS_EXCEPTIONS
-	#define _HAS_EXCEPTIONS 0
-#endif
-// C standard
-#include <inttypes.h>	// defines int64_t, uint64_t
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-// STL
-#include <algorithm>
-#include <array>
-#include <map>
-#include <set>
-#include <string>
-#include <vector>
-// C++11
-#if (__cplusplus>199711L) || (_MSC_VER>=1600/*VS2010*/)
-	#include <chrono>
-	#include <type_traits>
-	#include <unordered_map>
-	#include <unordered_set>
-#endif
-#if defined(_WIN32)||defined(_WIN64) // Windows
-	#include <windows.h>
-#endif
-// platform-specific
-#ifndef GX_PLATFORM
-	#if defined _M_IX86
-		#define GX_PLATFORM "x86"
-	#elif defined _M_X64
-		#define GX_PLATFORM "x64"
-	#endif
-#endif
-#ifdef _MSC_VER	// Visual Studio
-	#pragma optimize( "gsy", on )
-	#pragma check_stack( off )
-	#pragma runtime_checks( "", off )
-	#pragma strict_gs_check( off )
-	#pragma float_control(except, off)
-	#ifndef __noinline
-		#define __noinline __declspec(noinline)
-	#endif
-#else			// GCC or Clang
-	#ifdef __GNUC__
-		#ifndef __forceinline
-			#define __forceinline inline __attribute__((__always_inline__))
-		#endif
-		#ifndef __noinline
-			#define __noinline __attribute__((noinline))
-		#endif
-	#elif defined(__clang__)
-		#pragma clang diagnostic ignored "-Wmissing-braces"				// ignore excessive warning for initialzer
-		#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"	// ignore non-virtual destructor
-		#define __noinline
-	#endif
-#endif
-// common macros
-#if (__cplusplus>=201703L||_MSC_VER>=1911/*VS2017*/)
-	#define has_include(file) __has_include(file)
-#else
-	#define has_include(file) 0
-#endif
-#ifndef SAFE_RELEASE
-	#define SAFE_RELEASE(a) {if(a){a->Release();a=nullptr;}}
-#endif
-#ifndef SAFE_DELETE
-	#define SAFE_DELETE(p) {if(p){delete p;p=nullptr;}}
-#endif
-#ifndef SAFE_FREE
-	#define SAFE_FREE(p) {if(p){free(p);p=nullptr;}}
-#endif
-// user types
-template <class T, int D> struct tarray { static const int N=D; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline T& operator[]( int i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( int i ) const { return ((T*)this)[i]; } __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } __forceinline bool operator==( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))==0; } __forceinline bool operator!=( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))!=0; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+D; } constexpr size_t size() const { return D; } };
-#define default_ctors(c) __forceinline c()=default;__forceinline c(c&&)=default;__forceinline c(const c&)=default;__forceinline c(std::initializer_list<T> l){T* p=&x;for(auto i:l)(*p++)=i;}
-#define default_assns(c) __forceinline c& operator=(c&&)=default;__forceinline c& operator=(const c&)=default; __forceinline c& operator=(T a){ for(auto& it:*this) it=a; return *this; }
-template <class T> struct tarray2	: public tarray<T,2> {	union{struct{T x,y;};struct{T r,g;};}; default_ctors(tarray2); default_assns(tarray2); };
-template <class T> struct tarray3	: public tarray<T,3> {	using V2=tarray2<T>; union{struct{T x,y,z;};struct{T r,g,b;};union{V2 xy,rg;};struct{T _x;union{V2 yz,gb;};};}; default_ctors(tarray3); default_assns(tarray3); };
-template <class T> struct tarray4	: public tarray<T,4> {	using V2=tarray2<T>; using V3=tarray3<T>; union{struct{T x,y,z,w;};struct{T r,g,b,a;};struct{union{V2 xy,rg;};union{V2 zw,ba;};};union{V3 xyz,rgb;};struct{T _x;union{V3 yzw,gba;V2 yz,gb;};};}; default_ctors(tarray4); default_assns(tarray4); };
-template <class T> struct tarray9	: public tarray<T,9> {	union{T a[9];struct{T _11,_12,_13,_21,_22,_23,_31,_32,_33;};}; };
-template <class T> struct tarray16	: public tarray<T,16> {	union{T a[16];struct{T _11,_12,_13,_14,_21,_22,_23,_24,_31,_32,_33,_34,_41,_42,_43,_44;}; }; };
-
-using uint		= unsigned int;		using uchar		= unsigned char;	using ushort	= unsigned short;
-using float2	= tarray2<float>;	using float3	= tarray3<float>;	using float4	= tarray4<float>;
-using double2	= tarray2<double>;	using double3	= tarray3<double>;	using double4	= tarray4<double>;
-using int2		= tarray2<int>;		using int3		= tarray3<int>;		using int4		= tarray4<int>;
-using uint2		= tarray2<uint>;	using uint3		= tarray3<uint>;	using uint4		= tarray4<uint>;
-using short2	= tarray2<short>;	using short3	= tarray3<short>;	using short4	= tarray4<short>;
-using ushort2	= tarray2<ushort>;	using ushort3	= tarray3<ushort>;	using ushort4	= tarray4<ushort>;
-using char2		= tarray2<char>;	using char3		= tarray3<char>;	using char4		= tarray4<char>;
-using uchar2	= tarray2<uchar>;	using uchar3	= tarray3<uchar>;	using uchar4	= tarray4<uchar>;
-using bool2		= tarray2<bool>;	using bool3		= tarray3<bool>;	using bool4		= tarray4<bool>;
-using float9	= tarray9<float>;	using float16	= tarray16<float>;
-using double9	= tarray9<double>;	using double16	= tarray16<double>;
-#endif // __GXUT_COMMON__
-//###################################################################
-
-#if has_include( "gxfilesystem.h" )
+#if defined(__has_include)&&__has_include( "gxfilesystem.h" )
 	#include "gxfilesystem.h"
 #endif
-#if has_include(<intrin.h>)
+#if defined(__has_include)&&__has_include(<intrin.h>)&&__has_include(<nmmintrin.h>)
 	#include <intrin.h>
-#endif
-#if has_include(<nmmintrin.h>)
 	#include <nmmintrin.h>
 #endif
 
-#ifndef __GX_MEM_T__
-#define __GX_MEM_T__
 struct mem_t
 {
 	void*		ptr = nullptr;
@@ -152,7 +44,6 @@ struct mem_t
 	__forceinline operator bool() const { return ptr!=nullptr&&size>0; }
 	template <class T> __forceinline operator T* (){ return (T*) ptr; }
 };
-#endif
 
 template <class T> class mmap // memory-mapped file (similarly to virtual memory)
 {
@@ -210,7 +101,7 @@ struct zip_t : public izip_t
 	zip_t( const path& file_path ){ hzip=OpenZip( file_path.absolute(), nullptr ); }
 	zip_t( void* ptr, size_t size ){ hzip=OpenZip( ptr, uint(size), nullptr ); }
 	
-	virtual void release(){ for( auto& e : entries ) SAFE_FREE(e.ptr); entries.clear(); if(hzip){ CloseZipU(hzip); hzip=nullptr; } }
+	virtual void release(){ for( auto& e : entries ){ if(e.ptr){ free(e.ptr); e.ptr=nullptr; }} entries.clear(); if(hzip){ CloseZipU(hzip); hzip=nullptr; } }
 	virtual bool load(){ if(!hzip) return false; entry e; GetZipItem(hzip,-1,&e ); for(int k=0, kn=e.index;k<kn;k++){ GetZipItem( hzip, k, (ZIPENTRY*) &e); e.ptr=nullptr; e.size=0; if(!e.is_dir()) entries.emplace_back(e); } return true; }
 	virtual bool extract_to_files( path dir, const wchar_t* name=nullptr ){ bool b=false; if(!hzip) return b; for(size_t k=0;k<entries.size();k++){ auto& e=entries[k]; if(e.is_dir()||(name&&_wcsicmp(name,e.name)!=0)) continue; path p=dir+e.name; if(!p.dir().exists()) p.dir().mkdir(); UnzipItem( hzip, e.index, p ); b=true; } return b; }
 	virtual bool extract_to_memory( const wchar_t* name=nullptr )
@@ -231,24 +122,25 @@ struct zip_t : public izip_t
 #if defined(__7Z_H) && defined(__7Z_MEMINSTREAM_H)
 struct szip_t : public izip_t
 {
-	CSzArEx*		db = nullptr;
-	CFileInStream*	archive_stream = nullptr;
+	CSzArEx			db;
+	CFileInStream*	file_stream = nullptr;
 	CMemInStream*	mem_stream = nullptr;
-	CLookToRead*	look_stream = nullptr;
-	ISzAlloc		alloc_impl, alloc_temp;
+	CLookToRead2*	look_stream = nullptr;
+	ISzAlloc		alloc_impl = {SzAlloc,SzFree};
+	ISzAlloc		alloc_temp = {SzAllocTemp,SzFreeTemp};
 
 	virtual ~szip_t(){ release(); }
-	szip_t( const path& _file_path ):alloc_impl({SzAlloc,SzFree}),alloc_temp({SzAllocTemp,SzFreeTemp}){ crc_generate_table(); file_path=_file_path; archive_stream = new CFileInStream(); if( InFile_OpenW( &archive_stream->file, file_path.absolute() )!= 0 ){ wprintf( L"unable to InFile_OpenW(%s)\n", file_path.c_str() ); return; } FileInStream_CreateVTable( archive_stream ); LookToRead_CreateVTable( look_stream = new CLookToRead(), 0 ); look_stream->realStream = &archive_stream->s; LookToRead_Init(look_stream); }
-	szip_t( void* ptr, size_t size ):alloc_impl({SzAlloc,SzFree}),alloc_temp({SzAllocTemp,SzFreeTemp}){ if(!ptr||!size) return; crc_generate_table(); MemInStream_Init(mem_stream = new CMemInStream(),ptr,size); }
+	szip_t( const path& _file_path ){file_path=_file_path;file_stream=new CFileInStream();if(InFile_OpenW(&file_stream->file,file_path.absolute())!=0){printf("unable to InFile_OpenW(%s)\n",wtoa(file_path.c_str()));return;} FileInStream_CreateVTable(file_stream);LookToRead2_CreateVTable(look_stream=new CLookToRead2(),0);look_stream->buf=(Byte*)alloc_impl.Alloc(&alloc_impl,1<<18);look_stream->bufSize=1<<18;look_stream->pos=look_stream->size=0;look_stream->realStream=&file_stream->vt;crc_generate_table();}
+	szip_t( void* ptr, size_t size ){ if(!ptr||!size) return; crc_generate_table(); MemInStream_Init(mem_stream = new CMemInStream(),ptr,size); }
 
-	virtual void release(){ for( auto& e : entries ) SAFE_FREE(e.ptr); entries.clear(); if(db) SzArEx_Free( db, &alloc_impl ); SAFE_DELETE(look_stream); if(archive_stream){ File_Close( &archive_stream->file );SAFE_DELETE(archive_stream); } SAFE_DELETE(mem_stream); }
-	virtual bool load(){ if(!look_in_stream()) return false; SzArEx_Init( db = new CSzArEx() ); if( SzArEx_Open( db, look_in_stream(), &alloc_impl, &alloc_temp ) != SZ_OK ){ wprintf( L"unable to SzArEx_Open(%s)\n", file_path.c_str() ); release(); return false; } for( uint k=0, kn=db->db.NumFiles; k<kn; k++ ){ const CSzFileItem* f = db->db.Files+k; if(f->IsDir) continue; entry e; memset(&e,0,sizeof(e)); e.index=k; if(f->AttribDefined)e.attr=f->Attrib; if(f->MTimeDefined) memcpy(&e.mtime,&f->MTime,sizeof(FILETIME)); SzArEx_GetFileNameUtf16(db,k,(ushort*)e.name); entries.emplace_back(e); } return true; }
-	virtual bool extract_to_files( path dir, const wchar_t* name=nullptr ){ uchar* ob=nullptr; uint bl=-1; for( size_t k=0, kn=entries.size(),of=0,obs=0,os=0; k<kn; k++ ){ auto& e=entries[k]; if(e.is_dir()||(name&&_wcsicmp(name,e.name)!=0)) continue; path p=dir+e.name; if(!p.dir().exists()) p.dir().mkdir(); if( SZ_OK!=SzArEx_Extract(db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){wprintf(L"unable to SzArEx_Extract(%s)\n",e.name);return false;} FILE* fp=_wfopen(p,L"wb"); if(!fp){wprintf( L"unable to fopen(%s)\n",p.c_str()); return false; } fwrite(ob+of,os,1,fp );fclose(fp); if(e.attr) SetFileAttributesW(p,e.attr); p.set_filetime(nullptr,nullptr,&e.mtime); } if(ob) alloc_impl.Free(&alloc_impl,ob); return true; }
-	virtual bool extract_to_memory( const wchar_t* name=nullptr ){ if(!db||!look_in_stream()) return false; uchar* ob=nullptr; uint bl=-1; for(size_t k=0,kn=entries.size(),of=0,obs=0,os=0;k<kn;k++){ auto& e=entries[k]; if(e.is_dir()||e.ptr||(name&&_wcsicmp(name,e.name)!=0)) continue; if( SZ_OK!=SzArEx_Extract(db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){wprintf(L"unable to SzArEx_Extract(%s)\n",e.name);return false;} memcpy(e.ptr=malloc(os),ob+of,e.size=os); } if(ob) alloc_impl.Free(&alloc_impl,ob); return true; }
+	virtual void release(){for(auto& e:entries){if(e.ptr){free(e.ptr);e.ptr=nullptr;}}entries.clear();SzArEx_Free(&db,&alloc_impl);if(look_stream){delete look_stream;look_stream=nullptr;} if(file_stream){File_Close(&file_stream->file);delete file_stream;file_stream=nullptr;} if(mem_stream){delete mem_stream;mem_stream=nullptr;} }
+	virtual bool load(){if(!look_in_stream()) return false; SzArEx_Init(&db);if(SzArEx_Open(&db,look_in_stream(),&alloc_impl,&alloc_temp)!=SZ_OK){printf("unable to SzArEx_Open(%s)\n",wtoa(file_path.c_str()));release();return false;}for( uint k=0, kn=db.NumFiles; k<kn; k++ ){if(SzArEx_IsDir(&db,k)) continue;entry e;memset(&e,0,sizeof(e));e.index=k;e.attr=SzBitWithVals_Check(&db.Attribs,k)?db.Attribs.Vals[k]:0;if(SzBitWithVals_Check(&db.MTime,k)) memcpy(&e.mtime,db.MTime.Vals+k,sizeof(FILETIME));SzArEx_GetFileNameUtf16(&db,k,(ushort*)e.name);entries.emplace_back(e);}return true;}
+	virtual bool extract_to_files( path dir, const wchar_t* name=nullptr ){uchar* ob=nullptr;uint bl=-1;for(size_t k=0,kn=entries.size(),of=0,obs=0,os=0;k<kn;k++){auto& e=entries[k];if(e.is_dir()||(name&&_wcsicmp(name,e.name)!=0)) continue; path p=dir+e.name; if(!p.dir().exists()) p.dir().mkdir(); if(SZ_OK!=SzArEx_Extract(&db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){wprintf(L"unable to SzArEx_Extract(%s)\n",e.name);return false;} FILE* fp=_wfopen(p,L"wb"); if(!fp){wprintf( L"unable to fopen(%s)\n",p.c_str()); return false; } fwrite(ob+of,os,1,fp );fclose(fp); if(e.attr) SetFileAttributesW(p,e.attr); p.set_filetime(nullptr,nullptr,&e.mtime); } if(ob) alloc_impl.Free(&alloc_impl,ob); return true; }
+	virtual bool extract_to_memory( const wchar_t* name=nullptr ){if(!look_in_stream())return false;uchar* ob=nullptr;uint bl=-1;for(size_t k=0,kn=entries.size(),of=0,obs=0,os=0;k<kn;k++){auto& e=entries[k];if(e.is_dir()||e.ptr||(name&&_wcsicmp(name,e.name)!=0)) continue;if(SZ_OK!=SzArEx_Extract(&db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){wprintf(L"unable to SzArEx_Extract(%s)\n",e.name);return false;} memcpy(e.ptr=malloc(os),ob+of,e.size=os); } if(ob) alloc_impl.Free(&alloc_impl,ob); return true; }
 
 	static bool cmp_signature( void* ptr ){ static uchar s[6]={'7','z',0xBC,0xAF,0x27,0x1C}; return memcmp(ptr,s,6)==0; }
 	static void crc_generate_table(){ static bool b=false; if(b) return; CrcGenerateTable(); b=true; }
-	ILookInStream* look_in_stream(){ return mem_stream?&mem_stream->s:(archive_stream&&look_stream)?&look_stream->s:nullptr; }
+	ILookInStream* look_in_stream(){ return mem_stream?&mem_stream->s:(file_stream&&look_stream)?&look_stream->vt:nullptr; }
 };
 #endif
 
@@ -263,7 +155,7 @@ struct resource_t : public mem_t
 		
 	__forceinline resource_t( LPCWSTR lpType, HMODULE _hModule=nullptr ):hModule(_hModule),hres(nullptr),hmem(nullptr),type(lpType),zip(nullptr){}
 	__forceinline ~resource_t(){ release(); }
-	__forceinline void release(){ if(hmem){ /*UnlockResource(hmem);*/ FreeResource(hmem); hmem=nullptr; } if(zip){ zip->release(); SAFE_DELETE(zip); } }
+	__forceinline void release(){ if(hmem){ /*UnlockResource(hmem);*/ FreeResource(hmem); hmem=nullptr; } if(zip){ zip->release(); delete zip; zip=nullptr; } }
 	__forceinline bool find( LPCWSTR lpName ){ return (hres=FindResourceW( hModule, lpName, type ))!=nullptr; }
 	__forceinline bool find( int res_id ){ return find(MAKEINTRESOURCEW(res_id)); }
 	
@@ -283,7 +175,7 @@ struct resource_t : public mem_t
 #if defined(__7Z_H) && defined(__7Z_MEMINSTREAM_H)
 		if(!zip&&szip_t::cmp_signature(ptr))	zip=new szip_t(ptr,size);
 #endif
-		if(zip&&!zip->load()) SAFE_DELETE(zip); return zip;
+		if(zip&&!zip->load()){delete zip;zip=nullptr;} return zip;
 	}
 };
 #endif // MAKEINTRESOURCEW

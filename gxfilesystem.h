@@ -21,13 +21,15 @@
 // COMMON HEADERS for GXUT
 #ifndef __GXUT_COMMON__ 
 #define __GXUT_COMMON__
-
-#pragma warning( disable: 4996 ) // suppress MS security warning for pre-included headers; this is standard only for C11-compatible compilers
+// common macros
 #ifndef _CRT_SECURE_NO_WARNINGS
 	#define _CRT_SECURE_NO_WARNINGS
 #endif
 #ifndef _HAS_EXCEPTIONS
 	#define _HAS_EXCEPTIONS 0
+#endif
+#if (__cplusplus<201703L&&_MSC_VER<1911/*VS2017*/)&&!defined(__has_include)
+	#define __has_include(a) 0
 #endif
 // C standard
 #include <inttypes.h>	// defines int64_t, uint64_t
@@ -43,7 +45,6 @@
 #include <vector>
 // C++11
 #if (__cplusplus>199711L) || (_MSC_VER>=1600/*VS2010*/)
-	#include <chrono>
 	#include <type_traits>
 	#include <unordered_map>
 	#include <unordered_set>
@@ -52,19 +53,16 @@
 	#include <windows.h>
 #endif
 // platform-specific
-#ifndef GX_PLATFORM
-	#if defined _M_IX86
-		#define GX_PLATFORM "x86"
-	#elif defined _M_X64
-		#define GX_PLATFORM "x64"
-	#endif
+#if defined _M_IX86
+	#define GX_PLATFORM "x86"
+#elif defined _M_X64
+	#define GX_PLATFORM "x64"
 #endif
 #ifdef _MSC_VER	// Visual Studio
 	#pragma optimize( "gsy", on )
 	#pragma check_stack( off )
-	#pragma runtime_checks( "", off )
 	#pragma strict_gs_check( off )
-	#pragma float_control(except, off)
+	#pragma float_control(except,off)
 	#ifndef __noinline
 		#define __noinline __declspec(noinline)
 	#endif
@@ -79,24 +77,14 @@
 	#elif defined(__clang__)
 		#pragma clang diagnostic ignored "-Wmissing-braces"				// ignore excessive warning for initialzer
 		#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"	// ignore non-virtual destructor
+		#pragma clang diagnostic ignored "-Wunused-variable"			// supress warning for unused b0
 		#define __noinline
 	#endif
 #endif
-// common macros
-#if (__cplusplus>=201703L||_MSC_VER>=1911/*VS2017*/)
-	#define has_include(file) __has_include(file)
-#else
-	#define has_include(file) 0
-#endif
-#ifndef SAFE_RELEASE
-	#define SAFE_RELEASE(a) {if(a){a->Release();a=nullptr;}}
-#endif
-#ifndef SAFE_DELETE
-	#define SAFE_DELETE(p) {if(p){delete p;p=nullptr;}}
-#endif
-#ifndef SAFE_FREE
-	#define SAFE_FREE(p) {if(p){free(p);p=nullptr;}}
-#endif
+// utility functions
+template <class T> void safe_delete( T*& p ){if(p){delete p;p=nullptr;}}
+// nocase base template
+namespace nocase { template <class T> struct less {}; template <class T> struct equal_to {}; };
 // user types
 template <class T, int D> struct tarray { static const int N=D; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline T& operator[]( int i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( int i ) const { return ((T*)this)[i]; } __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } __forceinline bool operator==( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))==0; } __forceinline bool operator!=( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))!=0; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+D; } constexpr size_t size() const { return D; } };
 #define default_ctors(c) __forceinline c()=default;__forceinline c(c&&)=default;__forceinline c(const c&)=default;__forceinline c(std::initializer_list<T> l){T* p=&x;for(auto i:l)(*p++)=i;}
@@ -122,6 +110,7 @@ using double9	= tarray9<double>;	using double16	= tarray16<double>;
 #endif // __GXUT_COMMON__
 //###################################################################
 
+#include <chrono>		// microtimer
 #include <direct.h>		// directory control
 #include <io.h>			// low-level io functions
 #include <time.h>
@@ -142,14 +131,7 @@ inline bool operator<(  const FILETIME& f1, const FILETIME& f2 ){	return Compare
 inline bool operator>=( const FILETIME& f1, const FILETIME& f2 ){	return CompareFileTime(&f1,&f2)>=0; }
 inline bool operator<=( const FILETIME& f1, const FILETIME& f2 ){	return CompareFileTime(&f1,&f2)<=0; }
 
-/******************************************************************** 
-1. path is only handled with wchar_t (no const char*)
-2. input type: const wchar_t*
-3. return type: const wchar_t*
-********************************************************************/
-
-//***********************************************
-class path
+struct path
 {
 protected:
 	wchar_t* data;	// for casting without (const wchar_t*)
@@ -298,11 +280,7 @@ public:
 	void set_readonly( bool readonly ) const { if(!exists()) return; SetFileAttributesW(data,attributes()=readonly?(attributes()|FILE_ATTRIBUTE_READONLY):(attributes()^FILE_ATTRIBUTE_READONLY)); }
 	
 	// make/copy/delete file/dir operations
-	bool mkdir() const 	// make all super directories
-	{
-		if(exists()) return false; std::vector<path> d; path p=to_backslash().remove_backslash();wchar_t* ctx;for( wchar_t* t=wcstok_s(p,L"\\",&ctx); t; t=wcstok_s(nullptr,L"\\", &ctx) ){ d.emplace_back((d.empty()?path(L""):d.back())+t+L"\\"); }
-		for(size_t k=0;k<d.size();k++) if(!d[k].exists()&&_wmkdir(d[k].data)!=0) return false; return true;
-	}
+	bool mkdir() const { if(exists()) return false; path p=to_backslash().remove_backslash(), d; wchar_t* ctx;for( wchar_t* t=wcstok_s(p,L"\\",&ctx); t; t=wcstok_s(nullptr,L"\\", &ctx) ){ d+=t;d+=L"\\"; if(!d.exists()&&_wmkdir(d.data)!=0) return false; } return true; } // make all super directories
 	bool copy_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()) return false; if(dst.exists()&&dst.is_dir()) dst=dst.add_backslash()+name(); if(dst.exists()&&overwrite){ if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } return CopyFileW( data, dst, overwrite?FALSE:TRUE )?true:false; }
 	bool move_file( path dst, bool overwrite=true ) const { if(!copy_file(dst,overwrite)||!exists()) return false; return delete_file(); }
 #ifndef _INC_SHELLAPI 
@@ -326,7 +304,7 @@ public:
 	inline path canonical() const { path p=*this; p.canonicalize(); return p; }
 
 	// create process
-	inline void create_process( const wchar_t* arguments=nullptr, bool bShowWindow=true, bool bWaitFinish=false ) const;
+	void create_process( const wchar_t* arguments=nullptr, bool bShowWindow=true, bool bWaitFinish=false ) const;
 
 	// time stamp
 	static const char* timestamp( const struct tm* t ){char* buff=__strbuf();sprintf(buff,"%04d%02d%02d%02d%02d%02d",t->tm_year+1900,t->tm_mon+1,t->tm_mday,t->tm_hour,t->tm_min,t->tm_sec);return buff;}
@@ -354,8 +332,8 @@ public:
 
 	// scan/findfile: ext_filter (specific extensions delimited by semicolons), str_filter (path should contain this string)
 	struct scan_info { std::vector<path>& result; bool recursive; bool inc_dir; const wchar_t* ext; const wchar_t* str; };
-	inline std::vector<path> scan( bool recursive=true, const wchar_t* ext_filter=nullptr, const wchar_t* str_filter=nullptr ) const;
-	inline std::vector<path> subdirs( bool recursive=true ) const;
+	std::vector<path> scan( bool recursive=true, const wchar_t* ext_filter=nullptr, const wchar_t* str_filter=nullptr ) const;
+	std::vector<path> subdirs( bool recursive=true ) const;
 
 	// module/working directories
 	static inline path module( HMODULE h_module=nullptr ){ static path m; if(!m.empty()&&!h_module) return m; path p;GetModuleFileNameW(h_module,p,path::capacity);p[0]=::toupper(p[0]); p=p.canonical(); return h_module?p:(m=p); }
@@ -368,15 +346,15 @@ public:
 	struct global { static inline path temp(); };
 
 	// utilities
-	static inline path temp( const wchar_t* subkey=L"" );
-	static inline path serial( path dir, const wchar_t* prefix, const wchar_t* postfix, int numzero=4 );
+	static path temp( const wchar_t* subkey=L"" );
+	static path serial( path dir, const wchar_t* prefix, const wchar_t* postfix, int numzero=4 );
 	inline path key() const { if(!data[0])return path();path d;size_t n=0;for(size_t k=0,kn=length();k<kn;k++){wchar_t c=data[k];if(c!=L':')d[n++]=(!isalnum(c)&&c!=L'_')?L'.':(::tolower(c));}if(d[n-1]==L'.')n--;d[n]=0;return d;}
 	inline path tolower() const { path d;size_t l=length();for(size_t k=0;k<l;k++)d[k]=::tolower(data[k]);d[l]=L'\0'; return d; }
 	inline path toupper() const { path d;size_t l=length();for(size_t k=0;k<l;k++)d[k]=::toupper(data[k]);d[l]=L'\0'; return d; }
 
 private:
-	inline void canonicalize(); // remove redundant dir indicates such as "..", "."
-	inline void _scan( path& dir, scan_info& si ) const;
+	void canonicalize(); // remove redundant dir indicates such as "..", "."
+	void _scan( path& dir, scan_info& si ) const;
 };
 
 //***********************************************
@@ -512,22 +490,8 @@ __noinline inline void path::canonicalize()
 
 namespace nocase
 {
-#ifndef __NOCASE_BASE_TYPE__
-#define __NOCASE_BASE_TYPE__
-	template <class T> struct equal_to { bool operator()(const T& a,const T& b)const;};
-	template <class T> struct not_equal_to { bool operator()(const T& a,const T& b)const;};
-	template <class T> struct greater { bool operator()(const T& a,const T& b)const;};
-	template <class T> struct less { bool operator()(const T& a,const T& b)const;};
-	template <class T> struct greater_equal { bool operator()(const T& a,const T& b)const;};
-	template <class T> struct less_equal { bool operator()(const T& a,const T& b)const;};
-#endif
-
-	template <> struct equal_to<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())==0;}};
-	template <> struct not_equal_to<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())!=0;}};
-	template <> struct greater<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())>0;}};
 	template <> struct less<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())<0;}};
-	template <> struct greater_equal<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())>=0;}};
-	template <> struct less_equal<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())<=0;}};
+	template <> struct equal_to<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())==0;}};
 }
 
 namespace std

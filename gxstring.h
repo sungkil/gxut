@@ -21,13 +21,15 @@
 // COMMON HEADERS for GXUT
 #ifndef __GXUT_COMMON__ 
 #define __GXUT_COMMON__
-
-#pragma warning( disable: 4996 ) // suppress MS security warning for pre-included headers; this is standard only for C11-compatible compilers
+// common macros
 #ifndef _CRT_SECURE_NO_WARNINGS
 	#define _CRT_SECURE_NO_WARNINGS
 #endif
 #ifndef _HAS_EXCEPTIONS
 	#define _HAS_EXCEPTIONS 0
+#endif
+#if (__cplusplus<201703L&&_MSC_VER<1911/*VS2017*/)&&!defined(__has_include)
+	#define __has_include(a) 0
 #endif
 // C standard
 #include <inttypes.h>	// defines int64_t, uint64_t
@@ -43,7 +45,6 @@
 #include <vector>
 // C++11
 #if (__cplusplus>199711L) || (_MSC_VER>=1600/*VS2010*/)
-	#include <chrono>
 	#include <type_traits>
 	#include <unordered_map>
 	#include <unordered_set>
@@ -52,19 +53,16 @@
 	#include <windows.h>
 #endif
 // platform-specific
-#ifndef GX_PLATFORM
-	#if defined _M_IX86
-		#define GX_PLATFORM "x86"
-	#elif defined _M_X64
-		#define GX_PLATFORM "x64"
-	#endif
+#if defined _M_IX86
+	#define GX_PLATFORM "x86"
+#elif defined _M_X64
+	#define GX_PLATFORM "x64"
 #endif
 #ifdef _MSC_VER	// Visual Studio
 	#pragma optimize( "gsy", on )
 	#pragma check_stack( off )
-	#pragma runtime_checks( "", off )
 	#pragma strict_gs_check( off )
-	#pragma float_control(except, off)
+	#pragma float_control(except,off)
 	#ifndef __noinline
 		#define __noinline __declspec(noinline)
 	#endif
@@ -79,24 +77,14 @@
 	#elif defined(__clang__)
 		#pragma clang diagnostic ignored "-Wmissing-braces"				// ignore excessive warning for initialzer
 		#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"	// ignore non-virtual destructor
+		#pragma clang diagnostic ignored "-Wunused-variable"			// supress warning for unused b0
 		#define __noinline
 	#endif
 #endif
-// common macros
-#if (__cplusplus>=201703L||_MSC_VER>=1911/*VS2017*/)
-	#define has_include(file) __has_include(file)
-#else
-	#define has_include(file) 0
-#endif
-#ifndef SAFE_RELEASE
-	#define SAFE_RELEASE(a) {if(a){a->Release();a=nullptr;}}
-#endif
-#ifndef SAFE_DELETE
-	#define SAFE_DELETE(p) {if(p){delete p;p=nullptr;}}
-#endif
-#ifndef SAFE_FREE
-	#define SAFE_FREE(p) {if(p){free(p);p=nullptr;}}
-#endif
+// utility functions
+template <class T> void safe_delete( T*& p ){if(p){delete p;p=nullptr;}}
+// nocase base template
+namespace nocase { template <class T> struct less {}; template <class T> struct equal_to {}; };
 // user types
 template <class T, int D> struct tarray { static const int N=D; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline T& operator[]( int i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( int i ) const { return ((T*)this)[i]; } __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } __forceinline bool operator==( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))==0; } __forceinline bool operator!=( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))!=0; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+D; } constexpr size_t size() const { return D; } };
 #define default_ctors(c) __forceinline c()=default;__forceinline c(c&&)=default;__forceinline c(const c&)=default;__forceinline c(std::initializer_list<T> l){T* p=&x;for(auto i:l)(*p++)=i;}
@@ -165,35 +153,15 @@ inline const wchar_t* _stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ re
 // 0.3 case-insensitive comparison for std::map/set, std::unordered_map/set
 namespace nocase
 {
-#ifndef __NOCASE_BASE_TYPE__
-#define __NOCASE_BASE_TYPE__
-	template <class T> struct equal_to { bool operator()(const T& a,const T& b)const;};
-	template <class T> struct not_equal_to { bool operator()(const T& a,const T& b)const;};
-	template <class T> struct greater { bool operator()(const T& a,const T& b)const;};
-	template <class T> struct less { bool operator()(const T& a,const T& b)const;};
-	template <class T> struct greater_equal { bool operator()(const T& a,const T& b)const;};
-	template <class T> struct less_equal { bool operator()(const T& a,const T& b)const;};
-#endif
-
-	template <> struct equal_to<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())==0;}};
-	template <> struct not_equal_to<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())!=0;}};
-	template <> struct greater<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())>0;}};
 	template <> struct less<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())<0;}};
-	template <> struct greater_equal<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())>=0;}};
-	template <> struct less_equal<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())<=0;}};
-
-	template <> struct equal_to<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())==0;}};
-	template <> struct not_equal_to<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())!=0;}};
-	template <> struct greater<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())>0;}};
+	template <> struct equal_to<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())==0;}};
 	template <> struct less<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())<0;}};
-	template <> struct greater_equal<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())>=0;}};
-	template <> struct less_equal<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())<=0;}};
+	template <> struct equal_to<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())==0;}};
 
-	// template aliases
-	template <class T> using			set = std::set<T,nocase::less<T>>;
-	template <class T, class V> using	map = std::map<T,V,nocase::less<T>>;
-	template <class T> using			unordered_set = std::unordered_set<T,std::hash<T>,nocase::equal_to<T>>;
-	template <class T, class V> using	unordered_map = std::unordered_map<T,V,std::hash<T>,nocase::equal_to<T>>;
+	template <class T> using			set = std::set<T,less<T>>;
+	template <class T, class V> using	map = std::map<T,V,less<T>>;
+	template <class T> using			unordered_set = std::unordered_set<T,std::hash<T>,equal_to<T>>;
+	template <class T, class V> using	unordered_map = std::unordered_map<T,V,std::hash<T>,equal_to<T>>;
 }
 
 //***********************************************
@@ -310,81 +278,87 @@ inline const wchar_t* dtow( const double9& m ){	return atow(dtoa(m)); }
 inline const wchar_t* dtow( const double16& m ){return atow(dtoa(m)); }
 
 //***********************************************
-// 7. conversion from string to user types
+// 7. fast manual conversion from string to int/float (3x--4x faster than CRT atoi/atof)
 
-__noinline __forceinline float __atof( const char *p ) // fast atof: taken from fast_atof.c (nearly 5x faster than crt atof())
+namespace fast
 {
-	while(*p==' '||*p=='\t') p++; // skip leading white spaces
-	bool sign=true; if(*p=='-'){ sign=false; p++; } else if(*p=='+') p++; // get sign
-	double value=0.0; for(; *p>='0'&&*p<='9'; p++ ) value=value*10.0+double(*p-'0'); // get digits before decimal point or exponent
-	if(*p=='.'){ double pow10=0.1; p++; while(*p>='0'&&*p<='9'){ value+=(*p-'0')*pow10; pow10*=0.1; p++; } } // get digits after decimal point
-	if(*p!='e'&&*p!='E') return float(sign?value:-value);
+	__forceinline int atoi( const char* str )
+	{
+		while(*str==' '||*str=='\t'||*str=='\n'||*str=='\r')str++; // skip leading white spaces
+		bool neg=false; if(*str=='-'){neg=true;str++;} else if(*str=='+')str++; // sign
+		int i=0;for(;;str++){uint d=static_cast<uint>(*str)-'0';if(d>9)break;i=i*10+d;} // integers
+		return neg?-i:i;
+	}
 
-	// Handle exponent
-	bool frac=false; p++; if(*p=='-'){ frac=true; p++; } else if(*p=='+') p++; // get sign of exponent
-	uint expon; for(expon=0; *p>='0'&&*p<='9'; p++ ) expon=expon*10+(*p-'0'); if(expon>308) expon=308;	// get digits of exponent
-
-	// Calculate scaling factor
-	double scale = 1.0;
-	while(expon >= 50){ scale *= 1E50; expon -= 50; }
-	while(expon >=  8){ scale *= 1E8;  expon -=  8; }
-	while(expon >   0){ scale *= 10.0; expon -=  1; }
-	value = float(frac?(value/scale):(value*scale));
-	return float(sign?value:-value);
+	__forceinline double atof( const char* str )
+	{
+		while(*str==' '||*str=='\t'||*str=='\n'||*str=='\r')str++; // skip leading white spaces
+		bool neg=false; if(*str=='-'){neg=true;str++;} else if(*str=='+')str++; // sign
+		int i=0;for(;;str++){uint d=static_cast<uint>(*str)-'0';if(d>9)break;i=i*10+d;} double v=double(i); // integers
+		if(*str=='.'){double f=0.1;str++;for(;;str++,f*=0.1){uint d=static_cast<uint>(*str)-'0';if(d>9)break;v+=d*f;}} // fractions
+		if(*str!='e'&&*str!='E') return neg?-v:v; // early return for non-exponent float
+		bool eng=false; str++; if(*str=='-'){eng=true;str++;} else if(*str=='+') str++; // exponent sign
+		int e=0;for(;;str++){uint d=static_cast<uint>(*str)-'0';if(d>9)break;e=e*10+d;} if(e>308)e=308; // exponents
+		double scale=1;while(e>=8){scale*=1E8;e-=8;} while(e>0){scale*=10.0;e--;} v=eng?v/scale:v*scale; // apply exponents
+		return neg?-v:v;
+	}
 }
 
-inline bool atob( const char* a ){ return _stricmp(a,"true")==0||atoi(a)!=0; }
-inline uint atou( const char* a ){ char* e=nullptr;uint v=(uint)strtoul(a,&e,10); return v; }
-inline uint atou( const wchar_t* w ){ wchar_t* e=nullptr;uint v=(uint)wcstoul(w,&e,10); return v; }
-inline uint64_t atoull( const char* a ){ char* e=nullptr;uint64_t v=strtoull(a,&e,10); return v; }
-inline int2 atoi2( const char* a ){ int2 v;char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=(int)strtol(a,&e,10); return v; }
-inline int3 atoi3( const char* a ){ int3 v;char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=(int)strtol(a,&e,10); return v; }
-inline int4 atoi4( const char* a ){ int4 v;char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=(int)strtol(a,&e,10); return v; }
-inline uint2 atou2( const char* a ){ uint2 v;char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=strtoul(a,&e,10); return v; }
-inline uint3 atou3( const char* a ){ uint3 v;char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=strtoul(a,&e,10); return v; }
-inline uint4 atou4( const char* a ){ uint4 v;char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=strtoul(a,&e,10); return v; }
-inline float2 atof2( const char* a ){ float2 v;char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=strtof(a,&e); return v; }
-inline float3 atof3( const char* a ){ float3 v;char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=strtof(a,&e); return v; }
-inline float4 atof4( const char* a ){ float4 v;char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=strtof(a,&e); return v; }
-inline float9 atof9( const char* a ){ float9 v;char* e=nullptr;for(int k=0;k<9;k++,a=e) v[k]=strtof(a,&e); return v; }
-inline float16 atof16( const char* a ){ float16 v;char* e=nullptr;for(int k=0;k<16;k++,a=e) v[k]=strtof(a,&e); return v; }
-inline double2 atod2( const char* a ){ double2 v;char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=strtod(a,&e); return v; }
-inline double3 atod3( const char* a ){ double3 v;char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=strtod(a,&e); return v; }
-inline double4 atod4( const char* a ){ double4 v;char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=strtod(a,&e); return v; }
-inline double9 atod9( const char* a ){ double9 v;char* e=nullptr;for(int k=0;k<9;k++,a=e) v[k]=strtod(a,&e); return v; }
-inline double16 atod16( const char* a ){ double16 v;char* e=nullptr;for(int k=0;k<16;k++,a=e) v[k]=strtod(a,&e); return v; }
+//***********************************************
+// 8. conversion from string to user types
 
-inline bool atob( const std::string& s ){ return atob(s.c_str()); }
-inline int atoi( const std::string& s ){ return int(atoi(s.c_str())); }
-inline float atof( const std::string& s ){	return float(atof(s.c_str())); }
-inline uint atou( const std::string& s ){ return atou(s.c_str()); }
-inline uint64_t atoull( const std::string& s ){ return atoull(s.c_str()); }
-inline int2 atoi2( const std::string& s ){ return atoi2(s.c_str()); }
-inline int3 atoi3( const std::string& s ){ return atoi3(s.c_str()); }
-inline int4 atoi4( const std::string& s ){ return atoi4(s.c_str()); }
-inline uint2 atou2( const std::string& s ){ return atou2(s.c_str()); }
-inline uint3 atou3( const std::string& s ){ return atou3(s.c_str()); }
-inline uint4 atou4( const std::string& s ){ return atou4(s.c_str()); }
-inline float2 atof2( const std::string& s ){ return atof2(s.c_str()); }
-inline float3 atof3( const std::string& s ){ return atof3(s.c_str()); }
-inline float4 atof4( const std::string& s ){ return atof4(s.c_str()); }
-inline float9 atof9( const std::string& s ){ return atof9(s.c_str()); }
-inline float16 atof16( const std::string& s ){ return atof16(s.c_str()); }
-inline double2 atod2( const std::string& s ){ return atod2(s.c_str()); }
-inline double3 atod3( const std::string& s ){ return atod3(s.c_str()); }
-inline double4 atod4( const std::string& s ){ return atod4(s.c_str()); }
-inline double9 atod9( const std::string& s ){ return atod9(s.c_str()); }
-inline double16 atod16( const std::string& s ){ return atod16(s.c_str()); }
+inline bool atob( const char* a ){		return _stricmp(a,"true")==0||fast::atoi(a)!=0; }
+inline uint atou( const char* a ){		char* e=nullptr;uint v=(uint)strtoul(a,&e,10); return v; }
+inline uint atou( const wchar_t* w ){	wchar_t* e=nullptr;uint v=(uint)wcstoul(w,&e,10); return v; }
+inline uint64_t atoull( const char* a ){char* e=nullptr;uint64_t v=strtoull(a,&e,10); return v; }
+inline int2 atoi2( const char* a ){		int2 v;char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=(int)strtol(a,&e,10); return v; }
+inline int3 atoi3( const char* a ){		int3 v;char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=(int)strtol(a,&e,10); return v; }
+inline int4 atoi4( const char* a ){		int4 v;char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=(int)strtol(a,&e,10); return v; }
+inline uint2 atou2( const char* a ){	uint2 v;char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=strtoul(a,&e,10); return v; }
+inline uint3 atou3( const char* a ){	uint3 v;char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=strtoul(a,&e,10); return v; }
+inline uint4 atou4( const char* a ){	uint4 v;char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=strtoul(a,&e,10); return v; }
+inline float2 atof2( const char* a ){	float2 v;char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=strtof(a,&e); return v; }
+inline float3 atof3( const char* a ){	float3 v;char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=strtof(a,&e); return v; }
+inline float4 atof4( const char* a ){	float4 v;char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=strtof(a,&e); return v; }
+inline float9 atof9( const char* a ){	float9 v;char* e=nullptr;for(int k=0;k<9;k++,a=e) v[k]=strtof(a,&e); return v; }
+inline float16 atof16( const char* a ){	float16 v;char* e=nullptr;for(int k=0;k<16;k++,a=e) v[k]=strtof(a,&e); return v; }
+inline double2 atod2( const char* a ){	double2 v;char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=strtod(a,&e); return v; }
+inline double3 atod3( const char* a ){	double3 v;char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=strtod(a,&e); return v; }
+inline double4 atod4( const char* a ){	double4 v;char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=strtod(a,&e); return v; }
+inline double9 atod9( const char* a ){	double9 v;char* e=nullptr;for(int k=0;k<9;k++,a=e) v[k]=strtod(a,&e); return v; }
+inline double16 atod16( const char* a ){double16 v;char* e=nullptr;for(int k=0;k<16;k++,a=e) v[k]=strtod(a,&e); return v; }
+
+inline bool atob( const std::string& s ){		return atob(s.c_str()); }
+inline int atoi( const std::string& s ){		return int(fast::atoi(s.c_str())); }
+inline float atof( const std::string& s ){		return float(fast::atof(s.c_str())); }
+inline uint atou( const std::string& s ){		return atou(s.c_str()); }
+inline uint64_t atoull( const std::string& s ){	return atoull(s.c_str()); }
+inline int2 atoi2( const std::string& s ){		return atoi2(s.c_str()); }
+inline int3 atoi3( const std::string& s ){		return atoi3(s.c_str()); }
+inline int4 atoi4( const std::string& s ){		return atoi4(s.c_str()); }
+inline uint2 atou2( const std::string& s ){		return atou2(s.c_str()); }
+inline uint3 atou3( const std::string& s ){		return atou3(s.c_str()); }
+inline uint4 atou4( const std::string& s ){		return atou4(s.c_str()); }
+inline float2 atof2( const std::string& s ){	return atof2(s.c_str()); }
+inline float3 atof3( const std::string& s ){	return atof3(s.c_str()); }
+inline float4 atof4( const std::string& s ){	return atof4(s.c_str()); }
+inline float9 atof9( const std::string& s ){	return atof9(s.c_str()); }
+inline float16 atof16( const std::string& s ){	return atof16(s.c_str()); }
+inline double2 atod2( const std::string& s ){	return atod2(s.c_str()); }
+inline double3 atod3( const std::string& s ){	return atod3(s.c_str()); }
+inline double4 atod4( const std::string& s ){	return atod4(s.c_str()); }
+inline double9 atod9( const std::string& s ){	return atod9(s.c_str()); }
+inline double16 atod16( const std::string& s ){	return atod16(s.c_str()); }
 
 //***********************************************
-// 8. conversion from wstring to user types
-inline int atoi( const wchar_t* w ){		return int(_wtoi(w)); }
-inline float atof( const wchar_t* w ){		return float(_wtof(w)); }
-inline int wtoi( const std::wstring& w ){	return int(_wtoi(w.c_str())); }
-inline float wtof( const std::wstring& w ){	return float(_wtof(w.c_str())); }
-inline int atoi( const std::wstring& w ){	return int(_wtoi(w.c_str())); }
-inline float atof( const std::wstring& w ){	return float(_wtof(w.c_str())); }
-inline bool wtob( const wchar_t* w ){		return _wcsicmp(w,L"true")==0||_wtoi(w)!=0; }
+// 9. conversion from wstring to user types
+inline int atoi( const wchar_t* w ){		return fast::atoi(wtoa(w)); }
+inline double atof( const wchar_t* w ){		return fast::atof(wtoa(w)); }
+inline int wtoi( const std::wstring& w ){	return fast::atoi(wtoa(w.c_str())); }
+inline double wtof( const std::wstring& w ){return fast::atof(wtoa(w.c_str())); }
+inline int atoi( const std::wstring& w ){	return fast::atoi(wtoa(w.c_str())); }
+inline double atof( const std::wstring& w ){return fast::atof(wtoa(w.c_str())); }
+inline bool wtob( const wchar_t* w ){		return _wcsicmp(w,L"true")==0||wtoi(w)!=0; }
 inline uint wtou( const wchar_t* w ){		return atou(wtoa(w)); }
 inline uint64_t wtoull( const wchar_t* w ){	return atoull(wtoa(w)); }
 
@@ -426,7 +400,7 @@ inline double9 wtod9( const std::wstring& w ){	return wtod9(w.c_str()); }
 inline double16 wtod16( const std::wstring& w ){return wtod16(w.c_str()); }
 
 //***********************************************
-// 9. trim
+// 10. trim
 template <class T>
 __noinline inline const T* trim( const T* src, const T* junk=_strcvt<T>(" \t\n") )
 {
@@ -443,12 +417,12 @@ __noinline inline const T* trim_comment( const T* src, const T* commentMark=_str
 	if(src==nullptr||src[0]==0) return src;
 	size_t slen=strlen(src),clen=strlen(commentMark),sc=slen-clen+1;
 	T* s=__tstrdup(src,slen);
-	for(size_t k=0;k<sc;k++){size_t c=0;for(;c<clen;c++)if(s[k+c]!=commentMark[c])break;if(c==clen){s[k]=0;break;}}
+	for(size_t k=0;k<sc;k++){size_t c=0;for(;c<clen;c++)if(s[k+c]==commentMark[c])break;if(c<clen){s[k]=0;break;}}
 	return trim(s);
 }
 
 //***********************************************
-// 10. explode
+// 11. explode
 template <class T>
 __noinline inline std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T> > >
 explode( const T* src, const T* seps=_strcvt<T>(" \t\n") )
@@ -492,7 +466,7 @@ __noinline inline std::vector<float> explodef( const T* src, const T* seps=_strc
 {
 	std::vector<float>  vs; vs.reserve(32);
 	T *ctx, *token = (T*)strtok_s(__tstrdup(src), seps, &ctx);
-	while(token!=nullptr){ vs.emplace_back(float(atof(token))); token=strtok_s(nullptr,seps,&ctx); }
+	while(token!=nullptr){ vs.emplace_back(float(fast::atof(token))); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }
 
@@ -501,7 +475,7 @@ __noinline inline std::vector<double> exploded( const T* src, const T* seps=_str
 {
 	std::vector<double>  vs; vs.reserve(32);
 	T *ctx, *token = (T*)strtok_s(__tstrdup(src), seps, &ctx);
-	while(token!=nullptr){ vs.emplace_back(double(atof(token))); token=strtok_s(nullptr,seps,&ctx); }
+	while(token!=nullptr){ vs.emplace_back(double(fast::atof(token))); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }
 
@@ -514,7 +488,7 @@ __noinline inline std::vector<const T*> explode_conservative( const T* _Src, T _
 }
 
 //***********************************************
-// 11. replace
+// 12. replace
 template <class T>
 __noinline inline const T* str_replace( const T* _Src, const T* _Find, const T* _Replace )
 {
@@ -536,6 +510,14 @@ __noinline inline const T* str_ireplace( const T* _Src, const T* _Find, const T*
 	std::vector<T> buff; buff.reserve(sl*2); while( p=(T*)_stristr(s,_Find) ){ buff.insert(buff.end(),s,p); buff.insert(buff.end(),_Replace,_Replace+rl); s=p+fl; }
 	buff.insert(buff.end(),s,(T*)(_Src+sl));buff.emplace_back(0);
 	return __tstrdup(&buff[0],buff.size());
+}
+
+template <class T>
+__noinline inline const T* str_replace( const T* _Src, T _Find, T _Replace )
+{
+	T *s=__tstrdup(_Src), *p=s;
+	for(int k=0,l=int(strlen(s));k<l;k++,p++) if(*p==_Find) *p=_Replace;
+	return s;
 }
 
 //***********************************************
