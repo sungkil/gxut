@@ -82,8 +82,12 @@
 		#define __noinline
 	#endif
 #endif
+// printf replacements: define implementation somewhere to use this
+extern int (*gprintf)( const char*, ... );
+extern int (*gwprintf)( const wchar_t*, ... );
 // utility functions
-template <class T> void safe_delete( T*& p ){if(p){delete p;p=nullptr;}}
+template <class T> std::nullptr_t safe_delete( T*& p ){if(p){delete p;p=nullptr;} return nullptr; }
+template <class T> std::nullptr_t safe_release( T*& p ){if(p){p->Release();p=nullptr;} return nullptr; }
 // nocase base template
 namespace nocase { template <class T> struct less {}; template <class T> struct equal_to {}; };
 // user types

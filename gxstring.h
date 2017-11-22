@@ -81,8 +81,12 @@
 		#define __noinline
 	#endif
 #endif
+// printf replacements: define implementation somewhere to use this
+extern int (*gprintf)( const char*, ... );
+extern int (*gwprintf)( const wchar_t*, ... );
 // utility functions
-template <class T> void safe_delete( T*& p ){if(p){delete p;p=nullptr;}}
+template <class T> std::nullptr_t safe_delete( T*& p ){if(p){delete p;p=nullptr;} return nullptr; }
+template <class T> std::nullptr_t safe_release( T*& p ){if(p){p->Release();p=nullptr;} return nullptr; }
 // nocase base template
 namespace nocase { template <class T> struct less {}; template <class T> struct equal_to {}; };
 // user types
@@ -187,8 +191,8 @@ inline const char* tovarname( const char* src ){ if(!src||!*src) return ""; char
 //***********************************************
 // 4. conversion between const wchar_t* and const char*
 template <class T,class I> const T* _strcvt( const I* s ){size_t len=strlen(s);T* buff=__tstrbuf<T>(len);for(uint k=0;k<len;k++)buff[k]=T(s[k]);return buff;}
-inline const wchar_t* atow( const char* a ){int wlen=MultiByteToWideChar(CP_ACP,0,a,-1,0,0);wchar_t* wbuff=_wcsbuf(wlen);MultiByteToWideChar(CP_ACP,0,a,-1,wbuff,wlen);return wbuff;}
-inline const char* wtoa( const wchar_t* w ){int mblen=WideCharToMultiByte(CP_ACP,0,w,-1,0,0,0,0);char* buff=_strbuf(mblen);WideCharToMultiByte(CP_ACP,0,w,-1,buff,mblen,nullptr,nullptr);return buff;}
+inline const wchar_t* atow( const char* a ){int wlen=MultiByteToWideChar(0,0,a,-1,0,0);wchar_t* wbuff=_wcsbuf(wlen);MultiByteToWideChar(0,0,a,-1,wbuff,wlen);return wbuff;}
+inline const char* wtoa( const wchar_t* w ){int mblen=WideCharToMultiByte(0,0,w,-1,0,0,0,0);char* buff=_strbuf(mblen);WideCharToMultiByte(0,0,w,-1,buff,mblen,0,0);return buff;}
 
 //***********************************************
 // 5. conversion to string types
@@ -412,13 +416,25 @@ __noinline inline const T* trim( const T* src, const T* junk=_strcvt<T>(" \t\n")
 }
 
 template <class T>
-__noinline inline const T* trim_comment( const T* src, const T* commentMark=_strcvt<T>("#") )
+__noinline inline const T* trim_comment( const T* src, const char* comment_symbols="#" )
 {
 	if(src==nullptr||src[0]==0) return src;
-	size_t slen=strlen(src),clen=strlen(commentMark),sc=slen-clen+1;
-	T* s=__tstrdup(src,slen);
-	for(size_t k=0;k<sc;k++){size_t c=0;for(;c<clen;c++)if(s[k+c]==commentMark[c])break;if(c<clen){s[k]=0;break;}}
-	return trim(s);
+	size_t slen=strlen(src),clen=strlen(comment_symbols),sc=slen-clen+1;
+	T* buff=__tstrdup(src,slen); const char* cs=comment_symbols;
+	bool cpp=false;for(int k=0;k<clen-1;k++){if(cs[k]!='/'||cs[k+1]!='/')continue;cpp=true;break;} // detect double slashes
+	for(size_t k=0;k<slen;k++)
+	{
+		T s=buff[k];
+		int j;for(j=0;j<clen;j++)
+		{
+			if(s!=cs[j]) continue;
+			if(cs[j]!='/'||!cpp) break;
+			if(j<clen-1&&k<slen-1&&buff[k+1]=='/') break;
+		}
+		if(j<clen){buff[slen=k]=0;break;}
+	}
+	buff[slen-_strrspn(buff,_strcvt<T>(" \t\n"))]=0; // rtrim
+	return buff;
 }
 
 //***********************************************

@@ -81,8 +81,12 @@
 		#define __noinline
 	#endif
 #endif
+// printf replacements: define implementation somewhere to use this
+extern int (*gprintf)( const char*, ... );
+extern int (*gwprintf)( const wchar_t*, ... );
 // utility functions
-template <class T> void safe_delete( T*& p ){if(p){delete p;p=nullptr;}}
+template <class T> std::nullptr_t safe_delete( T*& p ){if(p){delete p;p=nullptr;} return nullptr; }
+template <class T> std::nullptr_t safe_release( T*& p ){if(p){p->Release();p=nullptr;} return nullptr; }
 // nocase base template
 namespace nocase { template <class T> struct less {}; template <class T> struct equal_to {}; };
 // user types
@@ -142,11 +146,12 @@ public:
 	typedef struct _stat stat_t;			// use "struct _stat" instead of "_stat" for C-compatibility
 	
 	// get shared buffer for return values
-	static inline const wchar_t* __wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ size_t l1=wcslen(_Str1); wchar_t* s1=(wchar_t*)memcpy(__wcsbuf(),_Str1,sizeof(wchar_t)*l1); s1[l1]=L'\0'; for(wchar_t* s=s1;*s;s++) *s=towlower(*s); size_t l2=wcslen(_Str2); wchar_t* s2=(wchar_t*)memcpy(__wcsbuf(),_Str2,sizeof(wchar_t)*l2); s2[l2]=L'\0'; for(wchar_t* s=s2;*s;s++) *s=towlower(*s); const wchar_t* r=wcsstr(s1,s2); return r?_Str1+(r-s1):nullptr; }
-	static inline wchar_t*	__wcsbuf(){ static wchar_t buff[max_buffers][capacity]; static int i=0; return buff[i=(i+1)%std::extent<decltype(buff)>::value];}
-	static inline char*	__strbuf(){ return (char*)__wcsbuf(); }
-	static inline wchar_t* __mb2wc( const char* _Src, wchar_t* _Dst ){ MultiByteToWideChar(0 /*CP_ACP*/,0,_Src,-1,_Dst,min(capacity-1,MultiByteToWideChar(0 /*CP_ACP*/,0,_Src,-1,0,0))); return _Dst; }
-	static inline bool __wcsiext( const wchar_t* ext_filter, const wchar_t* filename ){ static wchar_t ext[path::capacity]; _wsplitpath_s(filename,nullptr,0,nullptr,0,nullptr,0,ext,_MAX_EXT); if(ext[0]==0) return false; size_t ext_len=wcslen(ext); ext[0]=L';'; ext[ext_len]=L';'; ext[ext_len+1]=0; /* ext include dot first */ return path::__wcsistr(ext_filter,ext)!=nullptr; }
+	static inline wchar_t*			__wcsbuf(){ static wchar_t buff[max_buffers][capacity]; static int i=0; return buff[i=(i+1)%std::extent<decltype(buff)>::value]; }
+	static inline char*				__strbuf(){ return (char*)__wcsbuf(); }
+	static inline wchar_t*			__mb2wc( const char* _Src, wchar_t* _Dst ){ MultiByteToWideChar(0,0,_Src,-1,_Dst,min(capacity-1,MultiByteToWideChar(0,0,_Src,-1,0,0))); return _Dst; }
+	static inline char*				__wc2mb( const wchar_t* _Src, char* _Dst ){ WideCharToMultiByte(0,0,_Src,-1,_Dst,min(capacity-1,WideCharToMultiByte(0,0,_Src,-1,0,0,0,0)),0,0); return _Dst; }
+	static inline bool				__wcsiext( const wchar_t* ext_filter, const wchar_t* filename ){ static wchar_t ext[path::capacity]; _wsplitpath_s(filename,nullptr,0,nullptr,0,nullptr,0,ext,_MAX_EXT); if(ext[0]==0) return false; size_t ext_len=wcslen(ext); ext[0]=L';'; ext[ext_len]=L';'; ext[ext_len+1]=0; /* ext include dot first */ return path::__wcsistr(ext_filter,ext)!=nullptr; }
+	static inline const wchar_t*	__wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ size_t l1=wcslen(_Str1); wchar_t* s1=(wchar_t*)memcpy(__wcsbuf(),_Str1,sizeof(wchar_t)*l1); s1[l1]=L'\0'; for(wchar_t* s=s1;*s;s++) *s=towlower(*s); size_t l2=wcslen(_Str2); wchar_t* s2=(wchar_t*)memcpy(__wcsbuf(),_Str2,sizeof(wchar_t)*l2); s2[l2]=L'\0'; for(wchar_t* s=s2;*s;s++) *s=towlower(*s); const wchar_t* r=wcsstr(s1,s2); return r?_Str1+(r-s1):nullptr; }
 
 	// split path
 	struct split_info { wchar_t *drive, *dir, *fname, *ext; };
@@ -212,6 +217,10 @@ public:
 	operator wchar_t*(){ return data; }
 	operator const wchar_t*() const { return data; }
 	const wchar_t* c_str() const { return data; }
+	
+	// conversion to wstring and multibyte string
+	std::wstring str() const { return std::wstring(data); }
+	const char* wtoa() const { return __wc2mb(data,__strbuf()); }
 
 	// operator overloading: array operator
 	inline wchar_t& operator[]( size_t i ){ return data[i]; }
@@ -299,7 +308,7 @@ public:
 	inline bool is_relative() const { return !is_absolute(); }
 	inline bool is_unc() const { return (data[0]==L'\\'&&data[1]==L'\\')||(data[0]==L'/'&&data[1]==L'/'); }
 	inline bool is_subdir( const path& parent ) const { path p=parent.canonical(); return _wcsnicmp(canonical(),p,p.size())==0; } // do not check existence
-	inline path absolute( const wchar_t* base_for_relative=L"" ) const { return _wfullpath(__wcsbuf(),(!base_for_relative[0]||is_absolute())?data:wcscat(wcscpy(__wcsbuf(),base_for_relative),data),capacity); }	// do not directly return for non-canonicalized path
+	inline path absolute( const wchar_t* base=L"" ) const { return _wfullpath(__wcsbuf(),(!*base||is_absolute())?data:wcscat(wcscpy(__wcsbuf(),path(base).add_backslash()),data),capacity); }	// do not directly return for non-canonicalized path
 	inline path relative( const wchar_t* from=L"" ) const;
 	inline path canonical() const { path p=*this; p.canonicalize(); return p; }
 
@@ -348,7 +357,7 @@ public:
 	// utilities
 	static path temp( const wchar_t* subkey=L"" );
 	static path serial( path dir, const wchar_t* prefix, const wchar_t* postfix, int numzero=4 );
-	inline path key() const { if(!data[0])return path();path d;size_t n=0;for(size_t k=0,kn=length();k<kn;k++){wchar_t c=data[k];if(c!=L':')d[n++]=(!isalnum(c)&&c!=L'_')?L'.':(::tolower(c));}if(d[n-1]==L'.')n--;d[n]=0;return d;}
+	inline path key() const { if(!*data)return path();path d;size_t n=0;for(size_t k=0,kn=length();k<kn;k++){wchar_t c=data[k];if(c!=L':'&&c!=L' ') d[n++]=(c==L'\\'||c==L'/')?L'.':(::tolower(c));}if(d[n-1]==L'.')n--;d[n]=0;return d; }
 	inline path tolower() const { path d;size_t l=length();for(size_t k=0;k<l;k++)d[k]=::tolower(data[k]);d[l]=L'\0'; return d; }
 	inline path toupper() const { path d;size_t l=length();for(size_t k=0;k<l;k++)d[k]=::toupper(data[k]);d[l]=L'\0'; return d; }
 
@@ -523,6 +532,21 @@ struct gxTimer
 	static gxTimer* singleton(){ static gxTimer i; return &i; }
 };
 #endif
+
+//***********************************************
+// general dynamic linking wrapper with DLL
+struct dll_t
+{
+	HMODULE hdll = nullptr;
+
+	~dll_t(){ release(); }
+	void release(){ if(hdll){ FreeLibrary(hdll); hdll=nullptr; }  }
+	path file_path(){ path f; if(hdll) GetModuleFileNameW(hdll,f,path::capacity); return f; }
+	bool load( const wchar_t* dll_path ){ return nullptr!=(hdll=LoadLibraryW(dll_path)); }
+	template <class T> T get_proc_address( const char* name ) const { return hdll==nullptr?nullptr:(T)GetProcAddress(hdll,name); }
+	template <class T> T* get_proc_address( const char* name, T*& p ) const { return hdll==nullptr?p=nullptr:p=(T*)GetProcAddress(hdll,name); }
+	operator bool() const { return hdll!=nullptr; }
+};
 
 //***********************************************
 #endif // __GX_FILESYSTEM__
