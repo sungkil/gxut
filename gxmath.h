@@ -729,6 +729,7 @@ __forceinline uint miplevels( uint width, uint height=1 ){ uint l=0; uint s=widt
 __forceinline float rsqrt( float x ){ float y=0.5f*x; int i=*(int*)&x; i=0x5F375A86-(i>>1); x=*(float*)&i; x=x*(1.5f-y*x*x); x=x*(1.5f-y*x*x); return x; }						// Quake3's Fast InvSqrt(): 1/sqrt(x): magic number changed from 0x5f3759df to 0x5F375A86 for more accuracy; 2 iteration has quite good accuracy
 __forceinline double rsqrt( double x ){ double y=0.5*x; int64_t i=*(int64_t*)&x; i=0x5FE6EB50C7B537A9-(i>>1); x=*(double*)&i; x=x*(1.5-y*x*x); x=x*(1.5-y*x*x); return x; }		// Quake3's Fast InvSqrt(): 1/sqrt(x): 64-bit magic number (0x5FE6EB50C7B537A9) used; 2 iteration has quite good accuracy
 __forceinline uint bitswap( uint n ){ n=((n&0x55555555)<<1)|((n&0xaaaaaaaa)>>1); n=((n&0x33333333)<<2)|((n&0xcccccccc)>>2); n=((n&0x0f0f0f0f)<<4)|((n&0xf0f0f0f0)>>4); n=((n&0x00ff00ff)<<8)|((n&0xff00ff00)>>8); return (n<<16)|(n>>16); }
+__forceinline float triangle_area( vec2 a, vec2 b, vec2 c ){ return abs(a.x*b.y+b.x*c.y+c.x*a.y-a.x*c.y-c.x*b.y-b.x*a.y)*0.5f; }
 
 //***********************************************
 // {GLSL|HLSL}-like shader intrinsic functions
@@ -784,12 +785,15 @@ __forceinline uint packUnorm2x16( vec2 v ){ ushort2 u; for(int k=0;k<2;k++) u[k]
 __forceinline uint packSnorm2x16( vec2 v ){ short2 s; for(int k=0;k<2;k++) s[k]=short(round(clamp(v[k],-1.0f,1.0f)*32767.0f)); return reinterpret_cast<uint&>(s); }
 __forceinline uint packUnorm4x8( vec4 v ){ uchar4 u; for(int k=0;k<4;k++) u[k]=uchar(round(clamp(v[k],0.0f,1.0f)*255.0f)); return reinterpret_cast<uint&>(u); }
 __forceinline uint packSnorm4x8( vec4 v ){ char4 s; for(int k=0;k<4;k++) s[k]=char(round(clamp(v[k],-1.0f,1.0f)*127.0f)); return reinterpret_cast<uint&>(s); }
+__forceinline uint packHalf2x16( vec2 v ){ half2 h=ftoh(v); return reinterpret_cast<uint&>(h); }
 __forceinline vec2 unpackUnorm2x16( uint u ){ vec2 v; for(int k=0;k<2;k++) v[k]=reinterpret_cast<ushort2&>(u)[k]/65535.0f; return v; }
 __forceinline vec2 unpackSnorm2x16( uint u ){ vec2 v; for(int k=0;k<2;k++) v[k]=clamp(reinterpret_cast<short2&>(u)[k]/32767.0f,-1.0f,1.0f); return v; }
 __forceinline vec4 unpackUnorm4x8( uint u ){ vec4 v; for(int k=0;k<4;k++) v[k]=reinterpret_cast<uchar4&>(u)[k]/255.0f; return v; }
 __forceinline vec4 unpackSnorm4x8( uint u ){ vec4 v; for(int k=0;k<4;k++) v[k]=clamp(reinterpret_cast<char4&>(u)[k]/127.0f,-1.0f,1.0f); return v; }
-__forceinline uint packHalf2x16( vec2 v ){ half2 h=ftoh(v); return reinterpret_cast<uint&>(h); }
 __forceinline vec2 unpackHalf2x16( uint u ){ return htof(reinterpret_cast<half2&>(u)); }
+// uint packing/unpacking
+__forceinline uint packUint4x8( uint4 v ){ return (v[0]&0xff)+((v[1]&0xff)<<8)+((v[2]&0xff)<<16)+((v[3]&0xff)<<24); }
+__forceinline uvec4 unpackUint4x8( uint u ){ return uvec4(u&0xff,(u>>8)&0xff,(u>>16)&0xff,(u>>24)&0xff); }
 // casting
 __forceinline uint floatBitsToUint( float f ){ return reinterpret_cast<uint&>(f); }
 __forceinline int floatBitsToInt( float f ){ return reinterpret_cast<int&>(f); }
