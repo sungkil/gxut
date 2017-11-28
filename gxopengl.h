@@ -157,21 +157,21 @@ namespace gl {
 
 	//***********************************************
 #ifdef __GX_TIMER__
-	struct Timer : public GLObject
+	struct timer_t : public GLObject
 	{
 		const GLuint	ID1=0;
 		union { double2 result; struct { double x, y; }; };	// Async OpenGL Timestamp: (begin,end)
-		gxTimer&		qpc;	// synchronous QueryPerformance CPU counter: reference to external or internal counter
-		gxTimer			qpc0;	// synchronous QueryPerformance CPU counter: internal counter instance
+		gx::timer_t&	qpc;	// synchronous QueryPerformance CPU counter: reference to external or internal counter
+		gx::timer_t		qpc0;	// synchronous QueryPerformance CPU counter: internal counter instance
 		bool			complete=false;
 
 		static double&	offset(){ static double f=0; return f; }
-		static void		sync_with_qpc(){ static int64_t e=epoch(); glFinish(); double i=0,j=0;uint k;for(k=0;k<16;k++){j+=(gxGetInteger64v(GL_TIMESTAMP)-e)/1000000.0;i+=gxTimer::now();} offset()=(i-j)/double(k); glFinish(); }
+		static void		sync_with_qpc(){ static int64_t e=epoch(); glFinish(); double i=0,j=0;uint k;for(k=0;k<16;k++){j+=(gxGetInteger64v(GL_TIMESTAMP)-e)/1000000.0;i+=gx::timer_t::now();} offset()=(i-j)/double(k); glFinish(); }
 		static int64_t	epoch(){ static int64_t e=0; if(e) return e; auto* ef=(int64_t(*)()) GetProcAddress(GetModuleHandleW(nullptr),"rex_timer_epoch_GL"); if(ef) return e=ef(); else if(glGetInteger64v){ printf( "gl::Timer::epoch(): unable to get rex_timer_epoch_GL()\n" ); glGetInteger64v(GL_TIMESTAMP,&e); return e; } printf( "gl::epoch(): unable to get the epoch of OpenGL\n" ); return e=-1; }
 
 		// constructor: initialized with the internal qpc or an external qpc
-		Timer():Timer(qpc0){}
-		Timer(gxTimer& t):GLObject(gxCreateQuery(GL_TIMESTAMP),"",GL_TIMESTAMP),ID1(gxCreateQuery(target)),qpc(t){ result=qpc.result=dvec2(0.0); }
+		timer_t():timer_t(qpc0){}
+		timer_t(gx::timer_t& t):GLObject(gxCreateQuery(GL_TIMESTAMP),"",GL_TIMESTAMP),ID1(gxCreateQuery(target)),qpc(t){ result=qpc.result=dvec2(0.0); }
 
 		// gl::Timer specific implementations
 		virtual void	release(){ GLuint idx[2]={ID,ID1}; glDeleteQueries(2,idx); }
@@ -179,7 +179,7 @@ namespace gl {
 		inline void		finish(){ if(complete) return; static int64_t e=epoch(); static const GLenum q=GL_QUERY_RESULT; GLuint64 v; glGetQueryObjectui64v(ID,q,&v); x = double(v-e)/1000000.0+offset(); glGetQueryObjectui64v(ID1,q,&v); y=double(v-e)/1000000.0+offset(); complete=true; }
 		inline double	latency(){ if(!complete) finish(); return x-qpc.x; }	// difference between CPU time and the time for flushing preceding commands = result.x - qpc.x
 
-		// consistent interface with gxTimer
+		// consistent interface with gx::timer
 		inline void		begin(){ qpc.begin(); glQueryCounter(ID,target); complete=false; }
 		inline void		end(){ glQueryCounter(ID1,target); qpc.end(); complete=false; }
 		inline double	delta(){ if(!complete) finish(); return y-x; }

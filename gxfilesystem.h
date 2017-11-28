@@ -85,6 +85,7 @@
 extern int (*gprintf)( const char*, ... );
 extern int (*gwprintf)( const wchar_t*, ... );
 // utility functions
+template <class T> std::nullptr_t safe_free( T*& p ){if(p){free(p);p=nullptr;} return nullptr; }
 template <class T> std::nullptr_t safe_delete( T*& p ){if(p){delete p;p=nullptr;} return nullptr; }
 template <class T> std::nullptr_t safe_release( T*& p ){if(p){p->Release();p=nullptr;} return nullptr; }
 // nocase base template
@@ -520,17 +521,17 @@ inline void usleep( int us ){ std::this_thread::sleep_for(std::chrono::microseco
 // timer
 #ifndef __GX_TIMER__
 #define __GX_TIMER__
-struct gxTimer
+namespace gx { struct timer_t
 {
 	union { double2 result; struct { double x, y; }; };
-	inline gxTimer(){ begin(); }
+	inline timer_t(){ begin(); }
 	inline void clear(){ x=y=now(); }
 	inline void begin(){ x=now(); }
 	inline double end(){ return (y=now())-x; }
 	inline double delta(){ return y-x; }
 	static double now(){ static double c=0; if(c==0){ int64_t f;QueryPerformanceFrequency((LARGE_INTEGER*)&f);c=1000.0/double(f);} static int64_t e=0; if(e==0){auto* ef=(int64_t(*)()) GetProcAddress(GetModuleHandleW(nullptr),"rex_timer_epoch");if(ef)e=ef();else QueryPerformanceCounter((LARGE_INTEGER*)&e);} int64_t i; QueryPerformanceCounter((LARGE_INTEGER*)&i); return double(i-e)*c; } // if rex found, use its epoch; otherwise, use a local epoch
-	static gxTimer* singleton(){ static gxTimer i; return &i; }
-};
+	static timer_t* singleton(){ static timer_t i; return &i; }
+};}
 #endif
 
 //***********************************************

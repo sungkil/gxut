@@ -86,6 +86,7 @@
 extern int (*gprintf)( const char*, ... );
 extern int (*gwprintf)( const wchar_t*, ... );
 // utility functions
+template <class T> std::nullptr_t safe_free( T*& p ){if(p){free(p);p=nullptr;} return nullptr; }
 template <class T> std::nullptr_t safe_delete( T*& p ){if(p){delete p;p=nullptr;} return nullptr; }
 template <class T> std::nullptr_t safe_release( T*& p ){if(p){p->Release();p=nullptr;} return nullptr; }
 // nocase base template
