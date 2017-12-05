@@ -232,17 +232,9 @@ namespace zlib
 template <unsigned int poly>
 __noinline inline unsigned int tcrc32( const unsigned char* buff, size_t size, unsigned int crc0 )
 {
-	if(buff==nullptr||size==0) return crc0;
-	static unsigned* t[4] = {nullptr};
-	if(!t[0])
-	{
-		for(int k=0;k<4;k++) t[k]=(unsigned*) malloc(sizeof(unsigned)*256);
-		for(int k=0;k<256;k++){ unsigned c=k; for( unsigned j=0;j<8;j++) c=c&1?poly^(c>>1):c>>1; t[0][k]=c; }
-		for(int k=0;k<256;k++){ unsigned c=t[0][k]; for(int j=1;j<4;j++) t[j][k]=c=t[0][c&0xff]^(c>>8); }
-	}
-
-	unsigned c = ~crc0;
-	for(;size&&(((ptrdiff_t)buff)&7);size--,buff++) c=t[0][(c^(*buff))&0xff]^(c>>8);	 // move forward to the 8-byte aligned boundary
+	static unsigned* t[4] = {nullptr}; if(!t[0]){ for(int k=0;k<4;k++) t[k]=(unsigned*) malloc(sizeof(unsigned)*256); for(int k=0;k<256;k++){ unsigned c=k; for( unsigned j=0;j<8;j++) c=c&1?poly^(c>>1):c>>1; t[0][k]=c; } for(int k=0;k<256;k++){ unsigned c=t[0][k]; for(int j=1;j<4;j++) t[j][k]=c=t[0][c&0xff]^(c>>8); } }
+	if(buff==nullptr||size==0) return crc0; unsigned c = ~crc0;
+	for(;size&&(((ptrdiff_t)buff)&7);size--,buff++) c=t[0][(c^(*buff))&0xff]^(c>>8); // move forward to the 8-byte aligned boundary
 	for(;size>=4;size-=4,buff+=4){c^=*(unsigned*)buff;c=t[3][(c>>0)&0xff]^t[2][(c>>8)&0xff]^t[1][(c>>16)&0xff]^t[0][(c>>24)&0xff]; }
 	for(;size;size--,buff++) c=t[0][(c^(*buff))&0xff]^(c>>8);
 	return ~c;

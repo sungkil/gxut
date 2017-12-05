@@ -80,25 +80,26 @@ static_assert(sizeof(light_t)%16==0,"size of struct light_t should be aligned at
 
 //***********************************************
 // ray
-template <class T=float> struct tray_t // template used to avoid non-trivial constructors in unions
+template <class T=float> struct ray_t // template used to avoid non-trivial constructors in unions
 {
 	union{struct{tvec3<T> pos,dir;tvec4<T> tex;};struct{tvec3<T> o,d;float t,tfar,time;int depth;};}; // lens system rays (with texcoord) or pbrt-like rays (tnear/tfar = parameters of the nearest/farthest intersections)
-	tray_t():t(0.0f),tfar(FLT_MAX),time(0.0f),depth(0){}
-	tray_t( const tvec3<T>& _pos, const tvec3<T>& _dir, float _tnear=0.0f, float _tfar=FLT_MAX ):tray_t(){ pos=_pos; dir=_dir; t=_tnear; tfar=_tfar; }
+	ray_t():t(0.0f),tfar(FLT_MAX),time(0.0f),depth(0){}
+	ray_t( const tvec3<T>& _pos, const tvec3<T>& _dir, float _tnear=0.0f, float _tfar=FLT_MAX ):ray_t(){ pos=_pos; dir=_dir; t=_tnear; tfar=_tfar; }
+	ray_t( const tvec3<T>& _pos, const tvec3<T>& _dir, const tvec4<T>& _tex ):ray_t(){ pos=_pos; dir=_dir; tex=_tex; }
 };
-using ray = tray_t<float>;
+using ray = ray_t<float>;
 
 //***********************************************
 // intersection
 struct isect
 {
-	vec3	pos;			// position at intersection
-	vec3	norm;			// normal at intersection
-	vec2	bc;				// barycentric coordinates at t
-	float	t=FLT_MAX;		// (nearest,farthest) intersections
-	float	tfar=FLT_MAX;	// (nearest,farthest) intersections
-	uint	g=-1;			// index of an intersected geometry
-	bool	hit=0, _[3];	// is intersected? and padding
+	vec3	pos;							// position at intersection
+	vec3	norm;							// normal at intersection
+	float	t=FLT_MAX;						// nearest intersection: t<0 indicates inverted intersection on spherical surfaces
+	union	{float tfar=FLT_MAX,theta;};	// farthest intersection (gxut) or incident angle (oxut)
+	bool	hit=0;							// is intersected? and padding
+	vec2	bc;								// barycentric coordinates at t 
+	uint	g=-1;							// index of an intersected geometry
 };
 
 //***********************************************
@@ -546,7 +547,7 @@ __noinline inline bool intersect( const ray& r, const vec3& v0, const vec3& v1, 
 
 	vec3 u=v1-v0, v=v2-v0, n=u.cross(v); if(n.length()==0) return false;	// degenerate case: non-triangle
 	float b=dot(n,r.dir); if(b>-0.000001f) return false;					// skip backfaces or rays lying on the plane
-	float t=dot(n,v0-r.pos)/b; if(t<r.t||t>r.tfar) return false;		// out of range of [tnear,tfar]
+	float t=dot(n,v0-r.pos)/b; if(t<r.t||t>r.tfar) return false;			// out of range of [tnear,tfar]
 	vec3 ipos=r.pos+t*r.dir, w=ipos-v0;
 	
 	// barycentric coord test
