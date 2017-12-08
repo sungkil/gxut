@@ -366,28 +366,28 @@ namespace gl {
 	// this vertex array generates multiple instances of VAO to bind multiple programs
 	struct VertexArray : public GLObject
 	{
-		VertexArray( GLuint ID, const char* name ):GLObject(ID,name,GL_VERTEX_ARRAY),vertexBuffer(nullptr),indexBuffer(nullptr),numVertex(0),numIndex(0){};
-		virtual void release(){ if(vertexBuffer){ delete vertexBuffer; vertexBuffer=nullptr; } if(indexBuffer){ delete indexBuffer; indexBuffer=nullptr; } GLuint id=ID; if(id) glDeleteVertexArrays( 1, &id ); }
+		VertexArray( GLuint ID, const char* name ):GLObject(ID,name,GL_VERTEX_ARRAY),vertex_buffer(nullptr),index_buffer(nullptr),vertex_count(0),index_count(0){};
+		virtual void release(){ if(vertex_buffer){ delete vertex_buffer; vertex_buffer=nullptr; } if(index_buffer){ delete index_buffer; index_buffer=nullptr; } GLuint id=ID; if(id) glDeleteVertexArrays( 1, &id ); }
 		GLuint bind( bool bBind=true ){ GLuint b0=binding(); if(!bBind||b0!=ID) glBindVertexArray( bBind?ID:0 ); return b0; }
 
-		inline void drawArrays( GLint first, GLsizei count, GLenum mode=GL_TRIANGLES ){ GLuint b0=bind(); glDrawArrays( mode, first, count ); }
-		inline void drawQuads( GLuint start=0, GLsizei count=6 ){ if(indexBuffer==nullptr) return; GLuint b0=bind(); glDrawElements( GL_TRIANGLES, count, GL_UNSIGNED_INT, (GLvoid*)(start*sizeof(GLuint))); } // GL_QUADS deprecated
+		inline void draw_arrays( GLint first, GLsizei count, GLenum mode=GL_TRIANGLES ){ GLuint b0=bind(); glDrawArrays( mode, first, count ); }
+		inline void draw_quads( GLuint start=0, GLsizei count=6 ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glDrawElements( GL_TRIANGLES, count, GL_UNSIGNED_INT, (GLvoid*)(start*sizeof(GLuint))); } // GL_QUADS deprecated
 
-		inline void drawElements( GLuint start, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ if(indexBuffer==nullptr) return; GLuint b0=bind(); glDrawElements( mode, GLsizei(count==0?numIndex:count), GL_UNSIGNED_INT, uint_offset(start) ); }
-		inline void drawElementsInstanced( GLuint start, GLsizei instance_count, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ if(indexBuffer==nullptr) return; GLuint b0=bind(); glDrawElementsInstanced( mode, GLsizei(count==0?numIndex:count), GL_UNSIGNED_INT, uint_offset(start), instance_count ); }
-		inline void drawElementsIndirect( GLvoid* indirect=nullptr, GLenum mode=GL_TRIANGLES ){ if(indexBuffer==nullptr) return; GLuint b0=bind(); glDrawElementsIndirect( mode, GL_UNSIGNED_INT, indirect ); }
-		inline void drawRangeElements( GLuint start, GLuint end, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ if(indexBuffer==nullptr) return; GLuint b0=bind(); glDrawRangeElements( mode, start, end, GLsizei(count==0?numIndex:count), GL_UNSIGNED_INT, uint_offset(start)); }
-		inline void multiDrawElements( GLuint* pstart, const GLsizei* pcount, GLsizei draw_count, GLenum mode=GL_TRIANGLES ){ if(indexBuffer==nullptr) return; GLuint b0=bind(); glMultiDrawElements( mode, pcount, GL_UNSIGNED_INT, uint_offset(pstart,draw_count), draw_count ); }
-		inline void multiDrawElementsIndirect( GLsizei draw_count, GLsizei stride=sizeof(DrawElementsIndirectCommand), GLvoid* indirect=nullptr, GLenum mode=GL_TRIANGLES ){ if(indexBuffer==nullptr) return; GLuint b0=bind(); glMultiDrawElementsIndirect( mode, GL_UNSIGNED_INT, indirect, draw_count, stride ); }
-		inline void multiDrawElementsIndirectCount( GLsizei max_draw_count, GLsizei stride=sizeof(DrawElementsIndirectCommand), const void* indirect=0 /* GL_DRAW_INDIRECT_BUFFER */, GLintptr draw_count=0 /* GL_PARAMETER_BUFFER_ARB */, GLenum mode=GL_TRIANGLES ){ if(indexBuffer==nullptr) return; GLuint b0=bind(); glMultiDrawElementsIndirectCountARB( mode, GL_UNSIGNED_INT, indirect, draw_count, max_draw_count, stride ); }
+		inline void draw_elements( GLuint start, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glDrawElements( mode, GLsizei(count==0?index_count:count), GL_UNSIGNED_INT, uint_offset(start) ); }
+		inline void draw_elements_instanced( GLuint start, GLsizei instance_count, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glDrawElementsInstanced( mode, GLsizei(count==0?index_count:count), GL_UNSIGNED_INT, uint_offset(start), instance_count ); }
+		inline void draw_elements_indirect( GLvoid* indirect=nullptr, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glDrawElementsIndirect( mode, GL_UNSIGNED_INT, indirect ); }
+		inline void draw_range_elements( GLuint start, GLuint end, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glDrawRangeElements( mode, start, end, GLsizei(count==0?index_count:count), GL_UNSIGNED_INT, uint_offset(start)); }
+		inline void multi_draw_elements( GLuint* pstart, const GLsizei* pcount, GLsizei draw_count, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glMultiDrawElements( mode, pcount, GL_UNSIGNED_INT, uint_offset(pstart,draw_count), draw_count ); }
+		inline void multi_draw_elements_indirect( GLsizei draw_count, GLsizei stride=sizeof(DrawElementsIndirectCommand), GLvoid* indirect=nullptr, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glMultiDrawElementsIndirect( mode, GL_UNSIGNED_INT, indirect, draw_count, stride ); }
+		inline void multi_draw_elements_indirect_count( GLsizei max_draw_count, GLsizei stride=sizeof(DrawElementsIndirectCommand), const void* indirect=0 /* GL_DRAW_INDIRECT_BUFFER */, GLintptr draw_count=0 /* GL_PARAMETER_BUFFER_ARB */, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glMultiDrawElementsIndirectCountARB( mode, GL_UNSIGNED_INT, indirect, draw_count, max_draw_count, stride ); }
 
 		inline GLvoid* uint_offset( GLuint start ){ return (GLvoid*)(start*sizeof(GLuint)); }
 		inline const GLvoid* const* uint_offset( GLuint* pstart, GLsizei draw_count ){ static std::vector<GLvoid*> offsets; if(offsets.size()<uint(draw_count)) offsets.resize(draw_count); for( int k=0; k<draw_count; k++ ) offsets[k] = (GLvoid*)(pstart[k]*sizeof(GLuint)); return &offsets[0]; }
 
-		Buffer*		vertexBuffer;
-		Buffer*		indexBuffer;
-		size_t		numVertex;
-		size_t		numIndex;
+		Buffer*		vertex_buffer;
+		Buffer*		index_buffer;
+		size_t		vertex_count;
+		size_t		index_count;
 	};
 
 	//***********************************************
@@ -491,8 +491,9 @@ namespace gl {
 	{
 		for(int k=0,texID=0,n=gxGetProgramiv( ID, GL_ACTIVE_UNIFORMS );k<n;k++)
 		{
-			Uniform u; GLsizei l; glGetActiveUniform(ID,k,std::extent<decltype(u.name)>::value-1,&l,&u.arraySize,&u.type,u.name); if(strstr(u.name,"gl_")) continue;
-			u.textureID=-1; u.texture=nullptr; u.ID = glGetUniformLocation(ID,u.name); bool bTexture=gxIsSamplerType(u.type); if(bTexture) u.textureID=texID++; uniform_cache[u.name]=u; if(u.arraySize==1) continue;
+			Uniform u; GLsizei l; glGetActiveUniform(ID,k,std::extent<decltype(u.name)>::value-1,&l,&u.arraySize,&u.type,u.name);
+			if(strstr(u.name,"gl_")) continue; u.ID = glGetUniformLocation(ID,u.name); if(u.ID<0) continue;
+			u.textureID=-1; u.texture=nullptr; bool bTexture=gxIsSamplerType(u.type); if(bTexture) u.textureID=texID++; uniform_cache[u.name]=u; if(u.arraySize==1) continue;
 			GLchar name[256]; strcpy(name,u.name); GLint loc=0; GLchar* bracket=strchr(name,'['); if(bracket) bracket[0]='\0';
 			for( GLint loc=bracket?1:0;loc<u.arraySize;loc++){ Uniform u1=u;sprintf(u1.name,"%s[%d]",name,loc);u1.ID=glGetUniformLocation(ID,u1.name);if(u1.ID==-1)continue;u1.arraySize=u.arraySize-loc;if(bTexture)u1.textureID=texID++;uniform_cache[u1.name]=u1; }
 		}
@@ -530,15 +531,15 @@ namespace gl {
 
 		Program::Uniform* getUniform( const char* name ){ return activeProgram?activeProgram->getUniform(name):nullptr; }
 		Program::Uniform* getUniform( const std::string& name ){ return activeProgram?activeProgram->getUniform(name.c_str()):nullptr; }
-		template <class T>	void setUniform( const char* name, const T& v ){ if(activeProgram) activeProgram->setUniform(name,v); }
+		template <class T>	void setUniform( const char* name, const T& v, GLsizei count=1 ){ if(activeProgram) activeProgram->setUniform(name,v,count); }
 		template <class T>	void setUniform( const char* name, T* v, GLsizei count=1 ){ if(activeProgram) activeProgram->setUniform(name,v,count); }
 		void setUniform( const char* name, Texture* t ){ if(activeProgram) activeProgram->setUniform(name,t); }
-		template <class T>	void setUniform( const std::string& name, const T& v ){ if(activeProgram) activeProgram->setUniform(name.c_str(),v); }
+		template <class T>	void setUniform( const std::string& name, const T& v, GLsizei count=1 ){ if(activeProgram) activeProgram->setUniform(name.c_str(),v,count); }
 		template <class T>	void setUniform( const std::string& name, T* v, GLsizei count=1 ){ if(activeProgram) activeProgram->setUniform(name.c_str(),v,count); }
 		void setUniform( const std::string& name, Texture* t ){ if(activeProgram) activeProgram->setUniform(name.c_str(),t); }
 
 		// uniform buffer/block
-		gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name); if(b&&b->size()!=size){ printf("[%s] create_uniform_buffer(): uniform_buffer[%s]->size(%d)!=size(%d)\n",getName(),b->getName(),int(b->size()),int(size)); } if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr); if(b) return uniformBufferMap[name]=b; printf("[%s] unable to create uniform buffer [%s]\n",getName(), name); return nullptr; }
+		gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name); if(b&&b->size()!=size){ printf("[%s] create_uniform_buffer(): uniform_buffer[%s]->size(%d)!=size(%d)\n",getName(),b->getName(),int(b->size()),int(size)); } if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr); if(b){ bind_uniform_buffer(name,b); return uniformBufferMap[name]=b; } printf("[%s] unable to create uniform buffer [%s]\n",getName(), name); return nullptr; }
 		gl::Buffer* get_uniform_buffer( const char* name ){ auto it=uniformBufferMap.find(name); return it==uniformBufferMap.end()?nullptr:it->second; }
 		GLuint get_uniform_block_binding( const char* name ){ GLint binding=activeProgram?activeProgram->get_uniform_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programList ){ GLint binding=program->get_uniform_block_binding(name); if(binding!=-1) return binding; } return -1; }
 		void bind_uniform_buffer( const char* name, gl::Buffer* ub=nullptr /* if nullptr, use default buffer */ ){ gl::Buffer* b=ub?ub:get_uniform_buffer(name); GLuint binding=get_uniform_block_binding(name); if(b&&binding!=-1) b->bind_base(binding); else if(!b) printf( "[%s] bind_uniform_buffer(): unable to find uniform buffer %s\n", getName(), name ); else printf( "[%s] bind_uniform_buffer(): unable to find uniform buffer binding %s\n", getName(), name ); }
@@ -548,7 +549,7 @@ namespace gl {
 		void bind_shader_storage_buffer( const char* name, Buffer* buffer ){ GLint binding=get_shader_storage_block_binding(name); if(binding<0) return; if(buffer->target==GL_SHADER_STORAGE_BUFFER) buffer->bind_base(binding); else buffer->bind_base_as(GL_SHADER_STORAGE_BUFFER,binding); }
 
 		// draw or compute
-		inline void draw_quads(){ pQuad->drawQuads(); }
+		inline void draw_quads(){ pQuad->draw_quads(); }
 		inline void dispatch_compute( GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z=1 ){ glDispatchCompute( num_groups_x?num_groups_x:1, num_groups_y?num_groups_y:1, num_groups_z?num_groups_z:1 ); }
 		inline void dispatch_compute( GLuint num_threads_x, double local_size_x, GLuint num_threads_y, double local_size_y, GLuint num_threads_z=1, double local_size_z=1 )	{ GLuint num_groups_x = max(GLuint(ceil(num_threads_x/float(local_size_x))),1), num_groups_y = max(GLuint(ceil(num_threads_y/float(local_size_y))),1), num_groups_z = max(GLuint(ceil(num_threads_z/float(local_size_z))),1); dispatch_compute(num_groups_x, num_groups_y, num_groups_z ); }
 		inline void dispatch_compute_indirect( GLintptr indirect ){ glDispatchComputeIndirect( indirect ); }
@@ -779,39 +780,39 @@ inline gl::Buffer* gxCreateBuffer( const char* name, GLenum target, GLsizeiptr s
 }
 
 //***********************************************
-inline gl::VertexArray* gxCreateVertexArray( const char* name, vertex* pVertices, size_t numVertices, uint* pIndices=nullptr, size_t numIndices=0, GLenum usage=GL_STATIC_DRAW )
+inline gl::VertexArray* gxCreateVertexArray( const char* name, vertex* p_vertices, size_t vertex_count, uint* p_indices=nullptr, size_t index_count=0, GLenum usage=GL_STATIC_DRAW )
 {
-	if(numVertices==0){ printf( "gxCreateVertexArray('%s'): numVertices==0\n", name ); return nullptr; }
+	if(vertex_count==0){ printf( "gxCreateVertexArray('%s'): vertex_count==0\n", name ); return nullptr; }
 
 	GLuint ID=gxCreateVertexArray(); if(ID==0) return nullptr;
 	gl::VertexArray* pVertexArray = new gl::VertexArray( ID, name );
 	
-	pVertexArray->vertexBuffer = gxCreateBuffer( "vertexBuffer", GL_ARRAY_BUFFER, sizeof(vertex)*numVertices, usage, pVertices ); if(pVertexArray->vertexBuffer==nullptr){ printf( "gxCreateVertexArray(): unable to create vertexBuffer\n" ); pVertexArray->release(); return nullptr; }
-	if(pIndices&&numIndices){ pVertexArray->indexBuffer = gxCreateBuffer( "indexBuffer", GL_ELEMENT_ARRAY_BUFFER, sizeof(uint)*numIndices, usage, pIndices ); if(pVertexArray->indexBuffer==nullptr){ printf( "gxCreateVertexArray(): unable to create indexBuffer\n" ); pVertexArray->release(); return nullptr; } }
+	pVertexArray->vertex_buffer = gxCreateBuffer( "vertexBuffer", GL_ARRAY_BUFFER, sizeof(vertex)*vertex_count, usage, p_vertices ); if(pVertexArray->vertex_buffer==nullptr){ printf( "gxCreateVertexArray(): unable to create vertex_buffer\n" ); pVertexArray->release(); return nullptr; }
+	if(p_indices&&index_count){ pVertexArray->index_buffer = gxCreateBuffer( "indexBuffer", GL_ELEMENT_ARRAY_BUFFER, sizeof(uint)*index_count, usage, p_indices ); if(pVertexArray->index_buffer==nullptr){ printf( "gxCreateVertexArray(): unable to create index_buffer\n" ); pVertexArray->release(); return nullptr; } }
 
 	// use fixed binding (without direct state access)
 	pVertexArray->bind();
 	static const GLuint offset[] = { offsetof(vertex,pos), offsetof(vertex,norm), offsetof(vertex,tex) };
 	static const GLint  size[]	 = { sizeof(vertex::pos)/sizeof(GLfloat), sizeof(vertex::norm)/sizeof(GLfloat), sizeof(vertex::tex)/sizeof(GLfloat) };
 	for( GLuint k=0; k<3; k++ ){ glEnableVertexAttribArray( k ); glVertexAttribBinding( k, 0 ); glVertexAttribFormat( k, size[k], GL_FLOAT, GL_FALSE, offset[k] ); }
-	glBindVertexBuffer( 0, pVertexArray->vertexBuffer->ID, 0, sizeof(vertex) );
-	if(pVertexArray->indexBuffer) glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, pVertexArray->indexBuffer->ID );
+	glBindVertexBuffer( 0, pVertexArray->vertex_buffer->ID, 0, sizeof(vertex) );
+	if(pVertexArray->index_buffer) glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, pVertexArray->index_buffer->ID );
 	pVertexArray->bind(false);
 
-	pVertexArray->numVertex = numVertices;
-	pVertexArray->numIndex = pVertexArray->indexBuffer ? numIndices : 0;
+	pVertexArray->vertex_count = vertex_count;
+	pVertexArray->index_count = pVertexArray->index_count ? index_count : 0;
 	
 	return pVertexArray;
 }
 //***********************************************
 inline gl::VertexArray* gxCreateQuadVertexArray()
 {
-	static vertex quadVertex[]	= { {vec3(-1,-1,0),vec3(0,0,-1),vec2(0,0)}, {vec3(1,-1,0),vec3(0,0,-1),vec2(1,0)}, {vec3(1,1,0),vec3(0,0,-1),vec2(1,1)}, {vec3(-1,1,0),vec3(0,0,-1),vec2(0,1)}, };
-	static uint quadIndex[]		= { 0, 1, 3, 1, 2, 3 };
+	static vertex vertices[] = { {vec3(-1,-1,0),vec3(0,0,-1),vec2(0,0)}, {vec3(1,-1,0),vec3(0,0,-1),vec2(1,0)}, {vec3(1,1,0),vec3(0,0,-1),vec2(1,1)}, {vec3(-1,1,0),vec3(0,0,-1),vec2(0,1)}, };
+	static uint indices[]	 = { 0, 1, 3, 1, 2, 3 };
 
-	gl::VertexArray* quadVertexArray = gxCreateVertexArray( "QuadBuffer", quadVertex, std::extent<decltype(quadVertex)>::value, quadIndex, std::extent<decltype(quadIndex)>::value, GL_STATIC_DRAW );
-	if(quadVertexArray==nullptr){ printf( "gxCreateQuadBuffer(): Unable to create QuadBuffer\n" ); return nullptr; }
-	return quadVertexArray;
+	gl::VertexArray* quad_vertex_array = gxCreateVertexArray( "QUAD", vertices, std::extent<decltype(vertices)>::value, indices, std::extent<decltype(indices)>::value, GL_STATIC_DRAW );
+	if(quad_vertex_array==nullptr){ printf( "gxCreateQuadVertexArray(): Unable to create QUAD\n" ); return nullptr; }
+	return quad_vertex_array;
 }
 
 //***********************************************
@@ -870,7 +871,7 @@ inline void gxInfoLog( const char* name, const char* msg, std::map<size_t,std::s
 	for( size_t k=0,kn=vm.size();k<kn;k++ )
 	{
 		const char* v = vm[k].c_str(); printf("%s: %s\n", name, v ); if(lines==nullptr) continue;
-		char s[8192]={0};const char *l=strchr(v,'('), *r=strchr(v,')'); if(!l||!r||l>=r) continue;
+		char s[16384]={0};const char *l=strchr(v,'('), *r=strchr(v,')'); if(!l||!r||l>=r) continue;
 		memcpy(s,l+1,r-l-1); s[r-l-1]=0;
 		auto it=lines->find(size_t(atoi(s))); if(it==lines->end()) continue;
 		printf( ">> %s\n", trim(str_replace(it->second.c_str(),"%", "%%")) );	// % causes crash in gprintf
@@ -907,9 +908,9 @@ inline GLuint gxCompileShaderSource( GLenum shaderType, const char* name, const 
 	glShaderSource( ID, 1, &source, nullptr );
 	glCompileShader( ID );
 
-	static const int MAX_LOG_LENGTH=1024; static char msg[MAX_LOG_LENGTH] = {0}; GLint L; bool bLogExists;
+	static const int MAX_LOG_LENGTH=8192; static char msg[MAX_LOG_LENGTH] = {0}; GLint L; bool bLogExists;
 	glGetShaderInfoLog(ID,MAX_LOG_LENGTH,&L,msg); bLogExists=L>1&&L<=MAX_LOG_LENGTH;
-	if(bLogExists){ static auto v=gxExplodeShaderSourceMap(source); gxInfoLog(name,msg,&v); }
+	if(bLogExists){ auto v=gxExplodeShaderSourceMap(source); gxInfoLog(name,msg,&v); }
 	if(gxGetShaderiv(ID,GL_COMPILE_STATUS)!=GL_TRUE){ glDeleteShader(ID); return 0; }
 
 	return ID;
@@ -1112,7 +1113,7 @@ inline gl::Effect* gxCreateEffect( const char* name, const char* effectSource, c
 	for( int k=0, kn=parser->program_count(); k<kn; k++ )
 	{
 		std::map<uint,std::string> shader_map; for( int j=0; j<parser->shader_count(k); j++ ) shader_map[parser->shader_type(k,j)]=parser->shader_source(k,j);
-		if(!e->createProgram( name, parser->program_name(k), shader_map, nullptr )){ printf( "Unable to create %s.%s\n", name, parser->program_name(k) ); glfxDeleteParser(&parser); delete e; return nullptr; }
+		if(!e->createProgram( name, parser->program_name(k), shader_map, nullptr )){ printf( "Unable to create %s.%s\n", name, parser->program_name(k) ); glfxDeleteParser(&parser); if(e!=pEffectToAppend) delete e; return nullptr; }
 	}
 	glfxDeleteParser(&parser);
 
