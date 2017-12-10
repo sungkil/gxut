@@ -397,7 +397,7 @@ struct mat2 : public tarray<float,4>
 	union { float a[4]; struct {float _11,_12,_21,_22;}; };
 
 	// constructors
-	__forceinline mat2(){ setIdentity(); }
+	__forceinline mat2(){ set_identity(); }
 	__forceinline mat2( mat2&& v ) = default;
 	__forceinline mat2( const mat2& v ) = default;
 	__forceinline mat2( float f11, float f12, float f21, float f22 ){_11=f11;_12=f12;_21=f21;_22=f22;}
@@ -442,13 +442,23 @@ struct mat2 : public tarray<float,4>
 
 	// identity and transpose
 	__forceinline static mat2 identity(){ return mat2(); }
-	__forceinline mat2& setIdentity(){ _12=_21=0.0f;_11=_22=1.0f; return *this; }
+	__forceinline mat2& set_identity(){ _12=_21=0.0f;_11=_22=1.0f; return *this; }
 	__forceinline mat2 transpose() const { return mat2(_11,_21,_12,_22); }
 
 	// determinant/trace/inverse
 	__forceinline float det() const { return _11*_22 - _12*_21; }
 	__forceinline float trace() const { return _11+_22; }
 	__forceinline mat2 inverse() const { float s=1.0f/det(); return mat2( +_22*s, -_12*s, -_21*s, +_11*s ); }
+
+	// static row-major transformations: 2D transformation in 2D Cargesian coordinate system
+	__forceinline static mat2 scale( const vec2& v ){ return mat2().set_scale(v); }
+	__forceinline static mat2 scale( float x, float y ){ return mat2().set_scale(x,y); }
+	__forceinline static mat2 rotate( float theta ){ return mat2().set_rotate(theta); }
+	
+	// row-major transformations: 2D transformation in 2D Cargesian coordinate system
+	__forceinline mat2& set_scale( const vec2& v ){ _11=v.x; _12=0.0f; _21=0.0f; _22=v.y; return *this; }
+	__forceinline mat2& set_scale( float x, float y ){ _11=x; _12=0.0f; _21=0.0f; _22=y; return *this; }
+	__forceinline mat2& set_rotate( float theta ){ _11=_22=cosf(theta);_21=sinf(theta);_12=-_21; return *this; }
 };
 
 //***********************************************
@@ -457,7 +467,7 @@ struct mat3 : public tarray<float,9>
 	union{float a[9];struct{float _11,_12,_13,_21,_22,_23,_31,_32,_33;};};
 
 	// constructors
-	__forceinline mat3(){ setIdentity(); }
+	__forceinline mat3(){ set_identity(); }
 	__forceinline mat3( mat3&& )=default;
 	__forceinline mat3( const mat3& )=default;
 	__forceinline mat3( float f11, float f12, float f13, float f21, float f22, float f23, float f31, float f32, float f33 ){_11=f11;_12=f12;_13=f13;_21=f21;_22=f22;_23=f23;_31=f31;_32=f32;_33=f33;}
@@ -504,13 +514,27 @@ struct mat3 : public tarray<float,9>
 
 	// identity and transpose
 	__forceinline static mat3 identity(){ return mat3(); }
-	__forceinline mat3& setIdentity(){ _12=_13=_21=_23=_31=_32=0.0f;_11=_22=_33=1.0f; return *this; }
+	__forceinline mat3& set_identity(){ _12=_13=_21=_23=_31=_32=0.0f;_11=_22=_33=1.0f; return *this; }
 	__forceinline mat3 transpose() const { return mat3(_11,_21,_31,_12,_22,_32,_13,_23,_33); }
 
 	// determinant/trace/inverse
 	__forceinline float det() const { return _11*(_22*_33-_23*_32) + _12*(_23*_31-_21*_33) + _13*(_21*_32-_22*_31); }
 	__forceinline float trace() const { return _11+_22+_33; }
 	__forceinline mat3 inverse() const { float s=1.0f/det(); return mat3( (_22*_33-_32*_23)*s, (_13*_32-_12*_33)*s, (_12*_23-_13*_22)*s, (_23*_31-_21*_33)*s, (_11*_33-_13*_31)*s, (_21*_13-_11*_23)*s, (_21*_32-_31*_22)*s, (_31*_12-_11*_32)*s, (_11*_22-_21*_12)*s ); }
+
+	// static row-major transformations: 2D transformation in 3D homogeneous coordinate system
+	__forceinline static mat3 translate( const vec2& v ){ return mat3().set_translate(v); }
+	__forceinline static mat3 translate( float x, float y ){ return mat3().set_translate(x,y); }
+	__forceinline static mat3 scale( const vec2& v ){ return mat3().set_scale(v); }
+	__forceinline static mat3 scale( float x, float y ){ return mat3().set_scale(x,y); }
+	__forceinline static mat3 rotate( float theta ){ return mat3().set_rotate(theta); }
+	
+	// row-major transformations: 2D transformation in 3D homogeneous coordinate system
+	__forceinline mat3& set_translate( const vec2& v ){ set_identity(); _13=v.x; _23=v.y; return *this; }
+	__forceinline mat3& set_translate( float x,float y ){ set_identity(); _13=x; _23=y; return *this; }
+	__forceinline mat3& set_scale( const vec2& v ){ set_identity(); _11=v.x; _22=v.y; return *this; }
+	__forceinline mat3& set_scale( float x, float y ){ set_identity(); _11=x; _22=y; return *this; }
+	__forceinline mat3& set_rotate( float theta ){ set_identity(); _11=_22=cosf(theta);_21=sinf(theta);_12=-_21; return *this; }
 };
 
 //***********************************************
@@ -520,7 +544,7 @@ struct mat4 : public tarray<float,16>
 	union{float a[16];struct{float _11,_12,_13,_14,_21,_22,_23,_24,_31,_32,_33,_34,_41,_42,_43,_44;}; };
 
 	// constructors
-	__forceinline mat4(){ setIdentity(); }
+	__forceinline mat4(){ set_identity(); }
 	__forceinline mat4( mat4&& )=default;
 	__forceinline mat4( const mat4& )=default;
 	__forceinline mat4( float f11, float f12, float f13, float f14, float f21, float f22, float f23, float f24, float f31, float f32, float f33, float f34, float f41, float f42, float f43, float f44 ){_11=f11;_12=f12;_13=f13;_14=f14;_21=f21;_22=f22;_23=f23;_24=f24;_31=f31;_32=f32;_33=f33;_34=f34;_41=f41;_42=f42;_43=f43;_44=f44;}
@@ -573,7 +597,7 @@ struct mat4 : public tarray<float,16>
 	
 	// identity and transpose
 	__forceinline static mat4 identity(){ return mat4(); }
-	__forceinline mat4& setIdentity(){ _12=_13=_14=_21=_23=_24=_31=_32=_34=_41=_42=_43=0.0f;_11=_22=_33=_44=1.0f; return *this; }
+	__forceinline mat4& set_identity(){ _12=_13=_14=_21=_23=_24=_31=_32=_34=_41=_42=_43=0.0f;_11=_22=_33=_44=1.0f; return *this; }
 	__forceinline mat4 transpose() const { return mat4(_11,_21,_31,_41,_12,_22,_32,_42,_13,_23,_33,_43,_14,_24,_34,_44); }
 
 	// determinant/trace/inverse
@@ -583,41 +607,35 @@ struct mat4 : public tarray<float,16>
 	mat4 inverse() const;
 
 	// static row-major transformations
-	__forceinline static mat4 translate( const vec3& v ){ return mat4().setTranslate(v); }
-	__forceinline static mat4 translate( float x, float y, float z ){ return mat4().setTranslate(x,y,z); }
-	__forceinline static mat4 scale( const vec3& v ){ return mat4().setScale(v); }
-	__forceinline static mat4 scale( float x, float y, float z ){ return mat4().setScale(x,y,z); }
-	__forceinline static mat4 shear( const vec2& yz, const vec2& zx, const vec2& xy ){ return mat4().setShear(yz,zx,xy); }
-	__forceinline static mat4 rotateX( float theta ){ return mat4().setRotateX(theta); }
-	__forceinline static mat4 rotateY( float theta ){ return mat4().setRotateY(theta); }
-	__forceinline static mat4 rotateZ( float theta ){ return mat4().setRotateZ(theta); }
-	__forceinline static mat4 rotateVecToVec( const vec3& v0, vec3 v1 ){ return mat4().setRotateVecToVec(v0,v1); }
-	__forceinline static mat4 rotate( const vec3& axis, float angle ){ return mat4().setRotate(axis,angle); }
+	__forceinline static mat4 translate( const vec3& v ){ return mat4().set_translate(v); }
+	__forceinline static mat4 translate( float x, float y, float z ){ return mat4().set_translate(x,y,z); }
+	__forceinline static mat4 scale( const vec3& v ){ return mat4().set_scale(v); }
+	__forceinline static mat4 scale( float x, float y, float z ){ return mat4().set_scale(x,y,z); }
+	__forceinline static mat4 shear( const vec2& yz, const vec2& zx, const vec2& xy ){ return mat4().set_shear(yz,zx,xy); }
+	__forceinline static mat4 rotate_vec_to_vec( const vec3& v0, vec3 v1 ){ return mat4().set_rotate_vec_to_vec(v0,v1); }
+	__forceinline static mat4 rotate( const vec3& axis, float angle ){ return mat4().set_rotate(axis,angle); }
 
-	__forceinline static mat4 viewport( int width, int height ){ return mat4().setViewport(width,height); }
-	__forceinline static mat4 lookAt( const vec3& eye, const vec3& center, const vec3& up ){ return mat4().setLookAt(eye,center,up); }
-	__forceinline static mat4 lookAtInverse( const vec3& eye, const vec3& center, const vec3& up ){ return mat4().setLookAtInverse(eye,center,up); }
+	__forceinline static mat4 viewport( int width, int height ){ return mat4().set_viewport(width,height); }
+	__forceinline static mat4 look_at( const vec3& eye, const vec3& center, const vec3& up ){ return mat4().set_look_at(eye,center,up); }
+	__forceinline static mat4 look_at_inverse( const vec3& eye, const vec3& center, const vec3& up ){ return mat4().set_look_at_inverse(eye,center,up); }
 
-	__forceinline static mat4 perspective( float fovy, float aspect, float dn, float df ){ return mat4().setPerspective(fovy,aspect,dn,df); }
-	__forceinline static mat4 perspectiveOffCenter( float left, float right, float top, float bottom, float dn, float df ){ return mat4().setPerspectiveOffCenter(left,right,top,bottom,dn,df); }
-	__forceinline static mat4 ortho( float width, float height, float dn, float df ){ return mat4().setOrtho(width,height,dn,df); }
-	__forceinline static mat4 orthoOffCenter( float left, float right, float top, float bottom, float dn, float df ){ return mat4().setOrthoOffCenter(left,right,top,bottom,dn,df); }
-	__forceinline static mat4 perspectiveDX( float fovy, float aspect, float dn, float df ){ return mat4().setPerspectiveDX(fovy,aspect,dn,df); }
-	__forceinline static mat4 perspectiveOffCenterDX( float left, float right, float top, float bottom, float dn, float df ){ return mat4().setPerspectiveOffCenterDX(left,right,top,bottom,dn,df); }
-	__forceinline static mat4 orthoDX( float width, float height, float dn, float df ){ return mat4().setOrthoDX(width,height,dn,df); }
-	__forceinline static mat4 orthoOffCenterDX( float left, float right, float top, float bottom, float dn, float df ){ return mat4().setOrthoOffCenterDX(left,right,top,bottom,dn,df); }
+	__forceinline static mat4 perspective( float fovy, float aspect, float dn, float df ){ return mat4().set_perspective(fovy,aspect,dn,df); }
+	__forceinline static mat4 perspective_off_center( float left, float right, float top, float bottom, float dn, float df ){ return mat4().set_perspective_off_center(left,right,top,bottom,dn,df); }
+	__forceinline static mat4 ortho( float width, float height, float dn, float df ){ return mat4().set_ortho(width,height,dn,df); }
+	__forceinline static mat4 ortho_off_center( float left, float right, float top, float bottom, float dn, float df ){ return mat4().set_ortho_off_center(left,right,top,bottom,dn,df); }
+	__forceinline static mat4 perspective_dx( float fovy, float aspect, float dn, float df ){ return mat4().set_perspective_dx(fovy,aspect,dn,df); }
+	__forceinline static mat4 perspective_off_center_dx( float left, float right, float top, float bottom, float dn, float df ){ return mat4().set_perspective_off_center_dx(left,right,top,bottom,dn,df); }
+	__forceinline static mat4 ortho_dx( float width, float height, float dn, float df ){ return mat4().set_ortho_dx(width,height,dn,df); }
+	__forceinline static mat4 ortho_off_center_dx( float left, float right, float top, float bottom, float dn, float df ){ return mat4().set_ortho_off_center_dx(left,right,top,bottom,dn,df); }
 
 	// row-major transformations
-	__forceinline mat4& setTranslate( const vec3& v ){ setIdentity(); _14=v.x; _24=v.y; _34=v.z; return *this; }
-	__forceinline mat4& setTranslate( float x,float y,float z ){ setIdentity(); _14=x; _24=y; _34=z; return *this; }
-	__forceinline mat4& setScale( const vec3& v ){ setIdentity(); _11=v.x; _22=v.y; _33=v.z; return *this; }
-	__forceinline mat4& setScale( float x,float y,float z ){ setIdentity(); _11=x; _22=y; _33=z; return *this; }
-	__forceinline mat4& setShear( const vec2& yz, const vec2& zx, const vec2& xy ){ setIdentity(); _12=yz.x; _13=yz.y; _21=zx.y; _23=zx.x; _31=xy.x; _32=xy.y; return *this; }
-	__forceinline mat4& setRotateX( float theta ){ return setRotate(vec3(1,0,0),theta); }
-	__forceinline mat4& setRotateY( float theta ){ return setRotate(vec3(0,1,0),theta); }
-	__forceinline mat4& setRotateZ( float theta ){ return setRotate(vec3(0,0,1),theta); }
-	__forceinline mat4& setRotateVecToVec( const vec3& v0, const vec3& v1 ){ vec3 n=v0.cross(v1); return setRotate( n.normalize(), asin( min(n.length(),0.9999f) ) ); }
-	__noinline mat4& setRotate( const vec3& axis, float angle )
+	__forceinline mat4& set_translate( const vec3& v ){ set_identity(); _14=v.x; _24=v.y; _34=v.z; return *this; }
+	__forceinline mat4& set_translate( float x,float y,float z ){ set_identity(); _14=x; _24=y; _34=z; return *this; }
+	__forceinline mat4& set_scale( const vec3& v ){ set_identity(); _11=v.x; _22=v.y; _33=v.z; return *this; }
+	__forceinline mat4& set_scale( float x,float y,float z ){ set_identity(); _11=x; _22=y; _33=z; return *this; }
+	__forceinline mat4& set_shear( const vec2& yz, const vec2& zx, const vec2& xy ){ set_identity(); _12=yz.x; _13=yz.y; _21=zx.y; _23=zx.x; _31=xy.x; _32=xy.y; return *this; }
+	__forceinline mat4& set_rotate_vec_to_vec( const vec3& from, const vec3& to ){ vec3 n=from.cross(to); return set_rotate( n.normalize(), asin( min(n.length(),0.9999f) ) ); }
+	__noinline mat4& set_rotate( const vec3& axis, float angle )
 	{
 		float c=cos(angle), s=sin(angle), x=axis.x, y=axis.y, z=axis.z;
 		a[0] = x*x*(1-c)+c;		a[1] = x*y*(1-c)-z*s;		a[2] = x*z*(1-c)+y*s;	a[3] = 0.0f;
@@ -628,23 +646,23 @@ struct mat4 : public tarray<float,16>
 	}
 
 	// viewport, lookat, projection
-	__forceinline mat4& setViewport( int width, int height ){ setIdentity(); _11=width*0.5f; _22=-height*0.5f; _14=width*0.5f; _24=height*0.5f; return *this; }
-	__forceinline mat4& setLookAt( const vec3& eye, const vec3& center, const vec3& up ){ setIdentity(); rvec3(2) = (eye-center).normalize(); rvec3(0) = (up.cross(rvec3(2))).normalize(); rvec3(1) = rvec3(2).cross(rvec3(0)); return *this = (*this)*(mat4::translate(-eye)); }
-	__forceinline mat4& setLookAtInverse( const vec3& eye, const vec3& center, const vec3& up ){ setIdentity(); rvec3(2) = (eye-center).normalize(); rvec3(0) = (up.cross(rvec3(2))).normalize(); rvec3(1) = rvec3(2).cross(rvec3(0)); return *this = mat4::translate(eye)*transpose(); }
-	__forceinline vec3  lookAtEye() const { const vec3 &u=rvec3(0),&v=rvec3(1),&n=rvec3(2),uv=u.cross(v),vn=v.cross(n),nu=n.cross(u); return (vn*_14+nu*_24+uv*_34)/(-u.dot(vn)); }
-	__forceinline mat4  lookAtInverse() const { vec3 eye=lookAtEye(); return mat4(_11,_21,_31,eye.x,_12,_22,_32,eye.y,_13,_23,_33,eye.z,0,0,0,1); }
+	__forceinline mat4& set_viewport( int width, int height ){ set_identity(); _11=width*0.5f; _22=-height*0.5f; _14=width*0.5f; _24=height*0.5f; return *this; }
+	__forceinline mat4& set_look_at( const vec3& eye, const vec3& center, const vec3& up ){ set_identity(); rvec3(2) = (eye-center).normalize(); rvec3(0) = (up.cross(rvec3(2))).normalize(); rvec3(1) = rvec3(2).cross(rvec3(0)); return *this = (*this)*(mat4::translate(-eye)); }
+	__forceinline mat4& set_look_at_inverse( const vec3& eye, const vec3& center, const vec3& up ){ set_identity(); rvec3(2) = (eye-center).normalize(); rvec3(0) = (up.cross(rvec3(2))).normalize(); rvec3(1) = rvec3(2).cross(rvec3(0)); return *this = mat4::translate(eye)*transpose(); }
+	__forceinline vec3  look_at_eye() const { const vec3 &u=rvec3(0),&v=rvec3(1),&n=rvec3(2),uv=u.cross(v),vn=v.cross(n),nu=n.cross(u); return (vn*_14+nu*_24+uv*_34)/(-u.dot(vn)); }
+	__forceinline mat4  look_at_inverse() const { vec3 eye=look_at_eye(); return mat4(_11,_21,_31,eye.x,_12,_22,_32,eye.y,_13,_23,_33,eye.z,0,0,0,1); }
 
 	// Canonical view volume in OpenGL: [-1,1]^3
-	__forceinline mat4& setPerspective( float fovy, float aspect, float dn, float df ){ if(fovy>PI<float>) fovy*=PI<float>/180.0f; /* autofix for fov in degrees */ setIdentity(); _22=1.0f/tanf(fovy*0.5f); _11=_22/aspect; _33=(dn+df)/(dn-df); _34=2.0f*dn*df/(dn-df); _43=-1.0f;  _44=0.0f; return *this; }
-	__forceinline mat4& setPerspectiveOffCenter( float left, float right, float top, float bottom, float dn, float df ){ setIdentity(); _11=2.0f*dn/(right-left); _22=2.0f*dn/(top-bottom); _13=(right+left)/(right-left); _23=(top+bottom)/(top-bottom); _33=(dn+df)/(dn-df); _34=2.0f*dn*df/(dn-df); _43=-1.0f; _44=0.0f; return *this; }
-	__forceinline mat4& setOrtho( float width, float height, float dn, float df ){ setIdentity(); _11=2.0f/width; _22=2.0f/height;  _33=2.0f/(dn-df); _34=(dn+df)/(dn-df); return *this; }
-	__forceinline mat4& setOrthoOffCenter( float left, float right, float top, float bottom, float dn, float df ){ setOrtho( right-left, top-bottom, dn, df ); _14=(left+right)/(left-right); _24=(bottom+top)/(bottom-top); return *this; }
+	__forceinline mat4& set_perspective( float fovy, float aspect, float dn, float df ){ if(fovy>PI<float>) fovy*=PI<float>/180.0f; /* autofix for fov in degrees */ set_identity(); _22=1.0f/tanf(fovy*0.5f); _11=_22/aspect; _33=(dn+df)/(dn-df); _34=2.0f*dn*df/(dn-df); _43=-1.0f;  _44=0.0f; return *this; }
+	__forceinline mat4& set_perspective_off_center( float left, float right, float top, float bottom, float dn, float df ){ set_identity(); _11=2.0f*dn/(right-left); _22=2.0f*dn/(top-bottom); _13=(right+left)/(right-left); _23=(top+bottom)/(top-bottom); _33=(dn+df)/(dn-df); _34=2.0f*dn*df/(dn-df); _43=-1.0f; _44=0.0f; return *this; }
+	__forceinline mat4& set_ortho( float width, float height, float dn, float df ){ set_identity(); _11=2.0f/width; _22=2.0f/height;  _33=2.0f/(dn-df); _34=(dn+df)/(dn-df); return *this; }
+	__forceinline mat4& set_ortho_off_center( float left, float right, float top, float bottom, float dn, float df ){ set_ortho( right-left, top-bottom, dn, df ); _14=(left+right)/(left-right); _24=(bottom+top)/(bottom-top); return *this; }
 
 	// Canonical view volume in DirectX: [-1,1]^2*[0,1]: diffes only in _33 and _34
-	__forceinline mat4& setPerspectiveDX( float fovy, float aspect, float dn, float df ){ setPerspective( fovy, aspect, dn, df ); _33=df/(dn-df); _34*=0.5f; return *this; } // equivalent to D3DXMatrixPerspectiveFovRH()
-	__forceinline mat4& setPerspectiveOffCenterDX( float left, float right, float top, float bottom, float dn, float df ){ setPerspectiveOffCenter( left, right, top, bottom, dn, df ); _33=df/(dn-df); _34*=0.5f; return *this; }
-	__forceinline mat4& setOrthoDX( float width, float height, float dn, float df ){ setOrtho( width, height, dn, df ); _33*=0.5f; _34=dn/(dn-df); return *this; }
-	__forceinline mat4& setOrthoOffCenterDX( float left, float right, float top, float bottom, float dn, float df ){ setOrthoOffCenter( left, right, top, bottom, dn, df ); _33*=0.5f; _34=dn/(dn-df); return *this; }
+	__forceinline mat4& set_perspective_dx( float fovy, float aspect, float dn, float df ){ set_perspective( fovy, aspect, dn, df ); _33=df/(dn-df); _34*=0.5f; return *this; } // equivalent to D3DXMatrixPerspectiveFovRH()
+	__forceinline mat4& set_perspective_off_center_dx( float left, float right, float top, float bottom, float dn, float df ){ set_perspective_off_center( left, right, top, bottom, dn, df ); _33=df/(dn-df); _34*=0.5f; return *this; }
+	__forceinline mat4& set_ortho_dx( float width, float height, float dn, float df ){ set_ortho( width, height, dn, df ); _33*=0.5f; _34=dn/(dn-df); return *this; }
+	__forceinline mat4& set_ortho_off_center_dx( float left, float right, float top, float bottom, float dn, float df ){ set_ortho_off_center( left, right, top, bottom, dn, df ); _33*=0.5f; _34=dn/(dn-df); return *this; }
 };
 
 __noinline inline vec4 mat4::_xdet() const

@@ -72,8 +72,13 @@ struct light_t
 	int	 bind:24;	// ID of object bound to this light (negative means static lights)
 
 	// transformation to camera (eye-coordinate) space
-	vec4 ecpos( mat4& view_matrix ){ return position.a==0?vec4(mat3(view_matrix)*position.xyz,0.0f):view_matrix*position; }
-	vec3 ecnorm( mat4& view_matrix ){ return mat3(view_matrix)*normal; }
+	vec4 ecpos( mat4& view_matrix ) const { return position.a==0?vec4(mat3(view_matrix)*position.xyz,0.0f):view_matrix*position; }
+	vec3 ecnorm( mat4& view_matrix ) const { return mat3(view_matrix)*normal; }
+
+	// directions and angles against view vector
+	vec3  dir() const { return normalize(position.xyz); }
+	float phi() const { vec3 d=dir(); return atan2(d.y,d.x); }	// angle on the xy plane orthogonal to the optical axis
+	float theta() const { return acos(dir().z); }				// angle between outgoing light direction and the optical axis
 };
 static_assert(sizeof(light_t)%16==0,"size of struct light_t should be aligned at 16-byte boundary" );
 #endif
@@ -205,7 +210,7 @@ struct camera : public camera_t
 	vec4		frustum[6];				// view frustum planes: left, right, top, bottom, near, far
 	camera_t	prev;					// placeholder for the camera at the previous frame
 	
-	mat4		inverse_view_matrix() const { return mat4::lookAtInverse(eye,center,up); } // works without eye, center, up
+	mat4		inverse_view_matrix() const { return mat4::look_at_inverse(eye,center,up); } // works without eye, center, up
 	mat4		perspective_dx() const { mat4 m=projection_matrix; m._33=dfar/(dnear-dfar); m._34*=0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
 	vec2		plane_size( float ecd=1.0f ) const { return vec2(2.0f/projection_matrix._11,2.0f/projection_matrix._22)*ecd; } // plane size (width, height) at eye-coordinate distance 1
 	void		update_view_frusta(){ const mat4 m=projection_matrix*view_matrix;for(int k=0;k<6;k++){vec4& p=frustum[k];p=m.rvec4(k>>1)*float(1-(k&1)*2)+m.rvec4(3);p/=p.xyz.length();}} // left, right, bottom, top, near, far
@@ -535,7 +540,7 @@ __noinline inline ray gen_primary_ray( camera* cam, float x, float y )	// (x,y) 
 	const vec3& eye=cam->eye, center=cam->center, up=cam->up;
 	float fh = tan(cam->fovy*0.5f)*2.0f, fw=fh*cam->aspect;		// frustum height/width in NDC
 	vec3 epos = vec3( fw*(x-0.5f), fh*(y-0.5f), -1.0f );			// pixel position on the image plane: make sure to have negative depth
-	mat4 I = mat4::lookAtInverse(eye,center,up);					// inverse view matrix
+	mat4 I = mat4::look_at_inverse(eye,center,up);					// inverse view matrix
 	ray r; r.o=eye; r.d=(I*epos-eye).normalize(); r.t=0.0f; r.tfar=FLT_MAX; return r;
 }
 
