@@ -99,7 +99,6 @@ template <class T> struct tarray3	: public tarray<T,3> {	using V2=tarray2<T>; un
 template <class T> struct tarray4	: public tarray<T,4> {	using V2=tarray2<T>; using V3=tarray3<T>; union{struct{T x,y,z,w;};struct{T r,g,b,a;};struct{union{V2 xy,rg;};union{V2 zw,ba;};};union{V3 xyz,rgb;};struct{T _x;union{V3 yzw,gba;V2 yz,gb;};};}; default_ctors(tarray4); default_assns(tarray4); };
 template <class T> struct tarray9	: public tarray<T,9> {	union{T a[9];struct{T _11,_12,_13,_21,_22,_23,_31,_32,_33;};}; };
 template <class T> struct tarray16	: public tarray<T,16> {	union{T a[16];struct{T _11,_12,_13,_14,_21,_22,_23,_24,_31,_32,_33,_34,_41,_42,_43,_44;}; }; };
-
 using uint		= unsigned int;		using uchar		= unsigned char;	using ushort	= unsigned short;
 using float2	= tarray2<float>;	using float3	= tarray3<float>;	using float4	= tarray4<float>;
 using double2	= tarray2<double>;	using double3	= tarray3<double>;	using double4	= tarray4<double>;
@@ -123,7 +122,7 @@ using double9	= tarray9<double>;	using double16	= tarray16<double>;
 #include <thread>		// usleep
 
 //***********************************************
-// Utility for filetime comparison
+// Win32-like filetime utilities
 inline FILETIME DiscardFileTimeMilliseconds( FILETIME f ){ SYSTEMTIME s; FileTimeToSystemTime(&f,&s); s.wMilliseconds=0; SystemTimeToFileTime(&s,&f); return f; }
 inline uint64_t FileTimeOffset( uint days, uint hours=0, uint mins=0, uint secs=0, uint mss=0 ){ return 10000ull*(mss+1000ull*secs+60*1000ull*mins+60*60*1000ull*hours+24*60*60*1000ull*days); } // FILETIME in 100 ns scale
 inline uint64_t FileTimeToUINT64( const FILETIME& f, uint offset_days=0 ){ return (uint64_t(f.dwHighDateTime)<<32|uint64_t(f.dwLowDateTime))-FileTimeOffset(offset_days); }

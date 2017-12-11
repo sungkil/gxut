@@ -356,7 +356,10 @@ __noinline inline void md5::finalize( unsigned char* result )
 
 //***********************************************
 // augmentation of filesystem
-#ifdef __GX_FILESYSTEM_H__
+#if defined(__has_include) && __has_include("gxfilesystem.h")
+#ifndef __GX_FILESYSTEM_H__
+#include "gxfilesystem.h"
+#endif
 
 __noinline inline std::string path::md5() const
 {
@@ -385,7 +388,7 @@ __noinline inline uint path::crc32c() const
 	return c;
 }
 
-#endif // __GX_FILESYSTEM_H__
+#endif // gxfilesystem.h
 
 //***********************************************
 namespace gx {

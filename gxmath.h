@@ -100,7 +100,6 @@ template <class T> struct tarray3	: public tarray<T,3> {	using V2=tarray2<T>; un
 template <class T> struct tarray4	: public tarray<T,4> {	using V2=tarray2<T>; using V3=tarray3<T>; union{struct{T x,y,z,w;};struct{T r,g,b,a;};struct{union{V2 xy,rg;};union{V2 zw,ba;};};union{V3 xyz,rgb;};struct{T _x;union{V3 yzw,gba;V2 yz,gb;};};}; default_ctors(tarray4); default_assns(tarray4); };
 template <class T> struct tarray9	: public tarray<T,9> {	union{T a[9];struct{T _11,_12,_13,_21,_22,_23,_31,_32,_33;};}; };
 template <class T> struct tarray16	: public tarray<T,16> {	union{T a[16];struct{T _11,_12,_13,_14,_21,_22,_23,_24,_31,_32,_33,_34,_41,_42,_43,_44;}; }; };
-
 using uint		= unsigned int;		using uchar		= unsigned char;	using ushort	= unsigned short;
 using float2	= tarray2<float>;	using float3	= tarray3<float>;	using float4	= tarray4<float>;
 using double2	= tarray2<double>;	using double3	= tarray3<double>;	using double4	= tarray4<double>;
@@ -134,10 +133,10 @@ template <class T=float> constexpr T PI = T(3.141592653589793);
 
 //***********************************************
 // template type_traits helpers
-template <class T> using enable_signed_t	= typename std::enable_if_t<std::is_signed<T>::value,T>;
-template <class T> using enable_float_t		= typename std::enable_if_t<std::is_floating_point<T>::value,T>;
-#define signed_memfun(U)	template <class X=T, typename U=enable_signed_t<X>>
-#define float_memfun(U)		template <class X=T, typename U=enable_float_t<X>>
+template <class T> using enable_signed_t = typename std::enable_if_t<std::is_signed<T>::value,T>;
+template <class T> using enable_float_t	 = typename std::enable_if_t<std::is_floating_point<T>::value,T>;
+#define signed_memfun(U) template <class X=T, typename U=enable_signed_t<X>>
+#define float_memfun(U)	 template <class X=T, typename U=enable_float_t<X>>
 
 //***********************************************
 template <class T,template <class> class A=tarray2> struct tvec2 : public tarray<T,2>
@@ -343,10 +342,10 @@ using dvec2 = tvec2<double>;	using dvec3 = tvec3<double>;	using dvec4 = tvec4<do
 using ivec2 = tvec2<int>;		using ivec3 = tvec3<int>;		using ivec4 = tvec4<int>;
 using uvec2 = tvec2<uint>;		using uvec3 = tvec3<uint>;		using uvec4 = tvec4<uint>;
 using bvec2 = tvec2<bool>;		using bvec3 = tvec3<bool>;		using bvec4 = tvec4<bool>;
-using svec2 = tvec2<size_t>;	using svec3 = tvec3<size_t>;	using svec4 = tvec4<size_t>;
 
-// vertex type for graphics operations
-struct alignas(32) vertex { vec3 pos; vec3 norm; vec2 tex; };
+// basic math types for computer graphics
+struct alignas(32) vertex { vec3 pos; vec3 norm; vec2 tex; };	// default vertex layout
+struct bbox_t { alignas(16) vec3 m=-FLT_MAX; alignas(16) vec3 M=FLT_MAX; };		// bounding box in std140 layout
 
 //***********************************************
 // std::hash support here

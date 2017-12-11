@@ -84,15 +84,14 @@ static_assert(sizeof(light_t)%16==0,"size of struct light_t should be aligned at
 #endif
 
 //***********************************************
-// ray
-template <class T=float> struct ray_t // template used to avoid non-trivial constructors in unions
+// ray for ray tracing
+struct ray
 {
-	union{struct{tvec3<T> pos,dir;tvec4<T> tex;};struct{tvec3<T> o,d;float t,tfar,time;int depth;};}; // lens system rays (with texcoord) or pbrt-like rays (tnear/tfar = parameters of the nearest/farthest intersections)
-	ray_t():t(0.0f),tfar(FLT_MAX),time(0.0f),depth(0){}
-	ray_t( const tvec3<T>& _pos, const tvec3<T>& _dir, float _tnear=0.0f, float _tfar=FLT_MAX ):ray_t(){ pos=_pos; dir=_dir; t=_tnear; tfar=_tfar; }
-	ray_t( const tvec3<T>& _pos, const tvec3<T>& _dir, const tvec4<T>& _tex ):ray_t(){ pos=_pos; dir=_dir; tex=_tex; }
+	union{struct{vec3 pos,dir;vec4 tex;};struct{vec3 o,d;float t,tfar,time;int depth;};}; // lens system rays (with texcoord) or pbrt-like rays (tnear/tfar = parameters of the nearest/farthest intersections)
+	ray():t(0.0f),tfar(FLT_MAX),time(0.0f),depth(0){}
+	ray( const vec3& _pos, const vec3& _dir, float _tnear=0.0f, float _tfar=FLT_MAX ):ray(){ pos=_pos; dir=_dir; t=_tnear; tfar=_tfar; }
+	ray( const vec3& _pos, const vec3& _dir, const vec4& _tex ):ray(){ pos=_pos; dir=_dir; tex=_tex; }
 };
-using ray = ray_t<float>;
 
 //***********************************************
 // intersection
@@ -112,11 +111,8 @@ struct isect
 #ifndef __cplusplus
 struct bbox { vec4 m; vec4 M; }; // bounding box in std140 layout
 #else
-struct bbox
+struct bbox : public bbox_t
 {
-	alignas(16) vec3 m;
-	alignas(16) vec3 M;
-
 	bbox(){ clear(); }
 	bbox( const vec3& v0 ){ m=M=v0; }
 	bbox( bbox&& b ) = default;
@@ -124,11 +120,13 @@ struct bbox
 	bbox( const vec3& v0, const vec3& v1 ){ m=vec3(min(v0.x,v1.x),min(v0.y,v1.y),min(v0.z,v1.z)); M=vec3(max(v0.x,v1.x),max(v0.y,v1.y),max(v0.z,v1.z)); }
 	bbox( const vec3& v0, const vec3& v1, const vec3& v2 ){ m=vec3(min(min(v0.x,v1.x),v2.x),min(min(v0.y,v1.y),v2.y),min(min(v0.z,v1.z),v2.z)); M=vec3(max(max(v0.x,v1.x),v2.x),max(max(v0.y,v1.y),v2.y),max(max(v0.z,v1.z),v2.z)); }
 	bbox( const bbox& b0, const bbox& b1 ){ m=vec3(min(b0.m.x,b1.m.x),min(b0.m.y,b1.m.y),min(b0.m.z,b1.m.z)); M=vec3(max(b0.M.x,b1.M.x),max(b0.M.y,b1.M.y),max(b0.M.z,b1.M.z)); }
-	inline void clear(){ M=-(m=FLT_MAX*0.0001f); }
+	inline void clear(){ M=-(m=FLT_MAX); }
 
 	// assignment
 	bbox& operator=( bbox&& b ) = default;
 	bbox& operator=( const bbox& b ) = default;
+	bbox& operator=( bbox_t&& b ){ m=b.m; M=b.M; return *this; }
+	bbox& operator=( const bbox_t& b ){ m=b.m; M=b.M; return *this; }
 
 	// array access
 	inline const vec3& operator[]( int i) const { return (&m)[i]; }
