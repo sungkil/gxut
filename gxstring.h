@@ -512,7 +512,7 @@ __noinline inline const T* str_replace( const T* _Src, const T* _Find, const T* 
 	int sl=int(strlen(_Src)), fl=int(strlen(_Find)); if(sl<fl) return __tstrdup(_Src);
 	int rl=int(strlen(_Replace));
 	T *s=(T*)_Src, *p=nullptr;
-	std::vector<T> buff; buff.reserve(sl*2); while( p=(T*)strstr(s,_Find) ){ buff.insert(buff.end(),s,p); buff.insert(buff.end(),_Replace,_Replace+rl); s=p+fl; }
+	std::vector<T> buff; buff.reserve(sl*2); while( p=(T*)strstr(s,_Find) ){ buff.insert(buff.end(),s,p); if(rl>0) buff.insert(buff.end(),_Replace,_Replace+rl); s=p+fl; }
 	buff.insert(buff.end(),s,(T*)(_Src+sl));buff.emplace_back(0);
 	return __tstrdup(&buff[0],buff.size());
 }

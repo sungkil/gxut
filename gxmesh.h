@@ -65,11 +65,13 @@ struct light_t { vec4 position, color, normal; }; // normal should use xyz
 #else
 struct light_t
 {
-	vec4 position;	// directional light (position.a==0) ignores normal
-	vec4 color;		// shared for diffuse/specular
-	vec3 normal;	// direction (the negated vector of position for directional light)
-	uint depth:8;	// vpl bounces (depth>0: VPLs; otherwise, a real light)
-	int	 bind:24;	// ID of object bound to this light (negative means static lights)
+	vec4 position;			// directional light (position.a==0) ignores normal
+	vec4 color;				// shared for diffuse/specular
+	vec3 normal;			// direction (the negated vector of position for directional light)
+	uint depth:8;			// vpl bounces (depth>0: VPLs; otherwise, a real light)
+	uint mouse:1;			// dynamic binding to the mouse?
+	uint bind:1;			// dynamic binding to an object
+	uint object_index:22;	// ID of object bound to this light
 
 	// transformation to camera (eye-coordinate) space
 	vec4 ecpos( mat4& view_matrix ) const { return position.a==0?vec4(mat3(view_matrix)*position.xyz,0.0f):view_matrix*position; }
