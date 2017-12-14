@@ -90,7 +90,7 @@ template <class T> std::nullptr_t safe_free( T*& p ){if(p){free(p);p=nullptr;} r
 template <class T> std::nullptr_t safe_delete( T*& p ){if(p){delete p;p=nullptr;} return nullptr; }
 template <class T> std::nullptr_t safe_release( T*& p ){if(p){p->Release();p=nullptr;} return nullptr; }
 // nocase base template
-namespace nocase { template <class T> struct less {}; template <class T> struct equal_to {}; };
+namespace nocase { template <class T> struct less {}; template <class T> struct equal_to {}; template <class T> struct hash {}; };
 // user types
 template <class T, int D> struct tarray { static const int N=D; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline T& operator[]( int i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( int i ) const { return ((T*)this)[i]; } __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } __forceinline bool operator==( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))==0; } __forceinline bool operator!=( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))!=0; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+D; } constexpr size_t size() const { return D; } };
 #define default_ctors(c) __forceinline c()=default;__forceinline c(c&&)=default;__forceinline c(const c&)=default;__forceinline c(std::initializer_list<T> l){T* p=&x;for(auto i:l)(*p++)=i;}

@@ -89,7 +89,7 @@ template <class T> std::nullptr_t safe_free( T*& p ){if(p){free(p);p=nullptr;} r
 template <class T> std::nullptr_t safe_delete( T*& p ){if(p){delete p;p=nullptr;} return nullptr; }
 template <class T> std::nullptr_t safe_release( T*& p ){if(p){p->Release();p=nullptr;} return nullptr; }
 // nocase base template
-namespace nocase { template <class T> struct less {}; template <class T> struct equal_to {}; };
+namespace nocase { template <class T> struct less {}; template <class T> struct equal_to {}; template <class T> struct hash {}; };
 // user types
 template <class T, int D> struct tarray { static const int N=D; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline T& operator[]( int i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( int i ) const { return ((T*)this)[i]; } __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } __forceinline bool operator==( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))==0; } __forceinline bool operator!=( const tarray& rhs) const { return memcmp(this,&rhs,sizeof(*this))!=0; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+D; } constexpr size_t size() const { return D; } };
 #define default_ctors(c) __forceinline c()=default;__forceinline c(c&&)=default;__forceinline c(const c&)=default;__forceinline c(std::initializer_list<T> l){T* p=&x;for(auto i:l)(*p++)=i;}
@@ -154,21 +154,6 @@ inline const wchar_t* _wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ wc
 inline const wchar_t* _stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return _wcsistr(_Str1,_Str2); }
 
 //***********************************************
-// 0.3 case-insensitive comparison for std::map/set, std::unordered_map/set
-namespace nocase
-{
-	template <> struct less<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())<0;}};
-	template <> struct equal_to<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())==0;}};
-	template <> struct less<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())<0;}};
-	template <> struct equal_to<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())==0;}};
-
-	template <class T> using			set = std::set<T,less<T>>;
-	template <class T, class V> using	map = std::map<T,V,less<T>>;
-	template <class T> using			unordered_set = std::unordered_set<T,std::hash<T>,equal_to<T>>;
-	template <class T, class V> using	unordered_map = std::unordered_map<T,V,std::hash<T>,equal_to<T>>;
-}
-
-//***********************************************
 // 1. shared circular buffers
 template <class T> __forceinline T* __tstrbuf( size_t len ){ static T* C[SHARED_CIRCULAR_BUFFER_SIZE]={0}; static uint cid=0; cid=(++cid)%(sizeof(C)/sizeof(T*));C[cid]=(T*)realloc(C[cid],sizeof(T)*(len+1)); C[cid][len]=0; return C[cid]; }
 template <class T> __forceinline T* __tstrdup( const T* s,size_t slen=-1 ){ if(slen==-1)slen=strlen(s); return (T*)memcpy(__tstrbuf<T>(slen),s,sizeof(T)*slen); }
@@ -189,13 +174,30 @@ template <class T> inline const T* toupper( const T* src ){ return _strupr(__tst
 inline const char* tovarname( const char* src ){ if(!src||!*src) return ""; char *s=(char*)src,*dst=_strbuf(strlen(src)+2), *d=dst; if(!isalpha(*s)&&(*s)!='_') *(d++)='_'; for(;*s;s++,d++) *d=isalnum(*s)?(*s):'_'; *d='\0'; return dst; }
 
 //***********************************************
-// 4. conversion between const wchar_t* and const char*
+// 4. case-insensitive comparison for std::map/set, std::unordered_map/set
+namespace nocase
+{
+	template <> struct less<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())<0;}};
+	template <> struct equal_to<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())==0;}};
+	template <> struct less<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())<0;}};
+	template <> struct equal_to<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())==0;}};
+	template <> struct hash<std::string> { size_t operator()( const std::string& p ) const { return std::hash<std::string>()(_strlwr(__tstrdup(p.c_str()))); }};
+	template <> struct hash<std::wstring> { size_t operator()( const std::wstring& p ) const { return std::hash<std::wstring>()(_strlwr(__tstrdup(p.c_str()))); }};
+
+	template <class T> using			set = std::set<T,less<T>>;
+	template <class T, class V> using	map = std::map<T,V,less<T>>;
+	template <class T> using			unordered_set = std::unordered_set<T,hash<T>,equal_to<T>>;
+	template <class T, class V> using	unordered_map = std::unordered_map<T,V,hash<T>,equal_to<T>>;
+}
+
+//***********************************************
+// 5. conversion between const wchar_t* and const char*
 template <class T,class I> const T* _strcvt( const I* s ){size_t len=strlen(s);T* buff=__tstrbuf<T>(len);for(uint k=0;k<len;k++)buff[k]=T(s[k]);return buff;}
 inline const wchar_t* atow( const char* a ){int wlen=MultiByteToWideChar(0,0,a,-1,0,0);wchar_t* wbuff=_wcsbuf(wlen);MultiByteToWideChar(0,0,a,-1,wbuff,wlen);return wbuff;}
 inline const char* wtoa( const wchar_t* w ){int mblen=WideCharToMultiByte(0,0,w,-1,0,0,0,0);char* buff=_strbuf(mblen);WideCharToMultiByte(0,0,w,-1,buff,mblen,0,0);return buff;}
 
 //***********************************************
-// 5. conversion to string types
+// 6. conversion to string types
 inline const char* btoa( bool b ){ return b?"1":"0"; }
 inline const char* itoa( int i ){static const char* fmt="%d";size_t size=size_t(_scprintf(fmt,i));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,i);return buff;}
 inline const char* utoa( uint u ){static const char* fmt="%u";size_t size=size_t(_scprintf(fmt,u));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,u);return buff;}
@@ -232,7 +234,7 @@ inline const char* dtoa( const double9& v ){static const char* fmt="%g %g %g %g 
 inline const char* dtoa( const double16& v ){static const char* fmt="%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g";size_t size=size_t(_scprintf(fmt,v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],v[8],v[9],v[10],v[11],v[12],v[13],v[14],v[15]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],v[8],v[9],v[10],v[11],v[12],v[13],v[14],v[15]);return buff;}
 
 //***********************************************
-// 5.2 Special-purpose functions
+// 6.2 Special-purpose functions
 
 // conversion int to string with commas
 __noinline inline const char* itoasep( int n )
@@ -245,7 +247,7 @@ __noinline inline const char* itoasep( int n )
 }
 
 //***********************************************
-// 6. conversion to wstring types
+// 7. conversion to wstring types
 inline const wchar_t* btow( bool b ){			return atow(btoa(b)); }
 inline const wchar_t* itow( int i ){			return atow(itoa(i)); }
 inline const wchar_t* utow( uint u ){			return atow(utoa(u)); }
@@ -282,7 +284,7 @@ inline const wchar_t* dtow( const double9& m ){	return atow(dtoa(m)); }
 inline const wchar_t* dtow( const double16& m ){return atow(dtoa(m)); }
 
 //***********************************************
-// 7. fast manual conversion from string to int/float (3x--4x faster than CRT atoi/atof)
+// 8. fast manual conversion from string to int/float (3x--4x faster than CRT atoi/atof)
 
 namespace fast
 {
@@ -309,7 +311,7 @@ namespace fast
 }
 
 //***********************************************
-// 8. conversion from string to user types
+// 9. conversion from string to user types
 
 inline bool atob( const char* a ){		return _stricmp(a,"true")==0||fast::atoi(a)!=0; }
 inline uint atou( const char* a ){		char* e=nullptr;uint v=(uint)strtoul(a,&e,10); return v; }
@@ -355,7 +357,7 @@ inline double9 atod9( const std::string& s ){	return atod9(s.c_str()); }
 inline double16 atod16( const std::string& s ){	return atod16(s.c_str()); }
 
 //***********************************************
-// 9. conversion from wstring to user types
+// 10. conversion from wstring to user types
 inline int atoi( const wchar_t* w ){		return fast::atoi(wtoa(w)); }
 inline double atof( const wchar_t* w ){		return fast::atof(wtoa(w)); }
 inline int wtoi( const std::wstring& w ){	return fast::atoi(wtoa(w.c_str())); }
@@ -404,7 +406,7 @@ inline double9 wtod9( const std::wstring& w ){	return wtod9(w.c_str()); }
 inline double16 wtod16( const std::wstring& w ){return wtod16(w.c_str()); }
 
 //***********************************************
-// 10. trim
+// 11. trim
 template <class T>
 __noinline inline const T* trim( const T* src, const T* junk=_strcvt<T>(" \t\n") )
 {
@@ -438,7 +440,7 @@ __noinline inline const T* trim_comment( const T* src, const char* comment_symbo
 }
 
 //***********************************************
-// 11. explode
+// 12. explode
 template <class T>
 __noinline inline std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T> > >
 explode( const T* src, const T* seps=_strcvt<T>(" \t\n") )
@@ -504,7 +506,7 @@ __noinline inline std::vector<const T*> explode_conservative( const T* _Src, T _
 }
 
 //***********************************************
-// 12. replace
+// 13. replace
 template <class T>
 __noinline inline const T* str_replace( const T* _Src, const T* _Find, const T* _Replace )
 {
