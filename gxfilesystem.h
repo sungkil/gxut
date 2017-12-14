@@ -499,14 +499,14 @@ __noinline inline void path::canonicalize()
 
 namespace std
 {
-	template <> struct hash<path> { size_t operator()( const path& p ) const { return hash<wstring>()(p.c_str()); } };
+	template <> struct hash<path>{ size_t operator()(const path& p)const{ return std::hash<std::wstring>()(p.tolower().c_str());}};
 }
 
 namespace nocase
 {
 	template <> struct less<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())<0;}};
 	template <> struct equal_to<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())==0;}};
-	template <> struct hash<path> { size_t operator()( const path& p ) const { return std::hash<std::wstring>()(_wcslwr((wchar_t*)path(p).c_str())); }};
+	template <> struct hash<path>{ size_t operator()(const path& p)const{ return std::hash<std::wstring>()(p.tolower().c_str());}};
 }
 
 //***********************************************
