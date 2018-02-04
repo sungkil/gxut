@@ -252,31 +252,31 @@ namespace gl {
 		inline void texture_parameterf( GLenum pname, GLfloat param ) const { if(glTextureParameterf) glTextureParameterf(ID,pname,param); else { GLuint b0=gxGetIntegerv(target_binding); glBindTexture(target,ID); glTexParameterf(target,pname,param); glBindTexture(target,b0); } }
 		inline void texture_parameterfv( GLenum pname, const GLfloat* params ) const { if(glTextureParameterfv) glTextureParameterfv(ID, pname, params); else { GLuint b0=gxGetIntegerv(target_binding); glBindTexture(target,ID); glTexParameterfv(target,pname,params); glBindTexture(target,b0); } }
 
-		// texture queries
-		GLint mip_levels(){ return is_immutable()?get_texture_parameteriv(GL_TEXTURE_VIEW_NUM_LEVELS):get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)-get_texture_parameteriv(GL_TEXTURE_BASE_LEVEL)+1; }
-		ivec2 mip_range(){ ivec2 range=ivec2(get_texture_parameteriv(GL_TEXTURE_BASE_LEVEL),get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)); return ivec2(range.x,range.y-range.x+1); }
-		ivec2 filter(){ return ivec2(get_texture_parameteriv(GL_TEXTURE_MIN_FILTER),get_texture_parameteriv(GL_TEXTURE_MAG_FILTER)); }
-		ivec3 wrap(){ ivec3 w(get_texture_parameteriv(GL_TEXTURE_WRAP_S),get_texture_parameteriv(GL_TEXTURE_WRAP_T),0); if(target==GL_TEXTURE_3D||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY) w.z=get_texture_parameteriv(GL_TEXTURE_WRAP_R); return w; }
-		GLint base_level(){	return get_texture_parameteriv( GL_TEXTURE_BASE_LEVEL ); }
-		GLint max_level(){	return get_texture_parameteriv( GL_TEXTURE_MAX_LEVEL ); }
-		GLint min_filter(){	return get_texture_parameteriv(GL_TEXTURE_MIN_FILTER); }
-		GLint mag_filter(){	return get_texture_parameteriv(GL_TEXTURE_MAG_FILTER); }
-		GLint wrap_s(){		return get_texture_parameteriv(GL_TEXTURE_WRAP_S); }
-		GLint wrap_t(){		return get_texture_parameteriv(GL_TEXTURE_WRAP_T); }
-		GLint wrap_r(){		return get_texture_parameteriv(GL_TEXTURE_WRAP_R); }
-		GLint min_LOD(){		return get_texture_parameteriv(GL_TEXTURE_MIN_LOD); }
-		GLint max_LOD(){		return get_texture_parameteriv(GL_TEXTURE_MAX_LOD); }
-		bool is_immutable(){return get_texture_parameteriv(GL_TEXTURE_IMMUTABLE_FORMAT)!=0; }
+		// texture dimension queries: pre-recorded when creating this
+		GLint mip_levels() const {				return _levels; } // on-demand query: is_immutable()?get_texture_parameteriv(GL_TEXTURE_VIEW_NUM_LEVELS):get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)-get_texture_parameteriv(GL_TEXTURE_BASE_LEVEL)+1; }
+		GLint width( GLint level=0 ) const {	return max(1,_width>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_WIDTH, level )
+		GLint height( GLint level=0 ) const {	return target==GL_TEXTURE_1D||target==GL_TEXTURE_BUFFER?1:max(1,_height>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_HEIGHT, level );
+		GLint depth( GLint level=0 ) const {	return (target==GL_TEXTURE_1D||target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_BUFFER)?1:max(1,_depth>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_DEPTH, level );
+		GLint layers( GLint level=0 ) const {	return target==GL_TEXTURE_1D_ARRAY?height(level):(target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_3D)?depth(level):target==GL_TEXTURE_CUBE_MAP?6:target==GL_TEXTURE_CUBE_MAP_ARRAY?6*depth(level):1; }
+
+		// other texture queries
+		ivec2 mip_range() const {	ivec2 range=ivec2(get_texture_parameteriv(GL_TEXTURE_BASE_LEVEL),get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)); return ivec2(range.x,range.y-range.x+1); }
+		ivec2 filter() const {		return ivec2(get_texture_parameteriv(GL_TEXTURE_MIN_FILTER),get_texture_parameteriv(GL_TEXTURE_MAG_FILTER)); }
+		ivec3 wrap() const {		ivec3 w(get_texture_parameteriv(GL_TEXTURE_WRAP_S),get_texture_parameteriv(GL_TEXTURE_WRAP_T),0); if(target==GL_TEXTURE_3D||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY) w.z=get_texture_parameteriv(GL_TEXTURE_WRAP_R); return w; }
+		GLint base_level() const {	return get_texture_parameteriv(GL_TEXTURE_BASE_LEVEL); }
+		GLint max_level() const {	return get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL); }
+		GLint min_filter() const {	return get_texture_parameteriv(GL_TEXTURE_MIN_FILTER); }
+		GLint mag_filter() const {	return get_texture_parameteriv(GL_TEXTURE_MAG_FILTER); }
+		GLint wrap_s() const {		return get_texture_parameteriv(GL_TEXTURE_WRAP_S); }
+		GLint wrap_t() const {		return get_texture_parameteriv(GL_TEXTURE_WRAP_T); }
+		GLint wrap_r() const {		return get_texture_parameteriv(GL_TEXTURE_WRAP_R); }
+		GLint min_LOD() const {		return get_texture_parameteriv(GL_TEXTURE_MIN_LOD); }
+		GLint max_LOD() const {		return get_texture_parameteriv(GL_TEXTURE_MAX_LOD); }
+		bool is_immutable() const {	return get_texture_parameteriv(GL_TEXTURE_IMMUTABLE_FORMAT)!=0; }
 
 		// bindless texture extension
-		GLuint64 handle(){ return glGetTextureHandleARB?glGetTextureHandleARB(ID):0; }
-		uvec2 make_resident(){ GLuint64 h=handle(); if(h&&glIsTextureHandleResidentARB&&glMakeTextureHandleResidentARB&&!glIsTextureHandleResidentARB(h)) glMakeTextureHandleResidentARB(h); return reinterpret_cast<uvec2&>(h); }
-
-		// texture level queries
-		GLint width( GLint level=0 ) const {	return get_texture_level_parameteriv( GL_TEXTURE_WIDTH, level ); }
-		GLint height( GLint level=0 ) const {	return target==GL_TEXTURE_1D||target==GL_TEXTURE_BUFFER?1:get_texture_level_parameteriv( GL_TEXTURE_HEIGHT, level ); }
-		GLint depth( GLint level=0 ) const {	return (target==GL_TEXTURE_1D||target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_BUFFER)?1:get_texture_level_parameteriv( GL_TEXTURE_DEPTH, level ); }
-		GLint layers( GLint level=0 ) const {	return target==GL_TEXTURE_1D_ARRAY?height(level):(target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_3D)?depth(level):target==GL_TEXTURE_CUBE_MAP?6:target==GL_TEXTURE_CUBE_MAP_ARRAY?6*depth(level):1; }
+		GLuint64 handle() const {	return glGetTextureHandleARB?glGetTextureHandleARB(ID):0; }
+		uvec2 make_resident() const { GLuint64 h=handle(); if(h&&glIsTextureHandleResidentARB&&glMakeTextureHandleResidentARB&&!glIsTextureHandleResidentARB(h)) glMakeTextureHandleResidentARB(h); return reinterpret_cast<uvec2&>(h); }
 
 		// type/format/channels/size
 		inline GLint  internal_format() const { return _internal_format; }
@@ -324,6 +324,12 @@ namespace gl {
 		inline Texture* slice( GLuint layer, GLuint level=0 ){ return view(level,1,layer,1); }
 		inline Texture* array_view(){ return (layers()>1)?this:gxCreateTextureView(this,0,mip_levels(),0,layers(),true); }
 
+		// dimensions
+		GLint		_width;
+		GLint		_height=1;
+		GLint		_depth=1;
+		GLint		_levels=1;
+
 		// internal format, type, format
 		GLenum		_internal_format;
 		GLenum		_type;
@@ -341,9 +347,9 @@ namespace gl {
 	inline Texture* Texture::clone( const char* name )
 	{
 		if(target==GL_TEXTURE_BUFFER) printf( "[%s] clone() does not support for GL_TEXTURE_BUFFER\n", name );
-		GLint wrap		= get_texture_parameteriv( GL_TEXTURE_WRAP_S );
-		GLint min_filter = get_texture_parameteriv( GL_TEXTURE_MIN_FILTER );
-		GLint mag_filter = get_texture_parameteriv( GL_TEXTURE_MAG_FILTER );
+		GLint wrap			= get_texture_parameteriv( GL_TEXTURE_WRAP_S );
+		GLint min_filter	= get_texture_parameteriv( GL_TEXTURE_MIN_FILTER );
+		GLint mag_filter	= get_texture_parameteriv( GL_TEXTURE_MAG_FILTER );
 
 		Texture* t = (target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY) ? gxCreateTexture1D( name, mip_levels(), width(), layers(), internal_format(), nullptr, false ):(target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY) ? gxCreateTexture2D( name, mip_levels(), width(), height(), layers(), internal_format(), nullptr, false, target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY, multisamples() ):(target==GL_TEXTURE_3D) ? gxCreateTexture3D( name, mip_levels(), width(), height(), depth(), internal_format(), nullptr ):nullptr; if(t==nullptr){ printf( "Texture[\"%s\"]::clone() == nullptr\n", name ); return nullptr; }
 
@@ -722,8 +728,7 @@ namespace gl {
 			else { glBindFramebuffer(GL_FRAMEBUFFER,ID); glBindRenderbuffer(GL_RENDERBUFFER,idx); glFramebufferTexture( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, idx, 0 ); }
 		}
 	}
-
-
+	
 	inline void Framebuffer::bind_no_attachments( GLint width, GLint height, GLint layers, GLint samples )
 	{
 		// bind FBO without attachments: nothing will be written to the color/depth buffers
@@ -1149,8 +1154,14 @@ inline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsizei w
 	glBindTexture( target, ID );
 
 	// allocate storage
-	if( target==GL_TEXTURE_1D ){	glTexStorage1D( target, levels, internal_format, width ); if(data) glTexSubImage1D( target, 0, 0, width, format, type, data ); }
-	else {							glTexStorage2D( target, levels, internal_format, width, layers ); if(data) glTexSubImage2D( target, 0, 0, 0, width, layers, format, type, data ); }
+	if( target==GL_TEXTURE_1D ){	glTexStorage1D( target, levels, internal_format, width );			if(data) glTexSubImage1D( target, 0, 0, width, format, type, data ); }
+	else {							glTexStorage2D( target, levels, internal_format, width, layers );	if(data) glTexSubImage2D( target, 0, 0, 0, width, layers, format, type, data ); }
+
+	// set dimensions
+	texture->_width		= width;
+	texture->_height	= target==GL_TEXTURE_1D_ARRAY?layers:1;
+	texture->_depth		= 1;
+	texture->_levels	= levels;
 
 	// generate mipmap
 	glTexParameteri( target, GL_TEXTURE_BASE_LEVEL, 0 );
@@ -1192,6 +1203,12 @@ inline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsizei w
 	else if( target==GL_TEXTURE_2D_MULTISAMPLE )		glTexStorage2DMultisample(target, multisamples, internal_format, width, height, GL_TRUE );
 	else if( target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY )	glTexStorage3DMultisample(target, multisamples, internal_format, width, height, layers, GL_TRUE );
 
+	// set dimensions
+	texture->_width		= width;
+	texture->_height	= height;
+	texture->_depth		= target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY?layers:1;
+	texture->_levels	= target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_ARRAY?levels:1;
+
 	// generate mipmap
 	glTexParameteri( target, GL_TEXTURE_BASE_LEVEL, 0 );
 	glTexParameteri( target, GL_TEXTURE_MAX_LEVEL, levels-1 );
@@ -1225,6 +1242,12 @@ inline gl::Texture* gxCreateTexture3D( const char* name, GLint levels, GLsizei w
 	glTexStorage3D( target, levels, internal_format, width, height, depth );
 	if(data) glTexSubImage3D( target, 0, 0, 0, 0, width, height, depth, format, type, data );
 
+	// set dimensions
+	texture->_width		= width;
+	texture->_height	= height;
+	texture->_depth		= depth;
+	texture->_levels	= levels;
+
 	// generate mipmap
 	glTexParameteri( target, GL_TEXTURE_BASE_LEVEL, 0 );
 	glTexParameteri( target, GL_TEXTURE_MAX_LEVEL, levels-1 );
@@ -1257,8 +1280,24 @@ inline gl::Texture* gxCreateTextureCube( const char* name, GLint levels, GLsizei
 	glBindTexture( target, ID ); // bind the new texture; we must bind the texture, because glTexStorage2D is not supported for faces of cube map
 
 	// allocate storage: ARB_texture_storage does not support GL_TEXTURE_CUBE_MAP_POSITIVE_X and others
-	if( target==GL_TEXTURE_CUBE_MAP ) for(int k=0;k<6;k++) glTexImage2D( GL_TEXTURE_CUBE_MAP_POSITIVE_X+k, 0, internal_format, width, height, 0, format, type, data&&data[k]?data[k]:nullptr );	// glTexStorage2D is not supported for faces of cube map
-	else if( target==GL_TEXTURE_CUBE_MAP_ARRAY ) glTexImage3D( target, 0, internal_format, width, height, layers*6, 0, format, type, nullptr );
+	if( target==GL_TEXTURE_CUBE_MAP )
+	{
+		int l=0; for(int w=width,h=height;l<levels&&(w>1||h>1);l++,w=max(1,w>>1),h=max(1,h>>1))
+			for(int k=0;k<6;k++) glTexImage2D( GL_TEXTURE_CUBE_MAP_POSITIVE_X+k, l, internal_format, w, h, 0, format, type, l==0&&data&&data[k]?data[k]:nullptr );	// glTexStorage2D is not supported for faces of cube map
+		if(l<levels) levels=l;
+	}
+	else if( target==GL_TEXTURE_CUBE_MAP_ARRAY )
+	{
+		int l=0; for(int w=width,h=height;l<levels&&(w>1||h>1);l++,w=max(1,w>>1),h=max(1,h>>1))
+			glTexImage3D( target, l, internal_format, w, h, layers*6, 0, format, type, nullptr );
+		if(l<levels) levels=l;
+	}
+
+	// set dimensions
+	texture->_width		= width;
+	texture->_height	= height;
+	texture->_depth		= target==GL_TEXTURE_CUBE_MAP_ARRAY?layers*6:6;
+	texture->_levels	= levels;
 
 	// generate mipmap
 	glTexParameteri( target, GL_TEXTURE_BASE_LEVEL, 0 );
@@ -1291,6 +1330,12 @@ inline gl::Texture* gxCreateTextureBuffer( const char* name, gl::Buffer* buffer,
 
 	// create a buffer object and bind the storage using buffer object
 	if(glTextureBuffer) glTextureBuffer( ID, internal_format, buffer->ID ); else glTexBuffer( target, internal_format, buffer->ID );
+
+	// set dimensions
+	texture->_width		= texture->get_texture_level_parameteriv( GL_TEXTURE_WIDTH, 0 );
+	texture->_height	= 1;
+	texture->_depth		= 1;
+	texture->_levels	= 1;
 
 	// unbind the texture
 	glBindTexture( target, 0 );
@@ -1330,8 +1375,8 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLu
 	// get attributes
 	GLint internal_format	= src->internal_format();
 	GLint wrap				= src->get_texture_parameteriv( GL_TEXTURE_WRAP_S );
-	GLint min_filter			= src->get_texture_parameteriv( GL_TEXTURE_MIN_FILTER );
-	GLint mag_filter			= src->get_texture_parameteriv( GL_TEXTURE_MAG_FILTER );
+	GLint min_filter		= src->get_texture_parameteriv( GL_TEXTURE_MIN_FILTER );
+	GLint mag_filter		= src->get_texture_parameteriv( GL_TEXTURE_MAG_FILTER );
 
 	// allocate the new texture using the initial crt heap
 	gl::Texture* t1 = (gl::Texture*) HeapAlloc((void*)src->crtheap,0,sizeof(gl::Texture));
@@ -1352,6 +1397,12 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLu
 	glTextureView( t1->ID, target1, src->ID, internal_format, min_level, levels, min_layer, layers);
 	t1->set_filter( min_filter, mag_filter );
 	t1->set_wrap( wrap );
+
+	// set dimensions
+	t1->_width	= src->_width;
+	t1->_height	= src->_height;
+	t1->_depth	= layers;
+	t1->_levels	= levels;
 
 	for( gl::Texture* t=src; t; t=t->next ) if(t->next==nullptr){ t->next=t1; break; }
 
