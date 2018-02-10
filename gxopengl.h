@@ -406,8 +406,8 @@ namespace gl {
 	{
 		struct Uniform
 		{
-			GLint ID; GLchar name[256]; GLint arraySize; GLenum type; GLint textureID; Texture* texture;
-			template <class T> inline void update( GLuint program_ID, T* v, GLsizei count )
+			GLint ID; GLchar name[256]; GLint array_size; GLenum type; GLint textureID; Texture* texture;
+			template <class T> inline void set( GLuint program_ID, T* v, GLsizei count )
 			{
 				switch(type)
 				{
@@ -420,9 +420,9 @@ namespace gl {
 				case GL_INT_VEC3:			glProgramUniform3iv( program_ID, ID, count, (const GLint*) v );		break;
 				case GL_INT_VEC4:			glProgramUniform4iv( program_ID, ID, count, (const GLint*) v );		break;
 				case GL_UNSIGNED_INT:		glProgramUniform1uiv( program_ID, ID, count, (const GLuint*) v );	break;
-				case GL_UNSIGNED_INT_VEC2:	glProgramUniform2uiv( program_ID, ID, count, (const GLuint*)v );		break;
-				case GL_UNSIGNED_INT_VEC3:	glProgramUniform3uiv( program_ID, ID, count, (const GLuint*)v );		break;
-				case GL_UNSIGNED_INT_VEC4:	glProgramUniform4uiv( program_ID, ID, count, (const GLuint*)v );		break;
+				case GL_UNSIGNED_INT_VEC2:	glProgramUniform2uiv( program_ID, ID, count, (const GLuint*)v );	break;
+				case GL_UNSIGNED_INT_VEC3:	glProgramUniform3uiv( program_ID, ID, count, (const GLuint*)v );	break;
+				case GL_UNSIGNED_INT_VEC4:	glProgramUniform4uiv( program_ID, ID, count, (const GLuint*)v );	break;
 				case GL_BOOL:				glProgramUniform1iv( program_ID, ID, count, (const GLint*) v );		break;
 				case GL_BOOL_VEC2:			glProgramUniform2iv( program_ID, ID, count, (const GLint*) v );		break;
 				case GL_BOOL_VEC3:			glProgramUniform3iv( program_ID, ID, count, (const GLint*) v );		break;
@@ -443,32 +443,36 @@ namespace gl {
 		Uniform* get_uniform( const char* name )
 		{
 			{auto it=uniform_cache.find(name);if(it!=uniform_cache.end()) return &it->second;}
+#ifdef WARN_INVALID_UNIFORM
 			{auto it=invalid_uniform_cache.find(name);if(it!=invalid_uniform_cache.end()) return nullptr;}
-			printf( "[Warning] %s.getUniform(%s): not found\n",this->name, name ); invalid_uniform_cache.emplace(name); return nullptr;
+			printf( "[Warning] %s.get_uniform(%s) not exists\n",this->name, name );
+			invalid_uniform_cache.emplace(name);
+#endif
+			return nullptr;
 		}
 		
 		// setUniform
 		template <class T>
-		void set_uniform( const char* name, T* v, GLsizei count=1 ){			Uniform* u=get_uniform(name); if(u) u->update(ID,v,count); }
-		void set_uniform( const char* name, const float& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->update(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const vec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->update(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const vec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->update(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const vec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->update(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const int& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->update(ID,(int*)&v,count); }
-		void set_uniform( const char* name, const ivec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->update(ID,(int*)&v,count); }
-		void set_uniform( const char* name, const ivec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->update(ID,(int*)&v,count); }
-		void set_uniform( const char* name, const ivec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->update(ID,(int*)&v,count); }
-		void set_uniform( const char* name, const uint& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->update(ID,(uint*)&v,count); }
+		void set_uniform( const char* name, T* v, GLsizei count=1 ){			Uniform* u=get_uniform(name); if(u) u->set(ID,v,count); }
+		void set_uniform( const char* name, const float& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const vec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const vec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const vec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const int& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, const ivec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, const ivec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, const ivec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, const uint& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(uint*)&v,count); }
 #ifdef _M_X64
-		void set_uniform( const char* name, const size_t& v, GLsizei count=1 ){	std::vector<uint> l;l.resize(count);for(int j=0;j<count;j++)l[j]=uint((&v)[j]); Uniform* u=get_uniform(name); if(u) u->update(ID,(uint*)&l[0],count); }
+		void set_uniform( const char* name, const size_t& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u&&count==1) u->set(ID,(uint*)&v,count); else if(u){std::vector<uint> l(count);for(int j=0;j<count;j++)l[j]=uint((&v)[j]);  u->set(ID,(uint*)&l[0],count);} }
 #endif
-		void set_uniform( const char* name, const uvec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->update(ID,(uint*)&v,count); }
-		void set_uniform( const char* name, const uvec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->update(ID,(uint*)&v,count); }
-		void set_uniform( const char* name, const uvec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->update(ID,(uint*)&v,count); }
-		void set_uniform( const char* name, const bool& b, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u){ int v=b?1:0; u->update(ID,(int*)&v,count); }}
-		void set_uniform( const char* name, const mat4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->update(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const mat3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->update(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const mat2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->update(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const uvec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(uint*)&v,count); }
+		void set_uniform( const char* name, const uvec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(uint*)&v,count); }
+		void set_uniform( const char* name, const uvec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(uint*)&v,count); }
+		void set_uniform( const char* name, const bool& b, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u){ int v=b?1:0; u->set(ID,(int*)&v,count); }}
+		void set_uniform( const char* name, const mat4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const mat3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const mat2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(float*)&v,count); }
 		void set_uniform( const char* name, Texture* t ){ if(!t) return;		Uniform* u=get_uniform(name); if(!u||u->ID<0||u->textureID<0) return; u->texture=t; glUseProgram(ID); glProgramUniform1i( ID, u->ID, u->textureID ); glActiveTexture(GL_TEXTURE0+u->textureID); u->texture->bind(); }
 
 		// update uniform/uniformBlock
@@ -495,18 +499,18 @@ namespace gl {
 	};
 
 	// template specialization on bool array
-	template<> inline void Program::Uniform::update<bool>( GLuint program_ID, bool* v, GLsizei count ){ std::vector<int> i(count);for(int k=0;k<count;k++)i[k]=int(v[k]); glProgramUniform1iv( program_ID, ID, count, &i[0] ); }
+	template<> inline void Program::Uniform::set<bool>( GLuint program_ID, bool* v, GLsizei count ){ std::vector<int> i(count);for(int k=0;k<count;k++)i[k]=int(v[k]); glProgramUniform1iv( program_ID, ID, count, &i[0] ); }
 
 	// late implementations of Program
 	inline void Program::update_uniform_cache()
 	{
 		for(int k=0,texID=0,n=gxGetProgramiv( ID, GL_ACTIVE_UNIFORMS );k<n;k++)
 		{
-			Uniform u; GLsizei l; glGetActiveUniform(ID,k,std::extent<decltype(u.name)>::value-1,&l,&u.arraySize,&u.type,u.name);
+			Uniform u; GLsizei l; glGetActiveUniform(ID,k,std::extent<decltype(u.name)>::value-1,&l,&u.array_size,&u.type,u.name);
 			if(strstr(u.name,"gl_")) continue; u.ID = glGetUniformLocation(ID,u.name); if(u.ID<0) continue;
-			u.textureID=-1; u.texture=nullptr; bool bTexture=gxIsSamplerType(u.type); if(bTexture) u.textureID=texID++; uniform_cache[u.name]=u; if(u.arraySize==1) continue;
+			u.textureID=-1; u.texture=nullptr; bool bTexture=gxIsSamplerType(u.type); if(bTexture) u.textureID=texID++; uniform_cache[u.name]=u; if(u.array_size==1) continue;
 			GLchar name[256]; strcpy(name,u.name); GLint loc=0; GLchar* bracket=strchr(name,'['); if(bracket) bracket[0]='\0';
-			for( GLint loc=bracket?1:0;loc<u.arraySize;loc++){ Uniform u1=u;sprintf(u1.name,"%s[%d]",name,loc);u1.ID=glGetUniformLocation(ID,u1.name);if(u1.ID==-1)continue;u1.arraySize=u.arraySize-loc;if(bTexture)u1.textureID=texID++;uniform_cache[u1.name]=u1; }
+			for( GLint loc=bracket?1:0;loc<u.array_size;loc++){ Uniform u1=u;sprintf(u1.name,"%s[%d]",name,loc);u1.ID=glGetUniformLocation(ID,u1.name);if(u1.ID==-1)continue;u1.array_size=u.array_size-loc;if(bTexture)u1.textureID=texID++;uniform_cache[u1.name]=u1; }
 		}
 	}
 
