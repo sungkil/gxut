@@ -264,8 +264,8 @@ public:
 	path remove_backslash()	const { path p(*this); size_t len=wcslen(p.data); if(len&&p.data[len-1]=='\\'){p.data[len-1]=L'\0';} return p; }
 	path remove_first_dot()	const { return (wcslen(data)>2&&data[0]==L'.'&&data[1]==L'\\') ? path(data+2) : *this; }
 	path auto_quote()		const { if(data[0]==0||wcschr(data,L' ')==nullptr||(data[0]==L'\"'&&data[wcslen(data)-1]==L'\"')) return *this; path p; swprintf_s(p,capacity,L"\"%s\"",data); return p; }
-	path unix()				const {	path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(p.is_relative()||p.is_unc()||len<2) return p; p.data[1]=::tolower(p.data[0]); p.data[0]=L'/'; return p; }
-	path cygwin()			const { path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(p.is_relative()||p.is_unc()||len<2) return p; path p2; swprintf_s( p2, capacity, L"/cygdrive/%c%s", ::tolower(p[0]), p+2 ); return p2; }
+	path unix()				const {	path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; p.data[1]=::tolower(p.data[0]); p.data[0]=L'/'; return p; }
+	path cygwin()			const { path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; path p2; swprintf_s( p2, capacity, L"/cygdrive/%c%s", ::tolower(p[0]), p+2 ); return p2; }
 
 	// path info/operations
 	void chdir() const { if(is_dir()) _wchdir(data); }
@@ -304,9 +304,10 @@ public:
 #endif
 
 	// relative/absolute path
-	inline bool is_absolute() const { return (data[0]!=0&&data[1]==L':')||memcmp(data,L"\\\\",sizeof(wchar_t)*2)==0||memcmp(data,L"//",sizeof(wchar_t)*2)==0; }
+	inline bool is_absolute() const { return (data[0]!=0&&data[1]==L':')||memcmp(data,L"\\\\",sizeof(wchar_t)*2)==0||memcmp(data,L"//",sizeof(wchar_t)*2)==0||wcsstr(data,L":\\")!=nullptr||wcsstr(data,L":/")!=nullptr; }
 	inline bool is_relative() const { return !is_absolute(); }
 	inline bool is_unc() const { return (data[0]==L'\\'&&data[1]==L'\\')||(data[0]==L'/'&&data[1]==L'/'); }
+	inline bool is_rsync() const { auto* p=wcsstr(data,L":\\"); if(!p) p=wcsstr(data,L":/"); return p!=nullptr&&p>data+1; }
 	inline bool is_subdir( const path& parent ) const { path p=parent.canonical(); return _wcsnicmp(canonical(),p,p.size())==0; } // do not check existence
 	inline path absolute( const wchar_t* base=L"" ) const { return _wfullpath(__wcsbuf(),(!*base||is_absolute())?data:wcscat(wcscpy(__wcsbuf(),path(base).add_backslash()),data),capacity); }	// do not directly return for non-canonicalized path
 	inline path relative( const wchar_t* from=L"" ) const;
