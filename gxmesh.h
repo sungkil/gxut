@@ -1,12 +1,12 @@
 //*******************************************************************
 // Copyright 2017 Sungkil Lee
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -34,12 +34,12 @@ struct tsampler_t
 	enum model_t {	SIMPLE, STRATIFIED, POISSON, HAMMERSLEY, HALTON };
 	enum surface_t{	SQUARE, CIRCLE, HEMISPHERE, SPHERE, CYLINDER };
 	using array_t = const std::array<vec4,max_samples>;
-	
+
 	model_t			model;
 	surface_t		surface;
 	uint			seed;	// random seed
 	uint			crc;	// crc32c to detect the change of samples
-	
+
 	bool			empty() const { return n==0; }
 	uint			size() const { return n; }
 	const vec4*		begin() const { return &data[0]; }
@@ -59,30 +59,53 @@ protected:
 using sampler_t = tsampler_t<1<<16>; // up to 64K samples
 
 //***********************************************
-// 16-byte aligned light for direct and virtual point lights
-#ifndef __cplusplus // definition for shaders
-struct light_t { vec4 position, color, normal; }; // normal should use xyz
+// 16-byte aligned light for direct lights
+#ifndef __cplusplus // std140 definition for shaders
+struct light_t
+{
+	vec4 position, color, normal;			// use normal.xyz
+};
+
+struct vpl_t
+{
+	vec4	position, color, normal;		// use normal.xyz
+	mat4	view_matrix, projection_matrix;
+	float	fovy, aspect, dnear, dfar;
+	uint	bounce, pad1, pad2, pad3;
+};
 #else
 struct light_t
 {
-	vec4 position;			// directional light (position.a==0) ignores normal
-	vec4 color;				// shared for diffuse/specular
-	vec3 normal;			// direction (the negated vector of position for directional light)
-	uint depth:8;			// vpl bounces (depth>0: VPLs; otherwise, a real light)
-	uint mouse:1;			// dynamic binding to the mouse?
-	uint bind:1;			// dynamic binding to an object
-	uint object_index:22;	// ID of object bound to this light
+	vec4	position;			// directional light (position.a==0) ignores normal
+	vec4	color;				// shared for diffuse/specular
+	vec3	normal;				// direction (the negated vector of position for directional light)
+	uint	mouse:1;			// dynamic binding to the mouse?
+	uint	bind:1;				// dynamic binding to an object
+	uint	object_index:30;	// ID of object bound to this light
 
 	// transformation to camera (eye-coordinate) space
-	vec4 ecpos( mat4& view_matrix ) const { return position.a==0?vec4(mat3(view_matrix)*position.xyz,0.0f):view_matrix*position; }
-	vec3 ecnorm( mat4& view_matrix ) const { return mat3(view_matrix)*normal; }
-
-	// directions and angles against view vector
-	vec3  dir() const { return normalize(position.xyz); }
-	float phi() const { vec3 d=dir(); return atan2(d.y,d.x); }	// angle on the xy plane orthogonal to the optical axis
-	float theta() const { return acos(dir().z); }				// angle between outgoing light direction and the optical axis
+	vec4	ecpos( mat4& view_matrix ) const { return position.a==0?vec4(mat3(view_matrix)*position.xyz,0.0f):view_matrix*position; }
+	vec3	ecnorm( mat4& view_matrix ) const { return mat3(view_matrix)*normal; }
+	vec3	dir() const { return normalize(position.xyz); }			// directions and angles against view vector
+	float	phi() const { vec3 d=dir(); return atan2(d.y,d.x); }	// angle on the xy plane orthogonal to the optical axis
+	float	theta() const { return acos(dir().z); }					// angle between outgoing light direction and the optical axis
 };
+
+// light as camera: use for VPLs and shadows (actually, including real lights as well)
+struct vpl_t : public light_t
+{
+	mat4	view_matrix;		// view matrix to render shadow map
+	mat4	projection_matrix;	// projection matrix to render shadow map
+	float	fovy;				// vertical field of view
+	float	aspect;				// aspect ratio
+	float	dnear;				// near clip for projection
+	float	dfar;				// far clip for projection
+	uint	bounce;				// vpl bounces (0: real lights, bounce>0: VPLs)
+	uint	pad0,pad1,pad2;		// padding; do not use uint[3] (the array is aligned with vec4 in std140 layout)							
+};
+
 static_assert(sizeof(light_t)%16==0,"size of struct light_t should be aligned at 16-byte boundary" );
+static_assert(sizeof(vpl_t)%16==0,	"size of struct vpl_t should be aligned at 16-byte boundary" );
 #endif
 
 //***********************************************
@@ -163,7 +186,7 @@ struct bbox : public bbox_t
 	inline const bbox& expand( const vec3& v ){ m=vec3(min(m.x,v.x),min(m.y,v.y),min(m.z,v.z)); M=vec3(max(M.x,v.x),max(M.y,v.y),max(M.z,v.z)); return *this; }
 	inline const bbox& expand( const vec3& v0, const vec3& v1, const vec3& v2 ){ m=vec3(min(min(m.x,v0.x),min(v1.x,v2.x)),min(min(m.y,v0.y),min(v1.y,v2.y)),min(min(m.z,v0.z),min(v1.z,v2.z))); M=vec3(max(max(M.x,v0.x),max(v1.x,v2.x)),max(max(M.y,v0.y),max(v1.y,v2.y)),max(max(M.z,v0.z),max(v1.z,v2.z))); return *this; }
 	inline const bbox& expand( const mat4& m ){ auto c=corners(); clear(); for( uint k=0;k<c.size();k++) expand(m*c[k]); return *this; }
-	
+
 	// transformation
 	inline const bbox& scale( float s ){ vec3 c=center(); m=c+(m-c)*s; M=c+(M-c)*s; return *this; }
 	inline const bbox& scale( const vec3& v ){ vec3 c=center(); m=c+(m-c)*v; M=c+(M-c)*v; return *this; }
@@ -209,7 +232,7 @@ struct camera : public camera_t
 	int			frame = RAND_MAX;		// frame used for this camera; used in a motion tracer
 	vec4		frustum[6];				// view frustum planes: left, right, top, bottom, near, far
 	camera_t	prev;					// placeholder for the camera at the previous frame
-	
+
 	mat4		inverse_view_matrix() const { return mat4::look_at_inverse(eye,center,up); } // works without eye, center, up
 	mat4		perspective_dx() const { mat4 m=projection_matrix; m._33=dfar/(dnear-dfar); m._34*=0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
 	vec2		plane_size( float ecd=1.0f ) const { return vec2(2.0f/projection_matrix._11,2.0f/projection_matrix._22)*ecd; } // plane size (width, height) at eye-coordinate distance 1
@@ -229,7 +252,7 @@ struct material
 	vec4		color;				// Blinn-Phong diffuse/specular color; color.a = opacity = 1-transmittance
 	float		specular=0.0f;		// specular intensity
 	float		beta=48.0f;			// specular power/shininess
-	float		emissive=0.0f;		// non-zero only for light sources (use color*emissive for its true color)
+	float		emissive=0.0f;		// 1 only for light sources; if an object is named "light*", its material is forced to be emissive
 	float		n=1.0f;				// refractive index
 	uint64_t	TEX=0;				// GPU handle to a diffuse texture; TEX.a = alpha values
 	uint64_t	NRM=0;				// GPU handle to a normal map
@@ -332,7 +355,7 @@ struct geometry
 	acc_t*	acc=nullptr;		// BVH or KD-tree build on geometry level
 	bbox	box;				// transform-unbaked bounding box
 	mat4	shader_matrix;		// do not use in C++; reserved for shader usage; use mesh::update_matrix() to fetch from object matrix
-	
+
 	geometry() = delete; // no default ctor to enforce to assign root
 	geometry( mesh* p_mesh ):root(p_mesh){}
 	geometry( mesh* p_mesh, uint id, uint obj_index, uint start_index, uint index_count, bbox* box, uint mat_index ):root(p_mesh),ID(id),object_index(obj_index),first_index(start_index),count(index_count),material_index(mat_index){ if(box) this->box=*box; }
@@ -362,11 +385,11 @@ struct object
 	struct { bool dynamic=false, bg=false; } attrib; // dynamic: potential matrix changes; background: backdrops such as floor/ground; set in other plugins (e.g., AnimateMesh)
 	char	name[_MAX_PATH]={0};
 	mesh*	root=nullptr;
-	
+
 	object() = delete;  // no default ctor to enforce to assign parent
 	object( mesh* p_mesh ):root(p_mesh){}
 	object( mesh* p_mesh, uint id, const char* name, bbox* box=nullptr ):ID(id),root(p_mesh){ strcpy(this->name,name); if(box) this->box=*box; }
-	
+
 	// face/geometry query
 	inline bool empty() const;
 	inline uint face_count() const;
@@ -554,7 +577,7 @@ __noinline inline bool intersect( const ray& r, const vec3& v0, const vec3& v1, 
 	float b=dot(n,r.dir); if(b>-0.000001f) return false;					// skip backfaces or rays lying on the plane
 	float t=dot(n,v0-r.pos)/b; if(t<r.t||t>r.tfar) return false;			// out of range of [tnear,tfar]
 	vec3 ipos=r.pos+t*r.dir, w=ipos-v0;
-	
+
 	// barycentric coord test
     float uu=dot(u,u), uv=dot(u,v), vv=dot(v,v), wu=dot(w,u), wv=dot(w,v), D=uv*uv-uu*vv;
     float bs = (uv*wv-vv*wu)/D; if( bs < 0.0f || bs > 1.0f )		return false;
@@ -605,7 +628,7 @@ __noinline inline bool geometry::intersect( const ray& r, isect* pi ) const
 	const uint* I = &root->indices[first_index];
 	for( uint k=0, kn=count/3; k<kn; k++, I+=3 )
 		if(::intersect(r,m*V[I[0]].pos,m*V[I[1]].pos,m*V[I[2]].pos,&t)&&t.t<i.t) i=t;
-	
+
 	if(pi&&i.hit){ *pi=i; pi->g=this->ID; }
 	return i.hit;
 }
@@ -634,7 +657,7 @@ __noinline inline bool mesh::intersect( const ray& r, isect* pi ) const
 		m=i;
 	}
 	if(m.hit&&pi) *pi = m;
-		
+
 	return m.hit;
 }
 
@@ -652,7 +675,7 @@ __noinline inline bool clip_line( vec2 p, vec2 q, vec2 lb, vec2 rt, vec2* p1=nul
 		else if(v.x>0){	if(f<t.x) return true; if(f<t.y) t.y=f; }
 		else if(v.x==0&&v.y<0) return true;
 	}
-	
+
 	if(p1&&t.x>0.0f) *p1=lerp(p,q,t.x);		// new p
 	if(q1&&t.y<1.0f) *q1=lerp(p,q,t.y);		// new q
 	return false;
@@ -663,7 +686,7 @@ __noinline inline bool clip_line( vec2 p, vec2 q, vec2 lb, vec2 rt, vec2* p1=nul
 __noinline inline mesh* create_box_mesh( bbox& box, const char* name="box", bool use_quads=false, bool double_sided=false )
 {
 	mesh* m = new mesh();
-	
+
 	// vertex definitions
 	for( uint k=0; k < 8; k++ ) m->vertices.emplace_back(vertex{ box.corner(k), vec3(0.0f), vec2(0.0f) });
 

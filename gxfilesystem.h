@@ -141,28 +141,37 @@ protected:
 	wchar_t* data;	// for casting without (const wchar_t*)
 
 public:
-	static const int max_buffers = 1024;
+	static const int max_buffers = 4096;
 	static const int capacity = 1024;		// MAX_PATH == 260
 	typedef struct _stat stat_t;			// use "struct _stat" instead of "_stat" for C-compatibility
 	
 	// get shared buffer for return values
-	static inline wchar_t*			__wcsbuf(){ static wchar_t buff[max_buffers][capacity]; static int i=0; return buff[i=(i+1)%std::extent<decltype(buff)>::value]; }
+	static inline wchar_t*			__wcsbuf(){ static wchar_t buff[max_buffers][capacity]; static int i=0; return buff[(i++)%std::extent<decltype(buff)>::value]; }
 	static inline char*				__strbuf(){ return (char*)__wcsbuf(); }
 	static inline wchar_t*			__mb2wc( const char* _Src, wchar_t* _Dst ){ MultiByteToWideChar(0,0,_Src,-1,_Dst,min(capacity-1,MultiByteToWideChar(0,0,_Src,-1,0,0))); return _Dst; }
 	static inline char*				__wc2mb( const wchar_t* _Src, char* _Dst ){ WideCharToMultiByte(0,0,_Src,-1,_Dst,min(capacity-1,WideCharToMultiByte(0,0,_Src,-1,0,0,0,0)),0,0); return _Dst; }
-	static inline bool				__wcsiext( const wchar_t* ext_filter, const wchar_t* filename ){ static wchar_t ext[path::capacity]; _wsplitpath_s(filename,nullptr,0,nullptr,0,nullptr,0,ext,_MAX_EXT); if(ext[0]==0) return false; size_t ext_len=wcslen(ext); ext[0]=L';'; ext[ext_len]=L';'; ext[ext_len+1]=0; /* ext include dot first */ return path::__wcsistr(ext_filter,ext)!=nullptr; }
+	static inline bool				__wcsiext( const wchar_t* fname, std::vector<std::wstring>& exts )
+	{
+		size_t fl=wcslen(fname); for(size_t k=0,kn=exts.size();k<kn;k++)
+		{
+			size_t el=exts[k].size();
+			if(el<fl&&_wcsicmp(exts[k].c_str(),fname+fl-el)==0) return true;
+		}
+		return false;
+	}
+
 	static inline const wchar_t*	__wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ size_t l1=wcslen(_Str1); wchar_t* s1=(wchar_t*)memcpy(__wcsbuf(),_Str1,sizeof(wchar_t)*l1); s1[l1]=L'\0'; for(wchar_t* s=s1;*s;s++) *s=towlower(*s); size_t l2=wcslen(_Str2); wchar_t* s2=(wchar_t*)memcpy(__wcsbuf(),_Str2,sizeof(wchar_t)*l2); s2[l2]=L'\0'; for(wchar_t* s=s2;*s;s++) *s=towlower(*s); const wchar_t* r=wcsstr(s1,s2); return r?_Str1+(r-s1):nullptr; }
 
 	// split path
 	struct split_info { wchar_t *drive, *dir, *fname, *ext; };
-	split_info split( wchar_t* drive=nullptr, wchar_t* dir=nullptr, wchar_t* fname=nullptr, wchar_t* ext=nullptr ) const { split_info si={drive,dir,fname,ext};_wsplitpath_s(data,si.drive,si.drive?_MAX_DRIVE:0,si.dir,si.dir?_MAX_DIR:0,si.fname,si.fname?_MAX_FNAME:0,si.ext,si.ext?_MAX_EXT:0);if(si.drive) si.drive[0]=::toupper(si.drive[0]); return si;}
+	split_info split( wchar_t* drive=nullptr, wchar_t* dir=nullptr, wchar_t* fname=nullptr, wchar_t* ext=nullptr ) const { split_info si={drive,dir,fname,ext};_wsplitpath_s(data,si.drive,si.drive?_MAX_DRIVE:0,si.dir,si.dir?_MAX_DIR:0,si.fname,si.fname?_MAX_FNAME:0,si.ext,si.ext?_MAX_EXT:0);if(si.drive&&si.drive[0]) si.drive[0]=::toupper(si.drive[0]); return si;}
 
 	// auxiliary cache information from scan()
 	struct cache_t { FILETIME mtime; uint64_t size; DWORD attributes; };
 
 	// destructor/constuctors
 	~path(){free(data);}
-	path():data((wchar_t*)malloc(sizeof(wchar_t)*capacity+sizeof(cache_t))){data[0]=L'\0';}
+	path():data((wchar_t*)malloc(sizeof(wchar_t)*capacity+sizeof(cache_t))){data[0]=0;}
 	path( const path& p ):path(){ wcscpy(data,p); memcpy(&cache(),&p.cache(),sizeof(cache_t)); } // do not canonicalize for copy constructor
 	path( path&& p ):path(){ std::swap(data,p.data); }
 	path( const wchar_t* s ):path(){ wcscpy(data,s); canonicalize(); }
@@ -271,7 +280,7 @@ public:
 	void chdir() const { if(is_dir()) _wchdir(data); }
 	path drive() const { return split(__wcsbuf()).drive; }
 	path dir() const { path p; if(wcschr(data,L'\\')==nullptr) return L".\\"; split_info si=split(__wcsbuf(),__wcsbuf()); wcscpy(p.data,wcscat(si.drive,si.dir)); size_t len=wcslen(p.data); if(len>0&&p.data[len-1]!='\\'){p.data[len]='\\';p.data[len+1]=L'\0';} return p; }
-	path name( bool bExt=true ) const { split_info si=split(nullptr,nullptr,__wcsbuf(),__wcsbuf()); return bExt?wcscat(si.fname,si.ext):si.fname; }
+	path name( bool with_ext=true ) const { split_info si=split(nullptr,nullptr,__wcsbuf(),__wcsbuf()); return with_ext?wcscat(si.fname,si.ext):si.fname; }
 	path ext() const { split_info si=split(nullptr,nullptr,nullptr,__wcsbuf()); return (si.ext[0]==0)?path():path(si.ext+1); }
 	path remove_ext() const { split_info si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
 	path parent() const { return dir().remove_backslash().dir(); }
@@ -341,9 +350,9 @@ public:
 	void set_filetime_to_now() const { SYSTEMTIME s=now(); set_filetime(&s,&s,&s); }
 
 	// scan/findfile: ext_filter (specific extensions delimited by semicolons), str_filter (path should contain this string)
-	struct scan_info { std::vector<path>& result; bool recursive; bool inc_dir; const wchar_t* ext; const wchar_t* str; };
+	struct scan_t { std::vector<path>& result; bool recursive; bool inc_dir; std::vector<std::wstring> exts; const wchar_t* str; };
 	std::vector<path> scan( bool recursive=true, const wchar_t* ext_filter=nullptr, const wchar_t* str_filter=nullptr ) const;
-	std::vector<path> subdirs( bool recursive=true ) const;
+	std::vector<path> subdirs( bool recursive=true, const wchar_t* str_filter=nullptr ) const;
 
 	// module/working directories
 	static inline path module( HMODULE h_module=nullptr ){ static path m; if(!m.empty()&&!h_module) return m; path p;GetModuleFileNameW(h_module,p,path::capacity);p[0]=::toupper(p[0]); p=p.canonical(); return h_module?p:(m=p); }
@@ -364,28 +373,27 @@ public:
 
 private:
 	void canonicalize(); // remove redundant dir indicates such as "..", "."
-	void _scan( path& dir, scan_info& si ) const;
+	void _scan( path& dir, scan_t& si ) const;
 };
 
 //***********************************************
 // definitions of long inline member functions
-
 __noinline inline std::vector<path> path::scan( bool recursive, const wchar_t* ext_filter, const wchar_t* str_filter ) const
 {
-	std::wstring ext_filter1=ext_filter?std::wstring(L";")+std::wstring(ext_filter)+L";":L"";
-	scan_info si={std::vector<path>(),recursive,false,ext_filter?ext_filter1.c_str():nullptr,str_filter};
+	std::vector<std::wstring> exts; if(ext_filter&&ext_filter[0]){ wchar_t ef[4096]={0}, *ctx=nullptr; wcscpy(ef,ext_filter); for(wchar_t* e=wcstok_s(ef,L";",&ctx);e;e=wcstok_s(nullptr,L";",&ctx)) if(e[0]) exts.push_back(std::wstring(L".")+e); }
+	scan_t si={std::vector<path>(),recursive,false,exts,str_filter};
 	if(!is_dir()) return si.result; path src=(is_relative()?absolute(L".\\"):*this).add_backslash();
 	si.result.reserve(65536);_scan(src,si);si.result.shrink_to_fit();return si.result;
 }
 
-__noinline inline std::vector<path> path::subdirs( bool recursive ) const
+__noinline inline std::vector<path> path::subdirs( bool recursive, const wchar_t* str_filter ) const
 {
-	scan_info si={std::vector<path>(),recursive,true,nullptr,nullptr};
+	scan_t si={std::vector<path>(),recursive,true,{},str_filter};
 	if(!is_dir()) return si.result; path src=(is_relative()?absolute(L".\\"):*this).add_backslash();
 	si.result.reserve(256);_scan(src,si);si.result.shrink_to_fit();return si.result;
 }
 
-__noinline inline void path::_scan( path& dir, path::scan_info& si ) const
+__noinline inline void path::_scan( path& dir, path::scan_t& si ) const
 {
 	WIN32_FIND_DATAW fd; HANDLE h=FindFirstFileExW(dir+L"*.*",FindExInfoBasic/*minimal(faster)*/,&fd,FindExSearchNameMatch,0,FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
 	std::vector<path> child_dirs; if(si.recursive) child_dirs.reserve(4);
@@ -393,8 +401,15 @@ __noinline inline void path::_scan( path& dir, path::scan_info& si ) const
 	while(FindNextFileW(h,&fd))
 	{
 		if(f[0]==L'.'&&(!f[1]||(f[1]==L'.'&&!f[2]))) continue;
-		if(fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY){ if(si.recursive||si.inc_dir){wcscat(wcscpy(t,dir),f);size_t l=wcslen(t);t[l]=L'\\';t[l+1]=0;if(si.recursive)child_dirs.emplace_back(t);if(si.inc_dir)si.result.emplace_back(t);} continue; }
-		if(si.inc_dir||(si.ext&&!__wcsiext(si.ext,f))||(si.str&&!__wcsistr(f,si.str))) continue;
+		if(fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)
+		{
+			if(!si.recursive&&!si.inc_dir) continue;
+			wcscat(wcscpy(t,dir),f);size_t l=wcslen(t);t[l]=L'\\';t[l+1]=0;
+			if(si.recursive)child_dirs.emplace_back(t);
+			if(si.inc_dir&&(!si.str||(si.str&&__wcsistr(f,si.str))))si.result.emplace_back(t);
+			continue;
+		}
+		if(si.inc_dir||(!si.exts.empty()&&!__wcsiext(f,si.exts))||(si.str&&!__wcsistr(f,si.str))) continue;
 		wcscat(wcscpy(t,dir),f); si.result.emplace_back(std::move(t));
 		cache_t& d=si.result.back().cache();d.size=uint64_t(fd.nFileSizeLow)+(uint64_t(fd.nFileSizeHigh)<<32ull);d.attributes=fd.dwFileAttributes;d.mtime=DiscardFileTimeMilliseconds(fd.ftLastWriteTime);
 	}
