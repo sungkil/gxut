@@ -40,11 +40,12 @@ struct tsampler_t
 	uint			seed;	// random seed
 	uint			crc;	// crc32c to detect the change of samples
 
+	static constexpr uint capacity() { return max_samples; }
+
 	bool			empty() const { return n==0; }
 	uint			size() const { return n; }
 	const vec4*		begin() const { return &data[0]; }
 	const vec4*		end() const { return begin()+n; }
-	uint			capacity() const { return uint(data.max_size()); }
 	const vec4&		operator[]( size_t i ) const { return data[i]; }
 	const vec4&		at( size_t i ) const { return data[i]; }
 	void			resize( uint new_size, bool b_resample=true ){ const_cast<uint&>(n)=min(new_size,max_samples); if(b_resample) resample(); }
