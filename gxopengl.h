@@ -566,7 +566,7 @@ namespace gl {
 		// draw or compute
 		inline void draw_quads(){ quad->draw_quads(); }
 		inline void dispatch_compute( GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z=1 ){ glDispatchCompute( num_groups_x?num_groups_x:1, num_groups_y?num_groups_y:1, num_groups_z?num_groups_z:1 ); }
-		inline void dispatch_compute( GLuint num_threads_x, double local_size_x, GLuint num_threads_y, double local_size_y, GLuint num_threads_z=1, double local_size_z=1 )	{ GLuint num_groups_x = max(GLuint(ceil(num_threads_x/float(local_size_x))),1), num_groups_y = max(GLuint(ceil(num_threads_y/float(local_size_y))),1), num_groups_z = max(GLuint(ceil(num_threads_z/float(local_size_z))),1); dispatch_compute(num_groups_x, num_groups_y, num_groups_z ); }
+		inline void dispatch_compute( GLuint num_threads_x, double local_size_x, GLuint num_threads_y, double local_size_y, GLuint num_threads_z=1, double local_size_z=1 )	{ GLuint num_groups_x = max(GLuint(ceil(num_threads_x/float(local_size_x))),1u), num_groups_y = max(GLuint(ceil(num_threads_y/float(local_size_y))),1u), num_groups_z = max(GLuint(ceil(num_threads_z/float(local_size_z))),1u); dispatch_compute(num_groups_x, num_groups_y, num_groups_z ); }
 		inline void dispatch_compute_indirect( GLintptr indirect ){ glDispatchComputeIndirect( indirect ); }
 
 		// internal members

@@ -34,6 +34,7 @@
 #endif
 // C standard
 #include <inttypes.h>	// defines int64_t, uint64_t
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -51,6 +52,7 @@
 	#include <unordered_set>
 #endif
 #if defined(_WIN32)||defined(_WIN64) // Windows
+	#define NOMINMAX // suppress definition of min/max
 	#include <windows.h>
 #endif
 // platform-specific
@@ -116,20 +118,14 @@ using double9	= tarray9<double>;	using double16	= tarray16<double>;
 //###################################################################
 
 #include <limits.h>
-#include <math.h>
+#include <float.h>
 
-#ifdef PI
-	#undef PI
-#endif
+#undef PI
+using std::min;
+using std::max;
+
 template <class T=float> constexpr T PI = T(3.141592653589793);
-
-#if !defined(max) && !defined(min)
-	#define max(a,b) ((a)>(b)?(a):(b))
-	#define min(a,b) ((a)<(b)?(a):(b))
-#endif
-#ifndef clamp
-	#define clamp(v,vmin,vmax) min(max(v,vmin),vmax)
-#endif
+template <class T,class N,class X> T clamp( T v, N vmin, X vmax ){ return v<T(vmin)?T(vmin):v>T(vmax)?T(vmax):v; }
 
 //***********************************************
 // template type_traits helpers
@@ -345,7 +341,7 @@ using bvec2 = tvec2<bool>;		using bvec3 = tvec3<bool>;		using bvec4 = tvec4<bool
 
 // basic math types for computer graphics
 struct alignas(32) vertex { vec3 pos; vec3 norm; vec2 tex; };	// default vertex layout
-struct bbox_t { alignas(16) vec3 m=-FLT_MAX; alignas(16) vec3 M=FLT_MAX; };		// bounding box in std140 layout
+struct bbox_t { alignas(16) vec3 m=-3.402823466e+38F; alignas(16) vec3 M=3.402823466e+38F; }; // bounding box in std140 layout; FLT_MAX = 3.402823466e+38F
 
 //***********************************************
 // std::hash support here
@@ -601,7 +597,7 @@ struct mat4 : public tarray<float,16>
 
 	// determinant/trace/inverse
 	vec4 _xdet() const;	// support function for det() and inverse()
-	__forceinline float mat4::det() const { return cvec4(3).dot(_xdet()); }
+	__forceinline float det() const { return cvec4(3).dot(_xdet()); }
 	__forceinline float trace() const { return _11+_22+_33+_44; }
 	mat4 inverse() const;
 
@@ -633,7 +629,12 @@ struct mat4 : public tarray<float,16>
 	__forceinline mat4& set_scale( const vec3& v ){ set_identity(); _11=v.x; _22=v.y; _33=v.z; return *this; }
 	__forceinline mat4& set_scale( float x,float y,float z ){ set_identity(); _11=x; _22=y; _33=z; return *this; }
 	__forceinline mat4& set_shear( const vec2& yz, const vec2& zx, const vec2& xy ){ set_identity(); _12=yz.x; _13=yz.y; _21=zx.y; _23=zx.x; _31=xy.x; _32=xy.y; return *this; }
-	__forceinline mat4& set_rotate_vec_to_vec( const vec3& from, const vec3& to ){ vec3 n=from.cross(to); return set_rotate( n.normalize(), asin( min(n.length(),0.9999f) ) ); }
+	__forceinline mat4& set_rotate_vec_to_vec( const vec3& from, const vec3& to )
+	{
+		const vec3 n=from.cross(to);
+		float nl=min(n.length(),0.9999f);
+		return set_rotate( n.normalize(), asin(nl) );
+	}
 	__noinline mat4& set_rotate( const vec3& axis, float angle )
 	{
 		float c=cos(angle), s=sin(angle), x=axis.x, y=axis.y, z=axis.z;

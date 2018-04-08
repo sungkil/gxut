@@ -26,6 +26,9 @@
 	#include <nmmintrin.h>
 #endif
 
+using std::min;
+using std::max;
+
 struct mem_t
 {
 	void*		ptr = nullptr;
@@ -405,8 +408,8 @@ struct binary_cache
 	virtual path zip_path(){ return cache_path()+L".zip"; }
 	virtual std::string signature() = 0;
 
-	void writef( const char* fmt, ... ){ if(!fp) return; va_list a; va_start(a,fmt); vfprintf_s(fp,fmt,a); va_end(a); }
-	void readf( const char* fmt, ... ){ if(!fp) return; va_list a; va_start(a,fmt); vfscanf_s(fp,fmt,a); va_end(a); }
+	void writef( const char* fmt, ... ){ if(!fp) return; va_list a; va_start(a,fmt); vfprintf(fp,fmt,a); va_end(a); }
+	void readf( const char* fmt, ... ){ if(!fp) return; va_list a; va_start(a,fmt); vfscanf(fp,fmt,a); va_end(a); }
 	void write( void* ptr, size_t size ){ if(fp) fwrite( ptr, size, 1, fp ); }
 	void read( void* ptr, size_t size ){ if(fp) fread(ptr,size,1,fp); }
 	void close(){ if(fp){ fclose(fp); fp=nullptr; } if(b_read&&zip_path().exists()) cache_path().rmfile(); else if(!b_read) compress(); }

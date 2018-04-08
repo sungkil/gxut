@@ -33,6 +33,7 @@
 #endif
 // C standard
 #include <inttypes.h>	// defines int64_t, uint64_t
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,6 +51,7 @@
 	#include <unordered_set>
 #endif
 #if defined(_WIN32)||defined(_WIN64) // Windows
+	#define NOMINMAX // suppress definition of min/max
 	#include <windows.h>
 #endif
 // platform-specific
@@ -114,12 +116,14 @@ using double9	= tarray9<double>;	using double16	= tarray16<double>;
 #endif // __GXUT_COMMON__
 //###################################################################
 
-#include <chrono>		// microtimer
 #include <direct.h>		// directory control
 #include <io.h>			// low-level io functions
 #include <time.h>
 #include <deque>
-#include <thread>		// usleep
+#ifndef __GNUC__		// MinGW has a problem with threads
+	#include <thread>	// usleep
+	#include <chrono>	// microtimer
+#endif
 
 //***********************************************
 // Win32-like filetime utilities
@@ -148,8 +152,8 @@ public:
 	// get shared buffer for return values
 	static inline wchar_t*			__wcsbuf(){ static wchar_t buff[max_buffers][capacity]; static int i=0; return buff[(i++)%std::extent<decltype(buff)>::value]; }
 	static inline char*				__strbuf(){ return (char*)__wcsbuf(); }
-	static inline wchar_t*			__mb2wc( const char* _Src, wchar_t* _Dst ){ MultiByteToWideChar(0,0,_Src,-1,_Dst,min(capacity-1,MultiByteToWideChar(0,0,_Src,-1,0,0))); return _Dst; }
-	static inline char*				__wc2mb( const wchar_t* _Src, char* _Dst ){ WideCharToMultiByte(0,0,_Src,-1,_Dst,min(capacity-1,WideCharToMultiByte(0,0,_Src,-1,0,0,0,0)),0,0); return _Dst; }
+	static inline wchar_t*			__mb2wc( const char* _Src, wchar_t* _Dst ){ int l=MultiByteToWideChar(0,0,_Src,-1,0,0);if(l>capacity-1)l=capacity-1; MultiByteToWideChar(0,0,_Src,-1,_Dst,l); return _Dst; }
+	static inline char*				__wc2mb( const wchar_t* _Src, char* _Dst ){ int l=WideCharToMultiByte(0,0,_Src,-1,0,0,0,0);if(l>capacity-1)l=capacity-1; WideCharToMultiByte(0,0,_Src,-1,_Dst,l,0,0); return _Dst; }
 	static inline bool				__wcsiext( const wchar_t* fname, std::vector<std::wstring>& exts )
 	{
 		size_t fl=wcslen(fname); for(size_t k=0,kn=exts.size();k<kn;k++)
@@ -350,7 +354,7 @@ public:
 	void set_filetime_to_now() const { SYSTEMTIME s=now(); set_filetime(&s,&s,&s); }
 
 	// scan/findfile: ext_filter (specific extensions delimited by semicolons), str_filter (path should contain this string)
-	struct scan_t { std::vector<path>& result; bool recursive; bool inc_dir; std::vector<std::wstring> exts; const wchar_t* str; };
+	struct scan_t { std::vector<path> result; bool recursive; bool inc_dir; std::vector<std::wstring> exts; const wchar_t* str; };
 	std::vector<path> scan( bool recursive=true, const wchar_t* ext_filter=nullptr, const wchar_t* str_filter=nullptr ) const;
 	std::vector<path> subdirs( bool recursive=true, const wchar_t* str_filter=nullptr ) const;
 
@@ -381,14 +385,14 @@ private:
 __noinline inline std::vector<path> path::scan( bool recursive, const wchar_t* ext_filter, const wchar_t* str_filter ) const
 {
 	std::vector<std::wstring> exts; if(ext_filter&&ext_filter[0]){ wchar_t ef[4096]={0}, *ctx=nullptr; wcscpy(ef,ext_filter); for(wchar_t* e=wcstok_s(ef,L";",&ctx);e;e=wcstok_s(nullptr,L";",&ctx)) if(e[0]) exts.push_back(std::wstring(L".")+e); }
-	scan_t si={std::vector<path>(),recursive,false,exts,str_filter};
+	scan_t si={{},recursive,false,exts,str_filter};
 	if(!is_dir()) return si.result; path src=(is_relative()?absolute(L".\\"):*this).add_backslash();
 	si.result.reserve(65536);_scan(src,si);si.result.shrink_to_fit();return si.result;
 }
 
 __noinline inline std::vector<path> path::subdirs( bool recursive, const wchar_t* str_filter ) const
 {
-	scan_t si={std::vector<path>(),recursive,true,{},str_filter};
+	scan_t si={{},recursive,true,{},str_filter};
 	if(!is_dir()) return si.result; path src=(is_relative()?absolute(L".\\"):*this).add_backslash();
 	si.result.reserve(256);_scan(src,si);si.result.shrink_to_fit();return si.result;
 }
@@ -529,7 +533,7 @@ namespace nocase
 // operating-system utilities
 inline BOOL CALLBACK enum_windows_proc( HWND hwnd , LPARAM pProcessList ){((std::vector<HWND>*)pProcessList)->emplace_back(hwnd);return TRUE;}
 inline std::vector<HWND> enum_windows( const wchar_t* filter=nullptr ){std::vector<HWND> v;EnumWindows(enum_windows_proc,(LPARAM)(&v));return v;}
-#if (__cplusplus>199711L) || (_MSC_VER>=1600/*VS2010*/)
+#if !defined(__GNUC__)&&((__cplusplus>199711L)||(_MSC_VER>=1600/*VS2010*/))
 inline void usleep( int us ){ std::this_thread::sleep_for(std::chrono::microseconds(us)); }
 #endif
 

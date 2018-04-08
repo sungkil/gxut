@@ -48,7 +48,7 @@ struct tsampler_t
 	const vec4*		end() const { return begin()+n; }
 	const vec4&		operator[]( size_t i ) const { return data[i]; }
 	const vec4&		at( size_t i ) const { return data[i]; }
-	void			resize( uint new_size, bool b_resample=true ){ const_cast<uint&>(n)=min(new_size,max_samples); if(b_resample) resample(); }
+	void			resize( uint new_size, bool b_resample=true ){ const_cast<uint&>(n)=min(new_size,uint(max_samples)); if(b_resample) resample(); }
 	virtual uint	resample()=0; // return the number of generated samples; implemented in Sampler plugin
 
 protected:
@@ -111,13 +111,14 @@ static_assert(sizeof(vpl_t)%16==0,	"size of struct vpl_t should be aligned at 16
 
 //***********************************************
 // ray for ray tracing
-struct ray
+template <class T> struct tray // defined as a template to avoid "a constructor in aggregate struct
 {
-	union{struct{vec3 pos,dir;vec4 tex;};struct{vec3 o,d;float t,tfar,time;int depth;};}; // lens system rays (with texcoord) or pbrt-like rays (tnear/tfar = parameters of the nearest/farthest intersections)
-	ray():t(0.0f),tfar(FLT_MAX),time(0.0f),depth(0){}
-	ray( const vec3& _pos, const vec3& _dir, float _tnear=0.0f, float _tfar=FLT_MAX ):ray(){ pos=_pos; dir=_dir; t=_tnear; tfar=_tfar; }
-	ray( const vec3& _pos, const vec3& _dir, const vec4& _tex ):ray(){ pos=_pos; dir=_dir; tex=_tex; }
+	union{struct{tvec3<T> pos,dir;tvec4<T> tex;};struct{tvec3<T> o,d;T t,tfar,time;int depth;};}; // lens system rays (with texcoord) or pbrt-like rays (tnear/tfar = parameters of the nearest/farthest intersections)
+	tray():t(0),tfar(T(FLT_MAX)),time(0),depth(0){}
+	tray( const vec3& _pos, const vec3& _dir, float _tnear=0.0f, float _tfar=FLT_MAX ):tray(){ pos=_pos; dir=_dir; t=_tnear; tfar=_tfar; }
+	tray( const vec3& _pos, const vec3& _dir, const vec4& _tex ):tray(){ pos=_pos; dir=_dir; tex=_tex; }
 };
+using ray = tray<float>;
 
 //***********************************************
 // intersection
@@ -684,7 +685,7 @@ __noinline inline bool clip_line( vec2 p, vec2 q, vec2 lb, vec2 rt, vec2* p1=nul
 
 //***********************************************
 // mesh utilities
-__noinline inline mesh* create_box_mesh( bbox& box, const char* name="box", bool use_quads=false, bool double_sided=false )
+__noinline inline mesh* create_box_mesh( const bbox& box, const char* name="box", bool use_quads=false, bool double_sided=false )
 {
 	mesh* m = new mesh();
 
@@ -697,7 +698,7 @@ __noinline inline mesh* create_box_mesh( bbox& box, const char* name="box", bool
 	if(double_sided){ auto& i=m->indices; for(size_t k=0,f=use_quads?4:3,kn=i.size()/f;k<kn;k++) for(size_t j=0;j<f;j++) i.emplace_back(i[(k+1)*f-j-1]); } // insert indices (for CW)
 
 	// create object and geometry
-	m->create_object(name,&box)->create_geometry(0,uint(m->indices.size()),&box,-1);
+	m->create_object(name,((bbox*)&box))->create_geometry(0,uint(m->indices.size()),(bbox*)&box,-1);
 
 	return m;
 }

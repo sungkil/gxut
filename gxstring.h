@@ -33,6 +33,7 @@
 #endif
 // C standard
 #include <inttypes.h>	// defines int64_t, uint64_t
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,6 +51,7 @@
 	#include <unordered_set>
 #endif
 #if defined(_WIN32)||defined(_WIN64) // Windows
+	#define NOMINMAX // suppress definition of min/max
 	#include <windows.h>
 #endif
 // platform-specific
@@ -201,8 +203,8 @@ inline const char* wtoa( const wchar_t* w ){int mblen=WideCharToMultiByte(0,0,w,
 inline const char* btoa( bool b ){ return b?"1":"0"; }
 inline const char* itoa( int i ){static const char* fmt="%d";size_t size=size_t(_scprintf(fmt,i));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,i);return buff;}
 inline const char* utoa( uint u ){static const char* fmt="%u";size_t size=size_t(_scprintf(fmt,u));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,u);return buff;}
-inline const char* ftoa( float f ){if(fabs(f)<0.00001f)return "0";static const char* fmt="%g";size_t size=size_t(_scprintf(fmt,f));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,f); return buff; }
-inline const char* dtoa( double d ){if(fabs(d)<0.0000001)return "0";static const char* fmt="%g";size_t size=size_t(_scprintf(fmt,d));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,d); return buff; }
+inline const char* ftoa( float f ){if(fabs(f)<0.00000001f)return "0";static const char* fmt="%g";size_t size=size_t(_scprintf(fmt,f));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,f); return buff; }
+inline const char* dtoa( double d ){if(fabs(d)<0.00000001)return "0";static const char* fmt="%g";size_t size=size_t(_scprintf(fmt,d));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,d); return buff; }
 inline const char* ulltoa( uint64_t u ){ static const char* fmt="%Iu";size_t size=size_t(_scprintf(fmt,u));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,u);return buff; }
 inline const char* itoa( const int2& v ){static const char* fmt="%d %d";size_t size=size_t(_scprintf(fmt,v[0],v[1]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v[0],v[1]);return buff;}
 inline const char* itoa( const int3& v ){static const char* fmt="%d %d %d";size_t size=size_t(_scprintf(fmt,v[0],v[1],v[2]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v[0],v[1],v[2]);return buff;}
