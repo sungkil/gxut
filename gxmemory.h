@@ -1,5 +1,5 @@
 //*******************************************************************
-// Copyright 2017 Sungkil Lee
+// Copyright 2011-2018 Sungkil Lee
 // 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -244,7 +244,7 @@ __noinline inline unsigned int tcrc32( const unsigned char* buff, size_t size, u
 }
 
 // normal crc32
-inline unsigned int crc32( void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0xedb88320UL>((const unsigned char*)buff,size,crc0); }
+inline unsigned int crc32( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0xedb88320UL>((const unsigned char*)buff,size,crc0); }
 
 // CRC32C SSE4.2 implementation up to 8-batch parallel construction (https://github.com/Voxer/sse4_crc32)
 #if defined(__SSE4_2__)||!defined(__clang__)
@@ -271,7 +271,7 @@ inline bool has_sse42(){ static bool b=false,h=true; if(b) return h; b=true; int
 #else
 inline bool has_sse42(){ return true; }
 #endif
-inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ return has_sse42()?crc32c_hw(buff,size,crc0):tcrc32<0x82f63b78UL>((const unsigned char*)buff,size,crc0); }
+inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ static bool hw=has_sse42(); return size>1024&&hw?crc32c_hw(buff,size,crc0):tcrc32<0x82f63b78UL>((const unsigned char*)buff,size,crc0); } // fallback to software for small-size buffer
 #else
 inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0x82f63b78UL>((const unsigned char*)buff,size,crc0); }
 #endif

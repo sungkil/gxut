@@ -1,5 +1,5 @@
 //*******************************************************************
-// Copyright 2017 Sungkil Lee
+// Copyright 2011-2018 Sungkil Lee
 // 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,8 +29,9 @@
 #ifndef _HAS_EXCEPTIONS
 	#define _HAS_EXCEPTIONS 0
 #endif
-#if (__cplusplus<201703L&&_MSC_VER<1911/*VS2017*/)&&!defined(__has_include)
-	#define __has_include(a) 0
+// SDKDDKVer
+#if defined(__has_include) && __has_include(<SDKDDKVer.h>)
+	#include <SDKDDKVer.h>
 #endif
 // C standard
 #include <inttypes.h>	// defines int64_t, uint64_t
@@ -52,7 +53,9 @@
 	#include <unordered_set>
 #endif
 #if defined(_WIN32)||defined(_WIN64) // Windows
-	#define NOMINMAX // suppress definition of min/max
+	#ifndef NOMINMAX
+		#define NOMINMAX // suppress definition of min/max
+	#endif
 	#include <windows.h>
 #endif
 // platform-specific
@@ -61,27 +64,28 @@
 #elif defined _M_X64
 	#define GX_PLATFORM "x64"
 #endif
-#ifdef _MSC_VER	// Visual Studio
+#if defined(_MSC_VER) && !defined(__clang__) // Visual Studio with cl 
 	#pragma optimize( "gsy", on )
 	#pragma check_stack( off )
 	#pragma strict_gs_check( off )
 	#pragma float_control(except,off)
 	#ifndef __noinline
-		#define __noinline __declspec(noinline)
+		#define __noinline //__declspec(noinline)
 	#endif
-#else			// GCC or Clang
+#else // GCC or Clang
+	#ifndef __noinline
+		#define __noinline //__attribute__((noinline))
+	#endif
 	#ifdef __GNUC__
 		#ifndef __forceinline
 			#define __forceinline inline __attribute__((__always_inline__))
 		#endif
-		#ifndef __noinline
-			#define __noinline __attribute__((noinline))
-		#endif
 	#elif defined(__clang__)
-		#pragma clang diagnostic ignored "-Wmissing-braces"				// ignore excessive warning for initialzer
-		#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"	// ignore non-virtual destructor
-		#pragma clang diagnostic ignored "-Wunused-variable"			// supress warning for unused b0
-		#define __noinline
+		#pragma clang diagnostic ignored "-Wmissing-braces"					// ignore excessive warning for initialzer
+		#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"		// ignore non-virtual destructor
+		#pragma clang diagnostic ignored "-Wunused-variable"				// supress warning for unused b0
+		#pragma clang diagnostic ignored "-Wunused-command-line-argument"	// e.g., /Gm-, /QPar, /FpC; clang bugs show still warnings
+		#pragma clang diagnostic ignored "-Wclang-cl-pch"					// clang bugs show still warnings
 	#endif
 #endif
 // printf replacements: define implementation somewhere to use this
@@ -94,7 +98,7 @@ template <class T> std::nullptr_t safe_release( T*& p ){if(p){p->Release();p=nul
 // nocase base template
 namespace nocase { template <class T> struct less {}; template <class T> struct equal_to {}; template <class T> struct hash {}; };
 // user types
-#define default_tarray(D)	static const int N=D; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline T& operator[]( int i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( int i ) const { return ((T*)this)[i]; } __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+N; } constexpr size_t size() const { return N; }
+#define default_tarray(D)	static const int N=D; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline T& operator[]( ptrdiff_t i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( ptrdiff_t i ) const { return ((T*)this)[i]; } __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+N; } constexpr size_t size() const { return N; }
 #define default_cmps(A)		__forceinline bool operator==( const A& rhs) const { return memcmp(this,&rhs,sizeof(*this))==0; } __forceinline bool operator!=( const A& rhs) const { return memcmp(this,&rhs,sizeof(*this))!=0; }
 #define default_ctors(c)	__forceinline c()=default;__forceinline c(c&&)=default;__forceinline c(const c&)=default;__forceinline c(std::initializer_list<T> l){T* p=&x;for(auto i:l)(*p++)=i;}
 #define default_assns(c)	__forceinline c& operator=(c&&)=default;__forceinline c& operator=(const c&)=default; __forceinline c& operator=(T a){ for(auto& it:*this) it=a; return *this; }
@@ -338,12 +342,16 @@ template<> __forceinline bool tvec3<double>::operator==(const tvec3& v) const { 
 template<> __forceinline bool tvec4<double>::operator==(const tvec4& v) const { static const double p=precision<double>::value(); return std::abs(x-v.x)<=p&&std::abs(y-v.y)<=p&&std::abs(z-v.z)<=p&&std::abs(w-v.w)<=p; }
 
 //***********************************************
-// type definitions
+// type definitions and size check
 using vec2	= tvec2<float>;		using vec3	= tvec3<float>;		using vec4	= tvec4<float>;
 using dvec2 = tvec2<double>;	using dvec3 = tvec3<double>;	using dvec4 = tvec4<double>;
 using ivec2 = tvec2<int>;		using ivec3 = tvec3<int>;		using ivec4 = tvec4<int>;
 using uvec2 = tvec2<uint>;		using uvec3 = tvec3<uint>;		using uvec4 = tvec4<uint>;
 using bvec2 = tvec2<bool>;		using bvec3 = tvec3<bool>;		using bvec4 = tvec4<bool>;
+
+static_assert(sizeof(vec2)%sizeof(float)*2==0,"sizeof(vec2)!=sizeof(float)*2" );
+static_assert(sizeof(vec3)%sizeof(float)*3==0,"sizeof(vec3)!=sizeof(float)*3" );
+static_assert(sizeof(vec4)%sizeof(float)*4==0,"sizeof(vec4)!=sizeof(float)*4" );
 
 // basic math types for computer graphics
 struct alignas(32) vertex { vec3 pos; vec3 norm; vec2 tex; };	// default vertex layout
@@ -706,6 +714,12 @@ __noinline inline mat4 mat4::inverse() const
 				(_31*_22-_21*_32)*_14 + (_11*_32-_31*_12)*_24 + (_21*_12-_11*_22)*_34,
 				xd.x, xd.y, xd.z, xd.w )*(1.0f/cvec4(3).dot(xd));
 }
+
+//***********************************************
+// matrix size check
+static_assert(sizeof(mat2)%sizeof(float)*4==0,"sizeof(mat2)!=sizeof(float)*4" );
+static_assert(sizeof(mat3)%sizeof(float)*9==0,"sizeof(mat3)!=sizeof(float)*9" );
+static_assert(sizeof(mat4)%sizeof(float)*16==0,"sizeof(mat4)!=sizeof(float)*16" );
 
 //***********************************************
 // vertor-matrix multiplications

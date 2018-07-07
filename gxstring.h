@@ -1,5 +1,5 @@
 //*******************************************************************
-// Copyright 2017 Sungkil Lee
+// Copyright 2011-2018 Sungkil Lee
 // 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,8 +28,9 @@
 #ifndef _HAS_EXCEPTIONS
 	#define _HAS_EXCEPTIONS 0
 #endif
-#if (__cplusplus<201703L&&_MSC_VER<1911/*VS2017*/)&&!defined(__has_include)
-	#define __has_include(a) 0
+// SDKDDKVer
+#if defined(__has_include) && __has_include(<SDKDDKVer.h>)
+	#include <SDKDDKVer.h>
 #endif
 // C standard
 #include <inttypes.h>	// defines int64_t, uint64_t
@@ -51,7 +52,9 @@
 	#include <unordered_set>
 #endif
 #if defined(_WIN32)||defined(_WIN64) // Windows
-	#define NOMINMAX // suppress definition of min/max
+	#ifndef NOMINMAX
+		#define NOMINMAX // suppress definition of min/max
+	#endif
 	#include <windows.h>
 #endif
 // platform-specific
@@ -60,7 +63,7 @@
 #elif defined _M_X64
 	#define GX_PLATFORM "x64"
 #endif
-#ifdef _MSC_VER	// Visual Studio
+#if defined(_MSC_VER) && !defined(__clang__) // Visual Studio with cl 
 	#pragma optimize( "gsy", on )
 	#pragma check_stack( off )
 	#pragma strict_gs_check( off )
@@ -68,19 +71,20 @@
 	#ifndef __noinline
 		#define __noinline __declspec(noinline)
 	#endif
-#else			// GCC or Clang
+#else // GCC or Clang
+	#ifndef __noinline
+		#define __noinline //__attribute__((noinline))
+	#endif
 	#ifdef __GNUC__
 		#ifndef __forceinline
 			#define __forceinline inline __attribute__((__always_inline__))
 		#endif
-		#ifndef __noinline
-			#define __noinline __attribute__((noinline))
-		#endif
 	#elif defined(__clang__)
-		#pragma clang diagnostic ignored "-Wmissing-braces"				// ignore excessive warning for initialzer
-		#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"	// ignore non-virtual destructor
-		#pragma clang diagnostic ignored "-Wunused-variable"			// supress warning for unused b0
-		#define __noinline
+		#pragma clang diagnostic ignored "-Wmissing-braces"					// ignore excessive warning for initialzer
+		#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"		// ignore non-virtual destructor
+		#pragma clang diagnostic ignored "-Wunused-variable"				// supress warning for unused b0
+		#pragma clang diagnostic ignored "-Wunused-command-line-argument"	// e.g., /Gm-, /QPar, /FpC; clang bugs show still warnings
+		#pragma clang diagnostic ignored "-Wclang-cl-pch"					// clang bugs show still warnings
 	#endif
 #endif
 // printf replacements: define implementation somewhere to use this
@@ -93,7 +97,7 @@ template <class T> std::nullptr_t safe_release( T*& p ){if(p){p->Release();p=nul
 // nocase base template
 namespace nocase { template <class T> struct less {}; template <class T> struct equal_to {}; template <class T> struct hash {}; };
 // user types
-#define default_tarray(D)	static const int N=D; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline T& operator[]( int i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( int i ) const { return ((T*)this)[i]; } __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+N; } constexpr size_t size() const { return N; }
+#define default_tarray(D)	static const int N=D; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline T& operator[]( ptrdiff_t i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( ptrdiff_t i ) const { return ((T*)this)[i]; } __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+N; } constexpr size_t size() const { return N; }
 #define default_cmps(A)		__forceinline bool operator==( const A& rhs) const { return memcmp(this,&rhs,sizeof(*this))==0; } __forceinline bool operator!=( const A& rhs) const { return memcmp(this,&rhs,sizeof(*this))!=0; }
 #define default_ctors(c)	__forceinline c()=default;__forceinline c(c&&)=default;__forceinline c(const c&)=default;__forceinline c(std::initializer_list<T> l){T* p=&x;for(auto i:l)(*p++)=i;}
 #define default_assns(c)	__forceinline c& operator=(c&&)=default;__forceinline c& operator=(const c&)=default; __forceinline c& operator=(T a){ for(auto& it:*this) it=a; return *this; }
@@ -175,6 +179,7 @@ inline const wchar_t* format( const wchar_t* fmt,... ){ va_list a; va_start(a,fm
 template <class T> inline const T* tolower( const T* src ){ return _strlwr(__tstrdup(src)); }
 template <class T> inline const T* toupper( const T* src ){ return _strupr(__tstrdup(src)); }
 inline const char* tovarname( const char* src ){ if(!src||!*src) return ""; char *s=(char*)src,*dst=_strbuf(strlen(src)+2), *d=dst; if(!isalpha(*s)&&(*s)!='_') *(d++)='_'; for(;*s;s++,d++) *d=isalnum(*s)?(*s):'_'; *d='\0'; return dst; }
+inline const wchar_t* tovarname( const wchar_t* src ){ if(!src||!*src) return L""; wchar_t *s=(wchar_t*)src,*dst=_wcsbuf(wcslen(src)+2), *d=dst; if(!isalpha(*s)&&(*s)!=L'_') *(d++)=L'_'; for(;*s;s++,d++) *d=isalnum(*s)?(*s):L'_'; *d=L'\0'; return dst; }
 
 //***********************************************
 // 4. case-insensitive comparison for std::map/set, std::unordered_map/set
@@ -206,7 +211,8 @@ inline const char* itoa( int i ){static const char* fmt="%d";size_t size=size_t(
 inline const char* utoa( uint u ){static const char* fmt="%u";size_t size=size_t(_scprintf(fmt,u));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,u);return buff;}
 inline const char* ftoa( float f ){if(fabs(f)<0.00000001f)return "0";static const char* fmt="%g";size_t size=size_t(_scprintf(fmt,f));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,f); return buff; }
 inline const char* dtoa( double d ){if(fabs(d)<0.00000001)return "0";static const char* fmt="%g";size_t size=size_t(_scprintf(fmt,d));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,d); return buff; }
-inline const char* ulltoa( uint64_t u ){ static const char* fmt="%Iu";size_t size=size_t(_scprintf(fmt,u));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,u);return buff; }
+inline const char* illtoa( int64_t i ){ static const char* fmt="%lld";size_t size=size_t(_scprintf(fmt,i));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,i);return buff; }
+inline const char* ulltoa( uint64_t u ){ static const char* fmt="%llu";size_t size=size_t(_scprintf(fmt,u));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,u);return buff; }
 inline const char* itoa( const int2& v ){static const char* fmt="%d %d";size_t size=size_t(_scprintf(fmt,v[0],v[1]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v[0],v[1]);return buff;}
 inline const char* itoa( const int3& v ){static const char* fmt="%d %d %d";size_t size=size_t(_scprintf(fmt,v[0],v[1],v[2]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v[0],v[1],v[2]);return buff;}
 inline const char* itoa( const int4& v ){static const char* fmt="%d %d %d %d";size_t size=size_t(_scprintf(fmt,v[0],v[1],v[2],v[3]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v[0],v[1],v[2],v[3]);return buff;}
@@ -244,6 +250,15 @@ __noinline inline const char* itoasep( int n )
 {
 	if(n<1000&&n>-1000) return itoa(n);
 	const char* s=itoa(n>0?n:-n); size_t len=strlen(s);
+	std::vector<char> v; v.resize(len+1); memcpy(&v[0],s,len+1);
+	for( uint idx=(len%3?len%3:3); idx<len; idx+=4,len++ ) v.emplace(v.begin()+idx,',');
+	return format("%s%s",n>0?"":"-",&v[0]);
+}
+
+__noinline inline const char* illtoasep( int64_t n )
+{
+	if(n<1000&&n>-1000) return illtoa(n);
+	const char* s=illtoa(n>0?n:-n); size_t len=strlen(s);
 	std::vector<char> v; v.resize(len+1); memcpy(&v[0],s,len+1);
 	for( uint idx=(len%3?len%3:3); idx<len; idx+=4,len++ ) v.emplace(v.begin()+idx,',');
 	return format("%s%s",n>0?"":"-",&v[0]);
@@ -367,7 +382,7 @@ inline int wtoi( const std::wstring& w ){	return fast::atoi(wtoa(w.c_str())); }
 inline double wtof( const std::wstring& w ){return fast::atof(wtoa(w.c_str())); }
 inline int atoi( const std::wstring& w ){	return fast::atoi(wtoa(w.c_str())); }
 inline double atof( const std::wstring& w ){return fast::atof(wtoa(w.c_str())); }
-inline bool wtob( const wchar_t* w ){		return _wcsicmp(w,L"true")==0||wtoi(w)!=0; }
+inline bool wtob( const wchar_t* w ){		return w&&w[0]&&(_wcsicmp(w,L"true")==0||wtoi(w)!=0); }
 inline uint wtou( const wchar_t* w ){		return atou(wtoa(w)); }
 inline uint64_t wtoull( const wchar_t* w ){	return atoull(wtoa(w)); }
 
@@ -410,18 +425,27 @@ inline double16 wtod16( const std::wstring& w ){return wtod16(w.c_str()); }
 
 //***********************************************
 // 11. trim
+
 template <class T>
-__noinline inline const T* trim( const T* src, const T* junk=_strcvt<T>(" \t\n") )
+inline const T* ltrim( const T* src, const T* symbols=_strcvt<T>(" \t\n") )
 {
-	if(src==nullptr||src[0]==0) return __tstrdup(src,0);
-	size_t slen=strlen(src);
-	T* s=__tstrdup(src,slen);
-	s[slen-_strrspn(src,junk)]=0;		// rtrim
-	return s+strspn(src,junk);			// ltrim
+	return !src||!src[0]?reinterpret_cast<const T*>(L""):__tstrdup(src,strlen(src))+strspn(src,symbols);
 }
 
 template <class T>
-__noinline inline const T* trim_comment( const T* src, const char* comment_symbols="#" )
+inline const T* rtrim( const T* src, const T* symbols=_strcvt<T>(" \t\n") )
+{
+	return !src||!src[0]?reinterpret_cast<const T*>(L""):__tstrdup(src,strlen(src)-_strrspn(src,symbols));
+}
+
+template <class T>
+inline const T* trim( const T* src, const T* symbols=_strcvt<T>(" \t\n") )
+{
+	if(!src||!src[0]) return _strcvt<T>(""); const T* r=rtrim(src,symbols); return r+(r&&r[0]?strspn(src,symbols):0);
+}
+
+template <class T>
+inline const T* trim_comment( const T* src, const char* comment_symbols="#" )
 {
 	if(src==nullptr||src[0]==0) return src;
 	size_t slen=strlen(src),clen=strlen(comment_symbols),sc=slen-clen+1;
@@ -443,7 +467,16 @@ __noinline inline const T* trim_comment( const T* src, const char* comment_symbo
 }
 
 //***********************************************
-// 12. explode
+// 12. explode/join
+
+template <class T>
+__noinline inline const T* join( std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T>>> v, const T* delim=_strcvt<T>(" ") )
+{
+	std::basic_string<T,std::char_traits<T>,std::allocator<T>> s;
+	for( size_t k=0, kn=v.size(); k<kn; k++ ){ if(k>0) s+=decltype(s)(delim); s+=v[k]; }
+	return __tstrdup(s.c_str());
+}
+
 template <class T>
 __noinline inline std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T> > >
 explode( const T* src, const T* seps=_strcvt<T>(" \t\n") )
@@ -517,7 +550,7 @@ __noinline inline const T* str_replace( const T* _Src, const T* _Find, const T* 
 	int sl=int(strlen(_Src)), fl=int(strlen(_Find)); if(sl<fl) return __tstrdup(_Src);
 	int rl=int(strlen(_Replace));
 	T *s=(T*)_Src, *p=nullptr;
-	std::vector<T> buff; buff.reserve(sl*2); while( p=(T*)strstr(s,_Find) ){ buff.insert(buff.end(),s,p); if(rl>0) buff.insert(buff.end(),_Replace,_Replace+rl); s=p+fl; }
+	std::vector<T> buff; buff.reserve(sl*2); while( nullptr!=(p=(T*)strstr(s,_Find)) ){ buff.insert(buff.end(),s,p); if(rl>0) buff.insert(buff.end(),_Replace,_Replace+rl); s=p+fl; }
 	buff.insert(buff.end(),s,(T*)(_Src+sl));buff.emplace_back(0);
 	return __tstrdup(&buff[0],buff.size());
 }
@@ -528,7 +561,7 @@ __noinline inline const T* str_ireplace( const T* _Src, const T* _Find, const T*
 	if(_Find==nullptr||_Find[0]==0) return __tstrdup(_Src);	// no change
 	int sl=int(strlen(_Src)), fl=int(strlen(_Find)); if(sl<fl) return __tstrdup(_Src); int rl=int(strlen(_Replace));
 	T *s=(T*)_Src, *p=nullptr;
-	std::vector<T> buff; buff.reserve(sl*2); while( p=(T*)_stristr(s,_Find) ){ buff.insert(buff.end(),s,p); buff.insert(buff.end(),_Replace,_Replace+rl); s=p+fl; }
+	std::vector<T> buff; buff.reserve(sl*2); while( nullptr!=(p=(T*)_stristr(s,_Find)) ){ buff.insert(buff.end(),s,p); buff.insert(buff.end(),_Replace,_Replace+rl); s=p+fl; }
 	buff.insert(buff.end(),s,(T*)(_Src+sl));buff.emplace_back(0);
 	return __tstrdup(&buff[0],buff.size());
 }

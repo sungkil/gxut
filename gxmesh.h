@@ -1,5 +1,5 @@
 //*******************************************************************
-// Copyright 2017 Sungkil Lee
+// Copyright 2011-2018 Sungkil Lee
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,8 +46,8 @@ struct tsampler_t
 	uint			size() const { return n; }
 	const vec4*		begin() const { return &data[0]; }
 	const vec4*		end() const { return begin()+n; }
-	const vec4&		operator[]( size_t i ) const { return data[i]; }
-	const vec4&		at( size_t i ) const { return data[i]; }
+	const vec4&		operator[]( ptrdiff_t i ) const { return data[i]; }
+	const vec4&		at( ptrdiff_t i ) const { return data[i]; }
 	void			resize( uint new_size, bool b_resample=true ){ const_cast<uint&>(n)=min(new_size,uint(max_samples)); if(b_resample) resample(); }
 	virtual uint	resample()=0; // return the number of generated samples; implemented in Sampler plugin
 
@@ -156,8 +156,8 @@ struct bbox : public bbox_t
 	bbox& operator=( const bbox_t& b ){ m=b.m; M=b.M; return *this; }
 
 	// array access
-	inline const vec3& operator[]( int i) const { return (&m)[i]; }
-	inline vec3& operator[]( int i ){ return (&m)[i]; }
+	inline const vec3& operator[]( ptrdiff_t i) const { return (&m)[i]; }
+	inline vec3& operator[]( ptrdiff_t i ){ return (&m)[i]; }
 
 	// query
 	inline vec3 center() const { return (M+m)*0.5f; }
@@ -360,7 +360,8 @@ struct geometry
 
 	geometry() = delete; // no default ctor to enforce to assign root
 	geometry( mesh* p_mesh ):root(p_mesh){}
-	geometry( mesh* p_mesh, uint id, uint obj_index, uint start_index, uint index_count, bbox* box, uint mat_index ):root(p_mesh),ID(id),object_index(obj_index),first_index(start_index),count(index_count),material_index(mat_index){ if(box) this->box=*box; }
+	geometry( mesh* p_mesh, uint id, uint obj_index, uint start_index, uint index_count, bbox* box, uint mat_index ):
+		count(index_count),first_index(start_index),ID(id),material_index(mat_index),object_index(obj_index),root(p_mesh){ if(box) this->box=*box; }
 	~geometry(){ if(acc) acc->release(); }
 
 	inline object* parent() const;
@@ -453,11 +454,14 @@ struct mesh
 	// update for matrix/bound
 	inline bool is_dynamic() const { for( size_t k=0, kn=objects.size()/instance_count; k<kn; k++ ) if(objects[k].attrib.dynamic) return true; return false; }
 	inline void update_matrix( bool transpose=false ){ if(!transpose) for(auto& g:geometries) g.shader_matrix=objects[g.object_index].matrix; else for(auto& g:geometries) g.shader_matrix=objects[g.object_index].matrix.transpose(); }
-	inline void update_bound( bool bRecalcTris=false );
+	void update_bound( bool bRecalcTris=false );
 
 	// intersection
-	inline bool intersect( const ray& r, std::vector<uint>* hit_prim_list=nullptr ) const;
-	inline bool intersect( const ray& r, isect* pi=nullptr ) const;
+	bool intersect( const ray& r, std::vector<uint>* hit_prim_list=nullptr ) const;
+	bool intersect( const ray& r, isect* pi=nullptr ) const;
+
+	// utility
+	void dump_binary( path dir=L"" ); // dump the vertex/index buffers as binary files
 };
 
 //***********************************************
@@ -488,7 +492,7 @@ inline bool object::empty() const { auto* g=&root->geometries[0]; for( uint k=0,
 inline uint object::geometry_count() const { uint n=0; for( auto& g : root->geometries ) if(g.parent()==this) n++; return n; }
 inline uint object::face_count() const { auto* g=&root->geometries[0]; uint f=0; for( uint k=0,kn=uint(root->geometries.size()); k<kn; k++ ) if(g[k].parent()==this) f+=g[k].face_count(); return f; }
 inline geometry* object::find_geometry( uint index ) const { auto* g=&root->geometries[0]; uint n=0; for( uint k=0,kn=uint(root->geometries.size()); k<kn; k++, g++ ) if(g->parent()==this&&(n++)==index) return g; return nullptr; }
-inline std::vector<geometry*> object::find_geometries() const { auto* g=&root->geometries[0]; std::vector<geometry*> gl; for( uint k=0,kn=uint(root->geometries.size()); k<kn; k++, g++ ) if(g->parent()==this) gl.emplace_back(g); return std::move(gl); }
+inline std::vector<geometry*> object::find_geometries() const { auto* g=&root->geometries[0]; std::vector<geometry*> gl; for( uint k=0,kn=uint(root->geometries.size()); k<kn; k++, g++ ) if(g->parent()==this) gl.emplace_back(g); return gl; }
 inline geometry* object::create_geometry( size_t first_index, size_t index_count, bbox* box, size_t mat_index ){ auto& g=root->geometries; g.emplace_back(geometry(root,uint(g.size()),this->ID,uint(first_index),uint(index_count),box,uint(mat_index))); return &g.back(); }
 inline geometry* object::create_geometry( const geometry& other ){ auto& g=root->geometries; g.emplace_back(other); auto* p=&g.back(); p->ID=uint(g.size())-1; return p; }
 
@@ -661,6 +665,18 @@ __noinline inline bool mesh::intersect( const ray& r, isect* pi ) const
 	if(m.hit&&pi) *pi = m;
 
 	return m.hit;
+}
+
+//***********************************************
+// utility
+inline void mesh::dump_binary( path dir )
+{
+	if(vertices.empty()||indices.empty()) return;
+	dir = dir.add_backslash(); if(!dir.exists()) dir.mkdir();
+	path vertex_bin_path = dir+path(file_path).name(false).name(false)+L".vertex.bin";
+	path index_bin_path = dir+path(file_path).name(false).name(false)+L".index.bin";
+	FILE* fp = _wfopen( vertex_bin_path, L"wb" ); fwrite( &vertices[0], sizeof(vertex), vertices.size(), fp ); fclose(fp);
+		  fp = _wfopen( index_bin_path, L"wb" );  fwrite( &indices[0], sizeof(uint), indices.size(), fp );	   fclose(fp);
 }
 
 //***********************************************

@@ -1,5 +1,5 @@
 //*******************************************************************
-// Copyright 2017 Sungkil Lee
+// Copyright 2011-2018 Sungkil Lee
 // 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,8 +28,9 @@
 #ifndef _HAS_EXCEPTIONS
 	#define _HAS_EXCEPTIONS 0
 #endif
-#if (__cplusplus<201703L&&_MSC_VER<1911/*VS2017*/)&&!defined(__has_include)
-	#define __has_include(a) 0
+// SDKDDKVer
+#if defined(__has_include) && __has_include(<SDKDDKVer.h>)
+	#include <SDKDDKVer.h>
 #endif
 // C standard
 #include <inttypes.h>	// defines int64_t, uint64_t
@@ -51,7 +52,9 @@
 	#include <unordered_set>
 #endif
 #if defined(_WIN32)||defined(_WIN64) // Windows
-	#define NOMINMAX // suppress definition of min/max
+	#ifndef NOMINMAX
+		#define NOMINMAX // suppress definition of min/max
+	#endif
 	#include <windows.h>
 #endif
 // platform-specific
@@ -60,7 +63,7 @@
 #elif defined _M_X64
 	#define GX_PLATFORM "x64"
 #endif
-#ifdef _MSC_VER	// Visual Studio
+#if defined(_MSC_VER) && !defined(__clang__) // Visual Studio with cl 
 	#pragma optimize( "gsy", on )
 	#pragma check_stack( off )
 	#pragma strict_gs_check( off )
@@ -68,19 +71,20 @@
 	#ifndef __noinline
 		#define __noinline __declspec(noinline)
 	#endif
-#else			// GCC or Clang
+#else // GCC or Clang
+	#ifndef __noinline
+		#define __noinline //__attribute__((noinline))
+	#endif
 	#ifdef __GNUC__
 		#ifndef __forceinline
 			#define __forceinline inline __attribute__((__always_inline__))
 		#endif
-		#ifndef __noinline
-			#define __noinline __attribute__((noinline))
-		#endif
 	#elif defined(__clang__)
-		#pragma clang diagnostic ignored "-Wmissing-braces"				// ignore excessive warning for initialzer
-		#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"	// ignore non-virtual destructor
-		#pragma clang diagnostic ignored "-Wunused-variable"			// supress warning for unused b0
-		#define __noinline
+		#pragma clang diagnostic ignored "-Wmissing-braces"					// ignore excessive warning for initialzer
+		#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"		// ignore non-virtual destructor
+		#pragma clang diagnostic ignored "-Wunused-variable"				// supress warning for unused b0
+		#pragma clang diagnostic ignored "-Wunused-command-line-argument"	// e.g., /Gm-, /QPar, /FpC; clang bugs show still warnings
+		#pragma clang diagnostic ignored "-Wclang-cl-pch"					// clang bugs show still warnings
 	#endif
 #endif
 // printf replacements: define implementation somewhere to use this
@@ -93,7 +97,7 @@ template <class T> std::nullptr_t safe_release( T*& p ){if(p){p->Release();p=nul
 // nocase base template
 namespace nocase { template <class T> struct less {}; template <class T> struct equal_to {}; template <class T> struct hash {}; };
 // user types
-#define default_tarray(D)	static const int N=D; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline T& operator[]( int i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( int i ) const { return ((T*)this)[i]; } __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+N; } constexpr size_t size() const { return N; }
+#define default_tarray(D)	static const int N=D; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline T& operator[]( ptrdiff_t i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( ptrdiff_t i ) const { return ((T*)this)[i]; } __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+N; } constexpr size_t size() const { return N; }
 #define default_cmps(A)		__forceinline bool operator==( const A& rhs) const { return memcmp(this,&rhs,sizeof(*this))==0; } __forceinline bool operator!=( const A& rhs) const { return memcmp(this,&rhs,sizeof(*this))!=0; }
 #define default_ctors(c)	__forceinline c()=default;__forceinline c(c&&)=default;__forceinline c(const c&)=default;__forceinline c(std::initializer_list<T> l){T* p=&x;for(auto i:l)(*p++)=i;}
 #define default_assns(c)	__forceinline c& operator=(c&&)=default;__forceinline c& operator=(const c&)=default; __forceinline c& operator=(T a){ for(auto& it:*this) it=a; return *this; }
@@ -128,11 +132,15 @@ using double9	= tarray9<double>;	using double16	= tarray16<double>;
 
 //***********************************************
 // Win32-like filetime utilities
-inline FILETIME DiscardFileTimeMilliseconds( FILETIME f ){ SYSTEMTIME s; FileTimeToSystemTime(&f,&s); s.wMilliseconds=0; SystemTimeToFileTime(&s,&f); return f; }
 inline uint64_t FileTimeOffset( uint days, uint hours=0, uint mins=0, uint secs=0, uint mss=0 ){ return 10000ull*(mss+1000ull*secs+60*1000ull*mins+60*60*1000ull*hours+24*60*60*1000ull*days); } // FILETIME in 100 ns scale
-inline uint64_t FileTimeToUINT64( const FILETIME& f, uint offset_days=0 ){ return (uint64_t(f.dwHighDateTime)<<32|uint64_t(f.dwLowDateTime))-FileTimeOffset(offset_days); }
-inline FILETIME	UINT64ToFileTime( uint64_t u ){ FILETIME f; f.dwHighDateTime=DWORD(u>>32); f.dwLowDateTime=u&0xffffffff; return f; }
-inline uint64_t SystemTimeToUINT64( const SYSTEMTIME& s, uint offset_days=0 ){ FILETIME f; SystemTimeToFileTime( &s, &f ); return FileTimeToUINT64(f,offset_days); }
+inline FILETIME DiscardFileTimeMilliseconds( FILETIME f ){uint64_t u=((uint64_t(f.dwHighDateTime)<<32|uint64_t(f.dwLowDateTime))/10000000)*10000000;return FILETIME{DWORD(u&0xffffffff),DWORD(u>>32)};} // 1ms = 10000 in FILETIME
+inline SYSTEMTIME FileTimeToSystemTime( const FILETIME& f ){ SYSTEMTIME s; FileTimeToSystemTime(&f,&s); return s; }
+inline FILETIME SystemTimeToFileTime( const SYSTEMTIME& s ){ FILETIME f; SystemTimeToFileTime(&s,&f); return f; }
+inline uint64_t FileTimeToUint64( const FILETIME& f, uint offset_days=0 ){ return (uint64_t(f.dwHighDateTime)<<32|uint64_t(f.dwLowDateTime))-FileTimeOffset(offset_days); }
+inline FILETIME	Uint64ToFileTime( uint64_t u ){ FILETIME f; f.dwHighDateTime=DWORD(u>>32); f.dwLowDateTime=u&0xffffffff; return f; }
+inline uint64_t SystemTimeToUint64( const SYSTEMTIME& s, uint offset_days=0 ){ FILETIME f; SystemTimeToFileTime( &s, &f ); return FileTimeToUint64(f,offset_days); }
+inline FILETIME Now(){ FILETIME f; GetSystemTimeAsFileTime(&f); return f; } // current time
+
 inline bool operator==( const FILETIME& f1, const FILETIME& f2 ){	return CompareFileTime(&f1,&f2)==0; }
 inline bool operator!=( const FILETIME& f1, const FILETIME& f2 ){	return CompareFileTime(&f1,&f2)!=0; }
 inline bool operator>(  const FILETIME& f1, const FILETIME& f2 ){	return CompareFileTime(&f1,&f2)>0; }
@@ -142,51 +150,40 @@ inline bool operator<=( const FILETIME& f1, const FILETIME& f2 ){	return Compare
 
 struct path
 {
-protected:
-	wchar_t* data;	// for casting without (const wchar_t*)
+	typedef WIN32_FILE_ATTRIBUTE_DATA attrib_t; // auxiliary cache information from scan()
+	typedef struct _stat stat_t; // use "struct _stat" instead of "_stat" for C-compatibility
 
-public:
 	static const int max_buffers = 4096;
 	static const int capacity = 1024;		// MAX_PATH == 260
-	typedef struct _stat stat_t;			// use "struct _stat" instead of "_stat" for C-compatibility
 	
 	// get shared buffer for return values
 	static inline wchar_t*			__wcsbuf(){ static wchar_t buff[max_buffers][capacity]; static int i=0; return buff[(i++)%std::extent<decltype(buff)>::value]; }
 	static inline char*				__strbuf(){ return (char*)__wcsbuf(); }
 	static inline wchar_t*			__mb2wc( const char* _Src, wchar_t* _Dst ){ int l=MultiByteToWideChar(0,0,_Src,-1,0,0);if(l>capacity-1)l=capacity-1; MultiByteToWideChar(0,0,_Src,-1,_Dst,l); return _Dst; }
 	static inline char*				__wc2mb( const wchar_t* _Src, char* _Dst ){ int l=WideCharToMultiByte(0,0,_Src,-1,0,0,0,0);if(l>capacity-1)l=capacity-1; WideCharToMultiByte(0,0,_Src,-1,_Dst,l,0,0); return _Dst; }
-	static inline bool				__wcsiext( const wchar_t* fname, std::vector<std::wstring>& exts )
-	{
-		size_t fl=wcslen(fname); for(size_t k=0,kn=exts.size();k<kn;k++)
-		{
-			size_t el=exts[k].size();
-			if(el<fl&&_wcsicmp(exts[k].c_str(),fname+fl-el)==0) return true;
-		}
-		return false;
-	}
-
-	static inline const wchar_t*	__wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ size_t l1=wcslen(_Str1); wchar_t* s1=(wchar_t*)memcpy(__wcsbuf(),_Str1,sizeof(wchar_t)*l1); s1[l1]=L'\0'; for(wchar_t* s=s1;*s;s++) *s=towlower(*s); size_t l2=wcslen(_Str2); wchar_t* s2=(wchar_t*)memcpy(__wcsbuf(),_Str2,sizeof(wchar_t)*l2); s2[l2]=L'\0'; for(wchar_t* s=s2;*s;s++) *s=towlower(*s); const wchar_t* r=wcsstr(s1,s2); return r?_Str1+(r-s1):nullptr; }
+	static inline const wchar_t*	__tolower( const wchar_t* _Str, size_t l ){ wchar_t* s=(wchar_t*)memcpy(__wcsbuf(),_Str,sizeof(wchar_t)*l); s[l]=L'\0'; for(wchar_t* p=s;*p;p++) *p=towlower(*p); return s; }
+	static inline const wchar_t*	__wcsistr( const wchar_t* _Str1, size_t l1, const wchar_t* _Str2, size_t l2 ){ const wchar_t *s1=__tolower(_Str1,l1), *s2=__tolower(_Str2,l2); const wchar_t* r=wcsstr(s1,s2); return r?_Str1+(r-s1):nullptr; }
+	static inline const wchar_t*	__wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return __wcsistr(_Str1,wcslen(_Str1),_Str2,wcslen(_Str2)); }
+	static inline bool				__wcsiext( const wchar_t* fname, std::vector<std::wstring>* exts, size_t fl ){ for(size_t k=0,kn=exts->size();k<kn;k++){size_t el=exts->operator[](k).size();if(el<fl&&_wcsicmp(exts->operator[](k).c_str(),fname+fl-el)==0) return true; } return false; }
+	static inline bool				__wcsiext( const wchar_t* fname, std::vector<std::wstring>* exts ){ return __wcsiext(fname,exts,wcslen(fname)); }
 
 	// split path
 	struct split_info { wchar_t *drive, *dir, *fname, *ext; };
 	split_info split( wchar_t* drive=nullptr, wchar_t* dir=nullptr, wchar_t* fname=nullptr, wchar_t* ext=nullptr ) const { split_info si={drive,dir,fname,ext};_wsplitpath_s(data,si.drive,si.drive?_MAX_DRIVE:0,si.dir,si.dir?_MAX_DIR:0,si.fname,si.fname?_MAX_FNAME:0,si.ext,si.ext?_MAX_EXT:0);if(si.drive&&si.drive[0]) si.drive[0]=::toupper(si.drive[0]); return si;}
 
-	// auxiliary cache information from scan()
-	struct cache_t { FILETIME mtime; uint64_t size; DWORD attributes; };
-
 	// destructor/constuctors
 	~path(){free(data);}
-	path():data((wchar_t*)malloc(sizeof(wchar_t)*capacity+sizeof(cache_t))){data[0]=0;}
-	path( const path& p ):path(){ wcscpy(data,p); memcpy(&cache(),&p.cache(),sizeof(cache_t)); } // do not canonicalize for copy constructor
-	path( path&& p ):path(){ std::swap(data,p.data); }
+	path():data((wchar_t*)malloc(sizeof(wchar_t)*capacity+sizeof(attrib_t))){ data[0]=0; clear_cache(); }
+	path( const path& p ):path(){ wcscpy(data,p); cache()=p.cache(); } // do not canonicalize for copy constructor
+	path( path&& p ):path(){ std::swap(data,p.data); std::swap(cache(),p.cache()); }
 	path( const wchar_t* s ):path(){ wcscpy(data,s); canonicalize(); }
 	path( const char* s ):path(){ __mb2wc(s,data); canonicalize(); }
 	explicit path( const std::wstring& s ):path(s.c_str()){}
 	explicit path( const std::string& s ):path(s.c_str()){}
 
 	// operator overloading: assignment
-	path& operator=( const path& p ){ wcscpy(data,p.data); memcpy(&cache(),&p.cache(),sizeof(cache_t)); return *this; }
-	path& operator=( path&& p ){ std::swap(data,p.data); return *this; }
+	path& operator=( const path& p ){ wcscpy(data,p.data); cache()=p.cache(); return *this; }
+	path& operator=( path&& p ){ std::swap(data,p.data); std::swap(cache(),p.cache()); return *this; }
 	path& operator=( const wchar_t* s ){ wcscpy(data,s); canonicalize(); return *this; }
 	path& operator=( const char* s ){ __mb2wc(s,data); canonicalize(); return *this; }
 	path& operator=( const std::wstring& s ){ return operator=(s.c_str()); }
@@ -237,10 +234,8 @@ public:
 	const char* wtoa() const { return __wc2mb(data,__strbuf()); }
 
 	// operator overloading: array operator
-	inline wchar_t& operator[]( size_t i ){ return data[i]; }
-	inline wchar_t& operator[]( int i ){ return data[i]; }
-	inline const wchar_t& operator[]( size_t i ) const { return data[i]; }
-	inline const wchar_t& operator[]( int i ) const { return data[i]; }
+	inline wchar_t& operator[]( ptrdiff_t i ){ return data[i]; }
+	inline const wchar_t& operator[]( ptrdiff_t i ) const { return data[i]; }
 
 	// iterators
 	using iterator = wchar_t*;
@@ -254,17 +249,11 @@ public:
 	void clear(){ data[0]=0; }
 	path clone() const { return path(*this); }
 
-	// attribute by stats
-	inline DWORD& attributes() const { return cache().attributes=GetFileAttributesW(data); }
-	inline stat_t stat() const { stat_t s={0}; if(exists()) _wstat(data,&s); return s; }
-	inline cache_t& cache() const { return *((cache_t*)(data+capacity)); }
-	inline cache_t& update_cache(){ cache().attributes=attributes(); cache().mtime=mfiletime(); cache().size=file_size(); return cache(); }
-
 	// size/length
 	inline bool empty()			const { return data[0]==0; }
 	inline size_t size()		const { return data[0]==0?0:wcslen(data); }
 	inline size_t length()		const { return data[0]==0?0:wcslen(data); }
-	inline size_t file_size()	const { if(!exists()) return 0; return size_t(cache().size=stat().st_size); }
+	inline size_t file_size()	const { if(!cache_exists()) update_cache(); auto& c=cache(); return size_t(c.nFileSizeHigh)<<32|size_t(c.nFileSizeLow); }
 
 	// md5/crc checksums: implemented in gxmemory.h
 	inline std::string md5() const;
@@ -272,9 +261,9 @@ public:
 	inline uint crc32c() const;
 
 	// system-related: slash, backslash, unix, quote
-	path to_backslash()	const {	path p(*this); std::replace(p.begin(),p.end(),L'/',L'\\'); return p; }
-	path to_slash()	const {	path p(*this); std::replace(p.begin(),p.end(),L'\\',L'/'); return p; }
-	path add_backslash()		const { path p(*this); size_t len=wcslen(p.data); if(len&&p.data[len-1]!='\\'){p.data[len]='\\';p.data[len+1]=L'\0';} return p; }
+	path to_backslash()		const {	path p(*this); std::replace(p.begin(),p.end(),L'/',L'\\'); return p; }
+	path to_slash()			const {	path p(*this); std::replace(p.begin(),p.end(),L'\\',L'/'); return p; }
+	path add_backslash()	const { path p(*this); size_t len=wcslen(p.data); if(len&&p.data[len-1]!='\\'){p.data[len]='\\';p.data[len+1]=L'\0';} return p; }
 	path remove_backslash()	const { path p(*this); size_t len=wcslen(p.data); if(len&&p.data[len-1]=='\\'){p.data[len-1]=L'\0';} return p; }
 	path remove_first_dot()	const { return (wcslen(data)>2&&data[0]==L'.'&&data[1]==L'\\') ? path(data+2) : *this; }
 	path auto_quote()		const { if(data[0]==0||wcschr(data,L' ')==nullptr||(data[0]==L'\"'&&data[wcslen(data)-1]==L'\"')) return *this; path p; swprintf_s(p,capacity,L"\"%s\"",data); return p; }
@@ -283,24 +272,28 @@ public:
 
 	// path info/operations
 	void chdir() const { if(is_dir()) _wchdir(data); }
-	path drive() const { return split(__wcsbuf()).drive; }
+	path drive() const { path d; split(d.data); return d; }
 	path dir() const { path p; if(wcschr(data,L'\\')==nullptr) return L".\\"; split_info si=split(__wcsbuf(),__wcsbuf()); wcscpy(p.data,wcscat(si.drive,si.dir)); size_t len=wcslen(p.data); if(len>0&&p.data[len-1]!='\\'){p.data[len]='\\';p.data[len+1]=L'\0';} return p; }
 	path name( bool with_ext=true ) const { split_info si=split(nullptr,nullptr,__wcsbuf(),__wcsbuf()); return with_ext?wcscat(si.fname,si.ext):si.fname; }
-	path ext() const { split_info si=split(nullptr,nullptr,nullptr,__wcsbuf()); return (si.ext[0]==0)?path():path(si.ext+1); }
+	path ext() const { path e; split_info si=split(nullptr,nullptr,nullptr,e.data); return e.empty()?e:path(e.data+1); }
 	path remove_ext() const { split_info si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
 	path parent() const { return dir().remove_backslash().dir(); }
-	std::vector<path> explode() const {std::vector<path> L;wchar_t* ctx;for(wchar_t* t=wcstok_s(wcscpy(__wcsbuf(),data),L"/\\",&ctx);t;t=wcstok_s(0,L"/\\",&ctx))L.emplace_back(path(t));return L;}
-	std::vector<path> relative_ancestors() const { std::vector<path> a, e=dir().relative().explode(); if(e.empty()) return a; path t=e.front().absolute().add_backslash(); a.emplace_back(t); for(size_t k=1,kn=e.size();k<kn;k++)a.emplace_back(t+=e[k].add_backslash()); return a; }
+	std::vector<path> explode() const { path slashed=to_slash(); std::vector<path> L;L.reserve(8); wchar_t* ctx; for(wchar_t* t=wcstok_s(slashed.data,L"/",&ctx);t;t=wcstok_s(0,L"/",&ctx)) L.emplace_back(t); return L; }
+	std::vector<path> relative_ancestors() const { std::vector<path> a, e=dir().relative().explode(); if(e.empty()) return a; a.reserve(8); path t=e.front().absolute()+L"\\"; a.emplace_back(t); for(size_t k=1,kn=e.size();k<kn;k++)a.emplace_back(t+=e[k]+L"\\"); return a; }
 
-	// is file or directory
-	bool exists() const { if(data[0]==0) return false; return attributes()!=INVALID_FILE_ATTRIBUTES; } // return _waccess(data,0)==0;
-	bool is_dir() const { if(data[0]==0) return false; DWORD a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_DIRECTORY)!=0; }
+	// attribute by stats
+	inline stat_t	stat() const { stat_t s={0}; if(exists()) _wstat(data,&s); return s; }
+	inline DWORD&	attributes() const { if(!cache_exists()) update_cache(); return cache().dwFileAttributes; }
+	inline void		update_cache() const { auto& c=cache(); if(!GetFileAttributesExW(data,GetFileExInfoStandard,&c)||c.dwFileAttributes==INVALID_FILE_ATTRIBUTES){ memset(&c,0,sizeof(attrib_t)); c.dwFileAttributes=INVALID_FILE_ATTRIBUTES; return; } c.ftLastWriteTime = DiscardFileTimeMilliseconds(c.ftLastWriteTime); }
+	inline void		clear_cache() const { attrib_t* a=(attrib_t*)(data+capacity); memset(a,0,sizeof(attrib_t)); a->dwFileAttributes=INVALID_FILE_ATTRIBUTES; }
 	
 	// get/set attributes
-	bool is_hidden() const { return data[0]!=0&&_waccess(data,0)==0&&(attributes()&FILE_ATTRIBUTE_HIDDEN); }
-	bool is_readonly() const { return data[0]!=0&&_waccess(data,0)==0&&(attributes()&FILE_ATTRIBUTE_READONLY); }
-	void set_hidden( bool hidden ) const { if(!exists()) return; SetFileAttributesW(data,attributes()=hidden?(attributes()|FILE_ATTRIBUTE_HIDDEN):(attributes()^FILE_ATTRIBUTE_HIDDEN)); }
-	void set_readonly( bool readonly ) const { if(!exists()) return; SetFileAttributesW(data,attributes()=readonly?(attributes()|FILE_ATTRIBUTE_READONLY):(attributes()^FILE_ATTRIBUTE_READONLY)); }
+	bool exists() const {				if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES; }
+	bool is_dir() const {				if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_DIRECTORY)!=0; }
+	bool is_hidden() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_HIDDEN)!=0; }
+	bool is_readonly() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_READONLY)!=0; }
+	void set_hidden( bool h ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(data,a=h?(a|FILE_ATTRIBUTE_HIDDEN):(a^FILE_ATTRIBUTE_HIDDEN)); }
+	void set_readonly( bool r ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(data,a=r?(a|FILE_ATTRIBUTE_READONLY):(a^FILE_ATTRIBUTE_READONLY)); }
 	
 	// make/copy/delete file/dir operations
 	bool mkdir() const { if(exists()) return false; path p=to_backslash().remove_backslash(), d; wchar_t* ctx;for( wchar_t* t=wcstok_s(p,L"\\",&ctx); t; t=wcstok_s(nullptr,L"\\", &ctx) ){ d+=t;d+=L"\\"; if(!d.exists()&&_wmkdir(d.data)!=0) return false; } return true; } // make all super directories
@@ -312,8 +305,8 @@ public:
 	bool delete_file() const { if(!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); return DeleteFileW(data)==TRUE; }
 #else
 	bool rmdir() const { if(!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={0};fop.wFunc=FO_DELETE;fop.fFlags=FOF_ALLOWUNDO|FOF_SILENT|FOF_NOCONFIRMATION;fop.pFrom=data;data[wcslen(data)+1]=L'\0';return SHFileOperationW(&fop)==0;}
-	bool rmfile() const { return delete_file(); }
-	bool delete_file( bool bUndo=false ) const { if(!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={0};fop.wFunc=FO_DELETE;fop.fFlags=(bUndo?FOF_ALLOWUNDO:0)|FOF_SILENT|FOF_NOCONFIRMATION|FOF_FILESONLY;fop.pFrom=data;data[wcslen(data)+1]=L'\0';return SHFileOperationW(&fop)==0;}
+	bool rmfile( bool b_undo=false ) const { return delete_file(b_undo); }
+	bool delete_file( bool b_undo=false ) const { if(!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={0};fop.wFunc=FO_DELETE;fop.fFlags=(b_undo?FOF_ALLOWUNDO:0)|FOF_SILENT|FOF_NOCONFIRMATION|FOF_FILESONLY;fop.pFrom=data;data[wcslen(data)+1]=L'\0';return SHFileOperationW(&fop)==0;}
 	void open( const wchar_t* args=nullptr, bool bShowWindow=true ) const {path cmd;swprintf(cmd,capacity,L"\"%s\"",data);ShellExecuteW(GetDesktopWindow(),L"Open",cmd,args,nullptr,bShowWindow?SW_SHOW:SW_HIDE);}
 #endif
 
@@ -332,36 +325,23 @@ public:
 
 	// time stamp
 	static const char* timestamp( const struct tm* t ){char* buff=__strbuf();sprintf(buff,"%04d%02d%02d%02d%02d%02d",t->tm_year+1900,t->tm_mon+1,t->tm_mday,t->tm_hour,t->tm_min,t->tm_sec);return buff;}
-	static const char* timestamp( const SYSTEMTIME& t ){char* buff=__strbuf();sprintf(buff,"%04d%02d%02d%02d%02d%02d",t.wYear,t.wMonth,t.wDay,t.wHour,t.wMinute,t.wSecond);return buff;}
-	static const char* timestamp( const FILETIME& t ){ SYSTEMTIME s; FileTimeToSystemTime(&t,&s); return timestamp(s); }
-	const char* ctimestamp() const { stat_t s=stat(); if(!exists()) return ""; struct tm t; _gmtime64_s(&t,&s.st_ctime); return timestamp(&t); }
-	const char* atimestamp() const { stat_t s=stat(); if(!exists()) return ""; struct tm t; _gmtime64_s(&t,&s.st_atime); return timestamp(&t); }
-	const char* mtimestamp() const { stat_t s=stat(); if(!exists()) return ""; struct tm t; _gmtime64_s(&t,&s.st_mtime); return timestamp(&t); }
+	static const char* timestamp( const FILETIME& f ){ SYSTEMTIME s;FileTimeToSystemTime(&f,&s);char* buff=__strbuf();sprintf(buff,"%04d%02d%02d%02d%02d%02d",s.wYear,s.wMonth,s.wDay,s.wHour,s.wMinute,s.wSecond);return buff; }
+	const char* ctimestamp() const { if(!exists()) return ""; stat_t s=stat(); struct tm t; _gmtime64_s(&t,&s.st_ctime); return timestamp(&t); }
+	const char* atimestamp() const { if(!exists()) return ""; stat_t s=stat(); struct tm t; _gmtime64_s(&t,&s.st_atime); return timestamp(&t); }
+	const char* mtimestamp() const { if(!exists()) return ""; stat_t s=stat(); struct tm t; _gmtime64_s(&t,&s.st_mtime); return timestamp(&t); }
 	
-	// current time
-	static SYSTEMTIME now(){ SYSTEMTIME s; GetSystemTime(&s); return s; }
-	static const char* nowstamp(){ return timestamp(now()); }
-	
-	struct FILETIMES { FILETIME c, a, m; };
-	FILETIMES filetimes() const { FILETIMES f={0};HANDLE h=CreateFileW(data,FILE_READ_ATTRIBUTES,0,0,OPEN_EXISTING,0,0);if(h){GetFileTime(h,&f.c,&f.a,&f.m);CloseHandle(h);cache().mtime=f.m=DiscardFileTimeMilliseconds(f.m);} return f;}
-	FILETIME cfiletime() const { FILETIME t={0}; HANDLE h=CreateFileW(data,FILE_READ_ATTRIBUTES,0,0,OPEN_EXISTING,0,0);if(h){GetFileTime(h,&t,0,0);CloseHandle(h);} return t; }
-	FILETIME afiletime() const { FILETIME t={0}; HANDLE h=CreateFileW(data,FILE_READ_ATTRIBUTES,0,0,OPEN_EXISTING,0,0);if(h){GetFileTime(h,0,&t,0);CloseHandle(h);} return t; }
-	FILETIME mfiletime() const { FILETIME t={0}; HANDLE h=CreateFileW(data,FILE_READ_ATTRIBUTES,0,0,OPEN_EXISTING,0,0);if(h){GetFileTime(h,0,0,&t);CloseHandle(h);cache().mtime=t=DiscardFileTimeMilliseconds(t);} return t; }
-	SYSTEMTIME cfilesystemtime() const { FILETIME f=cfiletime(); SYSTEMTIME s; FileTimeToSystemTime(&f,&s); return s; }
-	SYSTEMTIME afilesystemtime() const { FILETIME f=afiletime(); SYSTEMTIME s; FileTimeToSystemTime(&f,&s); return s; }
-	SYSTEMTIME mfilesystemtime() const { FILETIME f=mfiletime(); SYSTEMTIME s; FileTimeToSystemTime(&f,&s); return s; }
-	void set_filetime( FILETIME* c, FILETIME* a, FILETIME* m ) const {HANDLE h=CreateFileW( data, FILE_WRITE_ATTRIBUTES, 0, nullptr, OPEN_EXISTING, 0, nullptr );if(h){SetFileTime(h, c, a, &(cache().mtime=*m) );CloseHandle(h);}}
-	void set_filetime( SYSTEMTIME* c, SYSTEMTIME* a, SYSTEMTIME* m ) const { FILETIMES f={0}; if(c) SystemTimeToFileTime(c,&f.c); if(a) SystemTimeToFileTime(a,&f.a); if(m) SystemTimeToFileTime(m,&f.m); HANDLE h=CreateFileW( data, FILE_WRITE_ATTRIBUTES, 0, nullptr, OPEN_EXISTING, 0, nullptr ); if(h){SetFileTime(h,c?&f.c:nullptr,a?&f.a:nullptr,m?&(cache().mtime=f.m):nullptr);CloseHandle(h);}}
-	void set_filetime_to_now() const { SYSTEMTIME s=now(); set_filetime(&s,&s,&s); }
-
-	// scan/findfile: ext_filter (specific extensions delimited by semicolons), str_filter (path should contain this string)
-	struct scan_t { std::vector<path> result; bool recursive; bool inc_dir; std::vector<std::wstring> exts; const wchar_t* str; };
-	std::vector<path> scan( bool recursive=true, const wchar_t* ext_filter=nullptr, const wchar_t* str_filter=nullptr ) const;
-	std::vector<path> subdirs( bool recursive=true, const wchar_t* str_filter=nullptr ) const;
+	FILETIME cfiletime() const { if(!cache_exists()) update_cache(); return cache().ftCreationTime; }
+	FILETIME afiletime() const { if(!cache_exists()) update_cache(); return cache().ftLastAccessTime; }
+	FILETIME mfiletime() const { if(!cache_exists()) update_cache(); return cache().ftLastWriteTime; }
+	SYSTEMTIME cfilesystemtime() const { return FileTimeToSystemTime(cfiletime()); }
+	SYSTEMTIME afilesystemtime() const { return FileTimeToSystemTime(afiletime()); }
+	SYSTEMTIME mfilesystemtime() const { return FileTimeToSystemTime(mfiletime()); }
+	void set_filetime( const FILETIME* ctime, const FILETIME* atime, const FILETIME* mtime ) const { HANDLE h=CreateFileW(data,FILE_WRITE_ATTRIBUTES,0,nullptr,OPEN_EXISTING,0,nullptr); if(!h)return; auto& c=cache(); if(ctime) c.ftCreationTime=*ctime; if(atime) c.ftLastAccessTime=*atime; if(mtime) c.ftLastWriteTime=*mtime; SetFileTime(h, ctime, atime, mtime ); CloseHandle(h); }
+	void set_filetime( const FILETIME& f ) const { set_filetime(&f,&f,&f); }
 
 	// module/working directories
 	static inline path module( HMODULE h_module=nullptr ){ static path m; if(!m.empty()&&!h_module) return m; path p;GetModuleFileNameW(h_module,p,path::capacity);p[0]=::toupper(p[0]); p=p.canonical(); return h_module?p:(m=p); }
-	static inline path module_dir( HMODULE h_module=nullptr ){ static path d=module().dir(); return h_module?module().dir():d; }
+	static inline path module_dir( HMODULE h_module=nullptr ){ static path d=module().dir(); return h_module?module(h_module).dir():d; }
 	static inline path cwd(){ path p; _wgetcwd(p,path::capacity); return p.absolute().add_backslash(); }	// current working dir
 	static inline void chdir( path dir ){ if(dir.is_dir()) _wchdir(dir); }
 
@@ -376,9 +356,21 @@ public:
 	inline path tolower() const { path d;size_t l=length();for(size_t k=0;k<l;k++)d[k]=::tolower(data[k]);d[l]=L'\0'; return d; }
 	inline path toupper() const { path d;size_t l=length();for(size_t k=0;k<l;k++)d[k]=::toupper(data[k]);d[l]=L'\0'; return d; }
 
-private:
+	// scan/findfile: ext_filter (specific extensions delimited by semicolons), str_filter (path should contain this string)
+	std::vector<path> scan( bool recursive=true, const wchar_t* ext_filter=nullptr, const wchar_t* str_filter=nullptr ) const;
+	std::vector<path> subdirs( bool recursive=true, const wchar_t* str_filter=nullptr ) const;
+
+protected:
+
+	__forceinline attrib_t& cache() const { return *((attrib_t*)(data+capacity)); }
+	__forceinline bool		cache_exists() const { attrib_t* c=(attrib_t*)(data+capacity); return c->ftLastWriteTime.dwHighDateTime>0&&c->dwFileAttributes==INVALID_FILE_ATTRIBUTES; }
 	void canonicalize(); // remove redundant dir indicates such as "..", "."
-	void _scan( path& dir, scan_t& si ) const;
+
+	struct scan_t { std::vector<path> result; bool recursive; bool has_ext; std::vector<std::wstring> exts; const wchar_t* str; size_t slen; };
+	void scan_recursive( path& dir, scan_t& si ) const;
+	void subdirs_recursive( path& dir, scan_t& si ) const;
+
+	wchar_t* data;	// for casting without (const wchar_t*)
 };
 
 //***********************************************
@@ -386,40 +378,60 @@ private:
 __noinline inline std::vector<path> path::scan( bool recursive, const wchar_t* ext_filter, const wchar_t* str_filter ) const
 {
 	std::vector<std::wstring> exts; if(ext_filter&&ext_filter[0]){ wchar_t ef[4096]={0}, *ctx=nullptr; wcscpy(ef,ext_filter); for(wchar_t* e=wcstok_s(ef,L";",&ctx);e;e=wcstok_s(nullptr,L";",&ctx)) if(e[0]) exts.push_back(std::wstring(L".")+e); }
-	scan_t si={{},recursive,false,exts,str_filter};
+	scan_t si={{},recursive,!exts.empty(),exts,str_filter,str_filter?wcslen(str_filter):0};
 	if(!is_dir()) return si.result; path src=(is_relative()?absolute(L".\\"):*this).add_backslash();
-	si.result.reserve(65536);_scan(src,si);si.result.shrink_to_fit();return si.result;
+	si.result.reserve(1<<16);scan_recursive(src,si);si.result.shrink_to_fit();return si.result;
 }
 
 __noinline inline std::vector<path> path::subdirs( bool recursive, const wchar_t* str_filter ) const
 {
-	scan_t si={{},recursive,true,{},str_filter};
+	scan_t si={{},recursive,false,{},str_filter,str_filter?wcslen(str_filter):0};
 	if(!is_dir()) return si.result; path src=(is_relative()?absolute(L".\\"):*this).add_backslash();
-	si.result.reserve(256);_scan(src,si);si.result.shrink_to_fit();return si.result;
+	si.result.reserve(1<<12);subdirs_recursive(src,si);si.result.shrink_to_fit();return si.result;
 }
 
-__noinline inline void path::_scan( path& dir, path::scan_t& si ) const
+__noinline inline void path::scan_recursive( path& dir, path::scan_t& si ) const
 {
 	WIN32_FIND_DATAW fd; HANDLE h=FindFirstFileExW(dir+L"*.*",FindExInfoBasic/*minimal(faster)*/,&fd,FindExSearchNameMatch,0,FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
-	std::vector<path> child_dirs; if(si.recursive) child_dirs.reserve(4);
-	wchar_t* f=fd.cFileName; path t;
+	path t;
+	size_t dl=wcslen(dir); memcpy(t.data,dir.data,dl*sizeof(wchar_t)); wchar_t *f=fd.cFileName, *p=t.data+dl; 
+	std::vector<path> sdir; if(si.recursive) sdir.reserve(16);
+
 	while(FindNextFileW(h,&fd))
 	{
-		if(f[0]==L'.'&&(!f[1]||(f[1]==L'.'&&!f[2]))) continue;
-		if(fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)
+		size_t fl=wcslen(f);
+		if((fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)==0)
 		{
-			if(!si.recursive&&!si.inc_dir) continue;
-			wcscat(wcscpy(t,dir),f);size_t l=wcslen(t);t[l]=L'\\';t[l+1]=0;
-			if(si.recursive)child_dirs.emplace_back(t);
-			if(si.inc_dir&&(!si.str||(si.str&&__wcsistr(f,si.str))))si.result.emplace_back(t);
-			continue;
+			if((si.has_ext&&!__wcsiext(f,&si.exts,fl))||(si.slen>0&&!__wcsistr(f,fl,si.str,si.slen))) continue;
+			memcpy(p,f,sizeof(wchar_t)*fl); p[fl]=0; t.clear_cache(); si.result.emplace_back(t);
 		}
-		if(si.inc_dir||(!si.exts.empty()&&!__wcsiext(f,si.exts))||(si.str&&!__wcsistr(f,si.str))) continue;
-		wcscat(wcscpy(t,dir),f); si.result.emplace_back(std::move(t));
-		cache_t& d=si.result.back().cache();d.size=uint64_t(fd.nFileSizeLow)+(uint64_t(fd.nFileSizeHigh)<<32ull);d.attributes=fd.dwFileAttributes;d.mtime=DiscardFileTimeMilliseconds(fd.ftLastWriteTime);
+		else if(si.recursive&&(fd.dwFileAttributes&FILE_ATTRIBUTE_HIDDEN)==0)
+		{
+			if(f[0]==L'.'){ if(!f[1]||memcmp(f+1,L".",4)==0||memcmp(f+1,L"git",8)==0) continue; } // skip .git
+			memcpy(p,f,sizeof(wchar_t)*fl); p[fl]=L'\\';p[fl+1]=0; sdir.emplace_back(t);
+		}
 	}
 	FindClose(h);
-	for(auto& c:child_dirs) _scan(c,si);
+	for(auto& c:sdir) scan_recursive(c,si);
+}
+
+__noinline inline void path::subdirs_recursive( path& dir, path::scan_t& si ) const
+{
+	WIN32_FIND_DATAW fd; HANDLE h=FindFirstFileExW(dir+L"*.*",FindExInfoBasic/*minimal(faster)*/,&fd,FindExSearchNameMatch,0,FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
+	path t; size_t dl=wcslen(dir); memcpy(t.data,dir.data,dl*sizeof(wchar_t)); wchar_t *f=fd.cFileName, *p=t.data+dl; 
+	std::vector<path> sdir; if(si.recursive) sdir.reserve(16);
+
+	while(FindNextFileW(h,&fd))
+	{
+		if((fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)==0) continue;
+		if((fd.dwFileAttributes&FILE_ATTRIBUTE_HIDDEN)!=0) continue;
+		if(f[0]==L'.'){ if(!f[1]||memcmp(f+1,L".",4)==0||memcmp(f+1,L"git",8)==0) continue; } // skip .git
+		size_t fl=wcslen(f); memcpy(p,f,sizeof(wchar_t)*fl); p[fl]=L'\\';p[fl+1]=0;
+		if(si.recursive) sdir.emplace_back(t);
+		if(si.slen==0) si.result.emplace_back(t); else if(__wcsistr(f,fl,si.str,si.slen)) si.result.emplace_back(t);
+	}
+	FindClose(h);
+	for(auto& c:sdir) subdirs_recursive(c,si);
 }
 
 __noinline inline path path::serial( path dir, const wchar_t* prefix, const wchar_t* postfix, int numzero )
@@ -455,23 +467,22 @@ __noinline inline path path::relative( const wchar_t* from ) const
 {
 	if(is_relative()) return *this;
 
-	path md; GetModuleFileNameW(0,md,capacity);
-	path fromDir = (from&&from[0]) ? path(from).dir().absolute() : path(md).dir().absolute();
-	if(fromDir.drive()[0]!=this->drive()[0]) return *this;
+	path from_dir = (!from||!from[0]) ? module_dir() : path(from).dir().absolute();
+	if(from_dir[0]!=this->data[0]) return *this; // different drive
 
 	// 1. keep filename, make the list of reference and current path
-	std::vector<path> srcList=fromDir.explode(), dstList=dir().explode();
+	std::vector<path> src_list=from_dir.explode(), dst_list=dir().explode();
 
 	// 2. compare and count the different directory levels
 	path result;
-	size_t s=0,d=0,ss=srcList.size(),ds=dstList.size();
-	for( ; s<ss&&d<ds; s++, d++ ) if(_wcsicmp(srcList[s],dstList[d])!=0) break;
-	for( ; s<ss; s++ ) result += L"..\\";
-	for( ; d<ds; d++ ){ result += path(dstList[d]).add_backslash(); }
+	size_t s=0,d=0,ss=src_list.size(),ds=dst_list.size();
+	for(; s<ss&&d<ds; s++, d++ ) if(_wcsicmp(src_list[s],dst_list[d])!=0) break;
+	for(; s<ss; s++ ) result += L"..\\";
+	for(; d<ds; d++ ) result += dst_list[d]+L"\\";
+	result.canonicalize();
 
 	// 3. if empty dir, then attach ./
-	if(result.empty()||result[0]!=L'.') result=path(".\\")+result;
-	result.canonicalize();
+	if(result[0]==0||result[0]!=L'.') result=path(".\\")+result;
 	return this->is_dir()?result:result+name();
 }
 
@@ -517,7 +528,6 @@ __noinline inline void path::canonicalize()
 
 //***********************************************
 // nocase/std map/unordered_map extension for path
-
 namespace std
 {
 	template <> struct hash<path>{ size_t operator()(const path& p)const{ return std::hash<std::wstring>()(p.tolower().c_str());}};
@@ -534,9 +544,22 @@ namespace nocase
 // operating-system utilities
 inline BOOL CALLBACK enum_windows_proc( HWND hwnd , LPARAM pProcessList ){((std::vector<HWND>*)pProcessList)->emplace_back(hwnd);return TRUE;}
 inline std::vector<HWND> enum_windows( const wchar_t* filter=nullptr ){std::vector<HWND> v;EnumWindows(enum_windows_proc,(LPARAM)(&v));return v;}
+inline void exit( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fprintf( stdout, "[%s] %s", path::module().name(false).wtoa(), &buff[0] ); exit(EXIT_FAILURE); }
+inline void exit( const wchar_t* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<wchar_t> buff(_vscwprintf(fmt,a)+1); vswprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fwprintf( stdout, L"[%s] %s", path::module().name(false).c_str(), &buff[0] ); exit(EXIT_FAILURE); }
+inline const char* get_last_error(){ static char buff[4096]={0};DWORD e=GetLastError();char *s;FormatMessageA( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,e,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPSTR)&s,0,nullptr);sprintf(buff,"%s (code=%x)",s,uint(e));LocalFree(s);return buff; }
 #if !defined(__GNUC__)&&((__cplusplus>199711L)||(_MSC_VER>=1600/*VS2010*/))
 inline void usleep( int us ){ std::this_thread::sleep_for(std::chrono::microseconds(us)); }
 #endif
+
+//***********************************************
+// compiler utility
+namespace gx { namespace compiler
+{
+	inline int mtoi( const char* month ){ if(!month||!month[0]||!month[1]||!month[2]) return 0; char a=tolower(month[0]), b=tolower(month[1]), c=tolower(month[2]); if(a=='j'){ if(b=='a') return 1; if(c=='n') return 6; return 7; } if(a=='f') return 2; if(a=='m'){ if(c=='r') return 3; return 5; } if(a=='a'){ if(b=='p') return 4; return 8; } if(a=='s') return 9; if(a=='o') return 10; if(a=='n') return 11; return 12; }
+	inline int year(){ static int y=0; if(y) return y; char buff[64]; sscanf(__DATE__,"%*s %*s %s", buff); return y=atoi(buff); }
+	inline int month(){ static int m=0; if(m) return m; char buff[64]={0}; sscanf(__DATE__,"%s", buff); return m=mtoi(buff); }
+	inline int day(){ static int d=0; if(d) return d; char buff[64]; sscanf(__DATE__,"%*s %s %*s", buff); return d=atoi(buff); }
+}}
 
 //***********************************************
 // timer
