@@ -349,9 +349,9 @@ using ivec2 = tvec2<int>;		using ivec3 = tvec3<int>;		using ivec4 = tvec4<int>;
 using uvec2 = tvec2<uint>;		using uvec3 = tvec3<uint>;		using uvec4 = tvec4<uint>;
 using bvec2 = tvec2<bool>;		using bvec3 = tvec3<bool>;		using bvec4 = tvec4<bool>;
 
-static_assert(sizeof(vec2)%sizeof(float)*2==0,"sizeof(vec2)!=sizeof(float)*2" );
-static_assert(sizeof(vec3)%sizeof(float)*3==0,"sizeof(vec3)!=sizeof(float)*3" );
-static_assert(sizeof(vec4)%sizeof(float)*4==0,"sizeof(vec4)!=sizeof(float)*4" );
+static_assert(sizeof(vec2)==(sizeof(float)*2),"sizeof(vec2)!=sizeof(float)*2" );
+static_assert(sizeof(vec3)==(sizeof(float)*3),"sizeof(vec3)!=sizeof(float)*3" );
+static_assert(sizeof(vec4)==(sizeof(float)*4),"sizeof(vec4)!=sizeof(float)*4" );
 
 // basic math types for computer graphics
 struct alignas(32) vertex { vec3 pos; vec3 norm; vec2 tex; };	// default vertex layout
@@ -771,6 +771,7 @@ template <class T> __forceinline tvec3<enable_float_t<T>> cross( const tvec3<T>&
 // general math utility functions
 template <class T> __forceinline enable_float_t<T> radians( T f ){ return f*PI<T>/T(180.0); }
 template <class T> __forceinline enable_float_t<T> degrees( T f ){ return f*T(180.0)/PI<T>; }
+template <class T> __forceinline tvec2<enable_float_t<T>> minmax( const tvec2<T>& a, const tvec2<T>& b ){ return tvec2<T>(a.x<b.x?a.x:b.x,a.y>b.y?a.y:b.y); }
 __forceinline bool ispot( uint i ){ return (i&(i-1))==0; }		// http://en.wikipedia.org/wiki/Power_of_two
 __forceinline uint nextpot( uint n ){ int m=int(n)-1; for( uint k=1; k<uint(sizeof(int))*8; k<<=1 ) m=m|m>>k; return m+1; }	// next power-of-two
 __forceinline uint miplevels( uint width, uint height=1 ){ uint l=0; uint s=width>height?width:height; while(s){s=s>>1;l++;} return l; }
@@ -798,10 +799,10 @@ __forceinline vec4 abs( const vec4& v ){ return vec4(fabs(v.x),fabs(v.y),fabs(v.
 __forceinline vec2 fabs( const vec2& v ){ return vec2(fabs(v.x),fabs(v.y)); }
 __forceinline vec3 fabs( const vec3& v ){ return vec3(fabs(v.x),fabs(v.y),fabs(v.z)); }
 __forceinline vec4 fabs( const vec4& v ){ return vec4(fabs(v.x),fabs(v.y),fabs(v.z),fabs(v.w)); }
-__forceinline int sign( float f ){ return f>0.0f?1:f<0.0f?-1:0; }
-__forceinline ivec2 sign( const vec2& v ){ return ivec2(sign(v.x),sign(v.y)); }
-__forceinline ivec3 sign( const vec3& v ){ return ivec3(sign(v.x),sign(v.y),sign(v.z)); }
-__forceinline ivec4 sign( const vec4& v ){ return ivec4(sign(v.x),sign(v.y),sign(v.z),sign(v.w)); }
+__forceinline float sign( float f ){ return f>0.0f?1.0f:f<0.0f?-1.0f:0; }
+__forceinline vec2 sign( const vec2& v ){ return vec2(sign(v.x),sign(v.y)); }
+__forceinline vec3 sign( const vec3& v ){ return vec3(sign(v.x),sign(v.y),sign(v.z)); }
+__forceinline vec4 sign( const vec4& v ){ return vec4(sign(v.x),sign(v.y),sign(v.z),sign(v.w)); }
 __forceinline float smoothstep( float t ){ t=clamp(t,0.0f,1.0f); return t*t*(3-2*t); }							// C1-continuity
 __forceinline vec2 smoothstep( const vec2& t ){ return vec2(smoothstep(t.x),smoothstep(t.y)); }
 __forceinline vec3 smoothstep( const vec3& t ){ return vec3(smoothstep(t.x),smoothstep(t.y),smoothstep(t.z)); }
@@ -847,6 +848,19 @@ __forceinline uint floatBitsToUint( float f ){ return reinterpret_cast<uint&>(f)
 __forceinline int floatBitsToInt( float f ){ return reinterpret_cast<int&>(f); }
 __forceinline float intBitsToFloat( int i ){ return reinterpret_cast<float&>(i); }
 __forceinline float uintBitsToFloat( uint u ){ return reinterpret_cast<float&>(u); }
+// casting for normalized vec3 in [0,1]
+__forceinline vec2 normVec3BitsToVec2( vec3 v )
+{
+	static const uint cap=21, hcap=10, cmask=0x1fffff, hmask=0x3ff;	// channel capacity, half capacity, channel capacity mask (=(1<<cap)-1), half capacity mask (=(1<<hcap)-1)
+	uvec3 u = uvec3(uint(v.x*cmask),uint(v.y*cmask),uint(v.z*cmask));
+	return vec2( uintBitsToFloat(u.x|((u.z&~hmask)<<(cap-hcap))), uintBitsToFloat(u.y|((u.z&hmask)<<cap)) ); // bits = ( [z.11,x.21], [z.10,y.21] ) 
+}
+__forceinline vec3 vec2BitsToNormVec3( vec2 v )
+{
+	static const uint cap=21, hcap=10, cmask=0x1fffff, hmask=0x3ff;	// channel capacity, half capacity, channel capacity mask (=(1<<cap)-1), half capacity mask (=(1<<hcap)-1)
+	uvec2 u = uvec2( floatBitsToUint(v.x), floatBitsToUint(v.y) );
+	return vec3(float(u.x&cmask),float(u.y&cmask),float(((u.x&~cmask)>>(cap-hcap))|(u.y>>cap)))/float(cmask);
+}
 
 //***********************************************
 // spline interpolations

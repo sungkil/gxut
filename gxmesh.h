@@ -72,7 +72,6 @@ struct vpl_t
 	vec4	position, color, normal;		// use normal.xyz
 	mat4	view_matrix, projection_matrix;
 	float	fovy, aspect, dnear, dfar;
-	uint	bounce, pad1, pad2, pad3;
 };
 #else
 struct light_t
@@ -101,12 +100,10 @@ struct vpl_t : public light_t
 	float	aspect;				// aspect ratio
 	float	dnear;				// near clip for projection
 	float	dfar;				// far clip for projection
-	uint	bounce;				// vpl bounces (0: real lights, bounce>0: VPLs)
-	uint	pad0,pad1,pad2;		// padding; do not use uint[3] (the array is aligned with vec4 in std140 layout)							
 };
 
-static_assert(sizeof(light_t)%16==0,"size of struct light_t should be aligned at 16-byte boundary" );
-static_assert(sizeof(vpl_t)%16==0,	"size of struct vpl_t should be aligned at 16-byte boundary" );
+static_assert(sizeof(light_t)%16==0,"size of struct light_t should be aligned at 16-byte boundaries" );
+static_assert(sizeof(vpl_t)%16==0,	"size of struct vpl_t should be aligned at 16-byte boundaries" );
 #endif
 
 //***********************************************
@@ -129,7 +126,7 @@ struct isect
 	float	t=FLT_MAX;						// nearest intersection: t<0 indicates inverted intersection on spherical surfaces
 	union	{float tfar=FLT_MAX,theta;};	// farthest intersection (gxut) or incident angle (oxut)
 	bool	hit=0;							// is intersected? and padding
-	vec2	bc;								// barycentric coordinates at t 
+	vec2	bc;								// barycentric coordinates at t
 	uint	g=-1;							// index of an intersected geometry
 };
 
@@ -202,6 +199,17 @@ inline bbox operator*( const mat4& m, const bbox& b ){ bbox b1=b; return b1.expa
 #endif
 
 //***********************************************
+// sphere
+struct sphere
+{
+	vec3	pos;
+	float	radius;
+
+	// intersection
+	inline bool intersect( const ray& r, isect* pi=nullptr );
+};
+
+//***********************************************
 // Thin-lens camera definition
 #ifndef __cplusplus
 struct camera_t // std140 layout for OpenGL uniform buffer objects
@@ -227,21 +235,39 @@ struct camera_t
 static_assert(sizeof(camera_t)%16==0,"size of struct camera_t should be aligned at 16-byte boundary" );
 #endif
 
+// view frustum for culling
+struct frustum_t : public std::array<vec4,6> // left, right, top, bottom, near, far
+{
+	__forceinline frustum_t() = default;
+	__forceinline frustum_t( frustum_t&& ) = default;
+	__forceinline frustum_t( const frustum_t& ) = default;
+	__forceinline frustum_t( const mat4& view_matrix, const mat4& projection_matrix ){ update(projection_matrix*view_matrix); }
+	__forceinline frustum_t( camera_t& c ){ update(c); }
+	__forceinline frustum_t( vpl_t& c ){ update(c); }
+	__forceinline frustum_t& operator=(frustum_t&&)=default;
+	__forceinline frustum_t& operator=(const frustum_t&)=default;
+
+	__forceinline frustum_t& update( const mat4& view_projection_matrix ){ auto* planes=data(); for(int k=0;k<6;k++){ planes[k]=view_projection_matrix.rvec4(k>>1)*float(1-(k&1)*2)+view_projection_matrix.rvec4(3);planes[k]/=planes[k].xyz.length();} return *this; }
+	__forceinline frustum_t& update( camera_t& c ){ return update(c.projection_matrix*c.view_matrix); }
+	__forceinline frustum_t& update( vpl_t& c ){ return update(c.projection_matrix*c.view_matrix); }
+	__forceinline bool cull( bbox& b ) const { vec4 pv;pv.w=1.0f; for(int k=0;k<6;k++){const vec4& plane=operator[](k); for(int j=0;j<3;j++)pv[j]=plane[j]>0?b.M[j]:b.m[j];if(pv.dot(plane)<0)return true;} return false; }
+};
+
 struct camera : public camera_t
 {
 	vec3		dir;					// dir = center - eye (view direction vector)
 	float		F, fn, df;				// focal distance, f-number, focusing depth (in object distance)
 	int			frame = RAND_MAX;		// frame used for this camera; used in a motion tracer
-	vec4		frustum[6];				// view frustum planes: left, right, top, bottom, near, far
+	frustum_t	frustum;				// view frustum for culling
 	camera_t	prev;					// placeholder for the camera at the previous frame
 
 	mat4		inverse_view_matrix() const { return mat4::look_at_inverse(eye,center,up); } // works without eye, center, up
 	mat4		perspective_dx() const { mat4 m=projection_matrix; m._33=dfar/(dnear-dfar); m._34*=0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
 	vec2		plane_size( float ecd=1.0f ) const { return vec2(2.0f/projection_matrix._11,2.0f/projection_matrix._22)*ecd; } // plane size (width, height) at eye-coordinate distance 1
-	void		update_view_frusta(){ const mat4 m=projection_matrix*view_matrix;for(int k=0;k<6;k++){vec4& p=frustum[k];p=m.rvec4(k>>1)*float(1-(k&1)*2)+m.rvec4(3);p/=p.xyz.length();}} // left, right, bottom, top, near, far
-	void		update_depth_clips( const bbox* bound ){ if(!bound) return; bbox b=view_matrix*(*bound); vec2 z(max(0.001f,-b.M.z),max(0.001f,-b.m.z)); dnear=max(max(bound->radius()*0.00001f,50.0f),z.x*0.99f); dfar=max(max(dnear+1.0f,dnear*1.01f),z.y*1.01f); }
-	bool		vfc( bbox& b ) const { vec4 pv(0,0,0,1.0f); for(int c=0;c<6;c++){ for(int j=0;j<3;j++) pv[j]=frustum[c][j]>0?b.M[j]:b.m[j]; if(pv.dot(frustum[c])<0) return true; } return false; }
 	float		lens_radius() const { return F/fn*0.5f; }
+	void		update_depth_clips( const bbox* bound ){ if(!bound) return; bbox b=view_matrix*(*bound); vec2 z(max(0.001f,-b.M.z),max(0.001f,-b.m.z)); dnear=max(max(bound->radius()*0.00001f,50.0f),z.x*0.99f); dfar=max(max(dnear+1.0f,dnear*1.01f),z.y*1.01f); }
+	void		update_view_frustum(){ frustum.update(projection_matrix*view_matrix); }
+	bool		cull( bbox& b ) const { return frustum.cull(b); }
 };
 
 //***********************************************
@@ -305,7 +331,7 @@ struct acc_t
 // Bounding volume hierarchy
 struct bvh_t : public acc_t // two-level hierarchy: mesh or geometry
 {
-	struct node { bbox box; uint parent; uint nprims; union { uint idx:30, second:30; }; uint axis:2;  };	// idx: primitive index in index buffer; second: offset to right child of interiod node; axis==3 (leaf node)
+	struct node { bbox box; uint parent; uint nprims; union { uint idx:30, second:30; }; uint axis:2;  };	// idx: primitive index in index buffer; second: offset to right child of interior node; axis==3 (leaf node)
 	std::vector<node> nodes;
 };
 
@@ -341,7 +367,7 @@ struct geometry // std430 layout for OpenGL shader storage buffers
 	mat4	mtx;
 };
 #else
-struct geometry 
+struct geometry
 {
 	uint	count=0;			// start of DrawElementsIndirectCommand: number of indices
 	uint	instance_count=1;	// default: 1
@@ -381,7 +407,7 @@ static_assert( sizeof(geometry)%16==0, "sizeof(geometry) should be 16-byte align
 struct object
 {
 	mat4	matrix;				// group transformation
-	bbox	box;				// transformation-baked bounding box (expanded by geometry box and transformation) 
+	bbox	box;				// transformation-baked bounding box (expanded by geometry box and transformation)
 	uint	ID=-1;
 	float	level=0;			// real-number LOD
 	uint	instance=0;
@@ -623,6 +649,27 @@ __noinline inline bool bbox::intersect( const ray& r, isect* pi )
 		pi->hit = true;
 	}
 
+	return true;
+}
+
+// sphere intersection
+__noinline inline bool sphere::intersect( const ray& r, isect* pi )
+{
+	if(pi) pi->hit = false;
+
+	vec3 pc = r.pos-pos;
+	float B = dot(pc,r.dir);
+	float C = dot(pc,pc)-radius*radius;
+	float B2C = B*B-C; if(B2C<0.0f) return false; // no surface hit
+
+	if(pi)
+	{
+		pi->t = sqrt(B2C)*sign(radius*r.dir.z)-B;
+		pi->pos = r.dir*pi->t+r.pos;	// update intersection point
+		pi->norm = normalize(pi->pos-pos); pi->norm *= -sign(dot(pi->norm,r.dir));
+		pi->theta = acos(dot(-r.dir,pi->norm)); if(pi->theta<0) pi->theta=0.0f;	// incident angle: preclude division by zero
+		pi->hit = true;
+	}
 	return true;
 }
 

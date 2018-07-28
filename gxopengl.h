@@ -53,6 +53,7 @@ inline GLenum gxGetTargetBinding( GLenum target )
 		{GL_TEXTURE_2D_MULTISAMPLE,GL_TEXTURE_BINDING_2D_MULTISAMPLE},
 		{GL_TEXTURE_3D,GL_TEXTURE_BINDING_3D},
 		{GL_TEXTURE_CUBE_MAP,GL_TEXTURE_BINDING_CUBE_MAP},
+		{GL_TEXTURE_CUBE_MAP_ARRAY,GL_TEXTURE_BINDING_CUBE_MAP_ARRAY},
 		{GL_TEXTURE_1D_ARRAY,GL_TEXTURE_BINDING_1D_ARRAY},
 		{GL_TEXTURE_2D_ARRAY,GL_TEXTURE_BINDING_2D_ARRAY},
 		{GL_TEXTURE_2D_MULTISAMPLE_ARRAY,GL_TEXTURE_BINDING_2D_MULTISAMPLE_ARRAY},
@@ -115,11 +116,12 @@ gl::Texture*		gxCreateTexture2D(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,
 gl::Texture*		gxCreateTexture3D(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,GLvoid*);
 gl::Texture*		gxCreateTextureCube(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,GLvoid*[6],bool);
 gl::Texture*		gxCreateTextureBuffer(const char*,gl::Buffer*,GLint);
-gl::Texture*		gxCreateTextureView(gl::Texture*,GLuint,GLuint,GLuint,GLuint,bool);
+gl::Texture*		gxCreateTextureView(gl::Texture*,GLuint,GLuint,GLuint,GLuint,bool,GLenum);
 gl::Buffer*			gxCreateBuffer(const char*,GLenum,GLsizeiptr,GLenum,const void*);
 gl::Program*		gxCreateProgram(const char*,const char*,const std::map<GLuint,std::string>&,const char*,std::vector<const char*>*);
 gl::Program*		gxCreateProgram( const char*,const char*,const char*,const char*,const char*);
 gl::VertexArray*	gxCreateQuadVertexArray();
+gl::VertexArray*	gxCreatePointVertexArray( GLsizei width, GLsizei height );
 
 //***********************************************
 namespace gl {
@@ -256,8 +258,8 @@ namespace gl {
 		GLint mip_levels() const {				return _levels; } // on-demand query: is_immutable()?get_texture_parameteriv(GL_TEXTURE_VIEW_NUM_LEVELS):get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)-get_texture_parameteriv(GL_TEXTURE_BASE_LEVEL)+1; }
 		GLint width( GLint level=0 ) const {	return max(1,_width>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_WIDTH, level )
 		GLint height( GLint level=0 ) const {	return (target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY||target==GL_TEXTURE_BUFFER)?1:max(1,_height>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_HEIGHT, level );
-		GLint depth( GLint level=0 ) const {	return (target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY||target==GL_TEXTURE_BUFFER||target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_CUBE_MAP)?1:(target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_CUBE_MAP_ARRAY)?_depth:max(1,_depth>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_DEPTH, level );
-		GLint layers( GLint level=0 ) const {	return (target==GL_TEXTURE_1D_ARRAY)?height(level):(target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_3D)?depth(level):target==GL_TEXTURE_CUBE_MAP?6:target==GL_TEXTURE_CUBE_MAP_ARRAY?6*depth(level):1; }
+		GLint depth( GLint level=0 ) const {	return (target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY||target==GL_TEXTURE_BUFFER||target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_MULTISAMPLE)?1:(target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY)?_depth:max(1,_depth>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_DEPTH, level );
+		GLint layers( GLint level=0 ) const {	return (target==GL_TEXTURE_1D_ARRAY)?height(level):(target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_3D)?depth(level):target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY?depth(level):1; }
 
 		// other texture queries
 		ivec2 mip_range() const {	ivec2 range=ivec2(get_texture_parameteriv(GL_TEXTURE_BASE_LEVEL),get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)); return ivec2(range.x,range.y-range.x+1); }
@@ -319,10 +321,10 @@ namespace gl {
 		static bool& b_texture_deleted(){ static bool bDeleted=true; return bDeleted; }
 
 		// view-related function: wrapper to createTextureView
-		inline static uint crc( GLuint min_level, GLuint levels, GLuint min_layer, GLuint layers, bool force_array=false ){ struct info { GLuint min_level, levels, min_layer, layers; bool force_array; }; info i={min_level,levels,min_layer,layers,force_array}; return gl::crc32c(&i,sizeof(i)); }
-		inline Texture* view( GLuint min_level, GLuint levels, GLuint min_layer=0, GLuint layers=1, GLint internal_format=0 ){ return gxCreateTextureView(this,min_level,levels,min_layer,layers,false); } // view support (> OpenGL 4.3)
+		inline static uint crc( GLuint min_level, GLuint levels, GLuint min_layer, GLuint layers, bool force_array, GLenum target ){ struct info { GLuint min_level, levels, min_layer, layers; bool force_array; GLenum target; }; info i={min_level,levels,min_layer,layers,force_array,target}; return gl::crc32c(&i,sizeof(i)); }
+		inline Texture* view( GLuint min_level, GLuint levels, GLuint min_layer=0, GLuint layers=1, GLint internal_format=0, GLenum target=0 ){ return gxCreateTextureView(this,min_level,levels,min_layer,layers,false,target); } // view support (> OpenGL 4.3)
 		inline Texture* slice( GLuint layer, GLuint level=0 ){ return view(level,1,layer,1); }
-		inline Texture* array_view(){ return (layers()>1)?this:gxCreateTextureView(this,0,mip_levels(),0,layers(),true); }
+		inline Texture* array_view(){ return (layers()>1)?this:gxCreateTextureView(this,0,mip_levels(),0,layers(),true,0); }
 
 		// dimensions
 		GLint		_width;
@@ -351,7 +353,15 @@ namespace gl {
 		GLint min_filter	= get_texture_parameteriv( GL_TEXTURE_MIN_FILTER );
 		GLint mag_filter	= get_texture_parameteriv( GL_TEXTURE_MAG_FILTER );
 
-		Texture* t = (target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY) ? gxCreateTexture1D( name, mip_levels(), width(), layers(), internal_format(), nullptr, false ):(target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY) ? gxCreateTexture2D( name, mip_levels(), width(), height(), layers(), internal_format(), nullptr, false, target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY, multisamples() ):(target==GL_TEXTURE_3D) ? gxCreateTexture3D( name, mip_levels(), width(), height(), depth(), internal_format(), nullptr ):nullptr; if(t==nullptr){ printf( "Texture[\"%s\"]::clone() == nullptr\n", name ); return nullptr; }
+		bool b_multisample = target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY;
+		GLint m=mip_levels(), w=width(), h=height(), d=depth(), l=layers(), f=internal_format();
+
+		Texture* t =
+			(target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY) ? gxCreateTexture1D( name, m, w, l, f, nullptr, false ):
+			(target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY) ? gxCreateTexture2D( name, m, w, h, l, f, nullptr, false, b_multisample, multisamples() ):
+			(target==GL_TEXTURE_3D) ? gxCreateTexture3D( name, m, w, h, d, f, nullptr ):
+			(target==GL_TEXTURE_CUBE_MAP||GL_TEXTURE_CUBE_MAP_ARRAY) ? gxCreateTextureCube( name, m, w, h, l, f, nullptr, false ):nullptr;
+		if(t==nullptr){ printf( "Texture[\"%s\"]::clone() == nullptr\n", name ); return nullptr; }
 
 		t->texture_parameteri( GL_TEXTURE_WRAP_S, wrap );
 		if(t->height()>1)	t->texture_parameteri( GL_TEXTURE_WRAP_T, wrap );
@@ -382,18 +392,16 @@ namespace gl {
 		GLuint bind( bool b_bind=true ){ GLuint b0=binding(); if(!b_bind||b0!=ID) glBindVertexArray( b_bind?ID:0 ); return b0; }
 
 		inline void draw_arrays( GLint first, GLsizei count, GLenum mode=GL_TRIANGLES ){ GLuint b0=bind(); glDrawArrays( mode, first, count ); }
-		inline void draw_quads( GLuint start=0, GLsizei count=6 ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glDrawElements( GL_TRIANGLES, count, GL_UNSIGNED_INT, (GLvoid*)(start*sizeof(GLuint))); } // GL_QUADS deprecated
-
-		inline void draw_elements( GLuint start, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glDrawElements( mode, GLsizei(count==0?index_count:count), GL_UNSIGNED_INT, uint_offset(start) ); }
-		inline void draw_elements_instanced( GLuint start, GLsizei instance_count, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glDrawElementsInstanced( mode, GLsizei(count==0?index_count:count), GL_UNSIGNED_INT, uint_offset(start), instance_count ); }
+		inline void draw_elements( GLuint first, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glDrawElements( mode, GLsizei(count==0?index_count:count), GL_UNSIGNED_INT, uint_offset(first) ); }
+		inline void draw_elements_instanced( GLuint first, GLsizei instance_count, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glDrawElementsInstanced( mode, GLsizei(count==0?index_count:count), GL_UNSIGNED_INT, uint_offset(first), instance_count ); }
 		inline void draw_elements_indirect( GLvoid* indirect=nullptr, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glDrawElementsIndirect( mode, GL_UNSIGNED_INT, indirect ); }
-		inline void draw_range_elements( GLuint start, GLuint end, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glDrawRangeElements( mode, start, end, GLsizei(count==0?index_count:count), GL_UNSIGNED_INT, uint_offset(start)); }
-		inline void multi_draw_elements( GLuint* pstart, const GLsizei* pcount, GLsizei draw_count, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glMultiDrawElements( mode, pcount, GL_UNSIGNED_INT, uint_offset(pstart,draw_count), draw_count ); }
+		inline void draw_range_elements( GLuint first, GLuint end, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glDrawRangeElements( mode, first, end, GLsizei(count==0?index_count:count), GL_UNSIGNED_INT, uint_offset(first)); }
+		inline void multi_draw_elements( GLuint* pfirst, const GLsizei* pcount, GLsizei draw_count, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glMultiDrawElements( mode, pcount, GL_UNSIGNED_INT, uint_offset(pfirst,draw_count), draw_count ); }
 		inline void multi_draw_elements_indirect( GLsizei draw_count, GLsizei stride=sizeof(DrawElementsIndirectCommand), GLvoid* indirect=nullptr, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glMultiDrawElementsIndirect( mode, GL_UNSIGNED_INT, indirect, draw_count, stride ); }
 		inline void multi_draw_elements_indirect_count( GLsizei max_draw_count, GLsizei stride=sizeof(DrawElementsIndirectCommand), const void* indirect=0 /* GL_DRAW_INDIRECT_BUFFER */, GLintptr draw_count=0 /* GL_PARAMETER_BUFFER_ARB */, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glMultiDrawElementsIndirectCountARB( mode, GL_UNSIGNED_INT, indirect, draw_count, max_draw_count, stride ); }
 
-		inline GLvoid* uint_offset( GLuint start ){ return (GLvoid*)(start*sizeof(GLuint)); }
-		inline const GLvoid* const* uint_offset( GLuint* pstart, GLsizei draw_count ){ static std::vector<GLvoid*> offsets; if(offsets.size()<uint(draw_count)) offsets.resize(draw_count); for( int k=0; k<draw_count; k++ ) offsets[k] = (GLvoid*)(pstart[k]*sizeof(GLuint)); return &offsets[0]; }
+		inline GLvoid* uint_offset( GLuint first ){ return (GLvoid*)(first*sizeof(GLuint)); }
+		inline const GLvoid* const* uint_offset( GLuint* pfirst, GLsizei draw_count ){ static std::vector<GLvoid*> offsets; if(offsets.size()<uint(draw_count)) offsets.resize(draw_count); for( int k=0; k<draw_count; k++ ) offsets[k] = (GLvoid*)(pfirst[k]*sizeof(GLuint)); return &offsets[0]; }
 
 		Buffer*		vertex_buffer;
 		Buffer*		index_buffer;
@@ -535,7 +543,7 @@ namespace gl {
 	struct Effect : public GLObject
 	{
 		Effect( GLuint ID, const char* name ) : GLObject(ID,name,0), active_program(nullptr), quad(nullptr){ if(!(quad=gxCreateQuadVertexArray())) printf("[%s] unable to create quad buffer\n",name); }
-		virtual void release(){ active_program=nullptr; if(quad){ delete quad; quad=nullptr; } for(auto& it:uniform_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} uniform_buffer_map.clear(); for(auto* p:programs) p->release(); programs.clear(); }
+		virtual void release(){ active_program=nullptr; if(quad){ delete quad; quad=nullptr; } if(!pts.empty()){ for(auto it:pts) safe_delete(it.second); pts.clear(); } for(auto& it:uniform_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} uniform_buffer_map.clear(); for(auto* p:programs) p->release(); programs.clear(); }
 		static void unbind(){ glUseProgram(0); }
 
 		Program* bind( const char* programName ){ active_program=get_program(programName); if(active_program) active_program->bind(); else{ active_program=nullptr; glUseProgram(0); } return active_program; }
@@ -547,6 +555,7 @@ namespace gl {
 		Program* get_program( uint index ) const { if(index<programs.size()) return programs[index]; else { printf("[%s] Out-of-bound program index\n", name ); return nullptr; } }
 		bool create_program( const char* prefix, const char* name, const std::map<GLuint,std::string>& shaderSourceMap, const char* pMacro=nullptr, std::vector<const char*>* tfVaryings=nullptr ){ Program* program=gxCreateProgram(prefix,name,shaderSourceMap,pMacro,tfVaryings); if(!program) return false; programs.emplace_back(program); auto& m=program->uniform_block_map;for(auto& it:m){gl::Program::UniformBlock& ub=it.second;ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size);} return true; }
 		bool create_program( const char* prefix, const char* name, const char* vertShaderSource, const char* fragShaderSource, const char* pMacro=nullptr ){ std::map<GLuint,std::string> ssm={std::make_pair(GL_VERTEX_SHADER,vertShaderSource),std::make_pair(GL_FRAGMENT_SHADER,fragShaderSource)}; return create_program(prefix,name,ssm,pMacro,nullptr); }
+		bool attach( const char* name, const char* effect_source, const char* p_macro=nullptr );
 
 		Program::Uniform* get_uniform( const char* name ){ return active_program?active_program->get_uniform(name):nullptr; }
 		Program::Uniform* get_uniform( const std::string& name ){ return active_program?active_program->get_uniform(name.c_str()):nullptr; }
@@ -558,7 +567,7 @@ namespace gl {
 		void set_uniform( const std::string& name, Texture* t ){ if(active_program) active_program->set_uniform(name.c_str(),t); }
 
 		// uniform buffer/block
-		gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name); if(b&&b->size()!=size){ printf("[%s] create_uniform_buffer(): uniform_buffer[%s]->size(%d)!=size(%d)\n",name,b->name,int(b->size()),int(size)); } if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr); if(b){ bind_uniform_buffer(name,b); return uniform_buffer_map[name]=b; } printf("[%s] unable to create uniform buffer [%s]\n", this->name, name); return nullptr; }
+		gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name); if(b&&b->size()!=size){ static std::set<std::string> warns; auto it=warns.find(name); if(it==warns.end()){ warns.insert(name); printf("uniform_buffer(%s).size(=%d)!=%d\n",name,int(b->size()),int(size));} } if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr); if(b){ bind_uniform_buffer(name,b); return uniform_buffer_map[name]=b; } printf("[%s] unable to create uniform buffer [%s]\n", this->name, name); return nullptr; }
 		gl::Buffer* get_uniform_buffer( const char* name ){ auto it=uniform_buffer_map.find(name); return it==uniform_buffer_map.end()?nullptr:it->second; }
 		GLuint get_uniform_block_binding( const char* name ){ GLint binding=active_program?active_program->get_uniform_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint binding=program->get_uniform_block_binding(name); if(binding!=-1) return binding; } return -1; }
 		void bind_uniform_buffer( const char* name, gl::Buffer* ub=nullptr /* if nullptr, use default buffer */ ){ gl::Buffer* b=ub?ub:get_uniform_buffer(name); GLuint binding=get_uniform_block_binding(name); if(b&&binding!=-1) b->bind_base(binding); else if(!b) printf( "[%s] bind_uniform_buffer(): unable to find uniform buffer %s\n", this->name, name ); else printf( "[%s] bind_uniform_buffer(): unable to find uniform buffer binding %s\n", this->name, name ); }
@@ -568,7 +577,9 @@ namespace gl {
 		void bind_shader_storage_buffer( const char* name, Buffer* buffer ){ GLint binding=get_shader_storage_block_binding(name); if(binding<0) return; if(buffer->target==GL_SHADER_STORAGE_BUFFER) buffer->bind_base(binding); else buffer->bind_base_as(GL_SHADER_STORAGE_BUFFER,binding); }
 
 		// draw or compute
-		inline void draw_quads(){ quad->draw_quads(); }
+		inline void draw_quads(){ if(!quad) return; if(quad->index_buffer) quad->draw_elements(0,4,GL_TRIANGLE_STRIP); else quad->draw_arrays(0,4,GL_TRIANGLE_STRIP); }
+		inline void draw_points( GLsizei width, GLsizei height, bool no_attrib=false ){ if(no_attrib) return draw_points_no_attrib( width*height ); uint64_t key=uint64_t(width)|(uint64_t(height)<<32); auto it=pts.find(key); VertexArray* va=it!=pts.end()?it->second:pts[key]=gxCreatePointVertexArray(width,height); if(va) va->draw_arrays( 0, width*height, GL_POINTS ); }
+		inline void draw_points_no_attrib( GLsizei count ){ glBindVertexArray(0); glDrawArrays( GL_POINTS, 0, count ); } // attribute-less rendering without binding any vertex array: simply using gl_VertexID in vertex shaders
 		inline void dispatch_compute( GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z=1 ){ glDispatchCompute( num_groups_x?num_groups_x:1, num_groups_y?num_groups_y:1, num_groups_z?num_groups_z:1 ); }
 		inline void dispatch_compute( GLuint num_threads_x, double local_size_x, GLuint num_threads_y, double local_size_y, GLuint num_threads_z=1, double local_size_z=1 )	{ GLuint num_groups_x = max(GLuint(ceil(num_threads_x/float(local_size_x))),1u), num_groups_y = max(GLuint(ceil(num_threads_y/float(local_size_y))),1u), num_groups_z = max(GLuint(ceil(num_threads_z/float(local_size_z))),1u); dispatch_compute(num_groups_x, num_groups_y, num_groups_z ); }
 		inline void dispatch_compute_indirect( GLintptr indirect ){ glDispatchComputeIndirect( indirect ); }
@@ -577,6 +588,7 @@ namespace gl {
 		Program*						active_program;
 		std::vector<Program*>			programs;
 		std::map<std::string,Buffer*>	uniform_buffer_map;	// Do not define uniform buffers in each program, since they are shared across programs.
+		std::map<uint64_t,VertexArray*>	pts;				// point vertex array
 		VertexArray*					quad;
 	};
 
@@ -592,9 +604,10 @@ namespace gl {
 		void bind( Texture* t0, Texture* t1=nullptr, Texture* t2=nullptr, Texture* t3=nullptr, Texture* t4=nullptr, Texture* t5=nullptr, Texture* t6=nullptr, Texture* t7=nullptr ){ if(ID) bind(t0,0,0,t1,0,0,t2,0,0,t3,0,0,t4,0,0,t5,0,0,t6,0,0,t7,0,0); }
 		void bind( Texture* t0, GLint layer0, GLint mipLevel0, Texture* t1=nullptr, GLint layer1=0, GLint mipLevel1=0, Texture* t2=nullptr, GLint layer2=0, GLint mipLevel2=0, Texture* t3=nullptr, GLint layer3=0, GLint mipLevel3=0, Texture* t4=nullptr, GLint layer4=0, GLint mipLevel4=0, Texture* t5=nullptr, GLint layer5=0, GLint mipLevel5=0, Texture* t6=nullptr, GLint layer6=0, GLint mipLevel6=0, Texture* t7=nullptr, GLint layer7=0, GLint mipLevel7=0 );
 		void bind_no_attachments( GLint width, GLint height, GLint layers=1, GLint samples=1 ); // ARB_framebuffer_no_attachments
-		void bind_layers( Texture* t0, GLint mipLevel0=0, Texture* t1=nullptr, GLint mipLevel1=0, Texture* t2=nullptr, GLint mipLevel2=0, Texture* t3=nullptr, GLint mipLevel3=0, Texture* t4=nullptr, GLint mipLevel4=0, Texture* t5=nullptr, GLint mipLevel5=0, Texture* t6=nullptr, GLint mipLevel6=0, Texture* t7=nullptr, GLint mipLevel7=0 ); // t needs to be multi-layers
+		void bind_layers( Texture* t0, GLint mipLevel0, Texture* t1=nullptr, GLint mipLevel1=0, Texture* t2=nullptr, GLint mipLevel2=0, Texture* t3=nullptr, GLint mipLevel3=0, Texture* t4=nullptr, GLint mipLevel4=0, Texture* t5=nullptr, GLint mipLevel5=0, Texture* t6=nullptr, GLint mipLevel6=0, Texture* t7=nullptr, GLint mipLevel7=0 ); // t needs to be multi-layers
+		void bind_layers( Texture* t0, Texture* t1=nullptr, Texture* t2=nullptr, Texture* t3=nullptr, Texture* t4=nullptr, Texture* t5=nullptr, Texture* t6=nullptr, Texture* t7=nullptr ){ bind_layers(t0,0,t1,0,t2,0,t3,0,t4,0,t5,0,t6,0,t7,0); } // t needs to be multi-layers
 		void bind_depth_buffer( GLint width, GLint height, GLint layers, bool multisample, GLsizei multisamples );
-		void check_status(){ GLenum s=glCheckNamedFramebufferStatus?glCheckNamedFramebufferStatus(ID,GL_FRAMEBUFFER):glCheckFramebufferStatus(GL_FRAMEBUFFER); if(s==GL_FRAMEBUFFER_COMPLETE) return; if(s==GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT) printf( "[%s]: GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT\n", name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT) printf( "[%s]: GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT\n", name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER) printf( "[%s]: GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER\n", name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER) printf( "[%s]: GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER\n", name ); else if(s==GL_FRAMEBUFFER_UNSUPPORTED) printf( "[%s]: GL_FRAMEBUFFER_UNSUPPORTED\n", name ); }
+		void check_status(){ GLenum s=glCheckNamedFramebufferStatus?glCheckNamedFramebufferStatus(ID,GL_FRAMEBUFFER):glCheckFramebufferStatus(GL_FRAMEBUFFER); if(s==GL_FRAMEBUFFER_COMPLETE) return; if(s==GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT\n", name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT\n", name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER\n", name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER\n", name ); else if(s==GL_FRAMEBUFFER_UNSUPPORTED) printf( "[%s] GL_FRAMEBUFFER_UNSUPPORTED\n", name ); }
 		void read_pixels( GLenum attachment, GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLvoid* img ){ if(ID) glNamedFramebufferReadBuffer(ID,GL_COLOR_ATTACHMENT0+attachment); else glReadBuffer(GL_BACK); glReadPixels( x, y, width, height, format, type, img ); }
 		void set_viewport( GLint x, GLint y, GLsizei width, GLsizei height ){ glViewport( x, y, width, height ); }
 		void set_viewport( ivec4 origin_size ){ glViewport( origin_size.x, origin_size.y, origin_size.z, origin_size.w ); }
@@ -609,7 +622,7 @@ namespace gl {
 
 		static const GLint MAX_COLOR_ATTACHMENTS=8;
 		static void unbind(){ glBindFramebuffer( GL_FRAMEBUFFER, 0 ); }
-		static void set_state( bool b_depth_test, bool b_cull_face, bool b_blend=false, bool b_wireframe=false ){ b_depth_test?glEnable(GL_DEPTH_TEST):glDisable(GL_DEPTH_TEST); b_cull_face?glEnable(GL_CULL_FACE):glDisable(GL_CULL_FACE); b_blend?glEnable(GL_BLEND):glDisable(GL_BLEND); glPolygonMode( GL_FRONT_AND_BACK, b_wireframe?GL_LINE:GL_FILL ); }
+		static void set_state( bool b_depth_test, bool b_cull_face, bool b_blend=false, bool b_wireframe=false ){ b_depth_test?glEnable(GL_DEPTH_TEST):glDisable(GL_DEPTH_TEST); b_cull_face?glEnable(GL_CULL_FACE):glDisable(GL_CULL_FACE); b_blend?glEnable(GL_BLEND):glDisable(GL_BLEND); glPolygonMode(GL_FRONT_AND_BACK,b_wireframe?GL_LINE:GL_FILL); }
 		static void set_blend_func( GLenum sfactor, GLenum dfactor ){ glBlendFunc( sfactor, dfactor ); }
 		static void set_blend_func_separate( GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha ){ glBlendFuncSeparate( sfactorRGB, dfactorRGB, sfactorAlpha, dfactorAlpha ); }
 		static void set_multisample( bool b_multisample ){ b_multisample ? glEnable(GL_MULTISAMPLE):glDisable(GL_MULTISAMPLE); }
@@ -789,7 +802,6 @@ inline gl::Query* gxCreateQuery( const char* name, GLenum target=GL_TIME_ELAPSED
 	return new gl::Query(ID,name,target);
 }
 
-//***********************************************
 inline gl::Buffer* gxCreateBuffer( const char* name, GLenum target, GLsizeiptr size, GLenum usage, const void* data=nullptr )
 {
 	GLuint ID; if(glCreateBuffers) glCreateBuffers(1,&ID); else glGenBuffers(1,&ID); if(ID==0){ printf( "Unable to create buffer[%s]", name ); return nullptr; }	// glCreateBuffers() also initializes objects, while glGenBuffers() do not initialze until bind() is called
@@ -799,7 +811,6 @@ inline gl::Buffer* gxCreateBuffer( const char* name, GLenum target, GLsizeiptr s
 	return buffer;
 }
 
-//***********************************************
 inline gl::VertexArray* gxCreateVertexArray( const char* name, vertex* p_vertices, size_t vertex_count, uint* p_indices=nullptr, size_t index_count=0, GLenum usage=GL_STATIC_DRAW )
 {
 	if(vertex_count==0){ printf( "gxCreateVertexArray('%s'): vertex_count==0\n", name ); return nullptr; }
@@ -824,18 +835,21 @@ inline gl::VertexArray* gxCreateVertexArray( const char* name, vertex* p_vertice
 
 	return va;
 }
-//***********************************************
+
 inline gl::VertexArray* gxCreateQuadVertexArray()
 {
-	static vertex vertices[] = { {vec3(-1,-1,0),vec3(0,0,-1),vec2(0,0)}, {vec3(1,-1,0),vec3(0,0,-1),vec2(1,0)}, {vec3(1,1,0),vec3(0,0,-1),vec2(1,1)}, {vec3(-1,1,0),vec3(0,0,-1),vec2(0,1)}, };
-	static uint indices[]	 = { 0, 1, 3, 1, 2, 3 };
-
-	gl::VertexArray* va_quad = gxCreateVertexArray( "QUAD", vertices, std::extent<decltype(vertices)>::value, indices, std::extent<decltype(indices)>::value, GL_STATIC_DRAW );
-	if(va_quad==nullptr){ printf( "gxCreateQuadVertexArray(): Unable to create QUAD\n" ); return nullptr; }
-	return va_quad;
+	static vertex vertices[] = { {vec3(-1,-1,0),vec3(0,0,1),vec2(0,0)}, {vec3(1,-1,0),vec3(0,0,1),vec2(1,0)}, {vec3(-1,1,0),vec3(0,0,1),vec2(0,1)}, {vec3(1,1,0),vec3(0,0,1),vec2(1,1)} }; // strip ordering [0, 1, 3, 2]
+	gl::VertexArray* va = gxCreateVertexArray( "QUAD", vertices, std::extent<decltype(vertices)>::value ); if(!va) printf( "%s(): Unable to create QUAD\n", __FUNCTION__ );
+	return va;
 }
 
-//***********************************************
+inline gl::VertexArray* gxCreatePointVertexArray( GLsizei width, GLsizei height )
+{
+	std::vector<vertex> pts(width*height); for(int y=0,k=0;y<height;y++)for(int x=0;x<width;x++,k++) pts[k]={vec3(float(x),float(y),0.0f),vec3(0.0f,0.0f,1.0f),vec2(x/float(width-1),y/float(height-1))};
+	gl::VertexArray* va = gxCreateVertexArray( "PTS", &pts[0], pts.size() ); if(!va) printf( "%s(): Unable to create PTS(%dx%d)\n", __FUNCTION__, width, height );
+	return va;
+}
+
 inline unsigned int gl::crc32c( const void* ptr, size_t size, unsigned int crc0 )
 {
 	const unsigned char* buff= (unsigned char*) ptr;
@@ -847,7 +861,6 @@ inline unsigned int gl::crc32c( const void* ptr, size_t size, unsigned int crc0 
 	return ~c;
 }
 
-//***********************************************
 inline void gxSaveProgramBinary( const char* name, GLuint ID, uint crc )
 {
 	std::vector<char> program_binary(gxGetProgramiv( ID, GL_PROGRAM_BINARY_LENGTH ),0);
@@ -873,7 +886,6 @@ inline GLuint gxLoadProgramBinary( const char* name, uint crc )
 	return ID;
 }
 
-//***********************************************
 inline void gxInfoLog( const char* name, const char* msg, std::map<size_t,std::string>* lines=nullptr )
 {
 	char L[53]={0}; for(int k=0;k<50;k++)L[k]='_'; L[50]=L[51]='\n';
@@ -883,14 +895,14 @@ inline void gxInfoLog( const char* name, const char* msg, std::map<size_t,std::s
 	{
 		const char* v = vm[k].c_str(); printf("%s: %s\n", name, v ); if(lines==nullptr) continue;
 		char s[16384]={0};const char *l=strchr(v,'('), *r=strchr(v,')'); if(!l||!r||l>=r) continue;
-		memcpy(s,l+1,r-l-1); s[r-l-1]=0;
-		auto it=lines->find(size_t(atoi(s))); if(it==lines->end()) continue;
-		printf( ">> %s\n", trim(str_replace(it->second.c_str(),"%", "%%")) );	// % causes crash in gprintf
+		memcpy(s,l+1,r-l-1); s[r-l-1]=0; int idx=atoi(s);
+		auto it=lines->find(size_t(idx-1));	if(it!=lines->end()) printf( "%d> %s\n", idx-1, trim(str_replace(it->second.c_str(),"%", "%%")) );	// % causes crash in gprintf
+		it=lines->find(size_t(idx+0));		if(it!=lines->end()) printf( "%d> %s\n", idx+0, trim(str_replace(it->second.c_str(),"%", "%%")) );
+		it=lines->find(size_t(idx+1));		if(it!=lines->end()) printf( "%d> %s\n", idx+1, trim(str_replace(it->second.c_str(),"%", "%%")) );
 	}
 	printf("%s",L);
 }
 
-//***********************************************
 // explode shader source by exploiting #line directives
 inline std::vector<std::pair<size_t,std::string>> gxExplodeShaderSource( const char* source )
 {
@@ -899,8 +911,10 @@ inline std::vector<std::pair<size_t,std::string>> gxExplodeShaderSource( const c
 	for( int k=0,kn=int(vs.size()),idx=1; k<kn;k++,idx++ )
 	{
 		const char* s = trim(vs[k]);
-		if(strncmp(s,"#line",5)!=0) v.emplace_back( std::make_pair(idx,vs[k]) );
-		else {sscanf(str_replace(s,"\t"," "),"#line %d",&idx);v.emplace_back(std::make_pair(idx--,vs[k]));}
+		bool b_line = strncmp(s,"#line",5)==0;
+		if(b_line) sscanf(str_replace(s,"\t"," "),"#line %d",&idx);
+		v.emplace_back( std::make_pair(idx,vs[k]) );
+		if(b_line) idx--;
 	}
 	return v;
 }
@@ -912,7 +926,6 @@ inline std::map<size_t,std::string> gxExplodeShaderSourceMap( const char* source
 	return m;
 }
 
-//***********************************************
 inline GLuint gxCompileShaderSource( GLenum shader_type, const char* name, const char* source )
 {
 	GLuint ID = glCreateShader( shader_type ); if(ID==0){ printf("compileShaderSource(): unable to glCreateShader(%d)\n", shader_type); return 0; }
@@ -927,7 +940,6 @@ inline GLuint gxCompileShaderSource( GLenum shader_type, const char* name, const
 	return ID;
 }
 
-//***********************************************
 inline bool gxCheckProgramLink( const char* name, GLuint ID, bool bLog=true )
 {
 	if(ID==0) return false;
@@ -936,7 +948,6 @@ inline bool gxCheckProgramLink( const char* name, GLuint ID, bool bLog=true )
 	return true;
 }
 
-//***********************************************
 inline bool gxValidateProgram( const char* name, GLuint ID, bool bLog=true ) // check if the program can run in the current state
 {
 	if(ID==0) return false;
@@ -945,7 +956,6 @@ inline bool gxValidateProgram( const char* name, GLuint ID, bool bLog=true ) // 
 	return true;
 }
 
-//***********************************************
 // the last element of attribNames should be nullptr
 inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const std::map<GLuint,std::string>& shader_source_map, const char* p_macro, std::vector<const char*>* tf_varyings )
 {
@@ -1075,7 +1085,6 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 	return gxCreateProgram( prefix, name, shader_source_map, p_macro, nullptr );
 }
 
-//***********************************************
 inline gl::Effect* gxCreateEffect( const char* name )
 {
 	return new gl::Effect(0, name);
@@ -1147,7 +1156,11 @@ inline gl::Effect* gxCreateEffect( const char* name, const char* effect_source, 
 	return e;
 }
 
-//***********************************************
+inline bool gl::Effect::attach( const char* name, const char* effect_source, const char* p_macro )
+{
+	return gxCreateEffect(name,effect_source,p_macro,this)==this;
+}
+
 inline gl::Framebuffer* gxCreateFramebuffer( const char* name=nullptr )
 {
 	if(!name){ printf( "gxCreateFramebuffer(): name==nullptr\n" ); return nullptr; }
@@ -1155,14 +1168,12 @@ inline gl::Framebuffer* gxCreateFramebuffer( const char* name=nullptr )
 	return new gl::Framebuffer(ID,name&&name[0]?name:"");	// if name is nullptr, return default FBO
 }
 
-//***********************************************
 inline gl::TransformFeedback* gxCreateTransformFeedback( const char* name )
 {
 	GLuint ID=0; if(glCreateTransformFeedbacks) glCreateTransformFeedbacks( 1, &ID ); else if(glGenTransformFeedbacks) glGenTransformFeedbacks(1,&ID);
 	return (ID!=0||glIsTransformFeedback(ID)) ? new gl::TransformFeedback( ID, name ) : nullptr;
 }
 
-//***********************************************
 inline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsizei width, GLsizei layers=1, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr, bool force_array=false )
 {
 	if(layers>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "gxCreateTexture1D(): layer (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", layers, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
@@ -1174,7 +1185,7 @@ inline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsizei w
 	GLenum type = gxGetTextureType( internal_format );
 
 	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type); if(width==0) return texture;
-	texture->key = gl::Texture::crc(0,levels,0,layers);
+	texture->key = gl::Texture::crc(0,levels,0,layers,false,target);
 	glBindTexture( target, ID );
 
 	// allocate storage
@@ -1201,7 +1212,6 @@ inline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsizei w
 	return texture;
 }
 
-//***********************************************
 inline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsizei width, GLsizei height, GLsizei layers=1, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr, bool force_array=false, bool multisample=false, GLsizei multisamples=4 )
 {
 	if(layers>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "gxCreateTexture2D: layer (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", layers, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
@@ -1213,7 +1223,7 @@ inline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsizei w
 	GLenum type = gxGetTextureType( internal_format );
 
 	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type); if(width==0||height==0) return texture;
-	texture->key = gl::Texture::crc(0,levels,0,layers);
+	texture->key = gl::Texture::crc(0,levels,0,layers,false,target);
 	glBindTexture( target, ID );
 
 	// multipsamples
@@ -1239,16 +1249,15 @@ inline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsizei w
 	if( levels>1 ) glGenerateMipmap( target );
 
 	// attributes
-	glTexParameteri( ID, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
-	glTexParameteri( ID, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
-	if(layers>1) glTexParameteri( ID, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE );
-	glTexParameteri( ID, GL_TEXTURE_MAG_FILTER, target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY ? GL_NEAREST : GL_LINEAR );
-	glTexParameteri( ID, GL_TEXTURE_MIN_FILTER, target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY ? GL_NEAREST : levels>1?GL_LINEAR_MIPMAP_LINEAR:GL_LINEAR);
+	glTexParameteri( target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+	glTexParameteri( target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+	if(layers>1) glTexParameteri( target, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE );
+	glTexParameteri( target, GL_TEXTURE_MAG_FILTER, target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY ? GL_NEAREST : GL_LINEAR );
+	glTexParameteri( target, GL_TEXTURE_MIN_FILTER, target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY ? GL_NEAREST : levels>1?GL_LINEAR_MIPMAP_LINEAR:GL_LINEAR);
 
 	return texture;
 }
 
-//***********************************************
 inline gl::Texture* gxCreateTexture3D( const char* name, GLint levels, GLsizei width, GLsizei height, GLsizei depth, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr )
 {
 	if(!gxIsSizedInternalFormat(internal_format)){ printf( "gxCreateTexture3D(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n" ); return nullptr; }
@@ -1259,7 +1268,7 @@ inline gl::Texture* gxCreateTexture3D( const char* name, GLint levels, GLsizei w
 	GLenum type = gxGetTextureType( internal_format );
 
 	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type); if(width==0||height==0||depth==0) return texture;
-	texture->key = gl::Texture::crc(0,levels,0,depth);
+	texture->key = gl::Texture::crc(0,levels,0,depth,false,target);
 	glBindTexture( target, ID );
 
 	// allocate storage
@@ -1287,40 +1296,37 @@ inline gl::Texture* gxCreateTexture3D( const char* name, GLint levels, GLsizei w
 	return texture;
 }
 
-//***********************************************
-inline gl::Texture* gxCreateTextureCube( const char* name, GLint levels, GLsizei width, GLsizei height, GLsizei layers=1, GLint internal_format=GL_RGBA16F, GLvoid* data[6]=nullptr, bool force_array=false )
+inline gl::Texture* gxCreateTextureCube( const char* name, GLint levels, GLsizei width, GLsizei height, GLsizei count=1, GLint internal_format=GL_RGBA16F, GLvoid* data[6]=nullptr, bool force_array=false )
 {
-	if(layers>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "gxCreateTextureCube: layer (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", layers, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
+	if(count*6>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "gxCreateTextureCube: count*6 (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", count*6, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
 	if(!gxIsSizedInternalFormat(internal_format)){ printf( "gxCreateTextureCube(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n" ); return nullptr; }
+	if(width==0||height==0){ printf( "gxCreateTextureCube(%s): width==0 or height==0", name, width, height ); return nullptr; }
 
-	GLenum target = layers>1||force_array?GL_TEXTURE_CUBE_MAP_ARRAY:GL_TEXTURE_CUBE_MAP;
+	GLenum target = count>1||force_array?GL_TEXTURE_CUBE_MAP_ARRAY:GL_TEXTURE_CUBE_MAP;
 	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
 	GLenum format = gxGetTextureFormat( internal_format );
 	GLenum type = gxGetTextureType( internal_format );
 
-	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type); if(width==0||height==0) return texture;
-	texture->key = gl::Texture::crc(0,levels,0,layers);
+	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type);
+	texture->key = gl::Texture::crc(0,levels,0,count,false,target);
 
-	glBindTexture( target, ID ); // bind the new texture; we must bind the texture, because glTexStorage2D is not supported for faces of cube map
-
-	// allocate storage: ARB_texture_storage does not support GL_TEXTURE_CUBE_MAP_POSITIVE_X and others
+	glBindTexture( target, ID );
 	if( target==GL_TEXTURE_CUBE_MAP )
 	{
-		int l=0; for(int w=width,h=height;l<levels&&(w>1||h>1);l++,w=max(1,w>>1),h=max(1,h>>1))
-			for(int k=0;k<6;k++) glTexImage2D( GL_TEXTURE_CUBE_MAP_POSITIVE_X+k, l, internal_format, w, h, 0, format, type, l==0&&data&&data[k]?data[k]:nullptr );	// glTexStorage2D is not supported for faces of cube map
-		if(l<levels) levels=l;
+		// mutable version: // int l=0; for(int w=width,h=height;l<levels&&(w>1||h>1);l++,w=max(1,w>>1),h=max(1,h>>1)) for(int k=0;k<6;k++) glTexImage2D( GL_TEXTURE_CUBE_MAP_POSITIVE_X+k, l, internal_format, w, h, 0, format, type, l==0&&data&&data[k]?data[k]:nullptr ); if(l<levels) levels=l;
+		glTexStorage2D( target, levels, internal_format, width, height ); // immutable
+		if(data) for(int k=0;k<6;k++) if(data[k]) glTexSubImage2D( GL_TEXTURE_CUBE_MAP_POSITIVE_X+k, 0, 0, 0, width, height, format, type, data[k] );
 	}
 	else if( target==GL_TEXTURE_CUBE_MAP_ARRAY )
 	{
-		int l=0; for(int w=width,h=height;l<levels&&(w>1||h>1);l++,w=max(1,w>>1),h=max(1,h>>1))
-			glTexImage3D( target, l, internal_format, w, h, layers*6, 0, format, type, nullptr );
-		if(l<levels) levels=l;
+		// mutable version: // int l=0; for(int w=width,h=height;l<levels&&(w>1||h>1);l++,w=max(1,w>>1),h=max(1,h>>1)) glTexImage3D( target, l, internal_format, w, h, layers*6, 0, format, type, nullptr ); if(l<levels) levels=l;
+		glTexStorage3D( target, levels, internal_format, width, height, count*6 );
 	}
 
 	// set dimensions
 	texture->_width		= width;
 	texture->_height	= height;
-	texture->_depth		= target==GL_TEXTURE_CUBE_MAP_ARRAY?layers*6:6;
+	texture->_depth		= count*6;
 	texture->_levels	= levels;
 
 	// generate mipmap
@@ -1334,6 +1340,9 @@ inline gl::Texture* gxCreateTextureCube( const char* name, GLint levels, GLsizei
 	glTexParameteri( target, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE );
 	glTexParameteri( target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri( target, GL_TEXTURE_MIN_FILTER, levels>1?GL_LINEAR_MIPMAP_LINEAR:GL_LINEAR);
+
+	// enable seamless cubemap
+	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 
 	return texture;
 }
@@ -1349,7 +1358,7 @@ inline gl::Texture* gxCreateTextureBuffer( const char* name, gl::Buffer* buffer,
 
 	// create a texture
 	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type);
-	texture->key = gl::Texture::crc(0,1,0,1);
+	texture->key = gl::Texture::crc(0,1,0,1,false,target);
 	glBindTexture( target, ID );
 
 	// create a buffer object and bind the storage using buffer object
@@ -1367,9 +1376,9 @@ inline gl::Texture* gxCreateTextureBuffer( const char* name, gl::Buffer* buffer,
 	return texture;
 }
 
-inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLuint levels, GLuint min_layer=0, GLuint layers=1, bool force_array=false )
+inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLuint levels, GLuint min_layer=0, GLuint layers=1, bool force_array=false, GLenum target=0 )
 {
-	uint key = gl::Texture::crc(min_level,levels,min_layer,layers,force_array);
+	uint key = gl::Texture::crc(min_level,levels,min_layer,layers,force_array,target);
 	for(gl::Texture* t=src; t; t=t->next ) if(t->key==key) return t;
 
 	if(src->target==GL_TEXTURE_BUFFER){ printf( "%s->view should not be a texture buffer\n", src->name ); return nullptr; }
@@ -1380,21 +1389,27 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLu
 	if(!src->is_immutable()){ printf("%s(GL_TEXTURE_IMMUTABLE_FORMAT)!=GL_TRUE\n", src->name ); return nullptr; }
 
 	// correct the new target
-	GLenum target1=src->target, t=src->target;
-	if(force_array)
+	if(target==0)
 	{
-		if(t==GL_TEXTURE_1D||t==GL_TEXTURE_1D_ARRAY) target1=GL_TEXTURE_1D_ARRAY;
-		else if(t==GL_TEXTURE_2D||t==GL_TEXTURE_2D_ARRAY) target1=GL_TEXTURE_2D_ARRAY;
-		else if(t==GL_TEXTURE_2D_MULTISAMPLE||t==GL_TEXTURE_2D_MULTISAMPLE_ARRAY) target1=GL_TEXTURE_2D_MULTISAMPLE_ARRAY;
+		target=src->target;
+		GLenum t=src->target;
+		if(force_array)
+		{
+			if(t==GL_TEXTURE_1D||t==GL_TEXTURE_1D_ARRAY) target=GL_TEXTURE_1D_ARRAY;
+			else if(t==GL_TEXTURE_2D||t==GL_TEXTURE_2D_ARRAY) target=GL_TEXTURE_2D_ARRAY;
+			else if(t==GL_TEXTURE_2D_MULTISAMPLE||t==GL_TEXTURE_2D_MULTISAMPLE_ARRAY) target=GL_TEXTURE_2D_MULTISAMPLE_ARRAY;
+			else if(t==GL_TEXTURE_CUBE_MAP) target=GL_TEXTURE_CUBE_MAP_ARRAY;
+		}
+		else if(src->target==GL_TEXTURE_1D_ARRAY&&layers==1) target=GL_TEXTURE_1D;
+		else if(src->target==GL_TEXTURE_2D_ARRAY&&layers==1) target=GL_TEXTURE_2D;
+		else if(src->target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY&&layers==1) target=GL_TEXTURE_2D_MULTISAMPLE;
+		else if(src->target==GL_TEXTURE_CUBE_MAP_ARRAY&&layers==1) target=GL_TEXTURE_CUBE_MAP;
 	}
-	else if(src->target==GL_TEXTURE_1D_ARRAY&&layers==1) target1=GL_TEXTURE_1D;
-	else if(src->target==GL_TEXTURE_2D_ARRAY&&layers==1) target1=GL_TEXTURE_2D;
-	else if(src->target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY&&layers==1) target1=GL_TEXTURE_2D_MULTISAMPLE;
 
 	// create a new texture; here, we must use glGenTextures() instead of glCreateTextures(), because texture view requires to have a created but uninitialized texture.
 	GLuint ID1; glGenTextures(1,&ID1); if(ID1==0) return nullptr;
 	bool b_slice0 = min_level==0&&levels==1&&layers==1;
-	const char* name1 = b_slice0?format("%s[%d]",src->name,min_layer):format("%s(%d,%d,%d,%d)",src->name,min_level,levels,min_layer,layers);
+	const char* name1 = b_slice0?format("%s[%d]",src->name,min_layer):format("%s[%d:%d][%d:%d",src->name,min_layer,layers-1,min_level,levels-1);
 
 	// get attributes
 	GLint internal_format	= src->internal_format();
@@ -1404,7 +1419,7 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLu
 
 	// allocate the new texture using the initial crt heap
 	gl::Texture* t1 = (gl::Texture*) HeapAlloc((void*)src->crtheap,0,sizeof(gl::Texture));
-	new(t1) gl::Texture(ID1,name1,target1,internal_format,src->format(),src->type(),src->crtheap);
+	new(t1) gl::Texture(ID1,name1,target,internal_format,src->format(),src->type(),src->crtheap);
 	t1->key = key;
 
 	// multisamples
@@ -1418,7 +1433,7 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLu
 	}
 
 	// create view and set attributes
-	glTextureView( t1->ID, target1, src->ID, internal_format, min_level, levels, min_layer, layers);
+	glTextureView( t1->ID, target, src->ID, internal_format, min_level, levels, min_layer, layers);
 	t1->set_filter( min_filter, mag_filter );
 	t1->set_wrap( wrap );
 

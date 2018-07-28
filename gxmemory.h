@@ -233,18 +233,16 @@ namespace zlib
 //***********************************************
 // CRC32 implementation with 4-batch parallel construction (taken from zlib)
 template <unsigned int poly>
-__noinline inline unsigned int tcrc32( const unsigned char* buff, size_t size, unsigned int crc0 )
+__noinline inline unsigned int tcrc32( const void* buff, size_t size, unsigned int crc0 )
 {
+	const unsigned char* b=(const unsigned char*)buff;
 	static unsigned* t[4] = {nullptr}; if(!t[0]){ for(int k=0;k<4;k++) t[k]=(unsigned*) malloc(sizeof(unsigned)*256); for(int k=0;k<256;k++){ unsigned c=k; for( unsigned j=0;j<8;j++) c=c&1?poly^(c>>1):c>>1; t[0][k]=c; } for(int k=0;k<256;k++){ unsigned c=t[0][k]; for(int j=1;j<4;j++) t[j][k]=c=t[0][c&0xff]^(c>>8); } }
-	if(buff==nullptr||size==0) return crc0; unsigned c = ~crc0;
-	for(;size&&(((ptrdiff_t)buff)&7);size--,buff++) c=t[0][(c^(*buff))&0xff]^(c>>8); // move forward to the 8-byte aligned boundary
-	for(;size>=4;size-=4,buff+=4){c^=*(unsigned*)buff;c=t[3][(c>>0)&0xff]^t[2][(c>>8)&0xff]^t[1][(c>>16)&0xff]^t[0][(c>>24)&0xff]; }
-	for(;size;size--,buff++) c=t[0][(c^(*buff))&0xff]^(c>>8);
+	if(b==nullptr||size==0) return crc0; unsigned c = ~crc0;
+	for(;size&&(((ptrdiff_t)b)&7);size--,b++) c=t[0][(c^(*b))&0xff]^(c>>8); // move forward to the 8-byte aligned boundary
+	for(;size>=4;size-=4,b+=4){c^=*(unsigned*)b;c=t[3][(c>>0)&0xff]^t[2][(c>>8)&0xff]^t[1][(c>>16)&0xff]^t[0][(c>>24)&0xff]; }
+	for(;size;size--,b++) c=t[0][(c^(*b))&0xff]^(c>>8);
 	return ~c;
 }
-
-// normal crc32
-inline unsigned int crc32( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0xedb88320UL>((const unsigned char*)buff,size,crc0); }
 
 // CRC32C SSE4.2 implementation up to 8-batch parallel construction (https://github.com/Voxer/sse4_crc32)
 #if defined(__SSE4_2__)||!defined(__clang__)
@@ -263,22 +261,24 @@ __noinline inline unsigned int crc32c_hw( const void* buff, size_t size, unsigne
 	for(;size>=sizeof(uint32_t);size-=sizeof(uint32_t),b+=sizeof(uint32_t)) c=_mm_crc32_u32((uint32_t)c,*(uint32_t*)b);
 	for(;size>=sizeof(uint16_t);size-=sizeof(uint16_t),b+=sizeof(uint16_t)) c=_mm_crc32_u16((uint32_t)c,*(uint16_t*)b);
 	for(;size>=sizeof(uint8_t);size-=sizeof(uint8_t),b+=sizeof(uint8_t)) c=_mm_crc32_u8((uint32_t)c,*(uint8_t*)b);
-
 	return uint32_t(~c);
 }
 #ifdef _MSC_VER
 inline bool has_sse42(){ static bool b=false,h=true; if(b) return h; b=true; int regs[4]={0}; __cpuid(regs,1); return h=((regs[2]>>20)&1)==1; }
 #else
-inline bool has_sse42(){ return true; }
+constexpr bool has_sse42(){ return true; }
 #endif
-inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ static bool hw=has_sse42(); return size>1024&&hw?crc32c_hw(buff,size,crc0):tcrc32<0x82f63b78UL>((const unsigned char*)buff,size,crc0); } // fallback to software for small-size buffer
+inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ static bool hw=has_sse42(); return hw?crc32c_hw(buff,size,crc0):tcrc32<0x82f63b78UL>(buff,size,crc0); }
 #else
-inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0x82f63b78UL>((const unsigned char*)buff,size,crc0); }
+inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0x82f63b78UL>(buff,size,crc0); }
 #endif
 
+// regular crc32
+inline unsigned int crc32( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0xedb88320UL>(buff,size,crc0); }
+
 // crc32c wrappers
-inline unsigned int crc32c( const char* s ){ return crc32c((void*)s,strlen(s)); }
-inline unsigned int crc32c( const wchar_t* s ){ return crc32c((void*)s,wcslen(s)*sizeof(wchar_t)); }
+inline unsigned int crc32c( const char* s ){ return crc32c(s,strlen(s)); }
+inline unsigned int crc32c( const wchar_t* s ){ return crc32c(s,wcslen(s)*sizeof(wchar_t)); }
 
 //***********************************************
 // MD5 implementation

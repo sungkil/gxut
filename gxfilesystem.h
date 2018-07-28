@@ -253,7 +253,7 @@ struct path
 	inline bool empty()			const { return data[0]==0; }
 	inline size_t size()		const { return data[0]==0?0:wcslen(data); }
 	inline size_t length()		const { return data[0]==0?0:wcslen(data); }
-	inline size_t file_size()	const { if(!cache_exists()) update_cache(); auto& c=cache(); return size_t(c.nFileSizeHigh)<<32|size_t(c.nFileSizeLow); }
+	inline uint64_t file_size() const { if(!cache_exists()) update_cache(); auto& c=cache(); return uint64_t(c.nFileSizeHigh)<<32ull|uint64_t(c.nFileSizeLow); }
 
 	// md5/crc checksums: implemented in gxmemory.h
 	inline std::string md5() const;
@@ -265,19 +265,19 @@ struct path
 	path to_slash()			const {	path p(*this); std::replace(p.begin(),p.end(),L'\\',L'/'); return p; }
 	path add_backslash()	const { path p(*this); size_t len=wcslen(p.data); if(len&&p.data[len-1]!='\\'){p.data[len]='\\';p.data[len+1]=L'\0';} return p; }
 	path remove_backslash()	const { path p(*this); size_t len=wcslen(p.data); if(len&&p.data[len-1]=='\\'){p.data[len-1]=L'\0';} return p; }
-	path remove_first_dot()	const { return (wcslen(data)>2&&data[0]==L'.'&&data[1]==L'\\') ? path(data+2) : *this; }
 	path auto_quote()		const { if(data[0]==0||wcschr(data,L' ')==nullptr||(data[0]==L'\"'&&data[wcslen(data)-1]==L'\"')) return *this; path p; swprintf_s(p,capacity,L"\"%s\"",data); return p; }
 	path unix()				const {	path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; p.data[1]=::tolower(p.data[0]); p.data[0]=L'/'; return p; }
 	path cygwin()			const { path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; path p2; swprintf_s( p2, capacity, L"/cygdrive/%c%s", ::tolower(p[0]), p+2 ); return p2; }
+	void chdir()			const { if(is_dir()) _wchdir(data); }
 
 	// path info/operations
-	void chdir() const { if(is_dir()) _wchdir(data); }
 	path drive() const { path d; split(d.data); return d; }
 	path dir() const { path p; if(wcschr(data,L'\\')==nullptr) return L".\\"; split_info si=split(__wcsbuf(),__wcsbuf()); wcscpy(p.data,wcscat(si.drive,si.dir)); size_t len=wcslen(p.data); if(len>0&&p.data[len-1]!='\\'){p.data[len]='\\';p.data[len+1]=L'\0';} return p; }
 	path name( bool with_ext=true ) const { split_info si=split(nullptr,nullptr,__wcsbuf(),__wcsbuf()); return with_ext?wcscat(si.fname,si.ext):si.fname; }
 	path ext() const { path e; split_info si=split(nullptr,nullptr,nullptr,e.data); return e.empty()?e:path(e.data+1); }
-	path remove_ext() const { split_info si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
 	path parent() const { return dir().remove_backslash().dir(); }
+	path remove_first_dot()	const { return (wcslen(data)>2&&data[0]==L'.'&&data[1]==L'\\') ? path(data+2) : *this; }
+	path remove_ext() const { split_info si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
 	std::vector<path> explode() const { path slashed=to_slash(); std::vector<path> L;L.reserve(8); wchar_t* ctx; for(wchar_t* t=wcstok_s(slashed.data,L"/",&ctx);t;t=wcstok_s(0,L"/",&ctx)) L.emplace_back(t); return L; }
 	std::vector<path> relative_ancestors() const { std::vector<path> a, e=dir().relative().explode(); if(e.empty()) return a; a.reserve(8); path t=e.front().absolute()+L"\\"; a.emplace_back(t); for(size_t k=1,kn=e.size();k<kn;k++)a.emplace_back(t+=e[k]+L"\\"); return a; }
 
@@ -468,7 +468,7 @@ __noinline inline path path::relative( const wchar_t* from ) const
 	if(is_relative()) return *this;
 
 	path from_dir = (!from||!from[0]) ? module_dir() : path(from).dir().absolute();
-	if(from_dir[0]!=this->data[0]) return *this; // different drive
+	if(::tolower(from_dir[0])!=::tolower(this->data[0])) return *this; // different drive
 
 	// 1. keep filename, make the list of reference and current path
 	std::vector<path> src_list=from_dir.explode(), dst_list=dir().explode();
