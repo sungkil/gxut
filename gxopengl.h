@@ -92,7 +92,8 @@ inline GLenum	gxGetTextureFormat( GLint internal_format ){ switch( internal_form
 inline GLenum	gxGetTextureType( GLint internal_format ){ switch( internal_format ){ case GL_R8UI: case GL_RG8UI: case GL_RGB8UI: case GL_RGBA8UI: case GL_R8: case GL_RG8: case GL_RGB8: case GL_RGBA8: return GL_UNSIGNED_BYTE; /**/ case GL_R8I: case GL_RG8I: case GL_RGB8I: case GL_RGBA8I: return GL_BYTE; /**/ case GL_R16: case GL_RG16: case GL_RGB16: case GL_RGBA16: return GL_HALF_FLOAT; /**/ case GL_R16UI: case GL_RG16UI: case GL_RGB16UI: case GL_RGBA16UI: return GL_UNSIGNED_SHORT; /**/ case GL_R16I: case GL_RG16I: case GL_RGB16I: case GL_RGBA16I: return GL_SHORT; /**/ case GL_R16F: case GL_RG16F: case GL_RGB16F: case GL_RGBA16F: return GL_HALF_FLOAT; /**/ case GL_R32F: case GL_RG32F: case GL_RGB32F: case GL_RGBA32F: return GL_FLOAT; /**/ case GL_R32UI: case GL_RG32UI: case GL_RGB32UI: case GL_RGBA32UI: return GL_UNSIGNED_INT; /**/ case GL_R32I: case GL_RG32I: case GL_RGB32I: case GL_RGBA32I: return GL_INT;	} return 0; }
 inline GLenum	gxGetInternalFormat( GLint type, int channels ){ static const uint a=1u<<16u,b=2u<<16u,c=3u<<16u,d=4u<<16u; static std::map<uint,GLenum> ifm = { {a+GL_BYTE,GL_R8}, {b+GL_BYTE,GL_RG8}, {c+GL_BYTE,GL_RGB8}, {d+GL_BYTE,GL_RGBA8}, {a+GL_UNSIGNED_BYTE,GL_R8}, {b+GL_UNSIGNED_BYTE,GL_RG8}, {c+GL_UNSIGNED_BYTE,GL_RGB8}, {d+GL_UNSIGNED_BYTE,GL_RGBA8}, {a+GL_SHORT,GL_R16I}, {b+GL_SHORT,GL_RG16I}, {c+GL_SHORT,GL_RGB16I}, {d+GL_SHORT,GL_RGBA16I}, {a+GL_UNSIGNED_SHORT,GL_R16UI}, {b+GL_UNSIGNED_SHORT,GL_RG16UI}, {c+GL_UNSIGNED_SHORT,GL_RGB16UI}, {d+GL_UNSIGNED_SHORT,GL_RGBA16UI}, {a+GL_INT,GL_R32I}, {b+GL_INT,GL_RG32I}, {c+GL_INT,GL_RGB32I}, {d+GL_INT,GL_RGBA32I}, {a+GL_UNSIGNED_INT,GL_R32UI}, {b+GL_UNSIGNED_INT,GL_RG32UI}, {c+GL_UNSIGNED_INT,GL_RGB32UI}, {d+GL_UNSIGNED_INT,GL_RGBA32UI}, {a+GL_HALF_FLOAT,GL_R16F}, {b+GL_HALF_FLOAT,GL_RG16F}, {c+GL_HALF_FLOAT,GL_RGB16F}, {d+GL_HALF_FLOAT,GL_RGBA16F}, {a+GL_FLOAT,GL_R32F}, {b+GL_FLOAT,GL_RG32F}, {c+GL_FLOAT,GL_RGB32F}, {d+GL_FLOAT,GL_RGBA32F}, }; return ifm[(channels<<16)+type]; }
 inline GLint	gxGetTextureChannels( GLint internal_format ){ switch(gxGetTextureFormat(internal_format)){ case GL_RGBA: case GL_BGRA: case GL_RGBA_INTEGER: case GL_BGRA_INTEGER: return 4; case GL_RGB: case GL_BGR: case GL_RGB_INTEGER: case GL_BGR_INTEGER: return 3; case GL_RG: case GL_RG_INTEGER: return 2; case GL_RED: case GL_GREEN: case GL_BLUE: case GL_RED_INTEGER: case GL_GREEN_INTEGER: case GL_BLUE_INTEGER: return 1; default: return 0; } }
-inline size_t	gxGetTextureBPP( GLint internal_format ){ size_t s=0; switch(gxGetTextureType(internal_format)){ case GL_HALF_FLOAT: case GL_SHORT: case GL_UNSIGNED_SHORT: s=sizeof(short); break; case GL_BYTE: case GL_UNSIGNED_BYTE: s=sizeof(char); break; case GL_FLOAT: case GL_INT: case GL_UNSIGNED_INT: s=sizeof(int); break; }; return s*gxGetTextureChannels(internal_format); }
+inline size_t	gxGetTextureChannelBPP( GLint internal_format ){ size_t s=0; switch(gxGetTextureType(internal_format)){ case GL_HALF_FLOAT: case GL_SHORT: case GL_UNSIGNED_SHORT: s=sizeof(short); break; case GL_BYTE: case GL_UNSIGNED_BYTE: s=sizeof(char); break; case GL_FLOAT: case GL_INT: case GL_UNSIGNED_INT: s=sizeof(int); break; }; return s*8; }
+inline size_t	gxGetTextureBPP( GLint internal_format ){ return gxGetTextureChannelBPP(internal_format)*gxGetTextureChannels(internal_format); }
 inline GLenum	gxGetImageTextureInternalFormat( int depth, int channels ){ if(depth==8) return channels==1?GL_R8:channels==2?GL_RG8:channels==3?GL_RGB8:channels==4?GL_RGBA8:0; else if(depth==16)	return channels==1?GL_R16F:channels==2?GL_RG16F:channels==3?GL_RGB16F:channels==4?GL_RGBA16F:0; else if(depth==32)	return channels==1?GL_R32F:channels==2?GL_RG32F:channels==3?GL_RGB32F:channels==4?GL_RGBA32F:0; return 0; }
 inline bool		gxIsSamplerType( GLenum uniformType ){ GLenum t=uniformType; if(t>=GL_SAMPLER_1D && t<=GL_SAMPLER_2D_SHADOW) return true; if(t>=GL_SAMPLER_1D_ARRAY && t<=GL_SAMPLER_CUBE_SHADOW) return true; if(t>=GL_INT_SAMPLER_1D && t<=GL_UNSIGNED_INT_SAMPLER_2D_ARRAY) return true; if(t>=GL_SAMPLER_2D_RECT && t<=GL_SAMPLER_2D_RECT_SHADOW ) return true; if(t>=GL_SAMPLER_BUFFER && t<=GL_UNSIGNED_INT_SAMPLER_BUFFER ) return true; if(t>=GL_SAMPLER_CUBE_MAP_ARRAY && t<=GL_UNSIGNED_INT_SAMPLER_CUBE_MAP_ARRAY ) return true; if(t>=GL_SAMPLER_2D_MULTISAMPLE && t<=GL_UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE_ARRAY ) return true; /* TODO: if(t>=GL_SAMPLER_RENDERBUFFER_NV && t<=GL_UNSIGNED_INT_SAMPLER_RENDERBUFFER_NV ) return true;*/ return false; }
 inline path		gxGetProgramBinaryPath( const char* name ){ path p=path::temp()+L"glProgramBinary\\"+atow(name)+L".bin"; if(!p.dir().exists()) p.dir().mkdir(); return p; }
@@ -291,7 +292,7 @@ namespace gl {
 		size_t size( GLint level=0 ) const { return width_step(level)*height(level); }
 
 		// set attributes
-		void set_filter( GLint min_filter, GLint mag_filter ){ texture_parameteri( GL_TEXTURE_MIN_FILTER, min_filter ); texture_parameteri( GL_TEXTURE_MAG_FILTER, mag_filter ); }
+		void set_filter( GLint min_filter, GLint mag_filter=0 ){ static const GLenum n=GL_NEAREST,l=GL_LINEAR,nn=GL_NEAREST_MIPMAP_NEAREST,nl=GL_NEAREST_MIPMAP_LINEAR,ln=GL_LINEAR_MIPMAP_NEAREST,ll=GL_LINEAR_MIPMAP_LINEAR; GLint i=min_filter,g=mag_filter?mag_filter:min_filter; texture_parameteri( GL_TEXTURE_MIN_FILTER, _levels==1?(i==nn||i==nl?n:i==ln||i==ll?l:i):i==n?nn:i==l?ll:i ); texture_parameteri( GL_TEXTURE_MAG_FILTER, g==nn||g==nl?n:g==ln||g==ll?l:g ); }
 		void set_wrap( GLint wrap ){ texture_parameteri( GL_TEXTURE_WRAP_S, wrap ); if(target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY) texture_parameteri( GL_TEXTURE_WRAP_T, wrap ); if(target==GL_TEXTURE_3D||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY) texture_parameteri( GL_TEXTURE_WRAP_R, wrap ); }
 		void set_mipmap_range( GLint base_level, GLint level_count ){ texture_parameteri(GL_TEXTURE_BASE_LEVEL,base_level); texture_parameteri(GL_TEXTURE_MAX_LEVEL,base_level+level_count-1); }
 		void set_min_LOD( GLfloat min_LOD ){ texture_parameterf(GL_TEXTURE_MIN_LOD,min_LOD); }
@@ -391,14 +392,15 @@ namespace gl {
 		virtual void release(){ if(vertex_buffer){ delete vertex_buffer; vertex_buffer=nullptr; } if(index_buffer){ delete index_buffer; index_buffer=nullptr; } GLuint id=ID; if(id) glDeleteVertexArrays( 1, &id ); }
 		GLuint bind( bool b_bind=true ){ GLuint b0=binding(); if(!b_bind||b0!=ID) glBindVertexArray( b_bind?ID:0 ); return b0; }
 
-		inline void draw_arrays( GLint first, GLsizei count, GLenum mode=GL_TRIANGLES ){ GLuint b0=bind(); glDrawArrays( mode, first, count ); }
-		inline void draw_elements( GLuint first, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glDrawElements( mode, GLsizei(count==0?index_count:count), GL_UNSIGNED_INT, uint_offset(first) ); }
-		inline void draw_elements_instanced( GLuint first, GLsizei instance_count, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glDrawElementsInstanced( mode, GLsizei(count==0?index_count:count), GL_UNSIGNED_INT, uint_offset(first), instance_count ); }
-		inline void draw_elements_indirect( GLvoid* indirect=nullptr, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glDrawElementsIndirect( mode, GL_UNSIGNED_INT, indirect ); }
-		inline void draw_range_elements( GLuint first, GLuint end, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glDrawRangeElements( mode, first, end, GLsizei(count==0?index_count:count), GL_UNSIGNED_INT, uint_offset(first)); }
-		inline void multi_draw_elements( GLuint* pfirst, const GLsizei* pcount, GLsizei draw_count, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glMultiDrawElements( mode, pcount, GL_UNSIGNED_INT, uint_offset(pfirst,draw_count), draw_count ); }
-		inline void multi_draw_elements_indirect( GLsizei draw_count, GLsizei stride=sizeof(DrawElementsIndirectCommand), GLvoid* indirect=nullptr, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glMultiDrawElementsIndirect( mode, GL_UNSIGNED_INT, indirect, draw_count, stride ); }
-		inline void multi_draw_elements_indirect_count( GLsizei max_draw_count, GLsizei stride=sizeof(DrawElementsIndirectCommand), const void* indirect=0 /* GL_DRAW_INDIRECT_BUFFER */, GLintptr draw_count=0 /* GL_PARAMETER_BUFFER_ARB */, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; GLuint b0=bind(); glMultiDrawElementsIndirectCountARB( mode, GL_UNSIGNED_INT, indirect, draw_count, max_draw_count, stride ); }
+		inline void draw_arrays( GLint first, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ bind(); glDrawArrays( mode, first, count?count:GLsizei(vertex_count) ); }
+		inline void draw_arrays_instanced( GLint first, GLsizei instance_count, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ bind(); glDrawArraysInstanced( mode, first, count?count:GLsizei(vertex_count), instance_count ); }
+		inline void draw_elements( GLuint first, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; bind(); glDrawElements( mode, count?count:GLsizei(index_count), GL_UNSIGNED_INT, uint_offset(first) ); }
+		inline void draw_elements_instanced( GLuint first, GLsizei instance_count, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; bind(); glDrawElementsInstanced( mode, count?count:GLsizei(index_count), GL_UNSIGNED_INT, uint_offset(first), instance_count ); }
+		inline void draw_elements_indirect( GLvoid* indirect=nullptr, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; bind(); glDrawElementsIndirect( mode, GL_UNSIGNED_INT, indirect ); }
+		inline void draw_range_elements( GLuint first, GLuint end, GLsizei count=0, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; bind(); glDrawRangeElements( mode, first, end, count?count:GLsizei(index_count), GL_UNSIGNED_INT, uint_offset(first)); }
+		inline void multi_draw_elements( GLuint* pfirst, const GLsizei* pcount, GLsizei draw_count, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; bind(); glMultiDrawElements( mode, pcount, GL_UNSIGNED_INT, uint_offset(pfirst,draw_count), draw_count ); }
+		inline void multi_draw_elements_indirect( GLsizei draw_count, GLsizei stride=sizeof(DrawElementsIndirectCommand), GLvoid* indirect=nullptr, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; bind(); glMultiDrawElementsIndirect( mode, GL_UNSIGNED_INT, indirect, draw_count, stride ); }
+		inline void multi_draw_elements_indirect_count( GLsizei max_draw_count, GLsizei stride=sizeof(DrawElementsIndirectCommand), const void* indirect=0 /* GL_DRAW_INDIRECT_BUFFER */, GLintptr draw_count=0 /* GL_PARAMETER_BUFFER_ARB */, GLenum mode=GL_TRIANGLES ){ if(index_buffer==nullptr) return; bind(); glMultiDrawElementsIndirectCountARB( mode, GL_UNSIGNED_INT, indirect, draw_count, max_draw_count, stride ); }
 
 		inline GLvoid* uint_offset( GLuint first ){ return (GLvoid*)(first*sizeof(GLuint)); }
 		inline const GLvoid* const* uint_offset( GLuint* pfirst, GLsizei draw_count ){ static std::vector<GLvoid*> offsets; if(offsets.size()<uint(draw_count)) offsets.resize(draw_count); for( int k=0; k<draw_count; k++ ) offsets[k] = (GLvoid*)(pfirst[k]*sizeof(GLuint)); return &offsets[0]; }
@@ -444,8 +446,8 @@ namespace gl {
 
 		Program( GLuint ID, const char* name ) : GLObject(ID,name,GL_PROGRAM){ get_instances().emplace(this); }
 		virtual void release(){ if(!ID) return; glDeleteProgram(ID); uniform_cache.clear(); invalid_uniform_cache.clear(); get_instances().erase(this); }
-		GLuint bind( bool b_bind=true ){ GLuint b0=binding(); if(!b_bind||b0!=ID) glUseProgram(b_bind?ID:0); if(!b_bind) return b0; if(uniform_cache.empty()) update_uniform_cache(); else if( Texture::b_texture_deleted() ){ std::set<Program*>& s=get_instances(); for( auto it=s.begin(); it!=s.end(); it++ ) (*it)->update_uniform_cache(); Texture::b_texture_deleted() = false; } for( auto it=uniform_cache.begin(); it!=uniform_cache.end(); it++ ){ Uniform& u=it->second;if(u.texture&&u.textureID>-1){glActiveTexture(GL_TEXTURE0+u.textureID); u.texture->bind();} } return b0; }
 		static void unbind(){ glUseProgram(0); }
+		GLuint bind( bool b_bind=true );
 
 		// getUniform: in-program uniform variables
 		Uniform* get_uniform( const char* name )
@@ -461,27 +463,27 @@ namespace gl {
 
 		// setUniform
 		template <class T>
-		void set_uniform( const char* name, T* v, GLsizei count=1 ){			Uniform* u=get_uniform(name); if(u) u->set(ID,v,count); }
-		void set_uniform( const char* name, const float& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const vec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const vec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const vec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const int& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(int*)&v,count); }
-		void set_uniform( const char* name, const ivec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(int*)&v,count); }
-		void set_uniform( const char* name, const ivec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(int*)&v,count); }
-		void set_uniform( const char* name, const ivec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(int*)&v,count); }
-		void set_uniform( const char* name, const uint& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(uint*)&v,count); }
+		void set_uniform( const char* name, T* v, GLsizei count=1 ){			Uniform* u=get_uniform(name); if(!u) return; u->set(ID,v,count); }
+		void set_uniform( const char* name, const float& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const vec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const vec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const vec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const int& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, const ivec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, const ivec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, const ivec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, const uint& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
 #ifdef _M_X64
-		void set_uniform( const char* name, const size_t& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u&&count==1) u->set(ID,(uint*)&v,count); else if(u){std::vector<uint> l(count);for(int j=0;j<count;j++)l[j]=uint((&v)[j]);  u->set(ID,(uint*)&l[0],count);} }
+		void set_uniform( const char* name, const size_t& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; if(count==1) u->set(ID,(uint*)&v,count); else {std::vector<uint> l(count);for(int j=0;j<count;j++)l[j]=uint((&v)[j]);u->set(ID,(uint*)&l[0],count);} }
 #endif
-		void set_uniform( const char* name, const uvec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(uint*)&v,count); }
-		void set_uniform( const char* name, const uvec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(uint*)&v,count); }
-		void set_uniform( const char* name, const uvec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(uint*)&v,count); }
-		void set_uniform( const char* name, const bool& b, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u){ int v=b?1:0; u->set(ID,(int*)&v,count); }}
-		void set_uniform( const char* name, const mat4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const mat3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const mat2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(u) u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, Texture* t ){ if(!t) return;		Uniform* u=get_uniform(name); if(!u||u->ID<0||u->textureID<0) return; u->texture=t; glUseProgram(ID); glProgramUniform1i( ID, u->ID, u->textureID ); glActiveTexture(GL_TEXTURE0+u->textureID); u->texture->bind(); }
+		void set_uniform( const char* name, const uvec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
+		void set_uniform( const char* name, const uvec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
+		void set_uniform( const char* name, const uvec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
+		void set_uniform( const char* name, const bool& b, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; int v=b?1:0; u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, const mat4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const mat3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const mat2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, Texture* t ){ if(!t) return;		Uniform* u=get_uniform(name); if(!u) return; if(u->ID<0||u->textureID<0) return; u->texture=t; glUseProgram(ID); glProgramUniform1i( ID, u->ID, u->textureID ); if(glBindTextureUnit) glBindTextureUnit( u->textureID, u->texture->ID ); else {glActiveTexture(GL_TEXTURE0+u->textureID); u->texture->bind();} }
 
 		// update uniform/uniformBlock
 		inline void update_uniform_cache();
@@ -508,6 +510,21 @@ namespace gl {
 
 	// template specialization on bool array
 	template<> inline void Program::Uniform::set<bool>( GLuint program_ID, bool* v, GLsizei count ){ std::vector<int> i(count);for(int k=0;k<count;k++)i[k]=int(v[k]); glProgramUniform1iv( program_ID, ID, count, &i[0] ); }
+
+	// bind
+	inline GLuint Program::bind( bool b_bind )
+	{
+		GLuint b0=binding(); if(!b_bind||b0!=ID) glUseProgram(b_bind?ID:0); if(!b_bind) return b0;
+		if(uniform_cache.empty()) update_uniform_cache();
+		else if( Texture::b_texture_deleted() ){std::set<Program*>& s=get_instances();for(auto it:s)it->update_uniform_cache();Texture::b_texture_deleted()=false;}
+		for(auto it:uniform_cache)
+		{
+			Uniform& u=it.second;if(!u.texture||u.textureID==-1) continue;
+			if(glBindTextureUnit) glBindTextureUnit( u.textureID, u.texture->ID );
+			else {glActiveTexture(GL_TEXTURE0+u.textureID);glBindTexture(u.texture->target,u.texture->ID);}
+		}
+		return b0;
+	}
 
 	// late implementations of Program
 	inline void Program::update_uniform_cache()
@@ -629,9 +646,9 @@ namespace gl {
 		static const GLenum* draw_buffers( uint index=0 ){ static GLenum d[MAX_COLOR_ATTACHMENTS]={GL_COLOR_ATTACHMENT0,GL_COLOR_ATTACHMENT1,GL_COLOR_ATTACHMENT2,GL_COLOR_ATTACHMENT3,GL_COLOR_ATTACHMENT4,GL_COLOR_ATTACHMENT5,GL_COLOR_ATTACHMENT6,GL_COLOR_ATTACHMENT7}; return &d[index]; }
 		void clear( const vec4& color=vec4(.0f,.0f,.0f,.0f) ){ for( uint k=0;k<MAX_COLOR_ATTACHMENTS;k++) if(active_targets[k]) clear_color_buffer( k, color, false ); clear_depth_buffer(); }
 		void clear_depth_buffer( float depth=1.0f ){ if(glClearNamedFramebufferfv) glClearNamedFramebufferfv( ID, GL_DEPTH, 0, &depth ); else glClearBufferfv( GL_DEPTH, 0, &depth ); }
-		void clear_color_buffer( GLint draw_buffer, const vec4& color, bool b_clear_depth=false ){ if(glClearNamedFramebufferfv) glClearNamedFramebufferfv( ID, GL_COLOR, draw_buffer, color ); else glClearBufferfv( GL_COLOR, draw_buffer, color ); if(b_clear_depth) clear_depth_buffer(); }
-		void clear_color_bufferi( GLint draw_buffer, const ivec4& color, bool b_clear_depth=false ){ if(glClearNamedFramebufferiv) glClearNamedFramebufferiv( ID, GL_COLOR, draw_buffer, color ); else glClearBufferiv( GL_COLOR, draw_buffer, color ); if(b_clear_depth) clear_depth_buffer(); }
-		void clear_color_bufferui( GLint draw_buffer, const uvec4& color, bool b_clear_depth=false ){ if(glClearNamedFramebufferuiv) glClearNamedFramebufferuiv( ID, GL_COLOR, draw_buffer, color ); else glClearBufferuiv( GL_COLOR, draw_buffer, color ); if(b_clear_depth) clear_depth_buffer(); }
+		void clear_color_buffer( GLint draw_buffer, const vec4& color, bool b_clear_depth=false ){ if(draw_buffer>=GL_DRAW_BUFFER0) draw_buffer-=GL_DRAW_BUFFER0; if(glClearNamedFramebufferfv) glClearNamedFramebufferfv( ID, GL_COLOR, draw_buffer, color ); else glClearBufferfv( GL_COLOR, draw_buffer, color ); if(b_clear_depth) clear_depth_buffer(); }
+		void clear_color_bufferi( GLint draw_buffer, const ivec4& color, bool b_clear_depth=false ){ if(draw_buffer>=GL_DRAW_BUFFER0) draw_buffer-=GL_DRAW_BUFFER0; if(glClearNamedFramebufferiv) glClearNamedFramebufferiv( ID, GL_COLOR, draw_buffer, color ); else glClearBufferiv( GL_COLOR, draw_buffer, color ); if(b_clear_depth) clear_depth_buffer(); }
+		void clear_color_bufferui( GLint draw_buffer, const uvec4& color, bool b_clear_depth=false ){ if(draw_buffer>=GL_DRAW_BUFFER0) draw_buffer-=GL_DRAW_BUFFER0; if(glClearNamedFramebufferuiv) glClearNamedFramebufferuiv( ID, GL_COLOR, draw_buffer, color ); else glClearBufferuiv( GL_COLOR, draw_buffer, color ); if(b_clear_depth) clear_depth_buffer(); }
 
 		GLenum	active_targets[MAX_COLOR_ATTACHMENTS];
 		std::map<uint64_t,GLuint> depth_buffers;
@@ -1206,8 +1223,8 @@ inline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsizei w
 	// attributes
 	glTexParameteri( target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
 	if(layers>1) glTexParameteri( target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
-	glTexParameteri( target, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
-	glTexParameteri( target, GL_TEXTURE_MIN_FILTER, levels>1?GL_LINEAR_MIPMAP_LINEAR:GL_LINEAR );
+	glTexParameteri( target, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+	glTexParameteri( target, GL_TEXTURE_MIN_FILTER, levels>1?GL_NEAREST_MIPMAP_NEAREST : GL_NEAREST );
 
 	return texture;
 }
@@ -1252,8 +1269,8 @@ inline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsizei w
 	glTexParameteri( target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
 	glTexParameteri( target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
 	if(layers>1) glTexParameteri( target, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE );
-	glTexParameteri( target, GL_TEXTURE_MAG_FILTER, target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY ? GL_NEAREST : GL_LINEAR );
-	glTexParameteri( target, GL_TEXTURE_MIN_FILTER, target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY ? GL_NEAREST : levels>1?GL_LINEAR_MIPMAP_LINEAR:GL_LINEAR);
+	glTexParameteri( target, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+	glTexParameteri( target, GL_TEXTURE_MIN_FILTER, levels>1?GL_NEAREST_MIPMAP_NEAREST : GL_NEAREST );
 
 	return texture;
 }
@@ -1290,8 +1307,8 @@ inline gl::Texture* gxCreateTexture3D( const char* name, GLint levels, GLsizei w
 	glTexParameteri( target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
 	glTexParameteri( target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
 	glTexParameteri( target, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE );
-	glTexParameteri( target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri( target, GL_TEXTURE_MIN_FILTER, levels>1?GL_LINEAR_MIPMAP_LINEAR:GL_LINEAR);
+	glTexParameteri( target, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+	glTexParameteri( target, GL_TEXTURE_MIN_FILTER, levels>1?GL_NEAREST_MIPMAP_NEAREST : GL_NEAREST );
 
 	return texture;
 }
@@ -1338,8 +1355,8 @@ inline gl::Texture* gxCreateTextureCube( const char* name, GLint levels, GLsizei
 	glTexParameteri( target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );	// GL_CLAMP_TO_EDGE is the best option
 	glTexParameteri( target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
 	glTexParameteri( target, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE );
-	glTexParameteri( target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri( target, GL_TEXTURE_MIN_FILTER, levels>1?GL_LINEAR_MIPMAP_LINEAR:GL_LINEAR);
+	glTexParameteri( target, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+	glTexParameteri( target, GL_TEXTURE_MIN_FILTER, levels>1?GL_NEAREST_MIPMAP_NEAREST : GL_NEAREST );
 
 	// enable seamless cubemap
 	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);

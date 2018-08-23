@@ -1,4 +1,4 @@
-//*******************************************************************
+//*********************************************************
 // Copyright 2011-2018 Sungkil Lee
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,7 +12,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//*******************************************************************
+//*********************************************************
 
 #pragma once
 #ifndef __GX_MESH__
@@ -20,27 +20,27 @@
 
 #include "gxmath.h" // the only necessary header for gxmesh
 
-//***********************************************
+//*************************************
 // forward declarations
 namespace gl { struct Buffer; struct VertexArray; struct Texture;}											// OpenGL forward decl.
 struct ID3D10Buffer; struct ID3D11Buffer; struct ID3D10ShaderResourceView; struct ID3D11ShaderResourceView; // D3DX forward decl.
 struct geometry; struct object; struct mesh;																// mesh forward decl.
 
-//***********************************************
+//*************************************
 // sampler interface (for lens/rays): vec4(x,y,z,weight) in a unit surface
 template <size_t max_samples>
 struct tsampler_t
 {
-	enum model_t {	SIMPLE, STRATIFIED, POISSON, HAMMERSLEY, HALTON };
-	enum surface_t{	SQUARE, CIRCLE, HEMISPHERE, SPHERE, CYLINDER };
+	enum model_t {	PMJ, SOBOL, POISSON, HAMMERSLEY, HALTON };
+	enum surface_t{	SQUARE, CIRCLE, HEMISPHERE, COSHEMI, SPHERE, CYLINDER }; // COSHEMI: cosine-weightd hemisphere
 	using array_t = const std::array<vec4,max_samples>;
-
-	model_t			model;
-	surface_t		surface;
-	uint			seed;	// random seed
-	uint			crc;	// crc32c to detect the change of samples
-
 	static constexpr uint capacity() { return max_samples; }
+
+	uint			crc;		// crc32c to detect the change of samples
+	model_t			model = PMJ;
+	surface_t		surface = SQUARE;
+	uint			seed = 0;	// random seed
+	uint			index = 0;	// index for sequential sampling
 
 	bool			empty() const { return n==0; }
 	uint			size() const { return n; }
@@ -48,45 +48,47 @@ struct tsampler_t
 	const vec4*		end() const { return begin()+n; }
 	const vec4&		operator[]( ptrdiff_t i ) const { return data[i]; }
 	const vec4&		at( ptrdiff_t i ) const { return data[i]; }
-	void			resize( uint new_size, bool b_resample=true ){ const_cast<uint&>(n)=min(new_size,uint(max_samples)); if(b_resample) resample(); }
+	void			resize( uint new_size, bool b_resample=true ){ const_cast<uint&>(n)=new_size<uint(max_samples)?new_size:uint(max_samples); if(b_resample) resample(); }
+	void			rewind(){ index=0; }
+	const vec4&		next(){ index=(++index)%n; return data[index]; } // only for fixed sequence; needs to be improved for sequential sampling
 	virtual uint	resample()=0; // return the number of generated samples; implemented in Sampler plugin
 
 protected:
-
-	array_t			data;
 	const uint		n=1;
+	array_t			data;
 };
 
 using sampler_t = tsampler_t<1<<16>; // up to 64K samples
 
-//***********************************************
+//*************************************
 // 16-byte aligned light for direct lights
 #ifndef __cplusplus // std140 definition for shaders
 struct light_t
 {
-	vec4 position, color, normal;			// use normal.xyz
+	vec4	pos, color, normal;		// use normal.xyz
 };
 
 struct vpl_t
 {
-	vec4	position, color, normal;		// use normal.xyz
+	vec4	pos, color, normal;		// use normal.xyz
 	mat4	view_matrix, projection_matrix;
 	float	fovy, aspect, dnear, dfar;
 };
 #else
 struct light_t
 {
-	vec4	position;			// directional light (position.a==0) ignores normal
+	vec4	pos;				// directional light (position.a==0) ignores normal
 	vec4	color;				// shared for diffuse/specular
 	vec3	normal;				// direction (the negated vector of position for directional light)
+	uint	bounce:6;			// zero means direct light
 	uint	mouse:1;			// dynamic binding to the mouse?
 	uint	bind:1;				// dynamic binding to an object
-	uint	object_index:30;	// ID of object bound to this light
+	uint	object_index:24;	// ID of object bound to this light
 
 	// transformation to camera (eye-coordinate) space
-	vec4	ecpos( mat4& view_matrix ) const { return position.a==0?vec4(mat3(view_matrix)*position.xyz,0.0f):view_matrix*position; }
+	vec4	ecpos( mat4& view_matrix ) const { return pos.a==0?vec4(mat3(view_matrix)*pos.xyz,0.0f):view_matrix*pos; }
 	vec3	ecnorm( mat4& view_matrix ) const { return mat3(view_matrix)*normal; }
-	vec3	dir() const { return normalize(position.xyz); }			// directions and angles against view vector
+	vec3	dir() const { return normalize(pos.xyz); }				// directions and angles against view vector
 	float	phi() const { vec3 d=dir(); return atan2(d.y,d.x); }	// angle on the xy plane orthogonal to the optical axis
 	float	theta() const { return acos(dir().z); }					// angle between outgoing light direction and the optical axis
 };
@@ -106,7 +108,7 @@ static_assert(sizeof(light_t)%16==0,"size of struct light_t should be aligned at
 static_assert(sizeof(vpl_t)%16==0,	"size of struct vpl_t should be aligned at 16-byte boundaries" );
 #endif
 
-//***********************************************
+//*************************************
 // ray for ray tracing
 template <class T> struct tray // defined as a template to avoid "a constructor in aggregate struct
 {
@@ -117,7 +119,7 @@ template <class T> struct tray // defined as a template to avoid "a constructor 
 };
 using ray = tray<float>;
 
-//***********************************************
+//*************************************
 // intersection
 struct isect
 {
@@ -130,7 +132,7 @@ struct isect
 	uint	g=-1;							// index of an intersected geometry
 };
 
-//***********************************************
+//*************************************
 // bounding box: 16-bytes aligned for std140 layout
 #ifndef __cplusplus
 struct bbox { vec4 m; vec4 M; }; // bounding box in std140 layout
@@ -164,7 +166,8 @@ struct bbox : public bbox_t
 	inline float surface_area() const { vec3 e=size(); return (e.x*e.z+e.y*e.x+e.z*e.y)*2.0f; }
 	inline float volume() const { vec3 e=size(); return e.x*e.y*e.z; }
 	inline bool overlap( const bbox& b ) const { return (M.x>=b.m.x)&&(m.x<=b.M.x)&&(M.y>=b.m.y)&&(m.y<=b.M.y)&&(M.z>=b.m.z)&&(m.z<=b.M.z); }
-	inline int max_extent() const { vec3 e=size(); return e.x>e.y&&e.x>e.z?0:e.y>e.z?1:2; }
+	inline int max_axis() const { vec3 e=size(); return e.x>e.y&&e.x>e.z?0:e.y>e.z?1:2; }
+	inline float max_extent() const { vec3 e=size(); return e.x>e.y&&e.x>e.z?e.x:e.y>e.z?e.y:e.z; }
 
 	// query on points
 	inline bool include( const vec3& v ) const { return v.x>=m.x&&v.x<=M.x&&v.y>=m.y&&v.y<=M.y&&v.z>=m.z&&v.z<=M.z; }
@@ -198,7 +201,7 @@ struct bbox : public bbox_t
 inline bbox operator*( const mat4& m, const bbox& b ){ bbox b1=b; return b1.expand(m); }
 #endif
 
-//***********************************************
+//*************************************
 // sphere
 struct sphere
 {
@@ -209,7 +212,7 @@ struct sphere
 	inline bool intersect( const ray& r, isect* pi=nullptr );
 };
 
-//***********************************************
+//*************************************
 // Thin-lens camera definition
 #ifndef __cplusplus
 struct camera_t // std140 layout for OpenGL uniform buffer objects
@@ -270,7 +273,7 @@ struct camera : public camera_t
 	bool		cull( bbox& b ) const { return frustum.cull(b); }
 };
 
-//***********************************************
+//*************************************
 // material definition (std140 layout, aligned at 16-byte/vec4 boundaries)
 #ifndef __cplusplus
 struct material { vec4 color; float specular, beta, emissive, n; uvec2 TEX, NRM; };
@@ -315,19 +318,19 @@ struct material_impl : public material
 	float roughness(){ return float(sqrtf(2.0f/(beta+2.0f))); }  // Beckmann roughness in [0,1] (0:mirror, 1: Lambertian)
 };
 
-//***********************************************
+//*************************************
 // acceleration structures
 struct acc_t
 {
 	enum { NONE, BVH, KDTREE } model = NONE;
 	mesh*		p_mesh = nullptr;	// should be set to mesh
 	uint		geom = -1;			// should be set for geometry BVH, -1 for mesh BVH
-	virtual bool intersect( const ray& r, std::vector<uint>* hit_prim_list=nullptr )=0; // return primitive ids
+	virtual bool intersect( const ray& r, std::vector<uint>* hit_prims=nullptr )=0; // return primitive (i.e., geometry) indices
 	virtual bool intersect( const ray& r, isect* pi )=0;
 	virtual void release()=0;
 };
 
-//***********************************************
+//*************************************
 // Bounding volume hierarchy
 struct bvh_t : public acc_t // two-level hierarchy: mesh or geometry
 {
@@ -335,7 +338,7 @@ struct bvh_t : public acc_t // two-level hierarchy: mesh or geometry
 	std::vector<node> nodes;
 };
 
-//***********************************************
+//*************************************
 // KDtree
 struct kdtree_t : public acc_t // two-level hierarchy: mesh or geometry
 {
@@ -343,7 +346,7 @@ struct kdtree_t : public acc_t // two-level hierarchy: mesh or geometry
 	std::vector<node> nodes;
 };
 
-//***********************************************
+//*************************************
 // cull data definition
 struct cull_t
 {
@@ -356,7 +359,7 @@ struct cull_t
 	inline cull_t& set( uchar m ){ data|=m; return *this;}
 };
 
-//***********************************************
+//*************************************
 // geometry: 144-bytes aligned; differentiated by material and grouping
 #ifndef __cplusplus
 struct geometry // std430 layout for OpenGL shader storage buffers
@@ -402,7 +405,7 @@ struct geometry
 static_assert( sizeof(geometry)%16==0, "sizeof(geometry) should be 16-byte aligned" );
 #endif
 
-//***********************************************
+//*************************************
 // a set of geometries for batch control (not related to the rendering)
 struct object
 {
@@ -431,7 +434,7 @@ struct object
 	inline geometry* create_geometry( const geometry& other );
 };
 
-//***********************************************
+//*************************************
 // a set of vertices, indices, objects, geometries, materials
 struct mesh
 {
@@ -464,6 +467,7 @@ struct mesh
 	mesh(){ vertices.reserve(1<<20); indices.reserve(1<<20); objects.reserve(1<<16); geometries.reserve(1<<16); materials.reserve(1<<16); }
 	inline mesh( mesh&& other ){ operator=(std::move(other)); } // move constructor
 	inline mesh& operator=( mesh&& other ); // move assignment operator
+	~mesh(){ release(); }
 
 	// release/memory
 	void release(){ if(!vertices.empty()){ vertices.clear(); vertices.shrink_to_fit(); } if(!indices.empty()){ indices.clear(); indices.shrink_to_fit(); } if(!geometries.empty()){ geometries.clear(); geometries.shrink_to_fit(); } objects.clear(); objects.shrink_to_fit(); materials.clear(); materials.shrink_to_fit(); if(acc){ acc->release(); acc=nullptr; } }
@@ -483,14 +487,14 @@ struct mesh
 	void update_bound( bool bRecalcTris=false );
 
 	// intersection
-	bool intersect( const ray& r, std::vector<uint>* hit_prim_list=nullptr ) const;
-	bool intersect( const ray& r, isect* pi=nullptr ) const;
+	bool intersect( const ray& r, std::vector<uint>* hit_prims=nullptr, bool use_acc=true ) const;
+	bool intersect( const ray& r, isect* pi=nullptr, bool use_acc=true ) const;
 
 	// utility
 	void dump_binary( path dir=L"" ); // dump the vertex/index buffers as binary files
 };
 
-//***********************************************
+//*************************************
 // Volume data format
 struct volume
 {
@@ -503,7 +507,7 @@ struct volume
 	vec4	table[256];		// transfer function: usually 256 size
 };
 
-//***********************************************
+//*************************************
 // late implementations for geometry
 
 inline object* geometry::parent() const { return root&&object_index<root->objects.size()?&root->objects[object_index]:nullptr; }
@@ -511,7 +515,7 @@ inline mat4 geometry::matrix() const { return parent()?parent()->matrix:mat4::id
 inline const char* geometry::name() const { return parent()?parent()->name:""; }
 inline float geometry::surface_area() const { if(count==0) return 0.0f; if(root->vertices.empty()||root->indices.empty()) return 0.0f; vertex* v=&root->vertices[0]; uint* i=&root->indices[0]; float sa = 0.0f; for( uint k=first_index, kn=k+count; k<kn; k+=3 ) sa += (v[i[k+1]].pos-v[i[k+0]].pos).cross(v[i[k+2]].pos-v[i[k+0]].pos).length()*0.5f; return sa; }
 
-//***********************************************
+//*************************************
 // late implementations for object
 
 inline bool object::empty() const { auto* g=&root->geometries[0]; for( uint k=0,kn=uint(root->geometries.size()); k<kn; k++, g++ ) if(g->parent()==this) return false; return true; }
@@ -522,7 +526,7 @@ inline std::vector<geometry*> object::find_geometries() const { auto* g=&root->g
 inline geometry* object::create_geometry( size_t first_index, size_t index_count, bbox* box, size_t mat_index ){ auto& g=root->geometries; g.emplace_back(geometry(root,uint(g.size()),this->ID,uint(first_index),uint(index_count),box,uint(mat_index))); return &g.back(); }
 inline geometry* object::create_geometry( const geometry& other ){ auto& g=root->geometries; g.emplace_back(other); auto* p=&g.back(); p->ID=uint(g.size())-1; return p; }
 
-//***********************************************
+//*************************************
 // late implementations for mesh
 
 __noinline inline mesh& mesh::operator=( mesh&& other ) // move assignment operator
@@ -587,7 +591,7 @@ __noinline inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
 	return proxy;
 }
 
-//***********************************************
+//*************************************
 // intersection implementations
 
 __noinline inline ray gen_primary_ray( camera* cam, float x, float y )	// (x,y) in [0,1]
@@ -602,18 +606,18 @@ __noinline inline ray gen_primary_ray( camera* cam, float x, float y )	// (x,y) 
 // triangle intersection: isect=(pos,t), bc=(s,t)
 __noinline inline bool intersect( const ray& r, const vec3& v0, const vec3& v1, const vec3& v2, isect* pi=nullptr )
 {
-	// http://geomalgorithms.com/a06-_intersect-2.html#intersect3D_RayTriangle
-	if(pi) pi->hit = false;
+	if(pi) pi->hit=false;
 
-	vec3 u=v1-v0, v=v2-v0, n=u.cross(v); if(n.length()==0) return false;	// degenerate case: non-triangle
-	float b=dot(n,r.dir); if(b>-0.000001f) return false;					// skip backfaces or rays lying on the plane
-	float t=dot(n,v0-r.pos)/b; if(t<r.t||t>r.tfar) return false;			// out of range of [tnear,tfar]
-	vec3 ipos=r.pos+t*r.dir, w=ipos-v0;
+	// http://geomalgorithms.com/a06-_intersect-2.html#intersect3D_RayTriangle
+	vec3 u=v1-v0, v=v2-v0, n=u.cross(v); if(n.length2()<0.000001f) return false;	// degenerate case: non-triangle
+	float b=dot(n,r.dir); if(b>-0.000001f) return false;							// skip backfaces or rays lying on the plane
+	float t=dot(n,v0-r.pos)/b; if(t<r.t||t>r.tfar) return false;					// out of range of [tnear,tfar]
+	vec3 ipos=r.pos+r.dir*t, w=ipos-v0;
 
 	// barycentric coord test
-    float uu=dot(u,u), uv=dot(u,v), vv=dot(v,v), wu=dot(w,u), wv=dot(w,v), D=uv*uv-uu*vv;
-    float bs = (uv*wv-vv*wu)/D; if( bs < 0.0f || bs > 1.0f )		return false;
-    float bt = (uv*wu-uu*wv)/D; if( bt < 0.0f || (bs + bt) > 1.0f )	return false;
+    float uu=dot(u,u),uv=dot(u,v),vv=dot(v,v),wu=dot(w,u),wv=dot(w,v),D=uv*uv-uu*vv;
+    float bs=(uv*wv-vv*wu)/D; if(bs<0||bs>1.0f)			return false;
+    float bt=(uv*wu-uu*wv)/D; if(bt<0||(bs+bt)>1.0f)	return false;
 
 	if(pi)
 	{
@@ -686,35 +690,31 @@ __noinline inline bool geometry::intersect( const ray& r, isect* pi ) const
 	return i.hit;
 }
 
-__noinline inline bool mesh::intersect( const ray& r, std::vector<uint>* hit_prim_list ) const
+__noinline inline bool mesh::intersect( const ray& r, std::vector<uint>* hit_prims, bool use_acc ) const
 {
+	if(acc&&use_acc) return acc->intersect(r,hit_prims);
+
 	std::vector<uint> m;
 	for( uint k=0, kn=uint(geometries.size()); k<kn; k++ )
 	{
 		if(!(geometries[k].matrix()*geometries[k].box).intersect(r,nullptr)) continue;
 		m.emplace_back(uint(k));
 	}
-	if(hit_prim_list) *hit_prim_list = m;
+	if(hit_prims) *hit_prims = m;
 	return !m.empty();
 }
 
-__noinline inline bool mesh::intersect( const ray& r, isect* pi ) const
+__noinline inline bool mesh::intersect( const ray& r, isect* pi, bool use_acc ) const
 {
-	isect m;
-	std::vector<uint> hit_prim_list;
-	if(!intersect( r, &hit_prim_list )) return false;
+	if(acc&&use_acc) return acc->intersect(r,pi);
 
-	for( uint k=0; k < uint(hit_prim_list.size()); k++ )
-	{
-		isect i; if(!geometries[hit_prim_list[k]].intersect(r,&i)||i.t>m.t) continue;
-		m=i;
-	}
+	std::vector<uint> hit_prims; if(!intersect( r, &hit_prims )) return false;
+	isect m; for( auto prim : hit_prims ){ isect i; if(!geometries[prim].intersect(r,&i)||i.t>m.t) continue; m=i; }
 	if(m.hit&&pi) *pi = m;
-
 	return m.hit;
 }
 
-//***********************************************
+//*************************************
 // utility
 inline void mesh::dump_binary( path dir )
 {
@@ -726,7 +726,7 @@ inline void mesh::dump_binary( path dir )
 		  fp = _wfopen( index_bin_path, L"wb" );  fwrite( &indices[0], sizeof(uint), indices.size(), fp );	   fclose(fp);
 }
 
-//***********************************************
+//*************************************
 // line clipping by Liang Barsky algorithm
 __noinline inline bool clip_line( vec2 p, vec2 q, vec2 lb, vec2 rt, vec2* p1=nullptr, vec2* q1=nullptr )
 {
@@ -746,7 +746,7 @@ __noinline inline bool clip_line( vec2 p, vec2 q, vec2 lb, vec2 rt, vec2* p1=nul
 	return false;
 }
 
-//***********************************************
+//*************************************
 // mesh utilities
 __noinline inline mesh* create_box_mesh( const bbox& box, const char* name="box", bool use_quads=false, bool double_sided=false )
 {
@@ -770,5 +770,51 @@ inline mesh* create_box_mesh( const char* name="box", bool use_quads=false, bool
 {
 	return create_box_mesh( bbox{vec3(-half_size),vec3(half_size)}, name, use_quads, double_sided );
 }
+
+//*************************************
+// progressive rendering
+
+//*************************************
+namespace gx {
+//*************************************
+template <uint MAX_CHUNK>
+struct progressive_data_t
+{
+	static const uint MAX_CHUNK_SIZE = MAX_CHUNK;
+
+	bool b_used=true;
+	uint chunk_size=16;	// defaulted to 16
+	uint count=0;		// total number of samples to render
+};
+
+template <uint MAX_CHUNK=256>
+struct progressive_t : public progressive_data_t<MAX_CHUNK>
+{
+	uint begin=0;	// volatile indices for accumulation
+	uint end=0;		// volatile indices for accumulation
+
+	operator bool() const { return b_used; } // using progressive rendeering
+	progressive_data_t& data(){ return reinterpret_cast<progressive_data_t&>(*this); }
+	bool is_complete() const { return !b_used||begin>=count; }
+	
+	void reset( size_t n )
+	{
+		count=uint(n);
+		if(chunk_size>MAX_CHUNK_SIZE)chunk_size=MAX_CHUNK_SIZE;
+		begin=0; end=b_used&&chunk_size<count?chunk_size:count;
+	}
+
+	bool update()
+	{
+		if(!b_used){ begin=0; end=count; return false; }
+		if(begin>=end) return false;
+		begin=end; end=begin+chunk_size; if(end>count) end=count;
+		return true;
+	}
+};
+
+//*************************************
+} // end namespace gx
+//*************************************
 
 #endif // __GX_MESH__

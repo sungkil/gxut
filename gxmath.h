@@ -19,7 +19,6 @@
 #define __GX_MATH__
 //###################################################################
 // COMMON HEADERS for GXUT
-// COMMON HEADERS for GXUT
 #ifndef __GXUT_COMMON__ 
 #define __GXUT_COMMON__
 // common macros
@@ -654,9 +653,9 @@ struct mat4
 	__forceinline mat4& set_shear( const vec2& yz, const vec2& zx, const vec2& xy ){ set_identity(); _12=yz.x; _13=yz.y; _21=zx.y; _23=zx.x; _31=xy.x; _32=xy.y; return *this; }
 	__forceinline mat4& set_rotate_vec_to_vec( const vec3& from, const vec3& to )
 	{
+		float fdt=from.dot(to); if(abs(fdt)>0.999999f) return fdt>0?set_identity():set_scale(-1.0f,-1.0f,-1.0f); // degenerate case:s exactly the same vectors or flipped
 		const vec3 n=from.cross(to);
-		float nl=min(n.length(),0.9999f);
-		return set_rotate( n.normalize(), asin(nl) );
+		return set_rotate( n.normalize(), asin(min(n.length(),1.0f)) );
 	}
 	__noinline mat4& set_rotate( const vec3& axis, float angle )
 	{
@@ -782,6 +781,9 @@ __forceinline float triangle_area( vec2 a, vec2 b, vec2 c ){ return abs(a.x*b.y+
 
 //***********************************************
 // {GLSL|HLSL}-like shader intrinsic functions
+__forceinline float distance( const vec2& a, const vec2& b ){ return (a-b).length(); }
+__forceinline float distance( const vec3& a, const vec3& b ){ return (a-b).length(); }
+__forceinline float distance( const vec4& a, const vec4& b ){ return (a-b).length(); }
 __forceinline float saturate( float f ){ return clamp(f,0.0f,1.0f); }
 __forceinline vec2 saturate( const vec2& v ){ return vec2(saturate(v.x),saturate(v.y)); }
 __forceinline vec3 saturate( const vec3& v ){ return vec3(saturate(v.x),saturate(v.y),saturate(v.z)); }
