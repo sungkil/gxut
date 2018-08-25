@@ -794,7 +794,7 @@ struct progressive_t : public progressive_data_t<MAX_CHUNK>
 	uint end=0;		// volatile indices for accumulation
 
 	operator bool() const { return b_used; } // using progressive rendeering
-	progressive_data_t& data(){ return reinterpret_cast<progressive_data_t&>(*this); }
+	progressive_data_t<MAX_CHUNK>& data(){ return reinterpret_cast<progressive_data_t<MAX_CHUNK>&>(*this); }
 	bool is_complete() const { return !b_used||begin>=count; }
 	
 	void reset( size_t n )

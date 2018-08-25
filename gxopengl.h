@@ -1317,7 +1317,7 @@ inline gl::Texture* gxCreateTextureCube( const char* name, GLint levels, GLsizei
 {
 	if(count*6>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "gxCreateTextureCube: count*6 (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", count*6, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
 	if(!gxIsSizedInternalFormat(internal_format)){ printf( "gxCreateTextureCube(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n" ); return nullptr; }
-	if(width==0||height==0){ printf( "gxCreateTextureCube(%s): width==0 or height==0", name, width, height ); return nullptr; }
+	if(width==0||height==0){ printf( "gxCreateTextureCube(%s): width==0 or height==0", name ); return nullptr; }
 
 	GLenum target = count>1||force_array?GL_TEXTURE_CUBE_MAP_ARRAY:GL_TEXTURE_CUBE_MAP;
 	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
