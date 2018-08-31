@@ -1,5 +1,5 @@
-#ifndef __gl_glcorearb_h_
-#define __gl_glcorearb_h_ 1
+#ifndef __gxcorearb_h_
+#define __gxcorearb_h_ 1
 
 #if defined(__gl_h_) || defined(__GL_H__)
 	#error do not include <gl.h> together with <gxcorearb.h>
@@ -480,9 +480,19 @@ typedef void (APIENTRYP PFNGLBLENDEQUATIONPROC) (GLenum mode);
 
 #ifndef GL_VERSION_1_5
 #define GL_VERSION_1_5 1
-#include <stddef.h>
-typedef ptrdiff_t GLsizeiptr;
-typedef ptrdiff_t GLintptr;
+#ifdef _M_X64
+typedef signed   long long int khronos_intptr_t;
+typedef unsigned long long int khronos_uintptr_t;
+typedef signed   long long int khronos_ssize_t;
+typedef unsigned long long int khronos_usize_t;
+#else
+typedef signed   long  int     khronos_intptr_t;
+typedef unsigned long  int     khronos_uintptr_t;
+typedef signed   long  int     khronos_ssize_t;
+typedef unsigned long  int     khronos_usize_t;
+#endif
+typedef khronos_ssize_t GLsizeiptr;
+typedef khronos_intptr_t GLintptr;
 #define GL_BUFFER_SIZE                    0x8764
 #define GL_BUFFER_USAGE                   0x8765
 #define GL_QUERY_COUNTER_BITS             0x8864
@@ -3088,7 +3098,164 @@ typedef void (APIENTRYP PFNGLMAXSHADERCOMPILERTHREADSKHRPROC) (GLuint count);
 #endif
 
 #ifdef GXCOREARB_IMPL
-	#define f(proc,func) PFNGL##proc##PROC gl##func = 0; 
+	#define e(t) bool GX_##t = false;
+#else
+	#define e(t) extern bool GX_##t;
+#endif
+
+e(ARB_ES2_compatibility)
+e(ARB_ES3_1_compatibility)
+e(ARB_ES3_2_compatibility)
+e(ARB_ES3_compatibility)
+e(ARB_arrays_of_arrays)
+e(ARB_base_instance)
+e(ARB_bindless_texture)
+e(ARB_blend_func_extended)
+e(ARB_buffer_storage)
+e(ARB_cl_event)
+e(ARB_clear_buffer_object)
+e(ARB_clear_texture)
+e(ARB_clip_control)
+e(ARB_compressed_texture_pixel_storage)
+e(ARB_compute_shader)
+e(ARB_compute_variable_group_size)
+e(ARB_conditional_render_inverted)
+e(ARB_conservative_depth)
+e(ARB_copy_buffer)
+e(ARB_copy_image)
+e(ARB_cull_distance)
+e(ARB_debug_output)
+e(ARB_depth_buffer_float)
+e(ARB_depth_clamp)
+e(ARB_derivative_control)
+e(ARB_direct_state_access)
+e(ARB_draw_buffers_blend)
+e(ARB_draw_elements_base_vertex)
+e(ARB_draw_indirect)
+e(ARB_draw_instanced)
+e(ARB_enhanced_layouts)
+e(ARB_explicit_attrib_location)
+e(ARB_explicit_uniform_location)
+e(ARB_fragment_coord_conventions)
+e(ARB_fragment_layer_viewport)
+e(ARB_fragment_shader_interlock)
+e(ARB_framebuffer_no_attachments)
+e(ARB_framebuffer_object)
+e(ARB_framebuffer_sRGB)
+e(ARB_geometry_shader4)
+e(ARB_get_program_binary)
+e(ARB_get_texture_sub_image)
+e(ARB_gl_spirv)
+e(ARB_gpu_shader5)
+e(ARB_gpu_shader_fp64)
+e(ARB_gpu_shader_int64)
+e(ARB_half_float_vertex)
+e(ARB_imaging)
+e(ARB_indirect_parameters)
+e(ARB_instanced_arrays)
+e(ARB_internalformat_query)
+e(ARB_internalformat_query2)
+e(ARB_invalidate_subdata)
+e(ARB_map_buffer_alignment)
+e(ARB_map_buffer_range)
+e(ARB_multi_bind)
+e(ARB_multi_draw_indirect)
+e(ARB_occlusion_query2)
+e(ARB_parallel_shader_compile)
+e(ARB_pipeline_statistics_query)
+e(ARB_pixel_buffer_object)
+e(ARB_polygon_offset_clamp)
+e(ARB_post_depth_coverage)
+e(ARB_program_interface_query)
+e(ARB_provoking_vertex)
+e(ARB_query_buffer_object)
+e(ARB_robust_buffer_access_behavior)
+e(ARB_robustness)
+e(ARB_robustness_isolation)
+e(ARB_sample_locations)
+e(ARB_sample_shading)
+e(ARB_sampler_objects)
+e(ARB_seamless_cube_map)
+e(ARB_seamless_cubemap_per_texture)
+e(ARB_separate_shader_objects)
+e(ARB_shader_atomic_counter_ops)
+e(ARB_shader_atomic_counters)
+e(ARB_shader_ballot)
+e(ARB_shader_bit_encoding)
+e(ARB_shader_clock)
+e(ARB_shader_draw_parameters)
+e(ARB_shader_group_vote)
+e(ARB_shader_image_load_store)
+e(ARB_shader_image_size)
+e(ARB_shader_precision)
+e(ARB_shader_stencil_export)
+e(ARB_shader_storage_buffer_object)
+e(ARB_shader_subroutine)
+e(ARB_shader_texture_image_samples)
+e(ARB_shader_viewport_layer_array)
+e(ARB_shading_language_420pack)
+e(ARB_shading_language_include)
+e(ARB_shading_language_packing)
+e(ARB_sparse_buffer)
+e(ARB_sparse_texture)
+e(ARB_sparse_texture2)
+e(ARB_sparse_texture_clamp)
+e(ARB_spirv_extensions)
+e(ARB_stencil_texturing)
+e(ARB_sync)
+e(ARB_tessellation_shader)
+e(ARB_texture_barrier)
+e(ARB_texture_border_clamp)
+e(ARB_texture_buffer_object)
+e(ARB_texture_buffer_object_rgb32)
+e(ARB_texture_buffer_range)
+e(ARB_texture_compression_bptc)
+e(ARB_texture_compression_rgtc)
+e(ARB_texture_cube_map_array)
+e(ARB_texture_filter_anisotropic)
+e(ARB_texture_filter_minmax)
+e(ARB_texture_gather)
+e(ARB_texture_mirror_clamp_to_edge)
+e(ARB_texture_mirrored_repeat)
+e(ARB_texture_multisample)
+e(ARB_texture_non_power_of_two)
+e(ARB_texture_query_levels)
+e(ARB_texture_query_lod)
+e(ARB_texture_rg)
+e(ARB_texture_rgb10_a2ui)
+e(ARB_texture_stencil8)
+e(ARB_texture_storage)
+e(ARB_texture_storage_multisample)
+e(ARB_texture_swizzle)
+e(ARB_texture_view)
+e(ARB_timer_query)
+e(ARB_transform_feedback2)
+e(ARB_transform_feedback3)
+e(ARB_transform_feedback_instanced)
+e(ARB_transform_feedback_overflow_query)
+e(ARB_uniform_buffer_object)
+e(ARB_vertex_array_bgra)
+e(ARB_vertex_array_object)
+e(ARB_vertex_attrib_64bit)
+e(ARB_vertex_attrib_binding)
+e(ARB_vertex_type_10f_11f_11f_rev)
+e(ARB_vertex_type_2_10_10_10_rev)
+e(ARB_viewport_array)
+e(KHR_blend_equation_advanced)
+e(KHR_blend_equation_advanced_coherent)
+e(KHR_context_flush_control)
+e(KHR_debug)
+e(KHR_no_error)
+e(KHR_parallel_shader_compile)
+e(KHR_robust_buffer_access_behavior)
+e(KHR_robustness)
+e(KHR_texture_compression_astc_hdr)
+e(KHR_texture_compression_astc_ldr)
+e(KHR_texture_compression_astc_sliced_3d)
+#undef e
+
+#ifdef GXCOREARB_IMPL
+	#define f(proc,func) PFNGL##proc##PROC gl##func = 0;
 #else
 	#define f(proc,func) extern PFNGL##proc##PROC gl##func;
 #endif
@@ -3848,27 +4015,56 @@ f(TEXPAGECOMMITMENTARB,TexPageCommitmentARB)
 f(TEXBUFFERARB,TexBufferARB)
 f(BLENDBARRIERKHR,BlendBarrierKHR)
 f(MAXSHADERCOMPILERTHREADSKHR,MaxShaderCompilerThreadsKHR)
-
 #undef f
+
+extern PROC (WINAPI* __wglGetProcAddress)(LPCSTR);
+extern void* (*__xglGetProcAddress)(LPCSTR);
+void gxcorearb( HMODULE hOpenGL32 );
+bool gxcorearb_extension_exists( const char* extension );
 
 #ifdef GXCOREARB_IMPL
 
-static HMODULE __hOpenGL32 = nullptr;
-static PROC (WINAPI* __wglGetProcAddress)(LPCSTR) = nullptr;
-static std::vector<std::string> unsupported;
+HMODULE __hOpenGL32 = nullptr;
+PROC (WINAPI* __wglGetProcAddress)(LPCSTR) = nullptr;
+void* (*__xglGetProcAddress)(LPCSTR) = nullptr;
+static std::vector<std::string> unsupported_functions;
+static std::vector<std::string> unsupported_extensions;
 
 __declspec(noinline) static void* get_gxcorearb_proc( const char* fname )
 {
-	void* p = __wglGetProcAddress(fname);	if(p) return p;
-	p = GetProcAddress(__hOpenGL32,fname);	if(p) return p;
-	unsupported.emplace_back(fname);		return p;
+	void* p = __xglGetProcAddress?__xglGetProcAddress(fname):nullptr;	if(p) return p;
+	p = (void*) __wglGetProcAddress(fname);								if(p) return p;
+	p = (void*) GetProcAddress(__hOpenGL32,fname);						if(p) return p;
+	unsupported_functions.emplace_back(fname);							return p;
+}
+
+__declspec(noinline) std::unordered_set<std::string> get_gxcorearb_extensions()
+{
+	std::unordered_set<std::string> extension_set;
+#ifdef GL_ES_VERSION_2_0
+	char* e=(char*)glGetString(GL_EXTENSIONS); std::vector<char> ext(e,e+strlen(e)+2);
+	for(char* t=strtok(&ext[0]," \t\n" );t;t=strtok(nullptr," \t\n")) extension_set.emplace(t);
+#else
+	int kn; glGetIntegerv(GL_NUM_EXTENSIONS,&kn);
+	for( int k=0; k<kn; k++ ) extension_set.emplace((char*)glGetStringi(GL_EXTENSIONS,k));
+#endif
+	return extension_set;
+}
+
+__declspec(noinline) bool gxcorearb_extension_exists( const char* extension )
+{
+	static std::unordered_set<std::string> extension_set = get_gxcorearb_extensions();
+	if(extension_set.find(extension)!=extension_set.end()) return true;
+	unsupported_extensions.emplace_back(extension); return false;
 }
 
 __declspec(noinline) void gxcorearb( HMODULE hOpenGL32 )
 {
-	__hOpenGL32 = hOpenGL32; if(__hOpenGL32==nullptr){ printf( "gxcorearb_init(): hOpenGL32==nullptr" ); return; }
-	__wglGetProcAddress = (decltype(__wglGetProcAddress)) GetProcAddress(hOpenGL32,"wglGetProcAddress"); if(__wglGetProcAddress==nullptr){ printf( "gxcorearb_init(): __wglGetProcAddress==nullptr" ); return; }
+	__hOpenGL32 = hOpenGL32; if(__hOpenGL32==nullptr) __hOpenGL32=LoadLibraryW(L"OpenGL32.dll"); if(__hOpenGL32==nullptr){ printf( "gxcorearb(): unable to load OpenGL32.dll" ); return; }
+	__wglGetProcAddress = (decltype(__wglGetProcAddress)) GetProcAddress(__hOpenGL32,"wglGetProcAddress"); if(__wglGetProcAddress==nullptr){ printf( "gxcorearb(): __wglGetProcAddress==nullptr" ); return; }
+	__xglGetProcAddress = (decltype(__xglGetProcAddress)) GetProcAddress(GetModuleHandleW(nullptr),"xglGetProcAddress");
 
+// query if functions exist
 #define g(proc,func) gl##func = (PFNGL##proc##PROC) get_gxcorearb_proc( "gl" #func );
 g(CULLFACE,CullFace)
 g(FRONTFACE,FrontFace)
@@ -4627,11 +4823,175 @@ g(BLENDBARRIERKHR,BlendBarrierKHR)
 g(MAXSHADERCOMPILERTHREADSKHR,MaxShaderCompilerThreadsKHR)
 #undef g
 
-	if(unsupported.empty()||_waccess(L"gxcorearb.log",0)==0) return;
-	printf( "[gxcorearb] see gxcorearb.log for unsupported OpenGL functions\n" );
-	FILE* fp = _wfopen( L"gxcorearb.log", L"w" ); if(!fp) return;
-	fprintf( fp, "unsupported OpenGL functions (only core profile listed)\n\n" );
-	for( auto& s : unsupported ) fprintf(fp,"%s\n", s.c_str() );
+// query if extensions exist
+#define e(ext) GX_##ext = gxcorearb_extension_exists( "GL_"#ext );
+e(ARB_ES2_compatibility)
+e(ARB_ES3_1_compatibility)
+e(ARB_ES3_2_compatibility)
+e(ARB_ES3_compatibility)
+e(ARB_arrays_of_arrays)
+e(ARB_base_instance)
+e(ARB_bindless_texture)
+e(ARB_blend_func_extended)
+e(ARB_buffer_storage)
+e(ARB_cl_event)
+e(ARB_clear_buffer_object)
+e(ARB_clear_texture)
+e(ARB_clip_control)
+e(ARB_compressed_texture_pixel_storage)
+e(ARB_compute_shader)
+e(ARB_compute_variable_group_size)
+e(ARB_conditional_render_inverted)
+e(ARB_conservative_depth)
+e(ARB_copy_buffer)
+e(ARB_copy_image)
+e(ARB_cull_distance)
+e(ARB_debug_output)
+e(ARB_depth_buffer_float)
+e(ARB_depth_clamp)
+e(ARB_derivative_control)
+e(ARB_direct_state_access)
+e(ARB_draw_buffers_blend)
+e(ARB_draw_elements_base_vertex)
+e(ARB_draw_indirect)
+e(ARB_draw_instanced)
+e(ARB_enhanced_layouts)
+e(ARB_explicit_attrib_location)
+e(ARB_explicit_uniform_location)
+e(ARB_fragment_coord_conventions)
+e(ARB_fragment_layer_viewport)
+e(ARB_fragment_shader_interlock)
+e(ARB_framebuffer_no_attachments)
+e(ARB_framebuffer_object)
+e(ARB_framebuffer_sRGB)
+e(ARB_geometry_shader4)
+e(ARB_get_program_binary)
+e(ARB_get_texture_sub_image)
+e(ARB_gl_spirv)
+e(ARB_gpu_shader5)
+e(ARB_gpu_shader_fp64)
+e(ARB_gpu_shader_int64)
+e(ARB_half_float_vertex)
+e(ARB_imaging)
+e(ARB_indirect_parameters)
+e(ARB_instanced_arrays)
+e(ARB_internalformat_query)
+e(ARB_internalformat_query2)
+e(ARB_invalidate_subdata)
+e(ARB_map_buffer_alignment)
+e(ARB_map_buffer_range)
+e(ARB_multi_bind)
+e(ARB_multi_draw_indirect)
+e(ARB_occlusion_query2)
+e(ARB_parallel_shader_compile)
+e(ARB_pipeline_statistics_query)
+e(ARB_pixel_buffer_object)
+e(ARB_polygon_offset_clamp)
+e(ARB_post_depth_coverage)
+e(ARB_program_interface_query)
+e(ARB_provoking_vertex)
+e(ARB_query_buffer_object)
+e(ARB_robust_buffer_access_behavior)
+e(ARB_robustness)
+e(ARB_robustness_isolation)
+e(ARB_sample_locations)
+e(ARB_sample_shading)
+e(ARB_sampler_objects)
+e(ARB_seamless_cube_map)
+e(ARB_seamless_cubemap_per_texture)
+e(ARB_separate_shader_objects)
+e(ARB_shader_atomic_counter_ops)
+e(ARB_shader_atomic_counters)
+e(ARB_shader_ballot)
+e(ARB_shader_bit_encoding)
+e(ARB_shader_clock)
+e(ARB_shader_draw_parameters)
+e(ARB_shader_group_vote)
+e(ARB_shader_image_load_store)
+e(ARB_shader_image_size)
+e(ARB_shader_precision)
+e(ARB_shader_stencil_export)
+e(ARB_shader_storage_buffer_object)
+e(ARB_shader_subroutine)
+e(ARB_shader_texture_image_samples)
+e(ARB_shader_viewport_layer_array)
+e(ARB_shading_language_420pack)
+e(ARB_shading_language_include)
+e(ARB_shading_language_packing)
+e(ARB_sparse_buffer)
+e(ARB_sparse_texture)
+e(ARB_sparse_texture2)
+e(ARB_sparse_texture_clamp)
+e(ARB_spirv_extensions)
+e(ARB_stencil_texturing)
+e(ARB_sync)
+e(ARB_tessellation_shader)
+e(ARB_texture_barrier)
+e(ARB_texture_border_clamp)
+e(ARB_texture_buffer_object)
+e(ARB_texture_buffer_object_rgb32)
+e(ARB_texture_buffer_range)
+e(ARB_texture_compression_bptc)
+e(ARB_texture_compression_rgtc)
+e(ARB_texture_cube_map_array)
+e(ARB_texture_filter_anisotropic)
+e(ARB_texture_filter_minmax)
+e(ARB_texture_gather)
+e(ARB_texture_mirror_clamp_to_edge)
+e(ARB_texture_mirrored_repeat)
+e(ARB_texture_multisample)
+e(ARB_texture_non_power_of_two)
+e(ARB_texture_query_levels)
+e(ARB_texture_query_lod)
+e(ARB_texture_rg)
+e(ARB_texture_rgb10_a2ui)
+e(ARB_texture_stencil8)
+e(ARB_texture_storage)
+e(ARB_texture_storage_multisample)
+e(ARB_texture_swizzle)
+e(ARB_texture_view)
+e(ARB_timer_query)
+e(ARB_transform_feedback2)
+e(ARB_transform_feedback3)
+e(ARB_transform_feedback_instanced)
+e(ARB_transform_feedback_overflow_query)
+e(ARB_uniform_buffer_object)
+e(ARB_vertex_array_bgra)
+e(ARB_vertex_array_object)
+e(ARB_vertex_attrib_64bit)
+e(ARB_vertex_attrib_binding)
+e(ARB_vertex_type_10f_11f_11f_rev)
+e(ARB_vertex_type_2_10_10_10_rev)
+e(ARB_viewport_array)
+e(KHR_blend_equation_advanced)
+e(KHR_blend_equation_advanced_coherent)
+e(KHR_context_flush_control)
+e(KHR_debug)
+e(KHR_no_error)
+e(KHR_parallel_shader_compile)
+e(KHR_robust_buffer_access_behavior)
+e(KHR_robustness)
+e(KHR_texture_compression_astc_hdr)
+e(KHR_texture_compression_astc_ldr)
+e(KHR_texture_compression_astc_sliced_3d)
+#undef e
+
+	// release dll
+	if(__hOpenGL32&&!hOpenGL32) FreeLibrary(__hOpenGL32);
+
+	// get lowercase computer name for unique log
+	char cname[1024]={0}; DWORD cl=sizeof(cname)/sizeof(cname[0]);
+	GetComputerNameA( cname, &cl ); for( size_t k=0, kn=strlen(cname); k<kn; k++ ) cname[k] = tolower(cname[k]);
+
+	// check if unsupported exists
+	char log_path[_MAX_PATH]={0}; sprintf( log_path, "gxcorearb.%s.log", cname ); if(_access(log_path,0)==0) return;
+	if(unsupported_functions.empty()&&unsupported_extensions.empty()) return;
+
+	// leave a log for unsupported
+	printf( "[gxcorearb] see %s for unavailable OpenGL extensions\n", log_path );
+	FILE* fp = fopen( log_path, "w" ); if(!fp) return;
+	if(!unsupported_extensions.empty()){ fprintf( fp, "# Unavailable OpenGL extensions\n" ); for( auto& s : unsupported_extensions ) fprintf(fp,"%s\n", s.c_str() ); fprintf( fp, "\n" ); }
+	if(!unsupported_functions.empty()){ fprintf( fp, "# Unavailable OpenGL core-profile functions\n" ); for( auto& s : unsupported_functions ) fprintf(fp,"%s\n", s.c_str() ); }
 	fclose(fp);
 }
 

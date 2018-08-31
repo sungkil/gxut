@@ -77,8 +77,6 @@ inline GLenum gxGetTargetBinding( GLenum target )
 
 //***********************************************
 // query utitlities
-inline bool		gxExtensionExistsImpl( const char* extension ){ static std::unordered_set<std::string> extension_set; if(extension_set.empty()){ int kn; glGetIntegerv(GL_NUM_EXTENSIONS,&kn); for( int k=0; k<kn; k++ ) extension_set.emplace((char*)glGetStringi(GL_EXTENSIONS,k)); } return extension_set.find(extension)!=extension_set.end(); }
-#define			gxExtensionExists( extension ) gxExtensionExistsImpl(#extension)
 inline GLuint	gxGetBinding( GLenum target ){ GLint iv; glGetIntegerv(gxGetTargetBinding(target),&iv); return iv; }
 inline GLint	gxGetProgramiv( GLuint program, GLenum pname ){ GLint iv; glGetProgramiv( program, pname, &iv); return iv; }
 inline GLint	gxGetActiveUniformBlockiv( GLuint program, GLuint uniformBlockIndex, GLenum pname ){ GLint i; glGetActiveUniformBlockiv( program, uniformBlockIndex, pname, &i ); return i; }
