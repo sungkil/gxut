@@ -23,8 +23,12 @@
 #include "gxfilesystem.h"
 #include <malloc.h>
 
-#if !defined(__gxcorearb_h_) && __has_include( "gxcorearb.h" )
-	#include "gxcorearb.h"
+#if !defined(__gxcorearb_h_) && defined(__has_include)
+	#if __has_include( "gxcorearb.h" )
+		#include "gxcorearb.h"
+	#elif __has_include( <gxut/gxcorearb.h> )
+		#include <gxut/gxcorearb.h>
+	#endif
 #endif
 
 //***********************************************
@@ -57,6 +61,7 @@ inline GLenum gxGetTargetBinding( GLenum target )
 		{GL_TEXTURE_1D_ARRAY,GL_TEXTURE_BINDING_1D_ARRAY},
 		{GL_TEXTURE_2D_ARRAY,GL_TEXTURE_BINDING_2D_ARRAY},
 		{GL_TEXTURE_2D_MULTISAMPLE_ARRAY,GL_TEXTURE_BINDING_2D_MULTISAMPLE_ARRAY},
+		{GL_TEXTURE_RECTANGLE,GL_TEXTURE_BINDING_RECTANGLE},
 		{GL_TRANSFORM_FEEDBACK,GL_TRANSFORM_FEEDBACK_BINDING},
 		{GL_PROGRAM,GL_CURRENT_PROGRAM},
 		{GL_VERTEX_ARRAY,GL_VERTEX_ARRAY_BINDING},
@@ -71,7 +76,7 @@ inline GLenum gxGetTargetBinding( GLenum target )
 		{GL_TIME_ELAPSED,0},
 	};
 	auto it=t.find(target); if(it!=t.end()) return it->second;
-	if(target) printf( "gxGetTargetBinding(): unable to find target binding for 0x%04X\n",target);
+	if(target) printf( "%s(): unable to find target binding for 0x%04X\n",__FUNCTION__,target);
 	return 0;
 }
 
@@ -101,6 +106,7 @@ inline GLuint	gxCreateQuery( GLenum target ){ GLuint idx; if(glCreateQueries) gl
 inline GLuint	gxCreateTexture( GLenum target ){ GLuint idx; if(glCreateTextures) glCreateTextures( target, 1, &idx ); else{ GLuint b0=gxGetBinding(target); glGenTextures(1,&idx); glBindTexture(target,idx); glBindTexture(target,b0); } return idx; }
 inline GLuint	gxCreateRenderBuffer(){ GLuint idx; if(glCreateRenderbuffers) glCreateRenderbuffers(1,&idx); else { GLuint b0=gxGetBinding(GL_RENDERBUFFER); glGenRenderbuffers(1,&idx); glBindRenderbuffer(GL_RENDERBUFFER,idx); glBindRenderbuffer(GL_RENDERBUFFER,b0); } return idx; }
 inline GLuint	gxCreateVertexArray(){ GLuint idx; if(glCreateVertexArrays) glCreateVertexArrays(1, &idx); else glGenVertexArrays(1,&idx); return idx; }
+inline const char* gxGetErrorString( GLenum e ){ if(e==GL_NO_ERROR) return ""; if(e==GL_INVALID_ENUM) return "GL_INVALID_ENUM"; if(e==GL_INVALID_VALUE) return "GL_INVALID_VALUE"; if(e==GL_INVALID_OPERATION) return "GL_INVALID_OPERATION"; if(e==GL_INVALID_FRAMEBUFFER_OPERATION) return "GL_INVALID_FRAMEBUFFER_OPERATION"; if(e==GL_OUT_OF_MEMORY) return "GL_OUT_OF_MEMORY"; if(e==GL_STACK_UNDERFLOW) return "GL_STACK_UNDERFLOW"; if(e==GL_STACK_OVERFLOW) return "GL_STACK_OVERFLOW"; return "UNKNOWN"; }
 
 //***********************************************
 // forward declarations
@@ -115,6 +121,7 @@ gl::Texture*		gxCreateTexture2D(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,
 gl::Texture*		gxCreateTexture3D(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,GLvoid*);
 gl::Texture*		gxCreateTextureCube(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,GLvoid*[6],bool);
 gl::Texture*		gxCreateTextureBuffer(const char*,gl::Buffer*,GLint);
+gl::Texture*		gxCreateTextureRectangle(const char*,GLsizei,GLsizei,GLint,GLvoid*);
 gl::Texture*		gxCreateTextureView(gl::Texture*,GLuint,GLuint,GLuint,GLuint,bool,GLenum);
 gl::Buffer*			gxCreateBuffer(const char*,GLenum,GLsizeiptr,GLenum,const void*);
 gl::Program*		gxCreateProgram(const char*,const char*,const std::map<GLuint,std::string>&,const char*,std::vector<const char*>*);
@@ -257,7 +264,7 @@ namespace gl {
 		GLint mip_levels() const {				return _levels; } // on-demand query: is_immutable()?get_texture_parameteriv(GL_TEXTURE_VIEW_NUM_LEVELS):get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)-get_texture_parameteriv(GL_TEXTURE_BASE_LEVEL)+1; }
 		GLint width( GLint level=0 ) const {	return max(1,_width>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_WIDTH, level )
 		GLint height( GLint level=0 ) const {	return (target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY||target==GL_TEXTURE_BUFFER)?1:max(1,_height>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_HEIGHT, level );
-		GLint depth( GLint level=0 ) const {	return (target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY||target==GL_TEXTURE_BUFFER||target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_MULTISAMPLE)?1:(target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY)?_depth:max(1,_depth>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_DEPTH, level );
+		GLint depth( GLint level=0 ) const {	return (target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY||target==GL_TEXTURE_BUFFER||target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_RECTANGLE)?1:(target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY)?_depth:max(1,_depth>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_DEPTH, level );
 		GLint layers( GLint level=0 ) const {	return (target==GL_TEXTURE_1D_ARRAY)?height(level):(target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_3D)?depth(level):target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY?depth(level):1; }
 
 		// other texture queries
@@ -273,7 +280,7 @@ namespace gl {
 		GLint wrap_r() const {		return get_texture_parameteriv(GL_TEXTURE_WRAP_R); }
 		GLint min_LOD() const {		return get_texture_parameteriv(GL_TEXTURE_MIN_LOD); }
 		GLint max_LOD() const {		return get_texture_parameteriv(GL_TEXTURE_MAX_LOD); }
-		bool is_immutable() const {	return get_texture_parameteriv(GL_TEXTURE_IMMUTABLE_FORMAT)!=0; }
+		bool is_immutable() const {	return get_texture_parameteriv(GL_TEXTURE_IMMUTABLE_FORMAT)!=GL_FALSE; }
 
 		// bindless texture extension
 		GLuint64 handle() const {	return glGetTextureHandleARB?glGetTextureHandleARB(ID):0; }
@@ -291,7 +298,7 @@ namespace gl {
 
 		// set attributes
 		void set_filter( GLint min_filter, GLint mag_filter=0 ){ static const GLenum n=GL_NEAREST,l=GL_LINEAR,nn=GL_NEAREST_MIPMAP_NEAREST,nl=GL_NEAREST_MIPMAP_LINEAR,ln=GL_LINEAR_MIPMAP_NEAREST,ll=GL_LINEAR_MIPMAP_LINEAR; GLint i=min_filter,g=mag_filter?mag_filter:min_filter; texture_parameteri( GL_TEXTURE_MIN_FILTER, _levels==1?(i==nn||i==nl?n:i==ln||i==ll?l:i):i==n?nn:i==l?ll:i ); texture_parameteri( GL_TEXTURE_MAG_FILTER, g==nn||g==nl?n:g==ln||g==ll?l:g ); }
-		void set_wrap( GLint wrap ){ texture_parameteri( GL_TEXTURE_WRAP_S, wrap ); if(target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY) texture_parameteri( GL_TEXTURE_WRAP_T, wrap ); if(target==GL_TEXTURE_3D||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY) texture_parameteri( GL_TEXTURE_WRAP_R, wrap ); }
+		void set_wrap( GLint wrap ){ texture_parameteri( GL_TEXTURE_WRAP_S, wrap ); if(target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_RECTANGLE) texture_parameteri( GL_TEXTURE_WRAP_T, wrap ); if(target==GL_TEXTURE_3D||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY) texture_parameteri( GL_TEXTURE_WRAP_R, wrap ); }
 		void set_mipmap_range( GLint base_level, GLint level_count ){ texture_parameteri(GL_TEXTURE_BASE_LEVEL,base_level); texture_parameteri(GL_TEXTURE_MAX_LEVEL,base_level+level_count-1); }
 		void set_min_LOD( GLfloat min_LOD ){ texture_parameterf(GL_TEXTURE_MIN_LOD,min_LOD); }
 		void set_max_LOD( GLfloat max_LOD ){ texture_parameterf(GL_TEXTURE_MAX_LOD,max_LOD); }
@@ -359,7 +366,9 @@ namespace gl {
 			(target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY) ? gxCreateTexture1D( name, m, w, l, f, nullptr, false ):
 			(target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY) ? gxCreateTexture2D( name, m, w, h, l, f, nullptr, false, b_multisample, multisamples() ):
 			(target==GL_TEXTURE_3D) ? gxCreateTexture3D( name, m, w, h, d, f, nullptr ):
-			(target==GL_TEXTURE_CUBE_MAP||GL_TEXTURE_CUBE_MAP_ARRAY) ? gxCreateTextureCube( name, m, w, h, l, f, nullptr, false ):nullptr;
+			(target==GL_TEXTURE_CUBE_MAP||GL_TEXTURE_CUBE_MAP_ARRAY) ? gxCreateTextureCube( name, m, w, h, l, f, nullptr, false ):
+			(target==GL_TEXTURE_RECTANGLE) ? gxCreateTextureRectangle( name, w, h, f, nullptr ):nullptr;
+
 		if(t==nullptr){ printf( "Texture[\"%s\"]::clone() == nullptr\n", name ); return nullptr; }
 
 		t->texture_parameteri( GL_TEXTURE_WRAP_S, wrap );
@@ -671,7 +680,7 @@ namespace gl {
 			gl::Texture* t = T[k];
 			GLenum target = t ? (active_targets[k]=t->target) : active_targets[k];
 			if(target==GL_TEXTURE_3D||target==GL_TEXTURE_1D_ARRAY||target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY) glFramebufferTextureLayer( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0+k, t?t->ID:0, t?M[k]:0, t?L[k]:0 );
-			else if(target==GL_TEXTURE_1D||target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_BUFFER) glFramebufferTexture( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0+k, t?t->ID:0, t?M[k]:0 );
+			else if(target==GL_TEXTURE_1D||target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_BUFFER||target==GL_TEXTURE_RECTANGLE) glFramebufferTexture( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0+k, t?t->ID:0, t?M[k]:0 );
 			if(t) num_draw_buffers++; else active_targets[k]=0;
 		}
 
@@ -828,13 +837,13 @@ inline gl::Buffer* gxCreateBuffer( const char* name, GLenum target, GLsizeiptr s
 
 inline gl::VertexArray* gxCreateVertexArray( const char* name, vertex* p_vertices, size_t vertex_count, uint* p_indices=nullptr, size_t index_count=0, GLenum usage=GL_STATIC_DRAW )
 {
-	if(vertex_count==0){ printf( "gxCreateVertexArray('%s'): vertex_count==0\n", name ); return nullptr; }
+	if(vertex_count==0){ printf( "%s(%s): vertex_count==0\n", __FUNCTION__, name ); return nullptr; }
 
 	GLuint ID=gxCreateVertexArray(); if(ID==0) return nullptr;
 	gl::VertexArray* va = new gl::VertexArray( ID, name );
 
-	va->vertex_buffer = gxCreateBuffer( "vertexBuffer", GL_ARRAY_BUFFER, sizeof(vertex)*vertex_count, usage, p_vertices ); if(va->vertex_buffer==nullptr){ printf( "gxCreateVertexArray(): unable to create vertex_buffer\n" ); va->release(); return nullptr; }
-	if(p_indices&&index_count){ va->index_buffer = gxCreateBuffer( "indexBuffer", GL_ELEMENT_ARRAY_BUFFER, sizeof(uint)*index_count, usage, p_indices ); if(va->index_buffer==nullptr){ printf( "gxCreateVertexArray(): unable to create index_buffer\n" ); va->release(); return nullptr; } }
+	va->vertex_buffer = gxCreateBuffer( "vertexBuffer", GL_ARRAY_BUFFER, sizeof(vertex)*vertex_count, usage, p_vertices ); if(va->vertex_buffer==nullptr){ printf( "%s(): unable to create vertex_buffer\n", __FUNCTION__ ); va->release(); return nullptr; }
+	if(p_indices&&index_count){ va->index_buffer = gxCreateBuffer( "indexBuffer", GL_ELEMENT_ARRAY_BUFFER, sizeof(uint)*index_count, usage, p_indices ); if(va->index_buffer==nullptr){ printf( "%s(): unable to create index_buffer\n", __FUNCTION__ ); va->release(); return nullptr; } }
 
 	// use fixed binding (without direct state access)
 	va->bind();
@@ -1149,16 +1158,16 @@ inline void glfxDeleteParser( glfx::IParser** pp_parser ){ if(!pp_parser||!(*pp_
 inline gl::Effect* gxCreateEffect( const char* name, const char* effect_source, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr )
 {
 #ifndef GLFX_PARSER_IMPL
-	static glfx::IParser*(*glfxCreateParser)() = (glfx::IParser*(*)()) GetProcAddress(GetModuleHandleW(nullptr),"glfxCreateParser"); if(glfxCreateParser==nullptr){ printf( "gxCreateEffect(): unable to link to glfxCreateParser()\n" ); return nullptr; }
-	static void(*glfxDeleteParser)(glfx::IParser**) = (void(*)(glfx::IParser**)) GetProcAddress(GetModuleHandleW(nullptr),"glfxDeleteParser"); if(glfxDeleteParser==nullptr){ printf( "gxCreateEffect(): unable to link to glfxDeleteParser()\n" ); return nullptr; }
+	static glfx::IParser*(*glfxCreateParser)() = (glfx::IParser*(*)()) GetProcAddress(GetModuleHandleW(nullptr),"glfxCreateParser"); if(glfxCreateParser==nullptr){ printf( "%s(): unable to link to glfxCreateParser()\n", __FUNCTION__ ); return nullptr; }
+	static void(*glfxDeleteParser)(glfx::IParser**) = (void(*)(glfx::IParser**)) GetProcAddress(GetModuleHandleW(nullptr),"glfxDeleteParser"); if(glfxDeleteParser==nullptr){ printf( "%s(): unable to link to glfxDeleteParser()\n", __FUNCTION__ ); return nullptr; }
 #endif
 
 	// preprocess source code
 	std::string src; if(p_macro&&p_macro[0]) src=p_macro; if(!src.empty()&&src.back()!='\n') src+='\n'; src+=effect_source;
 
 	// load shaders from effect
-	glfx::IParser* parser = glfxCreateParser(); if(parser==nullptr){ printf( "gxCreateEffect(): unable to create parser()\n" ); return nullptr; }
-	if(!parser->parse(src.c_str())){ printf( "gxCreateEffect(\"%s\")\n%s\n", name, parser->parse_log() ); return nullptr; }
+	glfx::IParser* parser = glfxCreateParser(); if(parser==nullptr){ printf( "%s(): unable to create parser()\n", __FUNCTION__ ); return nullptr; }
+	if(!parser->parse(src.c_str())){ printf( "%s(%s)\n%s\n", __FUNCTION__, name, parser->parse_log() ); return nullptr; }
 
 	gl::Effect* e = p_effect_to_append ? p_effect_to_append : new gl::Effect(0, name);
 	for( int k=0, kn=parser->program_count(); k<kn; k++ )
@@ -1178,7 +1187,7 @@ inline bool gl::Effect::attach( const char* name, const char* effect_source, con
 
 inline gl::Framebuffer* gxCreateFramebuffer( const char* name=nullptr )
 {
-	if(!name){ printf( "gxCreateFramebuffer(): name==nullptr\n" ); return nullptr; }
+	if(!name){ printf( "%s(): name==nullptr\n", __FUNCTION__ ); return nullptr; }
 	GLuint ID=0; if(glCreateFramebuffers) glCreateFramebuffers( 1, &ID ); else glGenFramebuffers(1,&ID); if(ID==0){ printf( "Unable to create buffer[%s]", name ); return nullptr; }
 	return new gl::Framebuffer(ID,name&&name[0]?name:"");	// if name is nullptr, return default FBO
 }
@@ -1191,8 +1200,8 @@ inline gl::TransformFeedback* gxCreateTransformFeedback( const char* name )
 
 inline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsizei width, GLsizei layers=1, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr, bool force_array=false )
 {
-	if(layers>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "gxCreateTexture1D(): layer (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", layers, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
-	if(!gxIsSizedInternalFormat(internal_format)){ printf( "gxCreateTexture1D(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n" ); return nullptr; }
+	if(layers>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "%s(): layer (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", __FUNCTION__, layers, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
+	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __FUNCTION__ ); return nullptr; }
 
 	GLenum target = layers>1||force_array?GL_TEXTURE_1D_ARRAY:GL_TEXTURE_1D;
 	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
@@ -1229,8 +1238,8 @@ inline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsizei w
 
 inline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsizei width, GLsizei height, GLsizei layers=1, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr, bool force_array=false, bool multisample=false, GLsizei multisamples=4 )
 {
-	if(layers>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "gxCreateTexture2D: layer (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", layers, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
-	if(!gxIsSizedInternalFormat(internal_format)){ printf( "gxCreateTexture2D(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n" ); return nullptr; }
+	if(layers>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "%s: layer (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", __FUNCTION__, layers, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
+	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __FUNCTION__ ); return nullptr; }
 
 	GLenum target = layers>1||force_array?(multisample?GL_TEXTURE_2D_MULTISAMPLE_ARRAY:GL_TEXTURE_2D_ARRAY):(multisample?GL_TEXTURE_2D_MULTISAMPLE:GL_TEXTURE_2D);
 	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
@@ -1244,13 +1253,20 @@ inline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsizei w
 	// multipsamples
 	GLint max_samples = multisample?gxGetInternalFormativ( target, internal_format, GL_SAMPLES ):1;
 	texture->_multisamples = multisample?min(multisamples,max_samples):1;
-	if(multisample&&multisamples>max_samples) printf("gxCreateTexture2D(): input multisamples (=%d) is clamped to max_samples (=%d)\n", multisamples, max_samples );
+	if(multisample&&multisamples>max_samples) printf("%s(): input multisamples (=%d) is clamped to max_samples (=%d)\n", __FUNCTION__, multisamples, max_samples );
 
 	// allocate storage
-	if( target==GL_TEXTURE_2D ){						glTexStorage2D( target, levels, internal_format, width, height );			if(data) glTexSubImage2D( target, 0, 0, 0, width, height, format, type, data ); }
-	else if( target==GL_TEXTURE_2D_ARRAY ){				glTexStorage3D( target, levels, internal_format, width, height, layers );	if(data) glTexSubImage3D( target, 0, 0, 0, 0, width, height, layers, format, type, data ); }
-	else if( target==GL_TEXTURE_2D_MULTISAMPLE )		glTexStorage2DMultisample(target, multisamples, internal_format, width, height, GL_TRUE );
-	else if( target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY )	glTexStorage3DMultisample(target, multisamples, internal_format, width, height, layers, GL_TRUE );
+	GLenum e0 = glGetError(); // previous error from others
+	if(target==GL_TEXTURE_2D){							glTexStorage2D( target, levels, internal_format, width, height );			if(data) glTexSubImage2D( target, 0, 0, 0, width, height, format, type, data ); }
+	else if(target==GL_TEXTURE_2D_ARRAY){				glTexStorage3D( target, levels, internal_format, width, height, layers );	if(data) glTexSubImage3D( target, 0, 0, 0, 0, width, height, layers, format, type, data ); }
+	else if(target==GL_TEXTURE_2D_MULTISAMPLE){			glTexStorage2DMultisample(target, multisamples, internal_format, width, height, GL_TRUE ); }
+	else if(target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY){	glTexStorage3DMultisample(target, multisamples, internal_format, width, height, layers, GL_TRUE ); }
+	GLenum e1 = glGetError(); // texture error 
+	if(e1!=GL_NO_ERROR&&e1!=e0){ printf( "%s(%s): error %s\n", __FUNCTION__, name, 	gxGetErrorString(e1) ); delete texture; return nullptr; }
+
+	// test if the format is immutable
+	GLint b_immutable; glGetTexParameteriv( target, GL_TEXTURE_IMMUTABLE_FORMAT, &b_immutable );
+	if(!b_immutable) printf( "%s(): %s is not immutable\n", __FUNCTION__, name );
 
 	// set dimensions
 	texture->_width		= width;
@@ -1275,7 +1291,7 @@ inline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsizei w
 
 inline gl::Texture* gxCreateTexture3D( const char* name, GLint levels, GLsizei width, GLsizei height, GLsizei depth, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr )
 {
-	if(!gxIsSizedInternalFormat(internal_format)){ printf( "gxCreateTexture3D(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n" ); return nullptr; }
+	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __FUNCTION__ ); return nullptr; }
 
 	GLenum target = GL_TEXTURE_3D;
 	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
@@ -1313,9 +1329,9 @@ inline gl::Texture* gxCreateTexture3D( const char* name, GLint levels, GLsizei w
 
 inline gl::Texture* gxCreateTextureCube( const char* name, GLint levels, GLsizei width, GLsizei height, GLsizei count=1, GLint internal_format=GL_RGBA16F, GLvoid* data[6]=nullptr, bool force_array=false )
 {
-	if(count*6>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "gxCreateTextureCube: count*6 (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", count*6, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
-	if(!gxIsSizedInternalFormat(internal_format)){ printf( "gxCreateTextureCube(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n" ); return nullptr; }
-	if(width==0||height==0){ printf( "gxCreateTextureCube(%s): width==0 or height==0", name ); return nullptr; }
+	if(count*6>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "%s(): count*6 (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", __FUNCTION__, count*6, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
+	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __FUNCTION__ ); return nullptr; }
+	if(width==0||height==0){ printf( "%s(%s): width==0 or height==0", __FUNCTION__, name ); return nullptr; }
 
 	GLenum target = count>1||force_array?GL_TEXTURE_CUBE_MAP_ARRAY:GL_TEXTURE_CUBE_MAP;
 	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
@@ -1364,7 +1380,7 @@ inline gl::Texture* gxCreateTextureCube( const char* name, GLint levels, GLsizei
 
 inline gl::Texture* gxCreateTextureBuffer( const char* name, gl::Buffer* buffer, GLint internal_format=GL_RGBA16F )
 {
-	if(!gxIsSizedInternalFormat(internal_format)){ printf( "createTextureBuffer(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n" ); return nullptr; }
+	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __FUNCTION__ ); return nullptr; }
 
 	GLenum target = GL_TEXTURE_BUFFER;
 	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
@@ -1391,6 +1407,38 @@ inline gl::Texture* gxCreateTextureBuffer( const char* name, gl::Buffer* buffer,
 	return texture;
 }
 
+inline gl::Texture* gxCreateTextureRectangle( const char* name, GLsizei width, GLsizei height, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr )
+{
+	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __FUNCTION__ ); return nullptr; }
+
+	GLenum target = GL_TEXTURE_RECTANGLE;
+	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
+	GLenum format = gxGetTextureFormat( internal_format );
+	GLenum type = gxGetTextureType( internal_format );
+
+	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type); if(width==0||height==0) return texture;
+	texture->key = gl::Texture::crc(0,1,0,1,false,target);
+	glBindTexture( target, ID );
+
+	// allocate storage
+	glTexStorage2D( target, 1, internal_format, width, height );
+	if(data) glTexSubImage2D( target, 0, 0, 0, width, height, format, type, data );
+
+	// set dimensions
+	texture->_width		= width;
+	texture->_height	= height;
+	texture->_depth		= 1;
+	texture->_levels	= 1;
+
+	// attributes
+	glTexParameteri( target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+	glTexParameteri( target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+	glTexParameteri( target, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+	glTexParameteri( target, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+
+	return texture;
+}
+
 inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLuint levels, GLuint min_layer=0, GLuint layers=1, bool force_array=false, GLenum target=0 )
 {
 	uint key = gl::Texture::crc(min_level,levels,min_layer,layers,force_array,target);
@@ -1401,7 +1449,7 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLu
 	if(layers==0){ printf( "%s->view should have more than one layers\n", src->name ); return nullptr; }
 	if((min_level+levels)>GLuint(src->mip_levels())){ printf( "%s->view should have less than %d levels\n", src->name, src->mip_levels() ); return nullptr; }
 	if((min_layer+layers)>GLuint(src->layers())){ printf( "%s->view should have less than %d layers\n", src->name, src->layers() ); return nullptr; }
-	if(!src->is_immutable()){ printf("%s(GL_TEXTURE_IMMUTABLE_FORMAT)!=GL_TRUE\n", src->name ); return nullptr; }
+	if(!src->is_immutable()){ printf("!%s->is_immutable()\n", src->name ); return nullptr; }
 
 	// correct the new target
 	if(target==0)
