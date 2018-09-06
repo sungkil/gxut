@@ -855,13 +855,13 @@ __forceinline vec2 normVec3BitsToVec2( vec3 v )
 {
 	static const uint cap=21, hcap=10, cmask=0x1fffff, hmask=0x3ff;	// channel capacity, half capacity, channel capacity mask (=(1<<cap)-1), half capacity mask (=(1<<hcap)-1)
 	uvec3 u = uvec3(uint(v.x*cmask),uint(v.y*cmask),uint(v.z*cmask));
-	return vec2( uintBitsToFloat(u.x|((u.z&~hmask)<<(cap-hcap))), uintBitsToFloat(u.y|((u.z&hmask)<<cap)) ); // bits = ( [z.11,x.21], [z.10,y.21] ) 
+	return vec2( uintBitsToFloat(u.x|((u.z&~hmask)<<(cap-hcap))), uintBitsToFloat((u.y<<1)|(u.z&hmask)<<(cap+1)|1) ); // bits = ( [z.11,x.21], [z.10,y.21,validity-bit] ) 
 }
 __forceinline vec3 vec2BitsToNormVec3( vec2 v )
 {
 	static const uint cap=21, hcap=10, cmask=0x1fffff, hmask=0x3ff;	// channel capacity, half capacity, channel capacity mask (=(1<<cap)-1), half capacity mask (=(1<<hcap)-1)
 	uvec2 u = uvec2( floatBitsToUint(v.x), floatBitsToUint(v.y) );
-	return vec3(float(u.x&cmask),float(u.y&cmask),float(((u.x&~cmask)>>(cap-hcap))|(u.y>>cap)))/float(cmask);
+	return vec3(float(u.x&cmask),float((u.y>>1)&cmask),float(((u.x&~cmask)>>(cap-hcap))|(u.y>>(cap+1))))/float(cmask);
 }
 
 //***********************************************
