@@ -796,7 +796,7 @@ struct progressive_t : public progressive_data_t<MAX_CHUNK>
 	operator bool() const { return b_used; } // using progressive rendeering
 	progressive_data_t<MAX_CHUNK>& data(){ return reinterpret_cast<progressive_data_t<MAX_CHUNK>&>(*this); }
 	bool is_complete() const { return !b_used||begin>=count; }
-	
+
 	void reset( size_t n )
 	{
 		count=uint(n);

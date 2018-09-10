@@ -1,12 +1,12 @@
 //*******************************************************************
 // Copyright 2011-2018 Sungkil Lee
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -92,12 +92,12 @@ struct parser_t
 	// short template functions
 	argument_t& add_argument( const char* name ){ arguments.push_back(argument_t()); auto& a=arguments.back(); a.name=name; return a; }
 	template<typename... Args> option_t& add_option( Args... args ){ options.push_back(option_t()); auto& o=options.back(); return o.add_name(args...);  }
-	
+
 	// long functions
 	bool parse( int argc, wchar_t* argv[] ){ return parse(argc,(const wchar_t**)argv); }
 	bool parse( int argc, const wchar_t** argv );
 	bool usage( const char* alt_name=nullptr );
-	
+
 	// get<> specializations, and other get functions
 	template <class T=std::string>	inline T get( const std::string& name ) const;
 	template<> inline std::wstring	get<std::wstring>( const std::string& name ) const;
@@ -136,8 +136,8 @@ inline std::vector<std::wstring> parser_t::others( const std::string& name ) con
 	std::vector<std::wstring> v;
 	if(name.empty()) for(auto& a:arguments) if(a.name.empty()) v.push_back(a.value);	// unnamed arguments
 	auto* o = find_option(name.c_str()); if(o&&o->instance>1) v=o->others;				// optioan others
-	return v; 
-} 
+	return v;
+}
 
 inline bool parser_t::parse( int argc, const wchar_t** argv )
 {
@@ -147,7 +147,7 @@ inline bool parser_t::parse( int argc, const wchar_t** argv )
 	bool	help_exists = false;
 
 	// test prerequisite
-	if(nr>0&&argc<2) return usage(); 
+	if(nr>0&&argc<2) return usage();
 
 	// start parsing
 	int r=0; for( int k=1; k<argc; k++ )
@@ -156,7 +156,7 @@ inline bool parser_t::parse( int argc, const wchar_t** argv )
 		if(a[0]!=L'-'){ if(r>=nr) arguments.push_back(argument_t()); arguments[r++].value = a; continue; } // increase array to accept excessive arguments
 		if(_wcsicmp(a,L"-h")==0||_wcsicmp(a,L"--help")==0){ help_exists=true; continue; } // test whether help exists
 		if(!a[1]) continue;	// skip too short options
-		
+
 		bool b_short = a[1]!=L'-';
 		std::string name = wtoa(b_short?a+1:a+2); // strip hyphens
 		if(name.empty()||!isalpha(name[0])) continue;
@@ -228,7 +228,7 @@ inline bool parser_t::usage( const char* alt_name )
 		if(a.name.empty()) continue;
 		(a.optional?opt_args:req_args).emplace_back(a.name,a.shelp);
 	}
-		
+
 	opts.emplace_back( "-h --help", "show usage help" );
 	for( auto& o : options )
 	{
@@ -239,7 +239,7 @@ inline bool parser_t::usage( const char* alt_name )
 		if(o.use_subarg) front += format( "=%s", o.subarg_name.c_str() );
 		opts.emplace_back( front, o.shelp );
 	}
-	
+
 	// find the longest front length
 	size_t cap=0;
 	for( auto& a : req_args )	cap=std::max(cap,a.first.length());

@@ -1,12 +1,12 @@
 //*******************************************************************
 // Copyright 2011-2018 Sungkil Lee
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,7 +19,7 @@
 #define __GX_MATH__
 //###################################################################
 // COMMON HEADERS for GXUT
-#ifndef __GXUT_COMMON__ 
+#ifndef __GXUT_COMMON__
 #define __GXUT_COMMON__
 // common macros
 #ifndef _CRT_SECURE_NO_WARNINGS
@@ -63,17 +63,17 @@
 #elif defined _M_X64
 	#define GX_PLATFORM "x64"
 #endif
-#if defined(_MSC_VER) && !defined(__clang__) // Visual Studio with cl 
+#if defined(_MSC_VER) && !defined(__clang__) // Visual Studio with cl
 	#pragma optimize( "gsy", on )
 	#pragma check_stack( off )
 	#pragma strict_gs_check( off )
 	#pragma float_control(except,off)
 	#ifndef __noinline
-		#define __noinline //__declspec(noinline)
+		#define __noinline __declspec(noinline)
 	#endif
 #else // GCC or Clang
 	#ifndef __noinline
-		#define __noinline //__attribute__((noinline))
+		#define __noinline __attribute__((noinline))
 	#endif
 	#ifdef __GNUC__
 		#ifndef __forceinline
@@ -150,12 +150,12 @@ template <class T,template <class> class A=tarray2> struct tvec2
 	__forceinline tvec2( const A<T>& v ){x=v.x;y=v.y;}
 	__forceinline tvec2( T a ){x=y=a;}
 	__forceinline tvec2( T a, T b ){x=a;y=b;}
-	
+
 	// assignment operators
 	default_assns(tvec2);
 	__forceinline tvec2& operator=( A<T>&& v ){ memmove(this,&v,sizeof(v)); return *this; }
 	__forceinline tvec2& operator=( const A<T>& v ){ memcpy(this,&v,sizeof(v)); return *this; }
-	
+
 	// casting operators
 	__forceinline operator A<T>&(){ return reinterpret_cast<A<T>&>(*this); }
 	__forceinline operator const A<T>&() const { return reinterpret_cast<const A<T>&>(*this); }
@@ -422,7 +422,7 @@ struct mat2
 	// casting operators
 	__forceinline operator float4& (){ return reinterpret_cast<float4&>(*this); }
 	__forceinline operator const float4& () const { return reinterpret_cast<const float4&>(*this); }
-	
+
 	// comparison operators
 	__forceinline bool operator==( const mat2& m ) const { for( int k=0; k<std::extent<decltype(a)>::value; k++ ) if(std::abs(a[k]-m[k])>precision<float>::value()) return false; return true; }
 	__forceinline bool operator!=( const mat2& m ) const { return !operator==(m); }
@@ -465,7 +465,7 @@ struct mat2
 	__forceinline static mat2 scale( const vec2& v ){ return mat2().set_scale(v); }
 	__forceinline static mat2 scale( float x, float y ){ return mat2().set_scale(x,y); }
 	__forceinline static mat2 rotate( float theta ){ return mat2().set_rotate(theta); }
-	
+
 	// row-major transformations: 2D transformation in 2D Cargesian coordinate system
 	__forceinline mat2& set_scale( const vec2& v ){ _11=v.x; _12=0.0f; _21=0.0f; _22=v.y; return *this; }
 	__forceinline mat2& set_scale( float x, float y ){ _11=x; _12=0.0f; _21=0.0f; _22=y; return *this; }
@@ -542,7 +542,7 @@ struct mat3
 	__forceinline static mat3 scale( const vec2& v ){ return mat3().set_scale(v); }
 	__forceinline static mat3 scale( float x, float y ){ return mat3().set_scale(x,y); }
 	__forceinline static mat3 rotate( float theta ){ return mat3().set_rotate(theta); }
-	
+
 	// row-major transformations: 2D transformation in 3D homogeneous coordinate system
 	__forceinline mat3& set_translate( const vec2& v ){ set_identity(); _13=v.x; _23=v.y; return *this; }
 	__forceinline mat3& set_translate( float x,float y ){ set_identity(); _13=x; _23=y; return *this; }
@@ -611,7 +611,7 @@ struct mat4
 	__forceinline mat4 operator*( const mat4& m ) const { return mat4(*this).operator*=(m); }
 	__forceinline vec4 operator*( const vec4& v ) const { return vec4(rvec4(0).dot(v),rvec4(1).dot(v),rvec4(2).dot(v),rvec4(3).dot(v)); }
 	__forceinline vec3 operator*( const vec3& v ) const { vec4 v4(v,1); return vec3(rvec4(0).dot(v4),rvec4(1).dot(v4),rvec4(2).dot(v4)); }
-	
+
 	// identity and transpose
 	__forceinline static mat4 identity(){ return mat4(); }
 	__forceinline mat4& set_identity(){ _12=_13=_14=_21=_23=_24=_31=_32=_34=_41=_42=_43=0.0f;_11=_22=_33=_44=1.0f; return *this; }
@@ -696,7 +696,7 @@ __noinline inline vec4 mat4::_xdet() const
 }
 
 // http://www.cg.info.hiroshima-cu.ac.jp/~miyazaki/knowledge/teche23.html
-__noinline inline mat4 mat4::inverse() const 
+__noinline inline mat4 mat4::inverse() const
 {
 	vec4 xd=_xdet();
 	return mat4((_32*_43-_42*_33)*_24 + (_42*_23-_22*_43)*_34 + (_22*_33-_32*_23)*_44,
@@ -781,13 +781,12 @@ __forceinline float triangle_area( vec2 a, vec2 b, vec2 c ){ return abs(a.x*b.y+
 
 //***********************************************
 // {GLSL|HLSL}-like shader intrinsic functions
+__forceinline vec2 abs( const vec2& v ){ return vec2(fabs(v.x),fabs(v.y)); }
+__forceinline vec3 abs( const vec3& v ){ return vec3(fabs(v.x),fabs(v.y),fabs(v.z)); }
+__forceinline vec4 abs( const vec4& v ){ return vec4(fabs(v.x),fabs(v.y),fabs(v.z),fabs(v.w)); }
 __forceinline float distance( const vec2& a, const vec2& b ){ return (a-b).length(); }
 __forceinline float distance( const vec3& a, const vec3& b ){ return (a-b).length(); }
 __forceinline float distance( const vec4& a, const vec4& b ){ return (a-b).length(); }
-__forceinline float saturate( float f ){ return clamp(f,0.0f,1.0f); }
-__forceinline vec2 saturate( const vec2& v ){ return vec2(saturate(v.x),saturate(v.y)); }
-__forceinline vec3 saturate( const vec3& v ){ return vec3(saturate(v.x),saturate(v.y),saturate(v.z)); }
-__forceinline vec4 saturate(const  vec4& v ){ return vec4(saturate(v.x),saturate(v.y),saturate(v.z),saturate(v.w)); }
 __forceinline float fract( float f ){ return float(f-floor(f)); }
 __forceinline vec2 fract( const vec2& v ){ return vec2(fract(v.x),fract(v.y)); }
 __forceinline vec3 fract( const vec3& v ){ return vec3(fract(v.x),fract(v.y),fract(v.z)); }
@@ -795,26 +794,9 @@ __forceinline vec4 fract( const vec4& v ){ return vec4(fract(v.x),fract(v.y),fra
 __forceinline vec2 fma( vec2 a, vec2 b, vec2 c ){ return vec2(fma(a.x,b.x,c.x),fma(a.y,b.y,c.y)); }
 __forceinline vec3 fma( vec3 a, vec3 b, vec3 c ){ return vec3(fma(a.x,b.x,c.x),fma(a.y,b.y,c.y),fma(a.z,b.z,c.z)); }
 __forceinline vec4 fma( vec4 a, vec4 b, vec4 c ){ return vec4(fma(a.x,b.x,c.x),fma(a.y,b.y,c.y),fma(a.z,b.z,c.z),fma(a.w,b.w,c.w)); }
-__forceinline vec2 abs( const vec2& v ){ return vec2(fabs(v.x),fabs(v.y)); }
-__forceinline vec3 abs( const vec3& v ){ return vec3(fabs(v.x),fabs(v.y),fabs(v.z)); }
-__forceinline vec4 abs( const vec4& v ){ return vec4(fabs(v.x),fabs(v.y),fabs(v.z),fabs(v.w)); }
 __forceinline vec2 fabs( const vec2& v ){ return vec2(fabs(v.x),fabs(v.y)); }
 __forceinline vec3 fabs( const vec3& v ){ return vec3(fabs(v.x),fabs(v.y),fabs(v.z)); }
 __forceinline vec4 fabs( const vec4& v ){ return vec4(fabs(v.x),fabs(v.y),fabs(v.z),fabs(v.w)); }
-__forceinline float sign( float f ){ return f>0.0f?1.0f:f<0.0f?-1.0f:0; }
-__forceinline vec2 sign( const vec2& v ){ return vec2(sign(v.x),sign(v.y)); }
-__forceinline vec3 sign( const vec3& v ){ return vec3(sign(v.x),sign(v.y),sign(v.z)); }
-__forceinline vec4 sign( const vec4& v ){ return vec4(sign(v.x),sign(v.y),sign(v.z),sign(v.w)); }
-__forceinline float smoothstep( float t ){ t=clamp(t,0.0f,1.0f); return t*t*(3-2*t); }							// C1-continuity
-__forceinline vec2 smoothstep( const vec2& t ){ return vec2(smoothstep(t.x),smoothstep(t.y)); }
-__forceinline vec3 smoothstep( const vec3& t ){ return vec3(smoothstep(t.x),smoothstep(t.y),smoothstep(t.z)); }
-__forceinline vec4 smoothstep( const vec4& t ){ return vec4(smoothstep(t.x),smoothstep(t.y),smoothstep(t.z),smoothstep(t.w)); }
-__forceinline float smootherstep( float t ){ t=clamp(t,0.0f,1.0f); return t*t*t*(6.0f*t*t-15.0f*t+10.0f); }		// C2-continuity (by Ken Perlin)
-__forceinline vec2 smootherstep( const vec2& t ){ return vec2(smootherstep(t.x),smootherstep(t.y)); }
-__forceinline vec3 smootherstep( const vec3& t ){ return vec3(smootherstep(t.x),smootherstep(t.y),smootherstep(t.z)); }
-__forceinline vec4 smootherstep( const vec4& t ){ return vec4(smootherstep(t.x),smootherstep(t.y),smootherstep(t.z),smootherstep(t.w)); }
-__forceinline vec3 reflect( const vec3& I, const vec3& N ){ return I-N*dot(I,N)*2.0f; }	// I: incident vector, N: normal
-__forceinline vec3 refract( const vec3& I, const vec3& N, float eta /* = n0/n1 */ ){ float d = I.dot(N); float k = 1.0f-eta*eta*(1.0f-d*d); return k<0.0f?0.0f:(I*eta-N*(eta*d+sqrtf(k))); } // I: incident vector, N: normal
 __forceinline float lerp( float v1, float v2, float t ){ return v1*(1.0f-t)+v2*t; }
 __forceinline vec2 lerp( const vec2& y1, const vec2& y2, float t ){ return y1*(-t+1.0f)+y2*t; }
 __forceinline vec3 lerp( const vec3& y1, const vec3& y2, float t ){ return y1*(-t+1.0f)+y2*t; }
@@ -831,7 +813,41 @@ __forceinline dvec2 lerp( const dvec2& y1, const dvec2& y2, float t ){ return y1
 __forceinline dvec3 lerp( const dvec3& y1, const dvec3& y2, float t ){ return y1*(-t+1.0)+y2*t; }
 __forceinline dvec4 lerp( const dvec4& y1, const dvec4& y2, float t ){ return y1*(-t+1.0)+y2*t; }
 __forceinline mat4 lerp( const mat4& v1, const mat4& v2, float t ){ return v1*(1.0f-t)+v2*t; }
-// packing/unpacking: https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_shading_language_packing.txt
+__forceinline float mix( float v1, float v2, float t ){ return v1*(1.0f-t)+v2*t; }
+__forceinline vec2 mix( const vec2& y1, const vec2& y2, float t ){ return y1*(-t+1.0f)+y2*t; }
+__forceinline vec3 mix( const vec3& y1, const vec3& y2, float t ){ return y1*(-t+1.0f)+y2*t; }
+__forceinline vec4 mix( const vec4& y1, const vec4& y2, float t ){ return y1*(-t+1.0f)+y2*t; }
+__forceinline vec2 mix( const vec2& y1, const vec2& y2, const vec2& t ){ return y1*(-t+1.0f)+y2*t; }
+__forceinline vec3 mix( const vec3& y1, const vec3& y2, const vec3& t ){ return y1*(-t+1.0f)+y2*t; }
+__forceinline vec4 mix( const vec4& y1, const vec4& y2, const vec4& t ){ return y1*(-t+1.0f)+y2*t; }
+__forceinline double mix( double v1, double v2, double t ){ return v1*(1.0-t)+v2*t; }
+__forceinline double mix( double v1, double v2, float t ){ return v1*(1.0f-t)+v2*t; }
+__forceinline dvec2 mix( const dvec2& y1, const dvec2& y2, double t ){ return y1*(-t+1.0)+y2*t; }
+__forceinline dvec3 mix( const dvec3& y1, const dvec3& y2, double t ){ return y1*(-t+1.0)+y2*t; }
+__forceinline dvec4 mix( const dvec4& y1, const dvec4& y2, double t ){ return y1*(-t+1.0)+y2*t; }
+__forceinline dvec2 mix( const dvec2& y1, const dvec2& y2, float t ){ return y1*(-t+1.0)+y2*t; }
+__forceinline dvec3 mix( const dvec3& y1, const dvec3& y2, float t ){ return y1*(-t+1.0)+y2*t; }
+__forceinline dvec4 mix( const dvec4& y1, const dvec4& y2, float t ){ return y1*(-t+1.0)+y2*t; }
+__forceinline mat4 mix( const mat4& v1, const mat4& v2, float t ){ return v1*(1.0f-t)+v2*t; }
+__forceinline vec3 reflect( const vec3& I, const vec3& N ){ return I-N*dot(I,N)*2.0f; }	// I: incident vector, N: normal
+__forceinline vec3 refract( const vec3& I, const vec3& N, float eta /* = n0/n1 */ ){ float d = I.dot(N); float k = 1.0f-eta*eta*(1.0f-d*d); return k<0.0f?0.0f:(I*eta-N*(eta*d+sqrtf(k))); } // I: incident vector, N: normal
+__forceinline float saturate( float f ){ return clamp(f,0.0f,1.0f); }
+__forceinline vec2 saturate( const vec2& v ){ return vec2(saturate(v.x),saturate(v.y)); }
+__forceinline vec3 saturate( const vec3& v ){ return vec3(saturate(v.x),saturate(v.y),saturate(v.z)); }
+__forceinline vec4 saturate(const  vec4& v ){ return vec4(saturate(v.x),saturate(v.y),saturate(v.z),saturate(v.w)); }
+__forceinline float sign( float f ){ return f>0.0f?1.0f:f<0.0f?-1.0f:0; }
+__forceinline vec2 sign( const vec2& v ){ return vec2(sign(v.x),sign(v.y)); }
+__forceinline vec3 sign( const vec3& v ){ return vec3(sign(v.x),sign(v.y),sign(v.z)); }
+__forceinline vec4 sign( const vec4& v ){ return vec4(sign(v.x),sign(v.y),sign(v.z),sign(v.w)); }
+__forceinline float smoothstep( float t ){ t=clamp(t,0.0f,1.0f); return t*t*(3-2*t); }							// C1-continuity
+__forceinline vec2 smoothstep( const vec2& t ){ return vec2(smoothstep(t.x),smoothstep(t.y)); }
+__forceinline vec3 smoothstep( const vec3& t ){ return vec3(smoothstep(t.x),smoothstep(t.y),smoothstep(t.z)); }
+__forceinline vec4 smoothstep( const vec4& t ){ return vec4(smoothstep(t.x),smoothstep(t.y),smoothstep(t.z),smoothstep(t.w)); }
+__forceinline float smootherstep( float t ){ t=clamp(t,0.0f,1.0f); return t*t*t*(6.0f*t*t-15.0f*t+10.0f); }		// C2-continuity (by Ken Perlin)
+__forceinline vec2 smootherstep( const vec2& t ){ return vec2(smootherstep(t.x),smootherstep(t.y)); }
+__forceinline vec3 smootherstep( const vec3& t ){ return vec3(smootherstep(t.x),smootherstep(t.y),smootherstep(t.z)); }
+__forceinline vec4 smootherstep( const vec4& t ){ return vec4(smootherstep(t.x),smootherstep(t.y),smootherstep(t.z),smootherstep(t.w)); }
+// packing/unpacking/casting: https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_shading_language_packing.txt
 __forceinline uint packUnorm2x16( vec2 v ){ ushort2 u; for(int k=0;k<2;k++) u[k]=ushort(round(clamp(v[k],0.0f,1.0f)*65535.0f)); return reinterpret_cast<uint&>(u); }
 __forceinline uint packSnorm2x16( vec2 v ){ short2 s; for(int k=0;k<2;k++) s[k]=short(round(clamp(v[k],-1.0f,1.0f)*32767.0f)); return reinterpret_cast<uint&>(s); }
 __forceinline uint packUnorm4x8( vec4 v ){ uchar4 u; for(int k=0;k<4;k++) u[k]=uchar(round(clamp(v[k],0.0f,1.0f)*255.0f)); return reinterpret_cast<uint&>(u); }
@@ -842,10 +858,8 @@ __forceinline vec2 unpackSnorm2x16( uint u ){ vec2 v; for(int k=0;k<2;k++) v[k]=
 __forceinline vec4 unpackUnorm4x8( uint u ){ vec4 v; for(int k=0;k<4;k++) v[k]=reinterpret_cast<uchar4&>(u)[k]/255.0f; return v; }
 __forceinline vec4 unpackSnorm4x8( uint u ){ vec4 v; for(int k=0;k<4;k++) v[k]=clamp(reinterpret_cast<char4&>(u)[k]/127.0f,-1.0f,1.0f); return v; }
 __forceinline vec2 unpackHalf2x16( uint u ){ return htof(reinterpret_cast<half2&>(u)); }
-// uint packing/unpacking
 __forceinline uint packUint4x8( uint4 v ){ return (v[0]&0xff)+((v[1]&0xff)<<8)+((v[2]&0xff)<<16)+((v[3]&0xff)<<24); }
 __forceinline uvec4 unpackUint4x8( uint u ){ return uvec4(u&0xff,(u>>8)&0xff,(u>>16)&0xff,(u>>24)&0xff); }
-// casting
 __forceinline uint floatBitsToUint( float f ){ return reinterpret_cast<uint&>(f); }
 __forceinline int floatBitsToInt( float f ){ return reinterpret_cast<int&>(f); }
 __forceinline float intBitsToFloat( int i ){ return reinterpret_cast<float&>(i); }

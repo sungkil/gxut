@@ -1,12 +1,12 @@
 //*******************************************************************
 // Copyright 2011-2018 Sungkil Lee
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,7 +19,7 @@
 #define __GX_STRING_H__
 //###################################################################
 // COMMON HEADERS for GXUT
-#ifndef __GXUT_COMMON__ 
+#ifndef __GXUT_COMMON__
 #define __GXUT_COMMON__
 // common macros
 #ifndef _CRT_SECURE_NO_WARNINGS
@@ -63,7 +63,7 @@
 #elif defined _M_X64
 	#define GX_PLATFORM "x64"
 #endif
-#if defined(_MSC_VER) && !defined(__clang__) // Visual Studio with cl 
+#if defined(_MSC_VER) && !defined(__clang__) // Visual Studio with cl
 	#pragma optimize( "gsy", on )
 	#pragma check_stack( off )
 	#pragma strict_gs_check( off )
@@ -73,7 +73,7 @@
 	#endif
 #else // GCC or Clang
 	#ifndef __noinline
-		#define __noinline //__attribute__((noinline))
+		#define __noinline __attribute__((noinline))
 	#endif
 	#ifdef __GNUC__
 		#ifndef __forceinline

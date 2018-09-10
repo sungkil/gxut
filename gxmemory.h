@@ -1,12 +1,12 @@
 //*******************************************************************
 // Copyright 2011-2018 Sungkil Lee
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -103,7 +103,7 @@ struct zip_t : public izip_t
 	virtual ~zip_t(){ release(); }
 	zip_t( const path& file_path ){ hzip=OpenZip( file_path.absolute(), nullptr ); }
 	zip_t( void* ptr, size_t size ){ hzip=OpenZip( ptr, uint(size), nullptr ); }
-	
+
 	virtual void release(){ for( auto& e : entries ){ if(e.ptr){ free(e.ptr); e.ptr=nullptr; }} entries.clear(); if(hzip){ CloseZipU(hzip); hzip=nullptr; } }
 	virtual bool load(){ if(!hzip) return false; entry e; GetZipItem(hzip,-1,&e ); for(int k=0, kn=e.index;k<kn;k++){ GetZipItem( hzip, k, (ZIPENTRY*) &e); e.ptr=nullptr; e.size=0; if(!e.is_dir()) entries.emplace_back(e); } return true; }
 	virtual bool extract_to_files( path dir, const wchar_t* name=nullptr ){ bool b=false; if(!hzip) return b; for(size_t k=0;k<entries.size();k++){ auto& e=entries[k]; if(e.is_dir()||(name&&_wcsicmp(name,e.name)!=0)) continue; path p=dir+e.name; if(!p.dir().exists()) p.dir().mkdir(); UnzipItem( hzip, e.index, p ); b=true; } return b; }
@@ -155,13 +155,13 @@ struct resource_t : public mem_t
 	HGLOBAL			hmem = nullptr;
 	const LPCWSTR	type = nullptr;
 	izip_t*			zip = nullptr;
-		
+
 	__forceinline resource_t( LPCWSTR lpType, HMODULE _hModule=nullptr ):hModule(_hModule),hres(nullptr),hmem(nullptr),type(lpType),zip(nullptr){}
 	__forceinline ~resource_t(){ release(); }
 	__forceinline void release(){ if(hmem){ /*UnlockResource(hmem);*/ FreeResource(hmem); hmem=nullptr; } if(zip){ zip->release(); delete zip; zip=nullptr; } }
 	__forceinline bool find( LPCWSTR lpName ){ return (hres=FindResourceW( hModule, lpName, type ))!=nullptr; }
 	__forceinline bool find( int res_id ){ return find(MAKEINTRESOURCEW(res_id)); }
-	
+
 	__forceinline bool load(){ if(!hres||!(hmem=LoadResource(hModule,hres))) return false; size=SizeofResource(hModule,hres); ptr=LockResource(hmem); return size!=0; }
 	__forceinline bool load( LPCWSTR lpName ){ return find(lpName)&&load(); }
 	__forceinline bool load( int res_id ){ return find(res_id)&&load(); }
@@ -324,7 +324,7 @@ __noinline inline const void* md5::body( const unsigned char* data, size_t size 
 	}
 	return data;
 }
- 
+
 __noinline inline void md5::update( const void* data, size_t size )
 {
 	uint32_t lo0=lo;
@@ -342,16 +342,16 @@ __noinline inline void md5::update( const void* data, size_t size )
 	if (size >= 64){ data = body((const unsigned char*)data,size&~(unsigned long)0x3f); size &= 0x3f; }
 	memcpy(buffer, data, size);
 }
- 
+
 __noinline inline void md5::finalize( unsigned char* result )
 {
 	uint32_t used = lo & 0x3f;;
 	buffer[used++] = 0x80;
 	uint32_t available = 64 - used;
- 
+
 	if(available < 8){ memset(&buffer[used], 0, available); body(buffer,64); used = 0; available = 64; }
 	memset(&buffer[used], 0, available - 8);
- 
+
 	buffer[56] = (lo <<= 3); buffer[57] = lo>>8; buffer[58] = lo>>16; buffer[59] = lo>>24; buffer[60] = hi; buffer[61] = hi>>8; buffer[62] = hi>>16; buffer[63] = hi>>24; body(buffer,64);
  	result[0] = a; result[1] = a >> 8; result[2] = a >> 16; result[3] = a >> 24; result[4] = b; result[5] = b >> 8; result[6] = b >> 16; result[7] = b >> 24; result[8] = c;
 	result[9] = c >> 8; result[10] = c >> 16; result[11] = c >> 24; result[12] = d; result[13] = d >> 8; result[14] = d >> 16; result[15] = d >> 24;

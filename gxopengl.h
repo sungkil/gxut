@@ -35,7 +35,7 @@
 // binding query targets
 inline GLenum gxGetTargetBinding( GLenum target )
 {
-	const static std::unordered_map<GLenum,GLenum> t = 
+	const static std::unordered_map<GLenum,GLenum> t =
 	{
 		{GL_ARRAY_BUFFER,GL_ARRAY_BUFFER_BINDING},
 		{GL_ELEMENT_ARRAY_BUFFER,GL_ELEMENT_ARRAY_BUFFER_BINDING},

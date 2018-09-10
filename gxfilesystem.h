@@ -1,12 +1,12 @@
 //*******************************************************************
 // Copyright 2011-2018 Sungkil Lee
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,7 +19,7 @@
 #define __GX_FILESYSTEM_H__
 //###################################################################
 // COMMON HEADERS for GXUT
-#ifndef __GXUT_COMMON__ 
+#ifndef __GXUT_COMMON__
 #define __GXUT_COMMON__
 // common macros
 #ifndef _CRT_SECURE_NO_WARNINGS
@@ -63,7 +63,7 @@
 #elif defined _M_X64
 	#define GX_PLATFORM "x64"
 #endif
-#if defined(_MSC_VER) && !defined(__clang__) // Visual Studio with cl 
+#if defined(_MSC_VER) && !defined(__clang__) // Visual Studio with cl
 	#pragma optimize( "gsy", on )
 	#pragma check_stack( off )
 	#pragma strict_gs_check( off )
@@ -73,7 +73,7 @@
 	#endif
 #else // GCC or Clang
 	#ifndef __noinline
-		#define __noinline //__attribute__((noinline))
+		#define __noinline __attribute__((noinline))
 	#endif
 	#ifdef __GNUC__
 		#ifndef __forceinline
@@ -155,7 +155,7 @@ struct path
 
 	static const int max_buffers = 4096;
 	static const int capacity = 1024;		// MAX_PATH == 260
-	
+
 	// get shared buffer for return values
 	static inline wchar_t*			__wcsbuf(){ static wchar_t buff[max_buffers][capacity]; static int i=0; return buff[(i++)%std::extent<decltype(buff)>::value]; }
 	static inline char*				__strbuf(){ return (char*)__wcsbuf(); }
@@ -228,7 +228,7 @@ struct path
 	operator wchar_t*(){ return data; }
 	operator const wchar_t*() const { return data; }
 	const wchar_t* c_str() const { return data; }
-	
+
 	// conversion to wstring and multibyte string
 	std::wstring str() const { return std::wstring(data); }
 	const char* wtoa() const { return __wc2mb(data,__strbuf()); }
@@ -244,7 +244,7 @@ struct path
 	iterator end() const { return data+length(); }
 	wchar_t& front() const { return data[0]; }
 	wchar_t& back() const { return data[0]==0?data[0]:data[length()-1]; }
-	
+
 	// clear and trivial clone
 	void clear(){ data[0]=0; }
 	path clone() const { return path(*this); }
@@ -286,7 +286,7 @@ struct path
 	inline DWORD&	attributes() const { if(!cache_exists()) update_cache(); return cache().dwFileAttributes; }
 	inline void		update_cache() const { auto& c=cache(); if(!GetFileAttributesExW(data,GetFileExInfoStandard,&c)||c.dwFileAttributes==INVALID_FILE_ATTRIBUTES){ memset(&c,0,sizeof(attrib_t)); c.dwFileAttributes=INVALID_FILE_ATTRIBUTES; return; } c.ftLastWriteTime = DiscardFileTimeMilliseconds(c.ftLastWriteTime); }
 	inline void		clear_cache() const { attrib_t* a=(attrib_t*)(data+capacity); memset(a,0,sizeof(attrib_t)); a->dwFileAttributes=INVALID_FILE_ATTRIBUTES; }
-	
+
 	// get/set attributes
 	bool exists() const {				if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES; }
 	bool is_dir() const {				if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_DIRECTORY)!=0; }
@@ -294,7 +294,7 @@ struct path
 	bool is_readonly() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_READONLY)!=0; }
 	void set_hidden( bool h ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(data,a=h?(a|FILE_ATTRIBUTE_HIDDEN):(a^FILE_ATTRIBUTE_HIDDEN)); }
 	void set_readonly( bool r ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(data,a=r?(a|FILE_ATTRIBUTE_READONLY):(a^FILE_ATTRIBUTE_READONLY)); }
-	
+
 	// make/copy/delete file/dir operations
 	bool mkdir() const { if(exists()) return false; path p=to_backslash().remove_backslash(), d; wchar_t* ctx;for( wchar_t* t=wcstok_s(p,L"\\",&ctx); t; t=wcstok_s(nullptr,L"\\", &ctx) ){ d+=t;d+=L"\\"; if(!d.exists()&&_wmkdir(d.data)!=0) return false; } return true; } // make all super directories
 	bool copy_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()) return false; if(dst.exists()&&dst.is_dir()) dst=dst.add_backslash()+name(); if(dst.exists()&&overwrite){ if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } return CopyFileW( data, dst, overwrite?FALSE:TRUE )?true:false; }
@@ -329,7 +329,7 @@ struct path
 	const char* ctimestamp() const { if(!exists()) return ""; stat_t s=stat(); struct tm t; _gmtime64_s(&t,&s.st_ctime); return timestamp(&t); }
 	const char* atimestamp() const { if(!exists()) return ""; stat_t s=stat(); struct tm t; _gmtime64_s(&t,&s.st_atime); return timestamp(&t); }
 	const char* mtimestamp() const { if(!exists()) return ""; stat_t s=stat(); struct tm t; _gmtime64_s(&t,&s.st_mtime); return timestamp(&t); }
-	
+
 	FILETIME cfiletime() const { if(!cache_exists()) update_cache(); return cache().ftCreationTime; }
 	FILETIME afiletime() const { if(!cache_exists()) update_cache(); return cache().ftLastAccessTime; }
 	FILETIME mfiletime() const { if(!cache_exists()) update_cache(); return cache().ftLastWriteTime; }
@@ -505,7 +505,7 @@ __noinline inline void path::canonicalize()
 	if(!wcsstr(data,L"\\.\\")&&!wcsstr(data,L"\\..\\")) return; // trivial return
 	wchar_t* ds; while( (ds=wcsstr(data+1,L"\\\\")) ) memmove(ds+1,ds+2,((len--)-(ds-data)-1)*sizeof(wchar_t));	// correct multiple backslashes, except the beginning of unc path
 	if(is_absolute()){ _wfullpath(data,(const wchar_t*)memcpy(__wcsbuf(),data,sizeof(wchar_t)*(len+1)),capacity); return; }
-	
+
 	// misc. flags to check
 	bool bTrailingBackslash = (data[len-1]==L'\\');
 	bool bSingleDotBegin = data[0]==L'.'&&data[1]==L'\\';
