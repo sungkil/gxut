@@ -185,50 +185,108 @@ struct resource_t : public mem_t
 
 //***********************************************
 // zlib in-memory compression/decompression
-
-#ifdef ZLIB_H
-namespace zlib
+#ifndef ZLIB_H
+#define ZLIB_H
+#define ZLIB_VERSION "1.2.11"
+#define MAX_WBITS 15 /* 32K LZ77 window */
+typedef void* (*alloc_func)(void* opaque, uint items, uint size);
+typedef void  (*free_func)(void* opaque, void* address);
+typedef struct z_stream_s
 {
-	inline size_t capacity( size_t size ){ return size+(((size+16383)>>16)*5)+6; }
-	__noinline inline int compress( void* src, size_t src_size, void* dst, size_t dst_capacity )
+	uchar*	next_in;	// next input byte
+	uint	avail_in;	// number of bytes available at next_in
+	ulong	total_in;	// total number of input bytes read so far
+	uchar*	next_out;	// next output byte will go here
+	uint	avail_out;	// remaining free space at next_out
+	ulong	total_out;	// total number of bytes output so far
+	char*	msg;		// last error message, NULL if no error
+	struct internal_state* state;	// not visible by applications
+	alloc_func	zalloc;	// used to allocate the internal state
+	free_func	zfree;	// used to free the internal state
+	void*	opaque;		// private data object passed to zalloc and zfree
+	int		data_type;	// best guess about the data type: binary or text for deflate, or the decoding state for inflate
+	ulong	adler;		// Adler-32 or CRC-32 value of the uncompressed data
+	ulong	reserved;	// reserved for future use
+} z_stream;
+
+extern "C"
+{
+	int deflateInit_( z_stream* strm, int level, const char* version, int stream_size );
+	int inflateInit_( z_stream* strm, const char* version, int stream_size );
+	int deflateInit2_( z_stream* strm, int level, int method, int windowBits, int memLevel, int strategy, const char *version, int stream_size );
+	int inflateInit2_( z_stream* strm, int windowBits, const char* version, int stream_size );
+
+	int inflate( z_stream* strm, int flush );
+	int inflateEnd( z_stream* strm );
+	int deflate (z_stream* strm, int flush );
+	int deflateEnd( z_stream* strm );
+}
+
+//*************************************
+namespace zlib {
+//*************************************
+inline size_t capacity( size_t size ){ return size+(((size+16383)>>16)*5)+6; }
+
+__noinline inline std::vector<uchar> compress( void* ptr, size_t size, bool b_gzip )
+{
+	z_stream s; memset(&s,0,sizeof(decltype(s)));
+	int ret = b_gzip?deflateInit2_(&s,-1,8,MAX_WBITS+16,8,0,ZLIB_VERSION,sizeof(s)):deflateInit_(&s,-1,ZLIB_VERSION,sizeof(s));
+	if(ret!=0/*Z_OK*/){ printf("%s(): failed in deflateInit()\n", __FUNCTION__ ); return std::vector<uchar>(); }
+	
+	std::vector<uchar> buff(capacity(size));
+	static const uint chunk = 0x8000;
+	size_t todo = size;
+	s.next_in	= (uchar*) ptr;
+	s.next_out	= &buff[0];
+	for( int ret=0; todo && ret==0; )
 	{
-		int ret			= -1; // size of compression (failure: -1)
-		z_stream zInfo	= {0};
-		zInfo.total_in	= zInfo.avail_in  = (uint)src_size;
-		zInfo.total_out	= zInfo.avail_out = (uint)dst_capacity;
-		zInfo.next_in	= (BYTE*)src;
-		zInfo.next_out	= (BYTE*)dst;
-
-		if(Z_OK!=deflateInit(&zInfo,Z_DEFAULT_COMPRESSION)||Z_STREAM_END!=deflate(&zInfo,Z_FINISH)){ deflateEnd(&zInfo); return ret; }
-		else{ ret=zInfo.total_out; deflateEnd(&zInfo); return ret; }
+		ulong total_in0 = s.total_in;
+		s.avail_in = uint(todo<chunk?todo:chunk);
+		s.avail_out = chunk;
+		ret = deflate( &s,(s.avail_in==todo) ? 4 : 2 ); // Z_FINISH : Z_SYNC_FLUSH
+		todo -= (s.total_in-total_in0);
 	}
+	buff.resize(s.total_out);
+	buff.shrink_to_fit();
+	deflateEnd(&s);
+	return buff;
+}
 
-	__noinline inline int decompress( void* src, size_t src_size, void* dst, size_t dst_capacity )
+__noinline inline std::vector<uchar> decompress( void* ptr, size_t size )
+{
+	z_stream s; memset(&s,0,sizeof(s));
+	std::vector<uchar> buff; if(size<3) return buff;
+
+	static const uchar siggz[] = {0x1F,0x8B,0x08};
+	bool b_gz = memcmp(ptr,siggz,sizeof(siggz))==0;
+	s.next_in = (uchar*) ptr;
+	if(b_gz) inflateInit2_(&s,MAX_WBITS+16,ZLIB_VERSION,int(sizeof(z_stream))); else inflateInit_(&s,ZLIB_VERSION,int(sizeof(z_stream)));
+	
+	static const uint chunk = 0x8000;
+	static std::vector<uchar> temp(chunk);
+	size_t todo = size;
+
+	buff.reserve(chunk);
+	for( int ret=0; todo && ret==0; )
 	{
-		int ret			= -1; // size of compression (failure: -1)
-		z_stream zInfo	= {0};
-		zInfo.total_in	= zInfo.avail_in  = (uint)src_size;
-		zInfo.total_out	= zInfo.avail_out = (uint)dst_capacity;
-		zInfo.next_in	= (BYTE*)src;
-		zInfo.next_out	= (BYTE*)dst;
-
-		if(Z_OK!=inflateInit(&zInfo)||Z_STREAM_END!=inflate(&zInfo,Z_FINISH)){ inflateEnd(&zInfo); return ret; }
-		else{ ret=zInfo.total_out; inflateEnd(&zInfo); return ret; }
+		unsigned long total_in0 = s.total_in;
+		unsigned long total_out0 = s.total_out;
+		s.avail_in = uint(todo<chunk?todo:chunk);
+		s.avail_out = chunk;
+		s.next_out = &temp[0];
+		ret = inflate(&s,2); // 2: Z_SYNC_FLUSH
+		todo -= s.total_in-total_in0;
+		buff.insert(buff.end(),temp.begin(),temp.begin()+s.total_out-total_out0);
 	}
+	inflateEnd(&s);
+	buff.shrink_to_fit();
+	return buff;
+}
 
-	__noinline inline bool unittest( void* src, size_t src_size )
-	{
-		size_t c_capacity = capacity(src_size);
-		uchar* c = (uchar*) malloc(c_capacity);
-		uchar* d = (uchar*) malloc(src_size);
-		int r = compress( src, src_size, c, c_capacity );
-		decompress( c, r, d, src_size );
-		bool b = memcmp( src, d, src_size )==0;
-		free(c); free(d);
-		return b;
-	}
+//*************************************
 } // namespace zlib
-#endif
+//*************************************
+#endif // ZLIB_H
 
 //***********************************************
 // CRC32 implementation with 4-batch parallel construction (taken from zlib)
