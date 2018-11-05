@@ -787,6 +787,9 @@ __forceinline vec4 abs( const vec4& v ){ return vec4(fabs(v.x),fabs(v.y),fabs(v.
 __forceinline float distance( const vec2& a, const vec2& b ){ return (a-b).length(); }
 __forceinline float distance( const vec3& a, const vec3& b ){ return (a-b).length(); }
 __forceinline float distance( const vec4& a, const vec4& b ){ return (a-b).length(); }
+__forceinline vec2 floor( const vec2& v ){ return vec2(floor(v.x),floor(v.y)); }
+__forceinline vec3 floor( const vec3& v ){ return vec3(floor(v.x),floor(v.y),floor(v.z)); }
+__forceinline vec4 floor( const vec4& v ){ return vec4(floor(v.x),floor(v.y),floor(v.z),floor(v.w)); }
 __forceinline float fract( float f ){ return float(f-floor(f)); }
 __forceinline vec2 fract( const vec2& v ){ return vec2(fract(v.x),fract(v.y)); }
 __forceinline vec3 fract( const vec3& v ){ return vec3(fract(v.x),fract(v.y),fract(v.z)); }
