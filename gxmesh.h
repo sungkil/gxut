@@ -109,6 +109,14 @@ static_assert(sizeof(vpl_t)%16==0,	"size of struct vpl_t should be aligned at 16
 #endif
 
 //*************************************
+// light list type
+struct lights_t : public std::vector<light_t>
+{
+	uint crc = 0;	// crc32c to detect the change of samples
+	void clear() noexcept { __super::clear(); crc=0; }
+};
+
+//*************************************
 // ray for ray tracing
 template <class T> struct tray // defined as a template to avoid "a constructor in aggregate struct
 {
