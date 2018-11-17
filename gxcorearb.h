@@ -2553,6 +2553,25 @@ typedef void (APIENTRYP PFNGLVERTEXATTRIBDIVISORARBPROC) (GLuint index, GLuint d
 #ifndef GL_ARB_internalformat_query2
 #define GL_ARB_internalformat_query2 1
 #define GL_SRGB_DECODE_ARB                0x8299
+#define GL_VIEW_CLASS_EAC_R11             0x9383
+#define GL_VIEW_CLASS_EAC_RG11            0x9384
+#define GL_VIEW_CLASS_ETC2_RGB            0x9385
+#define GL_VIEW_CLASS_ETC2_RGBA           0x9386
+#define GL_VIEW_CLASS_ETC2_EAC_RGBA       0x9387
+#define GL_VIEW_CLASS_ASTC_4x4_RGBA       0x9388
+#define GL_VIEW_CLASS_ASTC_5x4_RGBA       0x9389
+#define GL_VIEW_CLASS_ASTC_5x5_RGBA       0x938A
+#define GL_VIEW_CLASS_ASTC_6x5_RGBA       0x938B
+#define GL_VIEW_CLASS_ASTC_6x6_RGBA       0x938C
+#define GL_VIEW_CLASS_ASTC_8x5_RGBA       0x938D
+#define GL_VIEW_CLASS_ASTC_8x6_RGBA       0x938E
+#define GL_VIEW_CLASS_ASTC_8x8_RGBA       0x938F
+#define GL_VIEW_CLASS_ASTC_10x5_RGBA      0x9390
+#define GL_VIEW_CLASS_ASTC_10x6_RGBA      0x9391
+#define GL_VIEW_CLASS_ASTC_10x8_RGBA      0x9392
+#define GL_VIEW_CLASS_ASTC_10x10_RGBA     0x9393
+#define GL_VIEW_CLASS_ASTC_12x10_RGBA     0x9394
+#define GL_VIEW_CLASS_ASTC_12x12_RGBA     0x9395
 #endif /* GL_ARB_internalformat_query2 */
 
 #ifndef GL_ARB_invalidate_subdata
@@ -2997,60 +3016,6 @@ typedef void (APIENTRYP PFNGLTEXBUFFERARBPROC) (GLenum target, GLenum internalfo
 #define GL_ARB_viewport_array 1
 #endif /* GL_ARB_viewport_array */
 
-#ifndef GL_KHR_blend_equation_advanced
-#define GL_KHR_blend_equation_advanced 1
-#define GL_MULTIPLY_KHR                   0x9294
-#define GL_SCREEN_KHR                     0x9295
-#define GL_OVERLAY_KHR                    0x9296
-#define GL_DARKEN_KHR                     0x9297
-#define GL_LIGHTEN_KHR                    0x9298
-#define GL_COLORDODGE_KHR                 0x9299
-#define GL_COLORBURN_KHR                  0x929A
-#define GL_HARDLIGHT_KHR                  0x929B
-#define GL_SOFTLIGHT_KHR                  0x929C
-#define GL_DIFFERENCE_KHR                 0x929E
-#define GL_EXCLUSION_KHR                  0x92A0
-#define GL_HSL_HUE_KHR                    0x92AD
-#define GL_HSL_SATURATION_KHR             0x92AE
-#define GL_HSL_COLOR_KHR                  0x92AF
-#define GL_HSL_LUMINOSITY_KHR             0x92B0
-typedef void (APIENTRYP PFNGLBLENDBARRIERKHRPROC) (void);
-#endif /* GL_KHR_blend_equation_advanced */
-
-#ifndef GL_KHR_blend_equation_advanced_coherent
-#define GL_KHR_blend_equation_advanced_coherent 1
-#define GL_BLEND_ADVANCED_COHERENT_KHR    0x9285
-#endif /* GL_KHR_blend_equation_advanced_coherent */
-
-#ifndef GL_KHR_context_flush_control
-#define GL_KHR_context_flush_control 1
-#endif /* GL_KHR_context_flush_control */
-
-#ifndef GL_KHR_debug
-#define GL_KHR_debug 1
-#endif /* GL_KHR_debug */
-
-#ifndef GL_KHR_no_error
-#define GL_KHR_no_error 1
-#define GL_CONTEXT_FLAG_NO_ERROR_BIT_KHR  0x00000008
-#endif /* GL_KHR_no_error */
-
-#ifndef GL_KHR_parallel_shader_compile
-#define GL_KHR_parallel_shader_compile 1
-#define GL_MAX_SHADER_COMPILER_THREADS_KHR 0x91B0
-#define GL_COMPLETION_STATUS_KHR          0x91B1
-typedef void (APIENTRYP PFNGLMAXSHADERCOMPILERTHREADSKHRPROC) (GLuint count);
-#endif /* GL_KHR_parallel_shader_compile */
-
-#ifndef GL_KHR_robust_buffer_access_behavior
-#define GL_KHR_robust_buffer_access_behavior 1
-#endif /* GL_KHR_robust_buffer_access_behavior */
-
-#ifndef GL_KHR_robustness
-#define GL_KHR_robustness 1
-#define GL_CONTEXT_ROBUST_ACCESS          0x90F3
-#endif /* GL_KHR_robustness */
-
 #ifndef GL_KHR_texture_compression_astc_hdr
 #define GL_KHR_texture_compression_astc_hdr 1
 #define GL_COMPRESSED_RGBA_ASTC_4x4_KHR   0x93B0
@@ -3090,6 +3055,40 @@ typedef void (APIENTRYP PFNGLMAXSHADERCOMPILERTHREADSKHRPROC) (GLuint count);
 #ifndef GL_KHR_texture_compression_astc_sliced_3d
 #define GL_KHR_texture_compression_astc_sliced_3d 1
 #endif /* GL_KHR_texture_compression_astc_sliced_3d */
+
+#ifndef GL_NV_conservative_raster
+#define GL_NV_conservative_raster 1
+#define GL_CONSERVATIVE_RASTERIZATION_NV  0x9346
+#define GL_SUBPIXEL_PRECISION_BIAS_X_BITS_NV 0x9347
+#define GL_SUBPIXEL_PRECISION_BIAS_Y_BITS_NV 0x9348
+#define GL_MAX_SUBPIXEL_PRECISION_BIAS_BITS_NV 0x9349
+typedef void (APIENTRYP PFNGLSUBPIXELPRECISIONBIASNVPROC) (GLuint xbits, GLuint ybits);
+#endif /* GL_NV_conservative_raster */
+
+#ifndef GL_NV_conservative_raster_dilate
+#define GL_NV_conservative_raster_dilate 1
+#define GL_CONSERVATIVE_RASTER_DILATE_NV  0x9379
+#define GL_CONSERVATIVE_RASTER_DILATE_RANGE_NV 0x937A
+#define GL_CONSERVATIVE_RASTER_DILATE_GRANULARITY_NV 0x937B
+typedef void (APIENTRYP PFNGLCONSERVATIVERASTERPARAMETERFNVPROC) (GLenum pname, GLfloat value);
+#endif /* GL_NV_conservative_raster_dilate */
+
+#ifndef GL_NV_conservative_raster_pre_snap
+#define GL_NV_conservative_raster_pre_snap 1
+#define GL_CONSERVATIVE_RASTER_MODE_PRE_SNAP_NV 0x9550
+#endif /* GL_NV_conservative_raster_pre_snap */
+
+#ifndef GL_NV_conservative_raster_pre_snap_triangles
+#define GL_NV_conservative_raster_pre_snap_triangles 1
+#define GL_CONSERVATIVE_RASTER_MODE_NV    0x954D
+#define GL_CONSERVATIVE_RASTER_MODE_POST_SNAP_NV 0x954E
+#define GL_CONSERVATIVE_RASTER_MODE_PRE_SNAP_TRIANGLES_NV 0x954F
+typedef void (APIENTRYP PFNGLCONSERVATIVERASTERPARAMETERINVPROC) (GLenum pname, GLint param);
+#endif /* GL_NV_conservative_raster_pre_snap_triangles */
+
+#ifndef GL_NV_conservative_raster_underestimation
+#define GL_NV_conservative_raster_underestimation 1
+#endif /* GL_NV_conservative_raster_underestimation */
 
 #ifdef __cplusplus
 }
@@ -3241,17 +3240,14 @@ e(ARB_vertex_attrib_binding)
 e(ARB_vertex_type_10f_11f_11f_rev)
 e(ARB_vertex_type_2_10_10_10_rev)
 e(ARB_viewport_array)
-e(KHR_blend_equation_advanced)
-e(KHR_blend_equation_advanced_coherent)
-e(KHR_context_flush_control)
-e(KHR_debug)
-e(KHR_no_error)
-e(KHR_parallel_shader_compile)
-e(KHR_robust_buffer_access_behavior)
-e(KHR_robustness)
 e(KHR_texture_compression_astc_hdr)
 e(KHR_texture_compression_astc_ldr)
 e(KHR_texture_compression_astc_sliced_3d)
+e(NV_conservative_raster)
+e(NV_conservative_raster_dilate)
+e(NV_conservative_raster_pre_snap)
+e(NV_conservative_raster_pre_snap_triangles)
+e(NV_conservative_raster_underestimation)
 #undef e
 
 #ifdef GXCOREARB_IMPL
@@ -3934,7 +3930,6 @@ f(ISIMAGEHANDLERESIDENTARB,IsImageHandleResidentARB)
 f(VERTEXATTRIBL1UI64ARB,VertexAttribL1ui64ARB)
 f(VERTEXATTRIBL1UI64VARB,VertexAttribL1ui64vARB)
 f(GETVERTEXATTRIBLUI64VARB,GetVertexAttribLui64vARB)
-f(CREATESYNCFROMCLEVENTARB,CreateSyncFromCLeventARB)
 f(DISPATCHCOMPUTEGROUPSIZEARB,DispatchComputeGroupSizeARB)
 f(DEBUGMESSAGECONTROLARB,DebugMessageControlARB)
 f(DEBUGMESSAGEINSERTARB,DebugMessageInsertARB)
@@ -4010,11 +4005,12 @@ f(ISNAMEDSTRINGARB,IsNamedStringARB)
 f(GETNAMEDSTRINGARB,GetNamedStringARB)
 f(GETNAMEDSTRINGIVARB,GetNamedStringivARB)
 f(BUFFERPAGECOMMITMENTARB,BufferPageCommitmentARB)
-f(NAMEDBUFFERPAGECOMMITMENTARB,NamedBufferPageCommitmentARB)
+f(NAMEDBUFFERPAGECOMMITMENTEXT,NamedBufferPageCommitmentEXT)
 f(TEXPAGECOMMITMENTARB,TexPageCommitmentARB)
 f(TEXBUFFERARB,TexBufferARB)
-f(BLENDBARRIERKHR,BlendBarrierKHR)
-f(MAXSHADERCOMPILERTHREADSKHR,MaxShaderCompilerThreadsKHR)
+f(SUBPIXELPRECISIONBIASNV,SubpixelPrecisionBiasNV)
+f(CONSERVATIVERASTERPARAMETERFNV,ConservativeRasterParameterfNV)
+f(CONSERVATIVERASTERPARAMETERINV,ConservativeRasterParameteriNV)
 #undef f
 
 extern PROC (WINAPI* __wglGetProcAddress)(LPCSTR);
@@ -4740,7 +4736,6 @@ g(ISIMAGEHANDLERESIDENTARB,IsImageHandleResidentARB)
 g(VERTEXATTRIBL1UI64ARB,VertexAttribL1ui64ARB)
 g(VERTEXATTRIBL1UI64VARB,VertexAttribL1ui64vARB)
 g(GETVERTEXATTRIBLUI64VARB,GetVertexAttribLui64vARB)
-g(CREATESYNCFROMCLEVENTARB,CreateSyncFromCLeventARB)
 g(DISPATCHCOMPUTEGROUPSIZEARB,DispatchComputeGroupSizeARB)
 g(DEBUGMESSAGECONTROLARB,DebugMessageControlARB)
 g(DEBUGMESSAGEINSERTARB,DebugMessageInsertARB)
@@ -4816,11 +4811,12 @@ g(ISNAMEDSTRINGARB,IsNamedStringARB)
 g(GETNAMEDSTRINGARB,GetNamedStringARB)
 g(GETNAMEDSTRINGIVARB,GetNamedStringivARB)
 g(BUFFERPAGECOMMITMENTARB,BufferPageCommitmentARB)
-g(NAMEDBUFFERPAGECOMMITMENTARB,NamedBufferPageCommitmentARB)
+g(NAMEDBUFFERPAGECOMMITMENTEXT,NamedBufferPageCommitmentEXT)
 g(TEXPAGECOMMITMENTARB,TexPageCommitmentARB)
 g(TEXBUFFERARB,TexBufferARB)
-g(BLENDBARRIERKHR,BlendBarrierKHR)
-g(MAXSHADERCOMPILERTHREADSKHR,MaxShaderCompilerThreadsKHR)
+g(SUBPIXELPRECISIONBIASNV,SubpixelPrecisionBiasNV)
+g(CONSERVATIVERASTERPARAMETERFNV,ConservativeRasterParameterfNV)
+g(CONSERVATIVERASTERPARAMETERINV,ConservativeRasterParameteriNV)
 #undef g
 
 // query if extensions exist
@@ -4963,17 +4959,14 @@ e(ARB_vertex_attrib_binding)
 e(ARB_vertex_type_10f_11f_11f_rev)
 e(ARB_vertex_type_2_10_10_10_rev)
 e(ARB_viewport_array)
-e(KHR_blend_equation_advanced)
-e(KHR_blend_equation_advanced_coherent)
-e(KHR_context_flush_control)
-e(KHR_debug)
-e(KHR_no_error)
-e(KHR_parallel_shader_compile)
-e(KHR_robust_buffer_access_behavior)
-e(KHR_robustness)
 e(KHR_texture_compression_astc_hdr)
 e(KHR_texture_compression_astc_ldr)
 e(KHR_texture_compression_astc_sliced_3d)
+e(NV_conservative_raster)
+e(NV_conservative_raster_dilate)
+e(NV_conservative_raster_pre_snap)
+e(NV_conservative_raster_pre_snap_triangles)
+e(NV_conservative_raster_underestimation)
 #undef e
 
 	// release dll
