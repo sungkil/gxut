@@ -258,21 +258,18 @@ struct frustum_t : public std::array<vec4, 6> // left, right, top, bottom, near,
 	__forceinline frustum_t& operator=(frustum_t&&) = default;
 	__forceinline frustum_t& operator=(const frustum_t&) = default;
 
-	__forceinline frustum_t& update(const mat4& view_projection_matrix) { auto* planes = data(); for (int k = 0; k < 6; k++) { planes[k] = view_projection_matrix.rvec4(k >> 1)*float(1 - (k & 1) * 2) + view_projection_matrix.rvec4(3); planes[k] /= planes[k].xyz.length(); } return *this; }
+	__forceinline frustum_t& update(const mat4& view_projection_matrix) { auto* planes = data(); for (int k=0;k<6;k++){planes[k]=view_projection_matrix.rvec4(k>>1)*float(1-(k&1)*2)+view_projection_matrix.rvec4(3);planes[k]/=planes[k].xyz.length();} return *this; }
 	__forceinline frustum_t& update(camera_t& c) { return update(c.projection_matrix*c.view_matrix); }
 	__forceinline frustum_t& update(vpl_t& c) { return update(c.projection_matrix*c.view_matrix); }
-	__forceinline bool cull(bbox& b) const { vec4 pv; pv.w = 1.0f; for (int k = 0; k < 6; k++) { const vec4& plane = operator[](k); for (int j = 0; j < 3; j++)pv[j] = plane[j] > 0 ? b.M[j] : b.m[j]; if (pv.dot(plane) < 0)return true; } return false; }
+	__forceinline bool cull(bbox& b) const { vec4 pv; pv.w=1.0f; for(int k=0;k<6;k++){ const vec4& plane=operator[](k); for(int j=0;j<3;j++)pv[j]=plane[j]>0?b.M[j]:b.m[j]; if(pv.dot(plane)<0)return true;} return false; }
 };
 
 struct stereo_t
 {
-	enum model_t { NONE = 0, BOTH = 1, LEFT = 2, RIGHT = 3, ALTER = 4 };
+	enum model_t {NONE=0,LEFT=1,RIGHT=2,BOTH=3,ALTER=4}; // bitwise-and with left/right indicates left/right is drawn; ALTER renders left/right for even/odd frames
 	uint		model = 0;				// stereo-rendering model
 	float		ipd = 64.0f;			// inter-pupil distance for stereoscopy: 6.4 cm = men's average
-	float		eye_shift = 0.0f;		// stereo eye shift: negative: left, positive: right, zero: center
-	bool		is_left() const { return eye_shift < -0.0001f; }
-	bool		is_right() const { return eye_shift > +0.0001f; }
-	void		build(camera_t& c, float df) const { float t = c.dnear*tanf(0.5f*c.fovy*(c.fovy < PI<float> ? 1.0f : PI<float> / 180.0f)), r = t * c.aspect, o = eye_shift * c.dnear / df; c.eye.x += eye_shift; c.projection_matrix = mat4::perspective_off_center(-r - o, r - o, t, -t, c.dnear, c.dfar)*mat4::translate(-eye_shift, 0, 0); } // move object/camera toward negative/positive offset
+	camera_t	left, right;			// left, right cameras
 };
 
 struct camera : public camera_t
@@ -285,14 +282,13 @@ struct camera : public camera_t
 	stereo_t	stereo;					// stereo rendering attributes
 
 	mat4		inverse_view_matrix() const { return mat4::look_at_inverse(eye, center, up); } // works without eye, center, up
-	mat4		perspective_dx() const { mat4 m = projection_matrix; m._33 = dfar / (dnear - dfar); m._34 *= 0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
-	vec2		plane_size(float ecd = 1.0f) const { return vec2(2.0f / projection_matrix._11, 2.0f / projection_matrix._22)*ecd; } // plane size (width, height) at eye-coordinate distance 1
+	mat4		perspective_dx() const { mat4 m = projection_matrix; m._33 = dfar/(dnear-dfar); m._34*=0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
+	vec2		plane_size(float ecd = 1.0f) const { return vec2(2.0f/projection_matrix._11, 2.0f/projection_matrix._22)*ecd; } // plane size (width, height) at eye-coordinate distance 1
 	float		lens_radius() const { return F / fn * 0.5f; }
-	void		update_depth_clips(const bbox* bound) { if (!bound) return; bbox b = view_matrix * (*bound); vec2 z(max(0.001f, -b.M.z), max(0.001f, -b.m.z)); dnear = max(max(bound->radius()*0.00001f, 50.0f), z.x*0.99f); dfar = max(max(dnear + 1.0f, dnear*1.01f), z.y*1.01f); }
+	void		update_depth_clips(const bbox* bound) { if (!bound) return; bbox b=view_matrix*(*bound); vec2 z(max(0.001f,-b.M.z),max(0.001f,-b.m.z)); dnear=max(max(bound->radius()*0.00001f, 50.0f),z.x*0.99f); dfar=max(max(dnear+1.0f,dnear*1.01f),z.y*1.01f); }
 	void		update_view_frustum() { frustum.update(projection_matrix*view_matrix); }
 	bool		cull(bbox& b) const { return frustum.cull(b); }
-	camera		left() const { camera c = *this; c.stereo.eye_shift = -0.5f*stereo.ipd; c.stereo.build(c, df); return c; }
-	camera		right() const { camera c = *this; c.stereo.eye_shift = +0.5f*stereo.ipd; c.stereo.build(c, df); return c; }
+	void		update_stereo(){ if(!stereo.model) return; float s=0.5f*stereo.ipd, o=s*dnear/df, t=dnear*tanf(0.5f*fovy*(fovy<PI<float>?1.0f:PI<float>/180.0f)), R=t*aspect; auto& l=stereo.left=*this;	l.eye.x-=s; l.center.x-=s; l.view_matrix.set_look_at(l.eye,l.center,l.up); l.projection_matrix=mat4::perspective_off_center(-R+o,R+o,t,-t,dnear,dfar); auto& r=stereo.right=*this; r.eye.x+=s; r.center.x+=s; r.view_matrix.set_look_at(r.eye,r.center,r.up); r.projection_matrix=mat4::perspective_off_center(-R-o,R-o,t,-t,dnear,dfar); }
 };
 
 //*************************************
