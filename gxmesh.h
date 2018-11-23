@@ -82,7 +82,7 @@ struct light_t
 	vec3	normal;				// direction (the negated vector of position for directional light)
 	uint	bounce : 6;			// zero means direct light
 	uint	mouse : 1;			// dynamic binding to the mouse?
-	uint	bind : 1;				// dynamic binding to an object
+	uint	bind : 1;			// dynamic binding to an object
 	uint	object_index : 24;	// ID of object bound to this light
 
 	// transformation to camera (eye-coordinate) space
@@ -133,11 +133,11 @@ struct isect
 {
 	vec3	pos;							// position at intersection
 	vec3	norm;							// normal at intersection
-	float	t = FLT_MAX;						// nearest intersection: t<0 indicates inverted intersection on spherical surfaces
-	union { float tfar = FLT_MAX, theta; };	// farthest intersection (gxut) or incident angle (oxut)
-	bool	hit = 0;							// is intersected? and padding
+	float	t=FLT_MAX;						// nearest intersection: t<0 indicates inverted intersection on spherical surfaces
+	union { float tfar=FLT_MAX, theta; };	// farthest intersection (gxut) or incident angle (oxut)
+	bool	hit=0;							// is intersected? and padding
 	vec2	bc;								// barycentric coordinates at t
-	uint	g = -1;							// index of an intersected geometry
+	uint	g=-1;							// index of an intersected geometry
 };
 
 //*************************************
@@ -299,23 +299,23 @@ struct material { vec4 color; float specular, beta, emissive, n; uvec2 TEX, NRM;
 struct material
 {
 	vec4		color;				// Blinn-Phong diffuse/specular color; color.a = opacity = 1-transmittance
-	float		specular = 0.0f;		// specular intensity
-	float		beta = 48.0f;			// specular power/shininess
-	float		emissive = 0.0f;		// 1 only for light sources; if an object is named "light*", its material is forced to be emissive
-	float		n = 1.0f;				// refractive index
-	uint64_t	TEX = 0;				// GPU handle to a diffuse texture; TEX.a = alpha values
-	uint64_t	NRM = 0;				// GPU handle to a normal map
+	float		specular=0.0f;		// specular intensity
+	float		beta=48.0f;			// specular power/shininess
+	float		emissive=0.0f;		// 1 only for light sources; if an object is named "light*", its material is forced to be emissive
+	float		n=1.0f;				// refractive index
+	uint64_t	TEX=0;				// GPU handle to a diffuse texture; TEX.a = alpha values
+	uint64_t	NRM=0;				// GPU handle to a normal map
 };
 static_assert(sizeof(material) % 16 == 0, "size of struct material should be aligned at 16-byte boundary");
-inline float beta_to_roughness(float b) { return float(sqrtf(2.0f / (b + 2.0f))); }  // Beckmann roughness in [0,1] (0:mirror, 1: Lambertian)
-inline float roughness_to_beta(float r) { return 2.0f / (r*r) - 2.0f; }
+inline float beta_to_roughness(float b){ return float(sqrtf(2.0f/(b+2.0f))); }  // Beckmann roughness in [0,1] (0:mirror, 1: Lambertian)
+inline float roughness_to_beta(float r){ return 2.0f/(r*r)-2.0f; }
 #endif
 
 struct material_impl : public material
 {
 	const uint	ID;
 	uint64_t	CUB = 0;							// GPU handle to a cube/reflection map
-	char		name[_MAX_PATH] = { 0 };
+	char		name[_MAX_PATH]={0};
 	float		bump_scale = 1.0f;
 	union
 	{
@@ -352,7 +352,7 @@ struct acc_t
 // Bounding volume hierarchy
 struct bvh_t : public acc_t // two-level hierarchy: mesh or geometry
 {
-	struct node { bbox box; uint parent; uint nprims; union { uint idx : 30, second : 30; }; uint axis : 2; };	// idx: primitive index in index buffer; second: offset to right child of interior node; axis==3 (leaf node)
+	struct node { bbox box; uint parent; uint nprims; union {uint idx:30, second:30;}; uint axis:2; };	// idx: primitive index in index buffer; second: offset to right child of interior node; axis==3 (leaf node)
 	std::vector<node> nodes;
 };
 
@@ -360,7 +360,7 @@ struct bvh_t : public acc_t // two-level hierarchy: mesh or geometry
 // KDtree
 struct kdtree_t : public acc_t // two-level hierarchy: mesh or geometry
 {
-	struct node { float pos; uint parent; uint second : 29, has_left : 1, axis : 2; __forceinline bool is_leaf() { return axis == 3; } };
+	struct node { float pos; uint parent; uint second : 29, has_left : 1, axis : 2; __forceinline bool is_leaf(){return axis==3;} };
 	std::vector<node> nodes;
 };
 
@@ -368,13 +368,13 @@ struct kdtree_t : public acc_t // two-level hierarchy: mesh or geometry
 // cull data definition
 struct cull_t
 {
-	enum model { NONE = 0, USER = 1 << 0, REF = 1 << 1, VFC = 1 << 2, CHCPP = 1 << 3, WOC = 1 << 4, RESERVED5 = 1 << 5, RESERVED6 = 1 << 6, RESERVED7 = 1 << 7 };
+	enum model { NONE=0, USER=1<<0, REF=1<<1, VFC=1<<2, CHCPP=1<<3, WOC=1<<4, RESERVED5=1<<5, RESERVED6=1<<6, RESERVED7=1<<7 };
 	uchar data = 0; // bits of the corresponding culling types are set (bitwise OR-ed)
 
 	inline operator bool() const { return data != 0; }
 	inline bool operator()(uint m) const { return (data&m) != 0; }
-	inline cull_t& reset(uchar m = 0xff) { data = (m == 0xff) ? 0 : (data&~m); return *this; }
-	inline cull_t& set(uchar m) { data |= m; return *this; }
+	inline cull_t& reset(uchar m = 0xff){ data = (m == 0xff) ? 0 : (data&~m); return *this; }
+	inline cull_t& set(uchar m){ data |= m; return *this; }
 };
 
 //*************************************
@@ -390,14 +390,14 @@ struct geometry // std430 layout for OpenGL shader storage buffers
 #else
 struct geometry
 {
-	uint	count = 0;			// start of DrawElementsIndirectCommand: number of indices
-	uint	instance_count = 1;	// default: 1
-	uint	first_index = 0;		// first index
-	uint	base_vertex = 0;		// default: 0
-	uint	ID = -1;				// ID shared with base_instance (typically 0)
-	uint	material_index = -1;
-	uint	object_index = -1;	// object index to avoid pointer changes with vector reallocation
-	ushort	instance = 0;			// host-side instance ID (up to 2^16: 65536)
+	uint	count=0;			// start of DrawElementsIndirectCommand: number of indices
+	uint	instance_count=1;	// default: 1
+	uint	first_index=0;		// first index
+	uint	base_vertex=0;		// default: 0
+	uint	ID=-1;				// ID shared with base_instance (typically 0)
+	uint	material_index=-1;
+	uint	object_index=-1;	// object index to avoid pointer changes with vector reallocation
+	ushort	instance=0;			// host-side instance ID (up to 2^16: 65536)
 	cull_t	cull;				// 8-bit cull mask
 	bool	bg = false;			// is it background object?
 	mesh*	root = nullptr;		// pointer to the mesh
@@ -407,11 +407,8 @@ struct geometry
 
 	geometry() = delete; // no default ctor to enforce to assign root
 	geometry(mesh* p_mesh) :root(p_mesh) {}
-	geometry(mesh* p_mesh, uint id, uint obj_index, uint start_index, uint index_count, bbox* box, uint mat_index) :
-		count(index_count), first_index(start_index), ID(id), material_index(mat_index), object_index(obj_index), root(p_mesh) {
-		if (box) this->box = *box;
-	}
-	~geometry() { if (acc) acc->release(); }
+	geometry(mesh* p_mesh, uint id, uint obj_index, uint start_index, uint index_count, bbox* box, uint mat_index) : count(index_count), first_index(start_index), ID(id), material_index(mat_index), object_index(obj_index), root(p_mesh){ if (box) this->box = *box; }
+	~geometry(){ if(acc) acc->release(); }
 
 	inline object* parent() const;
 	inline const char* name() const;
@@ -431,16 +428,16 @@ struct object
 {
 	mat4	matrix;				// group transformation
 	bbox	box;				// transformation-baked bounding box (expanded by geometry box and transformation)
-	uint	ID = -1;
-	float	level = 0;			// real-number LOD
-	uint	instance = 0;
-	struct { bool dynamic = false, bg = false; } attrib; // dynamic: potential matrix changes; background: backdrops such as floor/ground; set in other plugins (e.g., AnimateMesh)
-	char	name[_MAX_PATH] = { 0 };
+	uint	ID=-1;
+	float	level=0;			// real-number LOD
+	uint	instance=0;
+	struct { bool dynamic=false, bg=false; } attrib; // dynamic: potential matrix changes; background: backdrops such as floor/ground; set in other plugins (e.g., AnimateMesh)
+	char	name[_MAX_PATH]={0};
 	mesh*	root = nullptr;
 
 	object() = delete;  // no default ctor to enforce to assign parent
-	object(mesh* p_mesh) :root(p_mesh) {}
-	object(mesh* p_mesh, uint id, const char* name, bbox* box = nullptr) :ID(id), root(p_mesh) { strcpy(this->name, name); if (box) this->box = *box; }
+	object(mesh* p_mesh):root(p_mesh) {}
+	object(mesh* p_mesh, uint id, const char* name, bbox* box=nullptr) :ID(id), root(p_mesh){ strcpy(this->name, name); if (box) this->box = *box; }
 
 	// face/geometry query
 	inline bool empty() const;
@@ -450,7 +447,7 @@ struct object
 	inline std::vector<geometry*> find_geometries() const;
 
 	// create helpers
-	inline geometry* create_geometry(size_t first_index, size_t index_count = 0, bbox* box = nullptr, size_t mat_index = -1);
+	inline geometry* create_geometry(size_t first_index, size_t index_count=0, bbox* box=nullptr, size_t mat_index=-1);
 	inline geometry* create_geometry(const geometry& other);
 };
 
@@ -469,56 +466,56 @@ struct mesh
 		struct { gl::VertexArray* vertex; gl::Buffer *geometry, *count; }; // vertex array, geometry/command buffer, count buffer for OpenGL
 		struct { ID3D10Buffer *vertex, *index; } d3d10; // vertex/index buffers for D3D
 		struct { ID3D11Buffer *vertex, *index; } d3d11; // vertex/index buffers for D3D
-	} buffer = { 0 };
+	} buffer = {0};
 
 	// acceleration and dynamics
 	bbox		box;
-	acc_t*		acc = nullptr;		// BVH or KD-tree
+	acc_t*		acc=nullptr;		// BVH or KD-tree
 
 	// LOD and instancing
-	uint		levels = 1;			// LOD levels
-	uint		instance_count = 1;	// number of instances. The instances are physically added into objects
+	uint		levels=1;			// LOD levels
+	uint		instance_count=1;	// number of instances. The instances are physically added into objects
 
 	// auxiliary information
-	wchar_t		file_path[_MAX_PATH] = { 0 };	// mesh file path
-	wchar_t		mtl_path[_MAX_PATH] = { 0 };	// material file path (e.g., *.mtl)
+	wchar_t		file_path[_MAX_PATH]={0};	// mesh file path
+	wchar_t		mtl_path[_MAX_PATH]={0};	// material file path (e.g., *.mtl)
 
 	// constructor
-	mesh() { vertices.reserve(1 << 20); indices.reserve(1 << 20); objects.reserve(1 << 16); geometries.reserve(1 << 16); materials.reserve(1 << 16); }
-	inline mesh(mesh&& other) { operator=(std::move(other)); } // move constructor
+	mesh(){ vertices.reserve(1<<20); indices.reserve(1<<20); objects.reserve(1<<16); geometries.reserve(1<<16); materials.reserve(1<<16); }
+	inline mesh(mesh&& other){ operator=(std::move(other)); } // move constructor
 	inline mesh& operator=(mesh&& other); // move assignment operator
-	~mesh() { release(); }
+	~mesh(){ release(); }
 
 	// release/memory
-	void release() { if (!vertices.empty()) { vertices.clear(); vertices.shrink_to_fit(); } if (!indices.empty()) { indices.clear(); indices.shrink_to_fit(); } if (!geometries.empty()) { geometries.clear(); geometries.shrink_to_fit(); } objects.clear(); objects.shrink_to_fit(); materials.clear(); materials.shrink_to_fit(); if (acc) { acc->release(); acc = nullptr; } }
-	mesh* shrink_to_fit() { vertices.shrink_to_fit(); indices.shrink_to_fit(); objects.shrink_to_fit(); geometries.shrink_to_fit(); materials.shrink_to_fit(); return this; }
+	void release(){ if (!vertices.empty()) { vertices.clear(); vertices.shrink_to_fit(); } if (!indices.empty()) { indices.clear(); indices.shrink_to_fit(); } if (!geometries.empty()) { geometries.clear(); geometries.shrink_to_fit(); } objects.clear(); objects.shrink_to_fit(); materials.clear(); materials.shrink_to_fit(); if (acc) { acc->release(); acc = nullptr; } }
+	mesh* shrink_to_fit(){ vertices.shrink_to_fit(); indices.shrink_to_fit(); objects.shrink_to_fit(); geometries.shrink_to_fit(); materials.shrink_to_fit(); return this; }
 
 	// face/object/proxy/material helpers
-	uint face_count(int level = 0) const { uint kn = uint(geometries.size()) / levels; auto* g = &geometries[kn*level]; uint f = 0; for (uint k = 0; k < kn; k++, g++)f += g->count; return f / 3; }
-	object* create_object(const char* name, bbox* _box = nullptr) { objects.emplace_back(object(this, uint(objects.size()), name, _box)); return &objects.back(); }
-	object* create_object(const object& o) { objects.emplace_back(o); auto& o1 = objects.back(); o1.root = this; o1.ID = uint(objects.size()) - 1; return &o1; }
-	object*	find_object(const char* name) { for (uint k = 0; k < objects.size(); k++)if (_stricmp(objects[k].name, name) == 0) return &objects[k]; return nullptr; }
-	inline mesh* create_proxy(bool use_quads = false, bool double_sided = false); // proxy mesh helpers: e.g., bounding box
-	std::vector<material> pack_materials() const { std::vector<material> p; auto& m = materials; p.resize(m.size()); for (size_t k = 0, kn = p.size(); k < kn; k++) p[k] = m[k]; return p; }
+	uint face_count(int level=0) const { uint kn=uint(geometries.size())/levels; auto* g=&geometries[kn*level]; uint f=0; for(uint k=0; k<kn; k++, g++) f+=g->count; return f/3; }
+	object* create_object(const char* name, bbox* _box=nullptr){ objects.emplace_back(object(this, uint(objects.size()), name, _box)); return &objects.back(); }
+	object* create_object(const object& o){ objects.emplace_back(o); auto& o1=objects.back(); o1.root=this; o1.ID=uint(objects.size())-1; return &o1; }
+	object*	find_object(const char* name){ for (uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) return &objects[k]; return nullptr; }
+	inline mesh* create_proxy(bool use_quads=false, bool double_sided=false); // proxy mesh helpers: e.g., bounding box
+	std::vector<material> pack_materials() const { std::vector<material> p; auto& m = materials; p.resize(m.size()); for(size_t k=0, kn=p.size(); k<kn; k++) p[k]=m[k]; return p; }
 
 	// update for matrix/bound
-	inline bool is_dynamic() const { for (size_t k = 0, kn = objects.size() / instance_count; k < kn; k++) if (objects[k].attrib.dynamic) return true; return false; }
-	inline void update_matrix(bool transpose = false) { if (!transpose) for (auto& g : geometries) g.shader_matrix = objects[g.object_index].matrix; else for (auto& g : geometries) g.shader_matrix = objects[g.object_index].matrix.transpose(); }
-	void update_bound(bool bRecalcTris = false);
+	inline bool is_dynamic() const { for(size_t k=0, kn=objects.size()/instance_count; k<kn; k++) if(objects[k].attrib.dynamic) return true; return false; }
+	inline void update_matrix(bool transpose=false){ if(!transpose) for(auto& g:geometries) g.shader_matrix=objects[g.object_index].matrix; else for (auto& g:geometries) g.shader_matrix=objects[g.object_index].matrix.transpose(); }
+	void update_bound(bool bRecalcTris=false);
 
 	// intersection
-	bool intersect(const ray& r, std::vector<uint>* hit_prims = nullptr, bool use_acc = true) const;
-	bool intersect(const ray& r, isect* pi = nullptr, bool use_acc = true) const;
+	bool intersect(const ray& r, std::vector<uint>* hit_prims=nullptr, bool use_acc=true) const;
+	bool intersect(const ray& r, isect* pi=nullptr, bool use_acc=true) const;
 
 	// utility
-	void dump_binary(path dir = L""); // dump the vertex/index buffers as binary files
+	void dump_binary(path dir=L""); // dump the vertex/index buffers as binary files
 };
 
 //*************************************
 // Volume data format
 struct volume
 {
-	wchar_t	file_path[_MAX_PATH] = { 0 };
+	wchar_t	file_path[_MAX_PATH]={0};
 	uint	width, height, depth;
 	vec3	voxel_size;		// size of a unit voxel
 	uint	format;			// GL_R32F or GL_RGBA32F
@@ -624,22 +621,22 @@ __noinline inline ray gen_primary_ray(camera* cam, float x, float y)	// (x,y) in
 }
 
 // triangle intersection: isect=(pos,t), bc=(s,t)
-__noinline inline bool intersect(const ray& r, const vec3& v0, const vec3& v1, const vec3& v2, isect* pi = nullptr)
+__noinline inline bool intersect(const ray& r, const vec3& v0, const vec3& v1, const vec3& v2, isect* pi=nullptr)
 {
-	if (pi) pi->hit = false;
+	if(pi) pi->hit = false;
 
 	// http://geomalgorithms.com/a06-_intersect-2.html#intersect3D_RayTriangle
-	vec3 u = v1 - v0, v = v2 - v0, n = u.cross(v); if (n.length2() < 0.000001f) return false;	// degenerate case: non-triangle
-	float b = dot(n, r.dir); if (b > -0.000001f) return false;							// skip backfaces or rays lying on the plane
-	float t = dot(n, v0 - r.pos) / b; if (t<r.t || t>r.tfar) return false;					// out of range of [tnear,tfar]
+	vec3 u=v1-v0, v=v2-v0, n=u.cross(v); if(n.length2()<0.000001f) return false;	// degenerate case: non-triangle
+	float b=dot(n,r.dir); if(b>-0.000001f) return false;							// skip backfaces or rays lying on the plane
+	float t=dot(n,v0-r.pos)/b; if(t<r.t||t>r.tfar) return false;					// out of range of [tnear,tfar]
 	vec3 ipos = r.pos + r.dir*t, w = ipos - v0;
 
-	// barycentric coord test
-	float uu = dot(u, u), uv = dot(u, v), vv = dot(v, v), wu = dot(w, u), wv = dot(w, v), D = uv * uv - uu * vv;
-	float bs = (uv*wv - vv * wu) / D; if (bs<0 || bs>1.0f)			return false;
-	float bt = (uv*wu - uu * wv) / D; if (bt<0 || (bs + bt)>1.0f)	return false;
+	// test on barycentric coordinate
+	float uu=dot(u,u),uv=dot(u,v),vv=dot(v,v),wu=dot(w,u),wv=dot(w,v),D=uv*uv-uu*vv;
+	float bs=(uv*wv-vv*wu)/D; if(bs<0||bs>1.0f)			return false;
+	float bt=(uv*wu-uu*wv)/D; if(bt<0||(bs+bt)>1.0f)	return false;
 
-	if (pi)
+	if(pi)
 	{
 		pi->pos = ipos;
 		pi->norm = n.normalize();
