@@ -53,6 +53,8 @@ protected:
 
 struct option_t
 {
+	struct size_less{ bool operator()(const std::string& a,const std::string& b)const{ if(a.length()!=b.length()) return a.length()<b.length(); else return _stricmp(a.c_str(),b.c_str())<0;}};
+
 	option_t& subarg( const char* subarg_name ){ use_subarg=true; this->subarg_name=subarg_name; return *this; }
 	option_t& help( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); shelp=trim(&buff[0],"\n"); va_end(a); return *this; }
 	option_t& set_default( const char* arg ){ value=atow(arg); return *this; }
@@ -67,13 +69,13 @@ protected:
 	const char* short_name() const { for( auto& n : names ) if(n.size()==1) return n.c_str(); return ""; }
 	std::vector<const char*> long_names() const { std::vector<const char*> v; for( auto& n : names ) if(n.size()>1) v.push_back(n.c_str()); return v; }
 
-	std::set<std::string>		names;				// multiple names allowed for a single option
-	std::wstring				value;				// found values
-	std::vector<std::wstring>	others;				// additional excessive multiple options
-	std::string					shelp;				// help string
-	std::string					subarg_name;		// name of sub-argument
-	bool						use_subarg=false;	// use a sub-argument
-	int							instance=0;			// allow multiple instances of an option
+	std::set<std::string,size_less>	names;				// multiple names allowed for a single option
+	std::wstring					value;				// found values
+	std::vector<std::wstring>		others;				// additional excessive multiple options
+	std::string						shelp;				// help string
+	std::string						subarg_name;		// name of sub-argument
+	bool							use_subarg=false;	// use a sub-argument
+	int								instance=0;			// allow multiple instances of an option
 };
 
 struct parser_t
