@@ -141,20 +141,20 @@ inline FILETIME	Uint64ToFileTime( uint64_t u ){ FILETIME f; f.dwHighDateTime=DWO
 inline uint64_t SystemTimeToUint64( const SYSTEMTIME& s, uint offset_days=0 ){ FILETIME f; SystemTimeToFileTime( &s, &f ); return FileTimeToUint64(f,offset_days); }
 inline FILETIME now(){ FILETIME f; GetSystemTimeAsFileTime(&f); return f; } // current time
 
-inline bool operator==( const FILETIME& f1, const FILETIME& f2 ){	return CompareFileTime(&f1,&f2)==0; }
-inline bool operator!=( const FILETIME& f1, const FILETIME& f2 ){	return CompareFileTime(&f1,&f2)!=0; }
-inline bool operator>(  const FILETIME& f1, const FILETIME& f2 ){	return CompareFileTime(&f1,&f2)>0; }
-inline bool operator<(  const FILETIME& f1, const FILETIME& f2 ){	return CompareFileTime(&f1,&f2)<0; }
-inline bool operator>=( const FILETIME& f1, const FILETIME& f2 ){	return CompareFileTime(&f1,&f2)>=0; }
-inline bool operator<=( const FILETIME& f1, const FILETIME& f2 ){	return CompareFileTime(&f1,&f2)<=0; }
+inline bool operator==( const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)==0; }
+inline bool operator!=( const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)!=0; }
+inline bool operator>(  const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)>0; }
+inline bool operator<(  const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)<0; }
+inline bool operator>=( const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)>=0; }
+inline bool operator<=( const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)<=0; }
 
 struct path
 {
 	typedef WIN32_FILE_ATTRIBUTE_DATA attrib_t; // auxiliary cache information from scan()
 	typedef struct _stat stat_t; // use "struct _stat" instead of "_stat" for C-compatibility
 
-	static const int max_buffers = 4096;
-	static const int capacity = 1024;		// MAX_PATH == 260
+	static const int max_buffers	= 4096;
+	static const int capacity		= 1024;	// MAX_PATH == 260
 
 	// get shared buffer for return values
 	static inline wchar_t*			__wcsbuf(){ static wchar_t buff[max_buffers][capacity]; static int i=0; return buff[(i++)%std::extent<decltype(buff)>::value]; }
@@ -168,12 +168,12 @@ struct path
 	static inline bool				__wcsiext( const wchar_t* fname, std::vector<std::wstring>* exts ){ return __wcsiext(fname,exts,wcslen(fname)); }
 
 	// split path
-	struct split_info { wchar_t *drive, *dir, *fname, *ext; };
-	split_info split( wchar_t* drive=nullptr, wchar_t* dir=nullptr, wchar_t* fname=nullptr, wchar_t* ext=nullptr ) const { split_info si={drive,dir,fname,ext};_wsplitpath_s(data,si.drive,si.drive?_MAX_DRIVE:0,si.dir,si.dir?_MAX_DIR:0,si.fname,si.fname?_MAX_FNAME:0,si.ext,si.ext?_MAX_EXT:0);if(si.drive&&si.drive[0]) si.drive[0]=::toupper(si.drive[0]); return si;}
+	struct split_t { wchar_t *drive, *dir, *fname, *ext; };
+	split_t split( wchar_t* drive=nullptr, wchar_t* dir=nullptr, wchar_t* fname=nullptr, wchar_t* ext=nullptr ) const { split_t si={drive,dir,fname,ext};_wsplitpath_s(data,si.drive,si.drive?_MAX_DRIVE:0,si.dir,si.dir?_MAX_DIR:0,si.fname,si.fname?_MAX_FNAME:0,si.ext,si.ext?_MAX_EXT:0);if(si.drive&&si.drive[0]) si.drive[0]=::toupper(si.drive[0]); return si;}
 
 	// destructor/constuctors
 	~path(){free(data);}
-	path():data((wchar_t*)malloc(sizeof(wchar_t)*capacity+sizeof(attrib_t))){ data[0]=0; clear_cache(); }
+	path():data((wchar_t*)malloc(sizeof(wchar_t)*capacity+sizeof(attrib_t))){data[0]=0;clear_cache();}
 	path( const path& p ):path(){ wcscpy(data,p); cache()=p.cache(); } // do not canonicalize for copy constructor
 	path( path&& p ):path(){ std::swap(data,p.data); std::swap(cache(),p.cache()); }
 	path( const wchar_t* s ):path(){ wcscpy(data,s); canonicalize(); }
@@ -224,18 +224,16 @@ struct path
 	bool operator<=( const path& p )	const { return _wcsicmp(data,p.data)<=0; }
 	bool operator>=( const path& p )	const { return _wcsicmp(data,p.data)>=0; }
 
-	// operator overloading: casting
-	operator wchar_t*(){ return data; }
-	operator const wchar_t*() const { return data; }
-	const wchar_t* c_str() const { return data; }
-
-	// conversion to wstring and multibyte string
-	std::wstring str() const { return std::wstring(data); }
-	const char* wtoa() const { return __wc2mb(data,__strbuf()); }
-
 	// operator overloading: array operator
 	inline wchar_t& operator[]( ptrdiff_t i ){ return data[i]; }
 	inline const wchar_t& operator[]( ptrdiff_t i ) const { return data[i]; }
+
+	// operator overloading: casting and conversion
+	operator wchar_t*(){ return data; }
+	operator const wchar_t*() const { return data; }
+	const wchar_t* c_str() const { return data; }
+	const char* wtoa() const { return __wc2mb(data,__strbuf()); }
+	std::wstring str() const { return std::wstring(data); }
 
 	// iterators
 	using iterator = wchar_t*;
@@ -270,16 +268,15 @@ struct path
 	path auto_quote()		const { if(data[0]==0||wcschr(data,L' ')==nullptr||(data[0]==L'\"'&&data[wcslen(data)-1]==L'\"')) return *this; path p; swprintf_s(p,capacity,L"\"%s\"",data); return p; }
 	path unix()				const {	path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; p.data[1]=::tolower(p.data[0]); p.data[0]=L'/'; return p; }
 	path cygwin()			const { path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; path p2; swprintf_s( p2, capacity, L"/cygdrive/%c%s", ::tolower(p[0]), p.data+2 ); return p2; }
-	void chdir()			const { if(is_dir()) _wchdir(data); }
-
+	
 	// path info/operations
 	path drive() const { path d; split(d.data); return d; }
-	path dir() const { path p; if(wcschr(data,L'\\')==nullptr) return L".\\"; split_info si=split(__wcsbuf(),__wcsbuf()); wcscpy(p.data,wcscat(si.drive,si.dir)); size_t len=wcslen(p.data); if(len>0&&p.data[len-1]!='\\'){p.data[len]='\\';p.data[len+1]=L'\0';} return p; }
-	path name( bool with_ext=true ) const { split_info si=split(nullptr,nullptr,__wcsbuf(),__wcsbuf()); return with_ext?wcscat(si.fname,si.ext):si.fname; }
-	path ext() const { path e; split_info si=split(nullptr,nullptr,nullptr,e.data); return e.empty()?e:path(e.data+1); }
+	path dir() const { path p; if(wcschr(data,L'\\')==nullptr) return L".\\"; split_t si=split(__wcsbuf(),__wcsbuf()); wcscpy(p.data,wcscat(si.drive,si.dir)); size_t len=wcslen(p.data); if(len>0&&p.data[len-1]!='\\'){p.data[len]='\\';p.data[len+1]=L'\0';} return p; }
+	path name( bool with_ext=true ) const { split_t si=split(nullptr,nullptr,__wcsbuf(),__wcsbuf()); return with_ext?wcscat(si.fname,si.ext):si.fname; }
+	path ext() const { path e; split_t si=split(nullptr,nullptr,nullptr,e.data); return e.empty()?e:path(e.data+1); }
 	path parent() const { return dir().remove_backslash().dir(); }
 	path remove_first_dot()	const { return (wcslen(data)>2&&data[0]==L'.'&&data[1]==L'\\') ? path(data+2) : *this; }
-	path remove_ext() const { split_info si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
+	path remove_ext() const { split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
 	std::vector<path> explode() const { path slashed=to_slash(); std::vector<path> L;L.reserve(8); wchar_t* ctx; for(wchar_t* t=wcstok_s(slashed.data,L"/",&ctx);t;t=wcstok_s(0,L"/",&ctx)) L.emplace_back(t); return L; }
 	std::vector<path> relative_ancestors() const { std::vector<path> a, e=dir().relative().explode(); if(e.empty()) return a; a.reserve(8); path t=e.front().absolute()+L"\\"; a.emplace_back(t); for(size_t k=1,kn=e.size();k<kn;k++)a.emplace_back(t+=e[k]+L"\\"); return a; }
 
@@ -297,8 +294,10 @@ struct path
 	void set_hidden( bool h ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(data,a=h?(a|FILE_ATTRIBUTE_HIDDEN):(a^FILE_ATTRIBUTE_HIDDEN)); }
 	void set_readonly( bool r ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(data,a=r?(a|FILE_ATTRIBUTE_READONLY):(a^FILE_ATTRIBUTE_READONLY)); }
 
-	// make/copy/delete file/dir operations
+	// chdir/make/copy/delete file/dir operations
+	void chdir() const { if(is_dir()) _wchdir(data); }
 	bool mkdir() const { if(exists()) return false; path p=to_backslash().remove_backslash(), d; wchar_t* ctx;for( wchar_t* t=wcstok_s(p,L"\\",&ctx); t; t=wcstok_s(nullptr,L"\\", &ctx) ){ d+=t;d+=L"\\"; if(!d.exists()&&_wmkdir(d.data)!=0) return false; } return true; } // make all super directories
+	bool create_directory() const { return mkdir(); }
 	bool copy_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()||dst.empty()) return false; if(dst.is_dir()||dst.back()==L'\\') dst=dst.add_backslash()+name(); if(!dst.dir().exists()) dst.dir().mkdir(); if(dst.exists()&&overwrite){ if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } return CopyFileW( data, dst, overwrite?FALSE:TRUE )?true:false; }
 	bool move_file( path dst, bool overwrite=true ) const { if(!copy_file(dst,overwrite)) return false; return delete_file(); }
 #ifndef _INC_SHELLAPI
@@ -322,7 +321,7 @@ struct path
 	inline bool is_subdir( const path& parent ) const { path p=parent.canonical(); return _wcsnicmp(canonical(),p,p.size())==0; } // do not check existence
 	inline path absolute( const wchar_t* base=L"" ) const { if(!data[0]) return *this; return _wfullpath(__wcsbuf(),(!*base||is_absolute())?data:wcscat(wcscpy(__wcsbuf(),path(base).add_backslash()),data),capacity); }	// do not directly return for non-canonicalized path
 	inline path relative( const wchar_t* from=L"" ) const;
-	inline path canonical() const { path p=*this; p.canonicalize(); return p; }
+	inline path canonical() const { path p=*this; p.canonicalize(); return p; } // not necessarily absolute: return relative path as well
 
 	// create process
 	void create_process( const wchar_t* arguments=nullptr, bool bShowWindow=true, bool bWaitFinish=false ) const;
@@ -337,9 +336,9 @@ struct path
 	FILETIME cfiletime() const { if(!cache_exists()) update_cache(); return cache().ftCreationTime; }
 	FILETIME afiletime() const { if(!cache_exists()) update_cache(); return cache().ftLastAccessTime; }
 	FILETIME mfiletime() const { if(!cache_exists()) update_cache(); return cache().ftLastWriteTime; }
-	SYSTEMTIME cfilesystemtime() const { return FileTimeToSystemTime(cfiletime()); }
-	SYSTEMTIME afilesystemtime() const { return FileTimeToSystemTime(afiletime()); }
-	SYSTEMTIME mfilesystemtime() const { return FileTimeToSystemTime(mfiletime()); }
+	SYSTEMTIME csystemtime() const { return FileTimeToSystemTime(cfiletime()); }
+	SYSTEMTIME asystemtime() const { return FileTimeToSystemTime(afiletime()); }
+	SYSTEMTIME msystemtime() const { return FileTimeToSystemTime(mfiletime()); }
 	void set_filetime( const FILETIME* ctime, const FILETIME* atime, const FILETIME* mtime ) const { HANDLE h=CreateFileW(data,FILE_WRITE_ATTRIBUTES,0,nullptr,OPEN_EXISTING,0,nullptr); if(!h)return; auto& c=cache(); if(ctime) c.ftCreationTime=*ctime; if(atime) c.ftLastAccessTime=*atime; if(mtime) c.ftLastWriteTime=*mtime; SetFileTime(h, ctime, atime, mtime ); CloseHandle(h); }
 	void set_filetime( const FILETIME& f ) const { set_filetime(&f,&f,&f); }
 
@@ -502,17 +501,17 @@ __noinline inline void path::create_process( const wchar_t* arguments, bool bSho
 
 __noinline inline void path::canonicalize()
 {
-	size_t len = length(); if(len==0) return;
+	size_t len=data[0]?wcslen(data):0; if(len==0) return;
 	for(uint k=0;k<len;k++) if(data[k]==L'/') data[k]=L'\\'; // slash to backslash
 	if(data[len-1]==L'.'&&((len>2&&data[len-2]==L'\\')||(len>3&&data[len-3]==L'\\'&&data[len-2]==L'.'))){ data[len++]=L'\\'; data[len]=L'\0'; } // add trailing slash to "\\." or "\\.."
 	if(len==2&&data[1]==L':'){ data[len++]=L'\\'; data[len]=L'\0'; } // root correction
 	if(!wcsstr(data,L"\\.\\")&&!wcsstr(data,L"\\..\\")) return; // trivial return
-	wchar_t* ds; while( (ds=wcsstr(data+1,L"\\\\")) ) memmove(ds+1,ds+2,((len--)-(ds-data)-1)*sizeof(wchar_t));	// correct multiple backslashes, except the beginning of unc path
+	wchar_t* ds; while((ds=wcsstr(data+1,L"\\\\"))) memmove(ds+1,ds+2,((len--)-(ds-data)-1)*sizeof(wchar_t)); // correct multiple backslashes, except the beginning of unc path
 	if(is_absolute()){ _wfullpath(data,(const wchar_t*)memcpy(__wcsbuf(),data,sizeof(wchar_t)*(len+1)),capacity); return; }
 
-	// misc. flags to check
-	bool bTrailingBackslash = (data[len-1]==L'\\');
-	bool bSingleDotBegin = data[0]==L'.'&&data[1]==L'\\';
+	// flags to check
+	bool b_trailing_backslash = (data[len-1]==L'\\');
+	bool b_single_dot_begin = data[0]==L'.'&&data[1]==L'\\';
 
 	// perform canonicalization
 	std::deque<wchar_t*> L;wchar_t* ctx;
@@ -522,12 +521,12 @@ __noinline inline void path::canonicalize()
 		else if(t[0]!=L'.'||t[1]!=0) L.emplace_back(wcscpy(__wcsbuf(),t));
 	}
 
-	// reconstruct the path
+	// reconstruction
 	wchar_t* d=data;
-	if(!bSingleDotBegin&&L.empty()){ d[0]=L'\0'; return; }
-	if(L.empty()||(bSingleDotBegin&&(!L.empty()&&L.front()[0]!=L'.'))){ (d++)[0]=L'.'; (d++)[0]=L'\\'; d[0]=L'\0'; } // make it begin with single-dot again
-	for(size_t k=0,kn=L.size();k<kn;k++){ wchar_t* t=L[k]; size_t l=wcslen(t); memcpy(d,t,l*sizeof(wchar_t)); d+=l; (d++)[0]=L'\\'; d[0]=L'\0'; }
-	if(!bTrailingBackslash&&d>data)(d-1)[0]=L'\0';
+	if(!b_single_dot_begin&&L.empty()){ d[0]=L'\0';return; }
+	if(L.empty()||(b_single_dot_begin&&(!L.empty()&&L.front()[0]!=L'.'))){ (d++)[0]=L'.';(d++)[0]=L'\\';d[0]=L'\0'; } // make it begin with single-dot again
+	for(size_t k=0,kn=L.size();k<kn;k++){ wchar_t* t=L[k];size_t l=wcslen(t);memcpy(d,t,l*sizeof(wchar_t));d+=l;(d++)[0]=L'\\';d[0]=L'\0'; }
+	if(!b_trailing_backslash&&d>data)(d-1)[0]=L'\0';
 }
 
 //***********************************************
