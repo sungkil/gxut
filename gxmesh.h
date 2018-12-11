@@ -288,7 +288,20 @@ struct camera : public camera_t
 	void		update_depth_clips(const bbox* bound) { if (!bound) return; bbox b=view_matrix*(*bound); vec2 z(max(0.001f,-b.M.z),max(0.001f,-b.m.z)); dnear=max(max(bound->radius()*0.00001f, 50.0f),z.x*0.99f); dfar=max(max(dnear+1.0f,dnear*1.01f),z.y*1.01f); }
 	void		update_view_frustum() { frustum.update(projection_matrix*view_matrix); }
 	bool		cull(bbox& b) const { return frustum.cull(b); }
-	void		update_stereo(){ if(!stereo.model) return; float s=0.5f*stereo.ipd, o=s*dnear/df, t=dnear*tanf(0.5f*fovy*(fovy<PI<float>?1.0f:PI<float>/180.0f)), R=t*aspect; vec3 stereo_dir = normalize(cross(dir,up))*s; auto& l=stereo.left=*this; l.eye-=stereo_dir; l.center-=stereo_dir; l.view_matrix.set_look_at(l.eye,l.center,l.up); l.projection_matrix=mat4::perspective_off_center(-R+o,R+o,t,-t,dnear,dfar); auto& r=stereo.right=*this; r.eye+=stereo_dir; r.center+=stereo_dir; r.view_matrix.set_look_at(r.eye,r.center,r.up); r.projection_matrix=mat4::perspective_off_center(-R-o,R-o,t,-t,dnear,dfar); 
+	void		update_stereo(){ if(!stereo.model) return; 
+	float s=0.5f*stereo.ipd, o=s*dnear/df, t=dnear*tanf(0.5f*fovy*(fovy<PI<float>?1.0f:PI<float>/180.0f)), R=t*aspect; 
+	vec3 stereo_dir = normalize(cross(dir, up))*s; 
+	auto& l=stereo.left=*this; 
+	l.eye-=stereo_dir; 
+	// @@JMKIM 2018.12.11 - make stereo to toe-in model
+	//l.center-=stereo_dir; 
+	l.view_matrix=mat4::look_at(l.eye, l.center, l.up); 
+	//l.projection_matrix=mat4::perspective_off_center(-R+o, R+o, t, -t, dnear, dfar);
+	auto& r=stereo.right=*this; 
+	r.eye+=stereo_dir; 
+	//r.center+=stereo_dir; 
+	r.view_matrix=mat4::look_at(r.eye, r.center, r.up); 
+	//r.projection_matrix=mat4::perspective_off_center(-R-o, R-o, t, -t, dnear, dfar);
 	}
 };
 
