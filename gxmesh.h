@@ -801,31 +801,31 @@ namespace gx {
 
 		bool b_used = true;
 		uint chunk_size = 16;	// defaulted to 16
-		uint count = 0;		// total number of samples to render
+		uint count = 1;			// total number of samples to render
 	};
 
 	template <uint MAX_CHUNK = 256>
 	struct progressive_t : public progressive_data_t<MAX_CHUNK>
 	{
 		uint begin = 0;	// volatile indices for accumulation
-		uint end = 0;		// volatile indices for accumulation
+		uint end = 1;	// volatile indices for accumulation
 
 		operator bool() const { return b_used; } // using progressive rendeering
 		progressive_data_t<MAX_CHUNK>& data() { return reinterpret_cast<progressive_data_t<MAX_CHUNK>&>(*this); }
 		bool is_complete() const { return !b_used || begin >= count; }
 
-		void reset(size_t n)
+		void reset( size_t n )
 		{
-			count = uint(n);
-			if (chunk_size > MAX_CHUNK_SIZE)chunk_size = MAX_CHUNK_SIZE;
-			begin = 0; end = b_used && chunk_size < count ? chunk_size : count;
+			count=uint(n);
+			if(chunk_size>MAX_CHUNK_SIZE) chunk_size=MAX_CHUNK_SIZE;
+			begin=0; end=b_used&&chunk_size<count?chunk_size:count;
 		}
 
 		bool update()
 		{
-			if (!b_used) { begin = 0; end = count; return false; }
-			if (begin >= end) return false;
-			begin = end; end = begin + chunk_size; if (end > count) end = count;
+			if(!b_used){ begin=0; end=count; return false; }
+			if(begin>=end) return false;
+			begin=end; end=begin+chunk_size; if(end>count) end=count;
 			return true;
 		}
 	};
