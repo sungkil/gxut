@@ -93,6 +93,12 @@ struct light_t
 	float	theta() const { return acos(dir().z); }					// angle between outgoing light direction and the optical axis
 };
 
+// area light source
+struct area_light_t : public light_t
+{
+	float	radius;		// world-space radius as a sphere
+};
+
 // light as camera: use for VPLs and shadows (actually, including real lights as well)
 struct vpl_t : public light_t
 {
