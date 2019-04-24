@@ -78,7 +78,7 @@ struct vpl_t
 struct light_t
 {
 	vec4	pos;				// directional light (position.a==0) ignores normal
-	vec4	color;				// shared for diffuse/specular
+	vec4	color;				// shared for diffuse/specular; color.a = specular scale
 	vec3	normal;				// direction (the negated vector of position for directional light)
 	uint	bounce : 6;			// zero means direct light
 	uint	mouse : 1;			// dynamic binding to the mouse?
