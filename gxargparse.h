@@ -84,8 +84,8 @@ struct parser_t
 	std::vector<option_t>	options;
 
 	// attributes
-	inline const char* name() const { static const std::string n=path::module().name(false).wtoa(); return n.c_str(); }
-	inline const wchar_t* wname() const { static const path n=path::module().name(false); return n.c_str(); }
+	inline const char* name() const { static const std::string n=path::module_path().name(false).wtoa(); return n.c_str(); }
+	inline const wchar_t* wname() const { static const path n=path::module_path().name(false); return n.c_str(); }
 	inline void header( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); sheader=trim(&buff[0]); va_end(a); }
 	inline void footer( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); sfooter=trim(&buff[0]); va_end(a); }
 	inline void copyright( const char* author, int since_year ){ this->author=author; this->since_year=since_year; }
