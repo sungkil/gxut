@@ -1,5 +1,5 @@
-//*******************************************************************
-// Copyright 2011-2018 Sungkil Lee
+//*********************************************************
+// Copyright 2011-2020 Sungkil Lee
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//*******************************************************************
+//*********************************************************
 
 #pragma once
 #ifndef __GX_MATH__
@@ -131,14 +131,14 @@ using std::max;
 template <class T=float> constexpr T PI = T(3.141592653589793);
 template <class T,class N,class X> T clamp( T v, N vmin, X vmax ){ return v<T(vmin)?T(vmin):v>T(vmax)?T(vmax):v; }
 
-//***********************************************
+//*************************************
 // template type_traits helpers
 template <class T> using enable_signed_t = typename std::enable_if_t<std::is_signed<T>::value,T>;
 template <class T> using enable_float_t	 = typename std::enable_if_t<std::is_floating_point<T>::value,T>;
 #define signed_memfun(U) template <class X=T, typename U=enable_signed_t<X>>
 #define float_memfun(U)	 template <class X=T, typename U=enable_float_t<X>>
 
-//***********************************************
+//*************************************
 template <class T,template <class> class A=tarray2> struct tvec2
 {
 	default_tarray(2);
@@ -340,7 +340,7 @@ template<> __forceinline bool tvec2<double>::operator==(const tvec2& v) const { 
 template<> __forceinline bool tvec3<double>::operator==(const tvec3& v) const { static const double p=precision<double>::value(); return std::abs(x-v.x)<=p&&std::abs(y-v.y)<=p&&std::abs(z-v.z)<=p; }
 template<> __forceinline bool tvec4<double>::operator==(const tvec4& v) const { static const double p=precision<double>::value(); return std::abs(x-v.x)<=p&&std::abs(y-v.y)<=p&&std::abs(z-v.z)<=p&&std::abs(w-v.w)<=p; }
 
-//***********************************************
+//*************************************
 // type definitions and size check
 using vec2	= tvec2<float>;		using vec3	= tvec3<float>;		using vec4	= tvec4<float>;
 using dvec2 = tvec2<double>;	using dvec3 = tvec3<double>;	using dvec4 = tvec4<double>;
@@ -356,7 +356,7 @@ static_assert(sizeof(vec4)==(sizeof(float)*4),"sizeof(vec4)!=sizeof(float)*4" );
 struct alignas(32) vertex { vec3 pos; vec3 norm; vec2 tex; };	// default vertex layout
 struct bbox_t { alignas(16) vec3 m=-3.402823466e+38F; alignas(16) vec3 M=3.402823466e+38F; }; // bounding box in std140 layout; FLT_MAX = 3.402823466e+38F
 
-//***********************************************
+//*************************************
 // std::hash support here
 
 #ifdef _M_X64
@@ -381,7 +381,7 @@ namespace std
 	template<> struct hash<uvec4> :	public bitwise_hash<uint4> {};
 }
 
-//***********************************************
+//*************************************
 // half-precision float and conversion
 struct half { unsigned short mantissa:10,exponent:5,sign:1; __forceinline operator float() const; };	// IEEE 754-2008 half-precision (16-bit) floating-point storage. // https://github.com/HeliumProject/Helium/blob/master/Math/Float16.cpp
 __forceinline float	htof( half value ){ struct _float32_t {uint mantissa:23,exponent:8,sign:1;}; _float32_t result;result.sign = value.sign;uint exponent=value.exponent,mantissa=value.mantissa; if(exponent==31){result.exponent=255;result.mantissa=0;} else if(exponent==0&&mantissa==0){result.exponent=0;result.mantissa=0;} else if(exponent==0){uint mantissa_shift=10-static_cast<uint>(log2(float(mantissa)));result.exponent=127-(15-1)-mantissa_shift;result.mantissa=mantissa<<(mantissa_shift+23-10);} else{result.exponent=127-15+exponent;result.mantissa=static_cast<uint>(value.mantissa)<<(23-10);} return reinterpret_cast<float&>(result); }
@@ -399,7 +399,7 @@ __forceinline half3	ftoh( const vec3& v ){ return half3{ftoh(v.x),ftoh(v.y),ftoh
 __forceinline half4 ftoh( const vec4& v ){ return half4{ftoh(v.x),ftoh(v.y),ftoh(v.z),ftoh(v.w)}; }
 __forceinline half* ftoh( const float* pf, half* ph, size_t nElements, size_t half_stride=1 ){ if(pf==nullptr||ph==nullptr||nElements==0) return ph; half* ph0=ph; for( size_t k=0; k < nElements; k++, pf++, ph+=half_stride ) *ph=ftoh(*pf); return ph0; }
 
-//***********************************************
+//*************************************
 struct mat2
 {
 	using T=float;
@@ -472,7 +472,7 @@ struct mat2
 	__forceinline mat2& set_rotate( float theta ){ _11=_22=cosf(theta);_21=sinf(theta);_12=-_21; return *this; }
 };
 
-//***********************************************
+//*************************************
 struct mat3
 {
 	using T=float;
@@ -551,7 +551,7 @@ struct mat3
 	__forceinline mat3& set_rotate( float theta ){ set_identity(); _11=_22=cosf(theta);_21=sinf(theta);_12=-_21; return *this; }
 };
 
-//***********************************************
+//*************************************
 // mat4 uses only row-major and right-hand (RH) notations even for D3D
 struct mat4
 {
@@ -714,13 +714,13 @@ __noinline inline mat4 mat4::inverse() const
 				xd.x, xd.y, xd.z, xd.w )*(1.0f/cvec4(3).dot(xd));
 }
 
-//***********************************************
+//*************************************
 // matrix size check
 static_assert(sizeof(mat2)%sizeof(float)*4==0,"sizeof(mat2)!=sizeof(float)*4" );
 static_assert(sizeof(mat3)%sizeof(float)*9==0,"sizeof(mat3)!=sizeof(float)*9" );
 static_assert(sizeof(mat4)%sizeof(float)*16==0,"sizeof(mat4)!=sizeof(float)*16" );
 
-//***********************************************
+//*************************************
 // vertor-matrix multiplications
 __forceinline vec2 operator*( const vec2& v, const mat2& m ){ return m.transpose()*v; }
 __forceinline vec3 operator*( const vec3& v, const mat3& m ){ return m.transpose()*v; }
@@ -735,7 +735,7 @@ __forceinline vec3 mul( const mat3& m, const vec3& v ){ return m*v; }
 __forceinline vec3 mul( const mat4& m, const vec3& v ){ return m*v; }
 __forceinline vec4 mul( const mat4& m, const vec4& v ){ return m*v; }
 
-//***********************************************
+//*************************************
 // scalar-vector algebra
 template <class T> __forceinline tvec2<T> operator+( T f, const tvec2<T>& v ){ return v+f; }
 template <class T> __forceinline tvec2<enable_signed_t<T>> operator-( T f, const tvec2<T>& v ){ return -v+f; }
@@ -750,7 +750,7 @@ template <class T> __forceinline tvec4<enable_signed_t<T>> operator-( T f, const
 template <class T> __forceinline tvec4<T> operator*( T f, const tvec4<T>& v ){ return v*f; }
 template <class T> __forceinline tvec4<T> operator/( T f, const tvec4<T>& v ){ return tvec4<T>(f/v.x,f/v.y,f/v.z,f/v.w); }
 
-//***********************************************
+//*************************************
 // global operators for vector length/normalize/dot/cross
 template <class T> __forceinline enable_float_t<T> length( const tvec2<T>& v ){ return v.length(); }
 template <class T> __forceinline enable_float_t<T> length( const tvec3<T>& v ){ return v.length(); }
@@ -766,7 +766,7 @@ template <class T> __forceinline enable_float_t<T> dot( const tvec3<T>& v1, cons
 template <class T> __forceinline enable_float_t<T> dot( const tvec4<T>& v1, const tvec4<T>& v2){ return v1.dot(v2); }
 template <class T> __forceinline tvec3<enable_float_t<T>> cross( const tvec3<T>& v1, const tvec3<T>& v2){ return v1.cross(v2); }
 
-//***********************************************
+//*************************************
 // general math utility functions
 template <class T> __forceinline enable_float_t<T> radians( T f ){ return f*PI<T>/T(180.0); }
 template <class T> __forceinline enable_float_t<T> degrees( T f ){ return f*T(180.0)/PI<T>; }
@@ -779,7 +779,7 @@ __forceinline double rsqrt( double x ){ double y=0.5*x; int64_t i=*(int64_t*)&x;
 __forceinline uint bitswap( uint n ){ n=((n&0x55555555)<<1)|((n&0xaaaaaaaa)>>1); n=((n&0x33333333)<<2)|((n&0xcccccccc)>>2); n=((n&0x0f0f0f0f)<<4)|((n&0xf0f0f0f0)>>4); n=((n&0x00ff00ff)<<8)|((n&0xff00ff00)>>8); return (n<<16)|(n>>16); }
 __forceinline float triangle_area( vec2 a, vec2 b, vec2 c ){ return abs(a.x*b.y+b.x*c.y+c.x*a.y-a.x*c.y-c.x*b.y-b.x*a.y)*0.5f; }
 
-//***********************************************
+//*************************************
 // {GLSL|HLSL}-like shader intrinsic functions
 __forceinline vec2 abs( const vec2& v ){ return vec2(fabs(v.x),fabs(v.y)); }
 __forceinline vec3 abs( const vec3& v ){ return vec3(fabs(v.x),fabs(v.y),fabs(v.z)); }
@@ -881,7 +881,7 @@ __forceinline vec3 vec2BitsToNormVec3( vec2 v )
 	return vec3(float(u.x&cmask),float((u.y>>1)&cmask),float(((u.x&~cmask)>>(cap-hcap))|(u.y>>(cap+1))))/float(cmask);
 }
 
-//***********************************************
+//*************************************
 // spline interpolations
 #pragma warning( disable: 4244 )
 template <class T> T hermite( T v0, T v1, T v2, T v3, double t, double tension=0.5, double bias=0.0, double continuity=-0.5 )
@@ -909,7 +909,7 @@ template <class T> T bezier( T v0, T v1, T v2, T v3, double t )
 }
 #pragma warning( default: 4244 )
 
-//***********************************************
+//*************************************
 // pseudo random number generator
 __forceinline uint& pseed(){ static uint seed=0; return seed; }
 __forceinline void sprand( uint seed ){ pseed()=seed; }
@@ -919,5 +919,19 @@ __forceinline vec2 prand2(){ return vec2(prand(),prand()); }
 __forceinline vec3 prand3(){ return vec3(prand(),prand(),prand()); }
 __forceinline vec4 prand4(){ return vec4(prand(),prand(),prand(),prand()); }
 
-//***********************************************
+//*************************************
+// CRC32 with 4-batch parallel construction (from zlib)
+template <unsigned int poly=0x82f63b78UL> // defaulted to crc32c
+__noinline inline unsigned int tcrc32( const void* buff, size_t size, unsigned int crc0=0 )
+{
+	if(!buff||!size) return crc0; unsigned c = ~crc0;
+	static unsigned* t[4] = {nullptr}; if(!t[0]){ for(int k=0;k<4;k++) t[k]=(unsigned*) malloc(sizeof(unsigned)*256); for(int k=0;k<256;k++){ unsigned c=k; for( unsigned j=0;j<8;j++) c=c&1?poly^(c>>1):c>>1; t[0][k]=c; } for(int k=0;k<256;k++){ unsigned c=t[0][k]; for(int j=1;j<4;j++) t[j][k]=c=t[0][c&0xff]^(c>>8); } }
+	const unsigned char* b=(const unsigned char*)buff;
+	for(;size&&(ptrdiff_t(b)&7);size--,b++) c=t[0][(c^(*b))&0xff]^(c>>8); // move forward to the 8-byte aligned boundary
+	for(;size>=4;size-=4,b+=4){c^=*(unsigned*)b;c=t[3][(c>>0)&0xff]^t[2][(c>>8)&0xff]^t[1][(c>>16)&0xff]^t[0][(c>>24)&0xff]; }
+	for(;size;size--,b++)c=t[0][(c^(*b))&0xff]^(c>>8);
+	return ~c;
+}
+
+//*************************************
 #endif // __GX_MATH__

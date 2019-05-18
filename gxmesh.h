@@ -1,5 +1,5 @@
 //*********************************************************
-// Copyright 2011-2018 Sungkil Lee
+// Copyright 2011-2020 Sungkil Lee
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,50 +15,23 @@
 //*********************************************************
 
 #pragma once
-#ifndef __GX_MESH__
-#define __GX_MESH__
+#ifndef __GX_MESH_H__
+#define __GX_MESH_H__
 
-#include "gxmath.h" // the only necessary header for gxmesh
+#if defined(__has_include)
+	#if __has_include("gxmath.h")
+		#include "gxmath.h" // the only necessary header for gxmesh
+	#endif
+	#if __has_include("gxsampler.h")
+		#include "gxsampler.h"
+	#endif
+#endif
 
 //*************************************
 // forward declarations
 namespace gl { struct Buffer; struct VertexArray; struct Texture; }											// OpenGL forward decl.
 struct ID3D10Buffer; struct ID3D11Buffer; struct ID3D10ShaderResourceView; struct ID3D11ShaderResourceView; // D3DX forward decl.
 struct geometry; struct object; struct mesh;																// mesh forward decl.
-
-//*************************************
-// sampler interface (for lens/rays): vec4(x,y,z,weight) in a unit surface
-template <size_t max_samples>
-struct tsampler_t
-{
-	enum model_t { PMJ, SOBOL, POISSON, HAMMERSLEY, HALTON };
-	enum surface_t { SQUARE, CIRCLE, HEMISPHERE, COSHEMI, SPHERE, CYLINDER }; // COSHEMI: cosine-weightd hemisphere
-	using array_t = const std::array<vec4, max_samples>;
-	static constexpr uint capacity() { return max_samples; }
-
-	uint			crc;		// crc32c to detect the change of samples
-	model_t			model = PMJ;
-	surface_t		surface = SQUARE;
-	uint			seed = 0;	// random seed
-	uint			index = 0;	// index for sequential sampling
-
-	bool			empty() const { return n == 0; }
-	uint			size() const { return n; }
-	const vec4*		begin() const { return &data[0]; }
-	const vec4*		end() const { return begin() + n; }
-	const vec4&		operator[](ptrdiff_t i) const { return data[i]; }
-	const vec4&		at(ptrdiff_t i) const { return data[i]; }
-	void			resize(uint new_size, bool b_resample = true) { const_cast<uint&>(n) = new_size < uint(max_samples) ? new_size : uint(max_samples); if (b_resample) resample(); }
-	void			rewind() { index = 0; }
-	const vec4&		next() { index = (++index) % n; return data[index]; } // only for fixed sequence; needs to be improved for sequential sampling
-	virtual uint	resample() = 0; // return the number of generated samples; implemented in Sampler plugin
-
-protected:
-	const uint		n = 1;
-	array_t			data;
-};
-
-using sampler_t = tsampler_t<1 << 16>; // up to 64K samples
 
 //*************************************
 // 16-byte aligned light for direct lights
@@ -794,4 +767,4 @@ inline mesh* create_box_mesh(const char* name = "box", bool use_quads = false, b
 	return create_box_mesh(bbox{ vec3(-half_size), vec3(half_size) }, name, use_quads, double_sided);
 }
 
-#endif // __GX_MESH__
+#endif // __GX_MESH_H__

@@ -1,5 +1,5 @@
 //*******************************************************************
-// Copyright 2011-2018 Sungkil Lee
+// Copyright 2011-2019 Sungkil Lee
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,9 @@
 #if defined(__has_include)&&__has_include( "gxfilesystem.h" )
 	#include "gxfilesystem.h"
 #endif
+#if defined(__has_include)&&__has_include( "gxmath.h" )
+	#include "gxmath.h"
+#endif
 #if defined(__has_include)&&__has_include(<intrin.h>)&&__has_include(<nmmintrin.h>)
 	#include <intrin.h>
 	#include <nmmintrin.h>
@@ -31,13 +34,13 @@ using std::max;
 
 struct mem_t
 {
-	void*		ptr = nullptr;
-	size_t		size = 0;
+	void*	ptr=nullptr;
+	size_t	size=0;
 
 	__forceinline mem_t(){ ptr=nullptr; size=0; }
 	__forceinline mem_t( size_t _size, const void* _ptr=nullptr ){ ptr=(void*)_ptr; size=_size; }
 	__forceinline void* alloc( size_t _size, ptrdiff_t elems=1 ){ return ptr=malloc(size=_size*elems); }
-	__forceinline void free(){ if(ptr) ::free(ptr); }
+	__forceinline void free(){ if(ptr) ::free(ptr); size=0; }
 	__forceinline void* cpy( void* src, size_t _size ){ return memcpy(ptr,src,_size); }
 	__forceinline void* dup( void* src, size_t _size ){ return ptr=memcpy(malloc(size=_size),src,_size); }
 	__forceinline int cmp( void* src, size_t _size ){ return memcmp(ptr,src,_size); }
@@ -289,25 +292,13 @@ __noinline inline std::vector<uchar> decompress( void* ptr, size_t size )
 #endif // ZLIB_H
 
 //***********************************************
-// CRC32 implementation with 4-batch parallel construction (taken from zlib)
-template <unsigned int poly>
-__noinline inline unsigned int tcrc32( const void* buff, size_t size, unsigned int crc0 )
-{
-	const unsigned char* b=(const unsigned char*)buff;
-	static unsigned* t[4] = {nullptr}; if(!t[0]){ for(int k=0;k<4;k++) t[k]=(unsigned*) malloc(sizeof(unsigned)*256); for(int k=0;k<256;k++){ unsigned c=k; for( unsigned j=0;j<8;j++) c=c&1?poly^(c>>1):c>>1; t[0][k]=c; } for(int k=0;k<256;k++){ unsigned c=t[0][k]; for(int j=1;j<4;j++) t[j][k]=c=t[0][c&0xff]^(c>>8); } }
-	if(b==nullptr||size==0) return crc0; unsigned c = ~crc0;
-	for(;size&&(((ptrdiff_t)b)&7);size--,b++) c=t[0][(c^(*b))&0xff]^(c>>8); // move forward to the 8-byte aligned boundary
-	for(;size>=4;size-=4,b+=4){c^=*(unsigned*)b;c=t[3][(c>>0)&0xff]^t[2][(c>>8)&0xff]^t[1][(c>>16)&0xff]^t[0][(c>>24)&0xff]; }
-	for(;size;size--,b++) c=t[0][(c^(*b))&0xff]^(c>>8);
-	return ~c;
-}
-
 // CRC32C SSE4.2 implementation up to 8-batch parallel construction (https://github.com/Voxer/sse4_crc32)
-#if defined(__SSE4_2__)||!defined(__clang__)
+#if !defined(_MSC_VER)||defined(__clang__)
+inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0x82f63b78UL>(buff,size,crc0); }
+#else
 __noinline inline unsigned int crc32c_hw( const void* buff, size_t size, unsigned int crc0 )
 {
-	if(buff==nullptr||size==0) return crc0;
-	const unsigned char* b = (const unsigned char*) buff;
+	if(!buff||!size) return crc0; const unsigned char* b = (const unsigned char*) buff;
 #if defined(_M_X64)
 	uint64_t c = ~uint64_t(crc0);
 	for(;size && ((ptrdiff_t)b&7);size--,b++) c=_mm_crc32_u8(uint32_t(c),*b); // move forward to the 8-byte aligned boundary
@@ -321,135 +312,96 @@ __noinline inline unsigned int crc32c_hw( const void* buff, size_t size, unsigne
 	for(;size>=sizeof(uint8_t);size-=sizeof(uint8_t),b+=sizeof(uint8_t)) c=_mm_crc32_u8((uint32_t)c,*(uint8_t*)b);
 	return uint32_t(~c);
 }
-#ifdef _MSC_VER
 inline bool has_sse42(){ static bool b=false,h=true; if(b) return h; b=true; int regs[4]={0}; __cpuid(regs,1); return h=((regs[2]>>20)&1)==1; }
-#else
-constexpr bool has_sse42(){ return true; }
-#endif
-inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ static bool hw=has_sse42(); return hw?crc32c_hw(buff,size,crc0):tcrc32<0x82f63b78UL>(buff,size,crc0); }
-#else
-inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0x82f63b78UL>(buff,size,crc0); }
+inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ static unsigned int(*pcrc32c)(const void*,size_t,unsigned int)=has_sse42()?crc32c_hw:tcrc32<0x82f63b78UL>; return pcrc32c(buff,size,crc0); }
 #endif
 
-// regular crc32
-inline unsigned int crc32( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0xedb88320UL>(buff,size,crc0); }
-
-// crc32c wrappers
+// crc32 wrappers
+inline unsigned int crc32( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0xedb88320UL>(buff,size,crc0); } // regular crc32
 inline unsigned int crc32c( const char* s ){ return crc32c(s,strlen(s)); }
 inline unsigned int crc32c( const wchar_t* s ){ return crc32c(s,wcslen(s)*sizeof(wchar_t)); }
 
 //***********************************************
 // MD5 implementation
-class md5
+struct md5
 {
-	uint32_t a=0x67452301, b=0xefcdab89, c=0x98badcfe, d=0x10325476, lo=0, hi=0; unsigned char buffer[64]; uint4 _digest;
+	uint4 digest={0xd98c1dd4,0x4b2008f,0x980980e9,0x7e42f8ec}; // null digest
+	explicit md5(const char* str):md5(str,strlen(str)){}
+	explicit md5(std::string str):md5(str.c_str(),str.size()){}
+	explicit md5(std::wstring wstr):md5(wstr.c_str(),wstr.size()*sizeof(wchar_t)){}
+	md5(const void* ptr, size_t size){ if(ptr&&size) update(ptr,size); }
+	const char* c_str() const { static char buff[64]; unsigned char* u=(unsigned char*)&digest; char* c=buff; for(int k=0;k<16;k++,u++,c+=2)sprintf(c,"%02x",*u); buff[32]=0; return buff; }
+	operator uint4() const { return digest; }
+
+private:
+	uint32_t a=0x67452301,b=0xefcdab89,c=0x98badcfe,d=0x10325476;
 	inline const void* body( const unsigned char* data, size_t size );
 	inline void update( const void* data, size_t size );
-	inline void finalize( unsigned char *result );
-public:
-	md5( const void* ptr, size_t size ){ memset(buffer,0,sizeof(buffer)); memset(&_digest,0,sizeof(_digest)); if(!ptr||!size) return; update(ptr,size); finalize((unsigned char*)&_digest); for(int k=0;k<16;k++)sprintf((char*)buffer+k*2,"%02x",((unsigned char*)&_digest)[k]); buffer[32]=0; }
-	md5( const char* str ):md5(str,strlen(str)){}
-	const char* c_str() const { return (const char*)buffer; }
-	const uint4& digest() const { return _digest; }
 };
 
 __noinline inline const void* md5::body( const unsigned char* data, size_t size )
 {
-#define MD5_F(x,y,z)				((z)^((x)&((y)^(z))))
-#define MD5_G(x,y,z)				((y)^((z)&((x)^(y))))
-#define MD5_H(x,y,z)				(((x)^(y))^(z))
-#define MD5_H2(x,y,z)				((x)^((y)^(z)))
-#define MD5_I(x,y,z)				((y)^((x)|~(z)))
-#define MD5_STEP(f,a,b,c,d,x,t,s) 	(a)+=f((b),(c),(d))+(*(uint32_t *)&data[(x)*4])+(t);(a)=(((a)<<(s))|(((a)&0xffffffff)>>(32-(s))));(a)+=(b)
+	#define MD5_F(x,y,z)				((z)^((x)&((y)^(z))))
+	#define MD5_G(x,y,z)				((y)^((z)&((x)^(y))))
+	#define MD5_H(x,y,z)				(((x)^(y))^(z))
+	#define MD5_H2(x,y,z)				((x)^((y)^(z)))
+	#define MD5_I(x,y,z)				((y)^((x)|~(z)))
+	#define MD5_STEP(f,a,b,c,d,x,t,s) 	(a)+=f((b),(c),(d))+(*(uint32_t*)&data[(x)*4])+(t);(a)=(((a)<<(s))|(((a)&0xffffffff)>>(32-(s))));(a)+=(b)
 	for( uint32_t a0=a,b0=b,c0=c,d0=d; size; data+= 64,size-=64,a0=a+=a0,b0=b+=b0,c0=c+=c0,d0=d+=d0)
 	{
-		MD5_STEP(MD5_F, a, b, c, d, 0,	0xd76aa478, 7);	MD5_STEP(MD5_F, d, a, b, c, 1,	0xe8c7b756, 12);	MD5_STEP(MD5_F, c, d, a, b, 2, 0x242070db, 17);	MD5_STEP(MD5_F, b, c, d, a, 3, 0xc1bdceee, 22);
-		MD5_STEP(MD5_F, a, b, c, d, 4,	0xf57c0faf, 7);	MD5_STEP(MD5_F, d, a, b, c, 5,	0x4787c62a, 12);	MD5_STEP(MD5_F, c, d, a, b, 6, 0xa8304613, 17);	MD5_STEP(MD5_F, b, c, d, a, 7, 0xfd469501, 22);
-		MD5_STEP(MD5_F, a, b, c, d, 8,	0x698098d8, 7);	MD5_STEP(MD5_F, d, a, b, c, 9,	0x8b44f7af, 12);	MD5_STEP(MD5_F, c, d, a, b, 10,0xffff5bb1, 17);	MD5_STEP(MD5_F, b, c, d, a, 11,0x895cd7be, 22);
-		MD5_STEP(MD5_F, a, b, c, d, 12,	0x6b901122, 7);	MD5_STEP(MD5_F, d, a, b, c, 13,	0xfd987193, 12);	MD5_STEP(MD5_F, c, d, a, b, 14,0xa679438e, 17);	MD5_STEP(MD5_F, b, c, d, a, 15,0x49b40821, 22);
-		MD5_STEP(MD5_G, a, b, c, d, 1,	0xf61e2562, 5);	MD5_STEP(MD5_G, d, a, b, c, 6,	0xc040b340, 9);		MD5_STEP(MD5_G, c, d, a, b, 11,0x265e5a51, 14);	MD5_STEP(MD5_G, b, c, d, a, 0, 0xe9b6c7aa, 20);
-		MD5_STEP(MD5_G, a, b, c, d, 5,	0xd62f105d, 5);	MD5_STEP(MD5_G, d, a, b, c, 10,	0x02441453, 9);		MD5_STEP(MD5_G, c, d, a, b, 15,0xd8a1e681, 14);	MD5_STEP(MD5_G, b, c, d, a, 4, 0xe7d3fbc8, 20);
-		MD5_STEP(MD5_G, a, b, c, d, 9,	0x21e1cde6, 5);	MD5_STEP(MD5_G, d, a, b, c, 14,	0xc33707d6, 9);		MD5_STEP(MD5_G, c, d, a, b, 3, 0xf4d50d87, 14);	MD5_STEP(MD5_G, b, c, d, a, 8, 0x455a14ed, 20);
-		MD5_STEP(MD5_G, a, b, c, d, 13,	0xa9e3e905, 5);	MD5_STEP(MD5_G, d, a, b, c, 2,	0xfcefa3f8, 9);		MD5_STEP(MD5_G, c, d, a, b, 7, 0x676f02d9, 14);	MD5_STEP(MD5_G, b, c, d, a, 12,0x8d2a4c8a, 20);
-		MD5_STEP(MD5_H, a, b, c, d, 5,	0xfffa3942, 4);	MD5_STEP(MD5_H2,d, a, b, c, 8,	0x8771f681, 11);	MD5_STEP(MD5_H, c, d, a, b, 11,0x6d9d6122, 16);	MD5_STEP(MD5_H2,b, c, d, a, 14,0xfde5380c, 23);
-		MD5_STEP(MD5_H, a, b, c, d, 1,	0xa4beea44, 4);	MD5_STEP(MD5_H2,d, a, b, c, 4,	0x4bdecfa9, 11);	MD5_STEP(MD5_H, c, d, a, b, 7, 0xf6bb4b60, 16);	MD5_STEP(MD5_H2,b, c, d, a, 10,0xbebfbc70, 23);
-		MD5_STEP(MD5_H, a, b, c, d, 13,	0x289b7ec6, 4);	MD5_STEP(MD5_H2,d, a, b, c, 0,	0xeaa127fa, 11);	MD5_STEP(MD5_H, c, d, a, b, 3, 0xd4ef3085, 16);	MD5_STEP(MD5_H2,b, c, d, a, 6, 0x04881d05, 23);
-		MD5_STEP(MD5_H, a, b, c, d, 9,	0xd9d4d039, 4);	MD5_STEP(MD5_H2,d, a, b, c, 12,	0xe6db99e5, 11);	MD5_STEP(MD5_H, c, d, a, b, 15,0x1fa27cf8, 16);	MD5_STEP(MD5_H2,b, c, d, a, 2, 0xc4ac5665, 23);
-		MD5_STEP(MD5_I, a, b, c, d, 0,	0xf4292244, 6);	MD5_STEP(MD5_I, d, a, b, c, 7,	0x432aff97, 10);	MD5_STEP(MD5_I, c, d, a, b, 14,0xab9423a7, 15);	MD5_STEP(MD5_I, b, c, d, a, 5, 0xfc93a039, 21);
-		MD5_STEP(MD5_I, a, b, c, d, 12,	0x655b59c3, 6);	MD5_STEP(MD5_I, d, a, b, c, 3,	0x8f0ccc92, 10);	MD5_STEP(MD5_I, c, d, a, b, 10,0xffeff47d, 15);	MD5_STEP(MD5_I, b, c, d, a, 1, 0x85845dd1, 21);
-		MD5_STEP(MD5_I, a, b, c, d, 8,	0x6fa87e4f, 6);	MD5_STEP(MD5_I, d, a, b, c, 15,	0xfe2ce6e0, 10);	MD5_STEP(MD5_I, c, d, a, b, 6, 0xa3014314, 15);	MD5_STEP(MD5_I, b, c, d, a, 13,0x4e0811a1, 21);
-		MD5_STEP(MD5_I, a, b, c, d, 4,	0xf7537e82, 6);	MD5_STEP(MD5_I, d, a, b, c, 11,	0xbd3af235, 10);	MD5_STEP(MD5_I, c, d, a, b, 2, 0x2ad7d2bb, 15);	MD5_STEP(MD5_I, b, c, d, a, 9, 0xeb86d391, 21);
+		MD5_STEP(MD5_F,a,b,c,d,0, 0xd76aa478,7);MD5_STEP(MD5_F,d,a,b,c,1,  0xe8c7b756,12);MD5_STEP(MD5_F,c,d,a,b,2, 0x242070db,17);MD5_STEP(MD5_F,b,c,d,a,3,  0xc1bdceee,22);
+		MD5_STEP(MD5_F,a,b,c,d,4, 0xf57c0faf,7);MD5_STEP(MD5_F,d,a,b,c,5,  0x4787c62a,12);MD5_STEP(MD5_F,c,d,a,b,6, 0xa8304613,17);MD5_STEP(MD5_F,b,c,d,a,7,  0xfd469501,22);
+		MD5_STEP(MD5_F,a,b,c,d,8, 0x698098d8,7);MD5_STEP(MD5_F,d,a,b,c,9,  0x8b44f7af,12);MD5_STEP(MD5_F,c,d,a,b,10,0xffff5bb1,17);MD5_STEP(MD5_F,b,c,d,a,11, 0x895cd7be,22);
+		MD5_STEP(MD5_F,a,b,c,d,12,0x6b901122,7);MD5_STEP(MD5_F,d,a,b,c,13, 0xfd987193,12);MD5_STEP(MD5_F,c,d,a,b,14,0xa679438e,17);MD5_STEP(MD5_F,b,c,d,a,15, 0x49b40821,22);
+		MD5_STEP(MD5_G,a,b,c,d,1, 0xf61e2562,5);MD5_STEP(MD5_G,d,a,b,c,6,  0xc040b340,9); MD5_STEP(MD5_G,c,d,a,b,11,0x265e5a51,14);MD5_STEP(MD5_G,b,c,d,a,0,  0xe9b6c7aa,20);
+		MD5_STEP(MD5_G,a,b,c,d,5, 0xd62f105d,5);MD5_STEP(MD5_G,d,a,b,c,10, 0x02441453,9); MD5_STEP(MD5_G,c,d,a,b,15,0xd8a1e681,14);MD5_STEP(MD5_G,b,c,d,a,4,  0xe7d3fbc8,20);
+		MD5_STEP(MD5_G,a,b,c,d,9, 0x21e1cde6,5);MD5_STEP(MD5_G,d,a,b,c,14, 0xc33707d6,9); MD5_STEP(MD5_G,c,d,a,b,3, 0xf4d50d87,14);MD5_STEP(MD5_G,b,c,d,a,8,  0x455a14ed,20);
+		MD5_STEP(MD5_G,a,b,c,d,13,0xa9e3e905,5);MD5_STEP(MD5_G,d,a,b,c,2,  0xfcefa3f8,9); MD5_STEP(MD5_G,c,d,a,b,7, 0x676f02d9,14);MD5_STEP(MD5_G,b,c,d,a,12, 0x8d2a4c8a,20);
+		MD5_STEP(MD5_H,a,b,c,d,5, 0xfffa3942,4);MD5_STEP(MD5_H2,d,a,b,c,8, 0x8771f681,11);MD5_STEP(MD5_H,c,d,a,b,11,0x6d9d6122,16);MD5_STEP(MD5_H2,b,c,d,a,14,0xfde5380c,23);
+		MD5_STEP(MD5_H,a,b,c,d,1, 0xa4beea44,4);MD5_STEP(MD5_H2,d,a,b,c,4, 0x4bdecfa9,11);MD5_STEP(MD5_H,c,d,a,b,7, 0xf6bb4b60,16);MD5_STEP(MD5_H2,b,c,d,a,10,0xbebfbc70,23);
+		MD5_STEP(MD5_H,a,b,c,d,13,0x289b7ec6,4);MD5_STEP(MD5_H2,d,a,b,c,0, 0xeaa127fa,11);MD5_STEP(MD5_H,c,d,a,b,3, 0xd4ef3085,16);MD5_STEP(MD5_H2,b,c,d,a,6, 0x04881d05,23);
+		MD5_STEP(MD5_H,a,b,c,d,9, 0xd9d4d039,4);MD5_STEP(MD5_H2,d,a,b,c,12,0xe6db99e5,11);MD5_STEP(MD5_H,c,d,a,b,15,0x1fa27cf8,16);MD5_STEP(MD5_H2,b,c,d,a,2, 0xc4ac5665,23);
+		MD5_STEP(MD5_I,a,b,c,d,0, 0xf4292244,6);MD5_STEP(MD5_I,d,a,b,c,7,  0x432aff97,10);MD5_STEP(MD5_I,c,d,a,b,14,0xab9423a7,15);MD5_STEP(MD5_I,b,c,d,a,5,  0xfc93a039,21);
+		MD5_STEP(MD5_I,a,b,c,d,12,0x655b59c3,6);MD5_STEP(MD5_I,d,a,b,c,3,  0x8f0ccc92,10);MD5_STEP(MD5_I,c,d,a,b,10,0xffeff47d,15);MD5_STEP(MD5_I,b,c,d,a,1,  0x85845dd1,21);
+		MD5_STEP(MD5_I,a,b,c,d,8, 0x6fa87e4f,6);MD5_STEP(MD5_I,d,a,b,c,15, 0xfe2ce6e0,10);MD5_STEP(MD5_I,c,d,a,b,6, 0xa3014314,15);MD5_STEP(MD5_I,b,c,d,a,13, 0x4e0811a1,21);
+		MD5_STEP(MD5_I,a,b,c,d,4, 0xf7537e82,6);MD5_STEP(MD5_I,d,a,b,c,11, 0xbd3af235,10);MD5_STEP(MD5_I,c,d,a,b,2, 0x2ad7d2bb,15);MD5_STEP(MD5_I,b,c,d,a,9,  0xeb86d391,21);
 	}
 	return data;
 }
 
 __noinline inline void md5::update( const void* data, size_t size )
 {
-	uint32_t lo0=lo;
-	if((lo = (lo0+size)&0x1fffffff) < lo0) hi++; hi += uint32_t(size) >> 29;
- 	uint32_t used = lo0&0x3f;
+	static unsigned char buffer[64];
+	uint32_t lo=0, hi=0, lo0=lo, available, used;
+	if((lo=(lo0+size)&0x1fffffff)<lo0)hi++;hi+=uint32_t(size)>>29;
+ 	used=lo0&0x3f;
  	if(used)
 	{
-		uint32_t available = 64-used;
-		if(size<available){ memcpy(&buffer[used], data, size); return; }
-		memcpy(&buffer[used], data, available);
-		data = (const unsigned char *)data + available;
-		size -= available;
+		available = 64-used;
+		if(size<available){memcpy(&buffer[used],data,size);return;}
+		memcpy(&buffer[used],data,available);
+		data=(const unsigned char*)data+available;
+		size-=available;
 		body(buffer,64);
 	}
-	if (size >= 64){ data = body((const unsigned char*)data,size&~(unsigned long)0x3f); size &= 0x3f; }
-	memcpy(buffer, data, size);
-}
-
-__noinline inline void md5::finalize( unsigned char* result )
-{
-	uint32_t used = lo & 0x3f;;
-	buffer[used++] = 0x80;
-	uint32_t available = 64 - used;
-
-	if(available < 8){ memset(&buffer[used], 0, available); body(buffer,64); used = 0; available = 64; }
-	memset(&buffer[used], 0, available - 8);
-
-	buffer[56] = (lo <<= 3); buffer[57] = lo>>8; buffer[58] = lo>>16; buffer[59] = lo>>24; buffer[60] = hi; buffer[61] = hi>>8; buffer[62] = hi>>16; buffer[63] = hi>>24; body(buffer,64);
- 	result[0] = a; result[1] = a >> 8; result[2] = a >> 16; result[3] = a >> 24; result[4] = b; result[5] = b >> 8; result[6] = b >> 16; result[7] = b >> 24; result[8] = c;
-	result[9] = c >> 8; result[10] = c >> 16; result[11] = c >> 24; result[12] = d; result[13] = d >> 8; result[14] = d >> 16; result[15] = d >> 24;
+	if(size>=64){data=body((const unsigned char*)data,size&~(unsigned long)0x3f);size&=0x3f;}
+	memcpy(buffer,data,size);
+		
+	// finalize
+	used=lo&0x3f; buffer[used++]=0x80; available=64-used;
+	if(available<8){memset(&buffer[used],0,available);body(buffer,64);used=0;available=64;}
+	memset(&buffer[used],0,available-8);
+	buffer[56]=(lo<<=3);buffer[57]=lo>>8;buffer[58]=lo>>16;buffer[59]=lo>>24;buffer[60]=hi;buffer[61]=hi>>8;buffer[62]=hi>>16;buffer[63]=hi>>24;
+	body(buffer,64);
+	digest.x=a; digest.y=b; digest.z=c; digest.w=d; // copy back to digest
 }
 
 //***********************************************
 // augmentation of filesystem
-#if defined(__has_include) && __has_include("gxfilesystem.h")
-#ifndef __GX_FILESYSTEM_H__
-#include "gxfilesystem.h"
-#endif
-
-__noinline inline std::string path::md5() const
-{
-	mem_t m={0}; if(!exists()) return ""; FILE* fp=_wfopen(data,L"rb"); if(!fp) return "";
-	fseek(fp,0,SEEK_END); m.size=ftell(fp); fseek(fp,0,SEEK_SET); fread(m.ptr=malloc(m.size),m.size,1,fp); fclose(fp);
-	std::string s = ::md5(m.ptr,m.size).c_str();
-	if(m.ptr) free(m.ptr);
-	return s;
-}
-
-__noinline inline uint path::crc32() const
-{
-	mem_t m={0}; if(!exists()) return 0; FILE* fp=_wfopen(data,L"rb"); if(!fp) return 0;
-	fseek(fp,0,SEEK_END); m.size=ftell(fp); fseek(fp,0,SEEK_SET); fread(m.ptr=malloc(m.size),m.size,1,fp); fclose(fp);
-	uint c = ::crc32(m.ptr,m.size);
-	if(m.ptr) free(m.ptr);
-	return c;
-}
-
-__noinline inline uint path::crc32c() const
-{
-	mem_t m={0}; if(!exists()) return 0; FILE* fp=_wfopen(data,L"rb"); if(!fp) return 0;
-	fseek(fp,0,SEEK_END); m.size=ftell(fp); fseek(fp,0,SEEK_SET); fread(m.ptr=malloc(m.size),m.size,1,fp); fclose(fp);
-	uint c = ::crc32c(m.ptr,m.size);
-	if(m.ptr) free(m.ptr);
-	return c;
-}
-
-#endif // gxfilesystem.h
+#ifdef __GX_FILESYSTEM_H__
+__noinline inline uint4 path::md5() const { size_t size; void* ptr=read_file(&size); if(!ptr) return ::md5(nullptr,0); ::md5 m(ptr,size); free(ptr); return m.digest; }
+__noinline inline uint path::crc32c() const { size_t size; void* ptr=read_file(&size); if(!ptr) return 0; uint c=::crc32c(ptr,size); free(ptr); return c; }
+#endif // __GX_FILESYSTEM_H__
 
 //***********************************************
 namespace gx {

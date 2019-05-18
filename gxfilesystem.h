@@ -1,5 +1,5 @@
 //*******************************************************************
-// Copyright 2011-2018 Sungkil Lee
+// Copyright 2011-2020 Sungkil Lee
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -252,11 +252,10 @@ struct path
 	inline size_t size()		const { return data[0]==0?0:wcslen(data); }
 	inline size_t length()		const { return data[0]==0?0:wcslen(data); }
 	inline uint64_t file_size() const { if(!cache_exists()) update_cache(); auto& c=cache(); return uint64_t(c.nFileSizeHigh)<<32ull|uint64_t(c.nFileSizeLow); }
-
-	// md5/crc checksums: implemented in gxmemory.h
-	inline std::string md5() const;
-	inline uint crc32() const;
-	inline uint crc32c() const;
+	
+	// crc32c/md5 checksums
+	inline uint crc32c() const;	// implemented in gxmath.h
+	inline uint4 md5() const;	// implemented in gxmemory.h
 
 	// system-related: slash, backslash, unix, quote
 	path to_backslash()		const {	path p(*this); std::replace(p.begin(),p.end(),L'/',L'\\'); return p; }
@@ -300,6 +299,7 @@ struct path
 	bool create_directory() const { return mkdir(); }
 	bool copy_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()||dst.empty()) return false; if(dst.is_dir()||dst.back()==L'\\') dst=dst.add_backslash()+name(); if(!dst.dir().exists()) dst.dir().mkdir(); if(dst.exists()&&overwrite){ if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } return CopyFileW( data, dst, overwrite?FALSE:TRUE )?true:false; }
 	bool move_file( path dst, bool overwrite=true ) const { if(!copy_file(dst,overwrite)) return false; return delete_file(); }
+	void* read_file( size_t* read_size ) const { FILE* fp=_wfopen(data,L"rb"); if(!fp) return nullptr; fseek(fp,0,SEEK_END); size_t size=ftell(fp); if(read_size) *read_size=size; fseek(fp,0,SEEK_SET); 	if(size==0){ fclose(fp); return nullptr; } void* ptr=malloc(size); if(ptr) fread(ptr,size,1,fp); fclose(fp); return ptr; }
 #ifndef _INC_SHELLAPI
 	bool rmdir() const { if(!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); _wrmdir(data); return true; }
 	bool rmfile() const { return delete_file(); }

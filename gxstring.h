@@ -1,5 +1,5 @@
 //*******************************************************************
-// Copyright 2011-2018 Sungkil Lee
+// Copyright 2011-2020 Sungkil Lee
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -422,6 +422,17 @@ inline double3 wtod3( const std::wstring& w ){	return wtod3(w.c_str()); }
 inline double4 wtod4( const std::wstring& w ){	return wtod4(w.c_str()); }
 inline double9 wtod9( const std::wstring& w ){	return wtod9(w.c_str()); }
 inline double16 wtod16( const std::wstring& w ){return wtod16(w.c_str()); }
+
+// hexadecimanal conversion
+inline const char* tohex( void* ptr, size_t size ){ unsigned char* u=(unsigned char*)ptr; char *buff=_strbuf(size*2), *b=buff; for(int k=0;k<size;k++,u++,b+=2) sprintf(b,"%02x",*u); buff[size*2]=0; return buff; }
+inline const char* tohex( int i ){ return tohex(&i,sizeof(i)); }
+inline const char* tohex( int2 i ){ return tohex(&i,sizeof(i)); }
+inline const char* tohex( int3 i ){ return tohex(&i,sizeof(i)); }
+inline const char* tohex( int4 i ){ return tohex(&i,sizeof(i)); }
+inline const char* tohex( uint u ){ return tohex(&u,sizeof(u)); }
+inline const char* tohex( uint2 u ){ return tohex(&u,sizeof(u)); }
+inline const char* tohex( uint3 u ){ return tohex(&u,sizeof(u)); }
+inline const char* tohex( uint4 u ){ return tohex(&u,sizeof(u)); }
 
 //***********************************************
 // 11. trim
