@@ -1118,30 +1118,25 @@ inline gl::Effect* gxCreateEffect( const char* name )
 #pragma comment( lib, "glfx.lib" )
 struct glfxParserImpl : public glfx::IParser
 {
-	std::string								log;
-	std::vector<std::string>				program_name_list;
-	std::vector<std::vector<uint>>			shader_type_list;
-	std::vector<std::vector<std::string>>	shader_source_list;
+	struct program_t{std::string name;struct shader_t{uint type;std::string source;};std::vector<shader_t> shaders;};
+	std::string				log;
+	std::vector<program_t>	programs;
 
 	virtual const char* parse_log(){ return log.c_str(); }
-	virtual int program_count(){ return int(program_name_list.size()); }
-	virtual const char* program_name( int program_id ){ return program_id>=program_count()?"":program_name_list[program_id].c_str(); }
-	virtual int shader_count( int program_id ){ return program_id>=program_count()?0:int(shader_type_list[program_id].size()); }
-	virtual unsigned shader_type( int program_id, int shader_id ){ return program_id>=program_count()?0:shader_id>=shader_count(program_id)?0:shader_type_list[program_id][shader_id]; }
-	virtual const char* shader_source( int program_id, int shader_id ){ return program_id>=program_count()?0:shader_id>=shader_count(program_id)?0:shader_source_list[program_id][shader_id].c_str(); }
-	virtual bool parse( const char* src )
+	virtual int program_count(){ return int(programs.size()); }
+	virtual const char* program_name( int program_id ){ return program_id>=program_count()?"":programs[program_id].name.c_str(); }
+	virtual int shader_count( int program_id ){ return program_id>=program_count()?0:int(programs[program_id].shaders.size()); }
+	virtual unsigned shader_type( int program_id, int shader_id ){ return program_id>=program_count()?0:shader_id>=shader_count(program_id)?0:programs[program_id].shaders[shader_id].type; }
+	virtual const char* shader_source( int program_id, int shader_id ){ return program_id>=program_count()?0:shader_id>=shader_count(program_id)?0:programs[program_id].shaders[shader_id].source.c_str(); }
+	virtual bool parse( const char* str )
 	{
-		int id = glfxGenEffect();
-		if(!glfxParseEffectFromMemory( id, src )){ log=glfxGetEffectLog(id); return false; }
-		std::map<std::string,std::map<uint,std::string>> PSM;
-		for( int k=0, kn=glfxGetProgramCount(id); k<kn; k++ )
+		std::string src;for(auto* v:explode_conservative(str,'\n')){if(*v)src+=trim_comment(v,"//");src+='\n';} // bug fix for glfxfindblock with blockmarks inside the comments
+		int id=glfxGenEffect();if(!glfxParseEffectFromMemory(id,src.c_str())){log=glfxGetEffectLog(id);return false;}
+		for(int k=0,kn=glfxGetProgramCount(id);k<kn;k++)
 		{
-			const char* name = glfxGetProgramName( id, k );
-			program_name_list.emplace_back( name );
-			std::map<uint,std::string> shader_map = glfxGetProgramSource( id, name );
-			shader_type_list.emplace_back(std::vector<uint>()); std::vector<uint>& t=shader_type_list.back();
-			shader_source_list.emplace_back(std::vector<std::string>()); std::vector<std::string>& s=shader_source_list.back();
-			for( auto& it : shader_map ){ t.emplace_back( it.first ); s.emplace_back( it.second ); }
+			programs.emplace_back(program_t());program_t& p=programs.back();p.name=glfxGetProgramName(id,k);
+			std::map<unsigned int,std::string> glfxGetProgramSource(int,const char*);
+			for(auto& it:glfxGetProgramSource(id,p.name.c_str()))p.shaders.emplace_back(program_t::shader_t{it.first,it.second});
 		}
 		glfxDeleteEffect(id);
 		return true;
