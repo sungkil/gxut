@@ -260,6 +260,7 @@ struct path
 	// system-related: slash, backslash, unix, quote
 	path to_backslash()		const {	path p(*this); std::replace(p.begin(),p.end(),L'/',L'\\'); return p; }
 	path to_slash()			const {	path p(*this); std::replace(p.begin(),p.end(),L'\\',L'/'); return p; }
+	path to_dot()			const {	path p(*this); std::replace(p.begin(),p.end(),L'\\',L'.'); std::replace(p.begin(),p.end(),L'/',L'.'); return p; }
 	path add_backslash()	const { path p(*this); size_t len=wcslen(p.data); if(len&&p.data[len-1]!='\\'){p.data[len]='\\';p.data[len+1]=L'\0';} return p; }
 	path add_slash()		const { path p(*this); size_t len=wcslen(p.data); if(len&&p.data[len-1]=='\\') p.data[len-1]='/'; else if(len&&p.data[len-1]!='/'){p.data[len]='/';p.data[len+1]=L'\0';} return p; }
 	path remove_backslash()	const { path p(*this); size_t len=wcslen(p.data); if(len&&p.data[len-1]=='\\'){p.data[len-1]=L'\0';} return p; }
