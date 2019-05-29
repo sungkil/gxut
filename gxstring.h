@@ -163,7 +163,7 @@ inline const wchar_t* _stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ re
 //***********************************************
 // 1. shared circular buffers
 template <class T> __forceinline T* __tstrbuf( size_t len ){ static T* C[SHARED_CIRCULAR_BUFFER_SIZE]={0}; static uint cid=0; cid=(++cid)%(sizeof(C)/sizeof(T*));C[cid]=(T*)realloc(C[cid],sizeof(T)*(len+1)); C[cid][len]=0; return C[cid]; }
-template <class T> __forceinline T* __tstrdup( const T* s,size_t slen=-1 ){ if(slen==-1)slen=strlen(s); return (T*)memcpy(__tstrbuf<T>(slen),s,sizeof(T)*slen); }
+template <class T> __forceinline T* __tstrdup( const T* s,size_t len=-1 ){ if(len==-1){const T* t=s; while(*t)t++;len=t-s;} T* d=__tstrbuf<T>(len); return len?(T*)memcpy(d,s,sizeof(T)*len):d; }
 __forceinline char* _strbuf( size_t len ){ return __tstrbuf<char>(len); }
 __forceinline wchar_t* _wcsbuf( size_t len ){ return __tstrbuf<wchar_t>(len); }
 
@@ -435,32 +435,59 @@ inline const char* tohex( uint3 u ){ return tohex(&u,sizeof(u)); }
 inline const char* tohex( uint4 u ){ return tohex(&u,sizeof(u)); }
 
 //***********************************************
-// 11. trim
+// 11. trim: delimiters of strings or characters
 
 template <class T>
-inline const T* ltrim( const T* src, const T* symbols=_strcvt<T>(" \t\n") )
+inline const T* ltrim( const T* src, const T* delims=_strcvt<T>(" \t\n") )
 {
-	return !src||!src[0]?reinterpret_cast<const T*>(L""):__tstrdup(src,strlen(src))+strspn(src,symbols);
+	if(!src||!src[0]) return reinterpret_cast<const T*>(L"");
+	return __tstrdup(src,strlen(src))+strspn(src,delims);
 }
 
 template <class T>
-inline const T* rtrim( const T* src, const T* symbols=_strcvt<T>(" \t\n") )
+inline const T* ltrim( const T* src, T delim )
 {
-	return !src||!src[0]?reinterpret_cast<const T*>(L""):__tstrdup(src,strlen(src)-_strrspn(src,symbols));
+	if(!src||!src[0]) return reinterpret_cast<const T*>(L"");
+	while(*src&&*src==delim) src++; return __tstrdup(src);
 }
 
 template <class T>
-inline const T* trim( const T* src, const T* symbols=_strcvt<T>(" \t\n") )
+inline const T* rtrim( const T* src, const T* delims=_strcvt<T>(" \t\n") )
 {
-	if(!src||!src[0]) return _strcvt<T>(""); const T* r=rtrim(src,symbols); return r+(r&&r[0]?strspn(src,symbols):0);
+	if(!src||!src[0]) return reinterpret_cast<const T*>(L"");
+	return __tstrdup(src,strlen(src)-_strrspn(src,delims));
 }
 
 template <class T>
-inline const T* trim_comment( const T* src, const char* comment_symbols="#" )
+inline const T* rtrim( const T* src, T delim )
 {
-	if(src==nullptr||src[0]==0) return src;
-	size_t slen=strlen(src),clen=strlen(comment_symbols),sc=slen-clen+1;
-	T* buff=__tstrdup(src,slen); const char* cs=comment_symbols;
+	if(!src||!src[0]) return reinterpret_cast<const T*>(L"");
+	int l=int(strlen(src)); const T* d=src+l-1; for(int k=l-1;*d==delim&&k>=0;k--,d--);
+	return __tstrdup(src,d-src+1);
+}
+
+template <class T>
+inline const T* trim( const T* src, const T* delims=_strcvt<T>(" \t\n") )
+{
+	if(!src||!src[0]) return reinterpret_cast<const T*>(L"");
+	const T* r=rtrim(src,delims); return r+(*r?strspn(src,delims):0);
+}
+
+template <class T>
+inline const T* trim( const T* src, T delim )
+{
+	if(!src||!src[0]) return reinterpret_cast<const T*>(L"");
+	while(*src&&*src==delim) src++; if(!src[0]) return reinterpret_cast<const T*>(__tstrdup(L""));
+	int l=int(strlen(src)); const T* d=src+l-1; for(int k=l-1;*d==delim&&k>=0;k--,d--);
+	return __tstrdup(src,d-src+1);
+}
+
+template <class T>
+inline const T* trim_comment( const T* src, const char* marker="#" )
+{
+	if(!src||!src[0]) return reinterpret_cast<const T*>(L"");
+	size_t slen=strlen(src),clen=strlen(marker),sc=slen-clen+1;
+	T* buff=__tstrdup(src,slen); const char* cs=marker;
 	bool cpp=false;for(int k=0;k<clen-1;k++){if(cs[k]!='/'||cs[k+1]!='/')continue;cpp=true;break;} // detect double slashes
 	for(size_t k=0;k<slen;k++)
 	{
