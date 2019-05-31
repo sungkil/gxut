@@ -212,8 +212,8 @@ struct camera_t // std140 layout for OpenGL uniform buffer objects
 #else
 struct camera_t
 {
-	mat4		view_matrix, projection_matrix;
-	union { float fovy, height; }; float aspect, dnear, dfar; // fov in radians; height for orthographic projection
+	mat4 view_matrix, projection_matrix;
+	union { struct { union {float fovy, height;}; float aspect,dnear,dfar; }; vec4 pp; }; // fov in radians; height for orthographic projection; pp=perspective parameters
 	alignas(16)	vec3 eye, center, up;	// lookAt params (16-bytes aligned for std140 layout)
 
 	camera_t() = default;

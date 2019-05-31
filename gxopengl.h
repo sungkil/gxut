@@ -1466,7 +1466,7 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLu
 	// create a new texture; here, we must use glGenTextures() instead of glCreateTextures(), because texture view requires to have a created but uninitialized texture.
 	GLuint ID1; glGenTextures(1,&ID1); if(ID1==0) return nullptr;
 	bool b_slice0 = min_level==0&&levels==1&&layers==1;
-	const char* name1 = b_slice0?format("%s[%d]",src->name,min_layer):format("%s[%d:%d][%d:%d",src->name,min_layer,layers-1,min_level,levels-1);
+	const char* name1 = b_slice0?format("%s[%d]",src->name,min_layer):format("%s[%d:%d][%d:%d]",src->name,min_layer,layers-1,min_level,levels-1);
 
 	// get attributes
 	GLint internal_format	= src->internal_format();
