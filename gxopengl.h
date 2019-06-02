@@ -87,6 +87,7 @@ inline GLint	gxGetProgramiv( GLuint program, GLenum pname ){ GLint iv; glGetProg
 inline GLint	gxGetActiveUniformBlockiv( GLuint program, GLuint uniformBlockIndex, GLenum pname ){ GLint i; glGetActiveUniformBlockiv( program, uniformBlockIndex, pname, &i ); return i; }
 inline GLint	gxGetShaderiv( GLuint shader, GLenum pname ){ GLint iv; glGetShaderiv( shader, pname, &iv); return iv; }
 inline GLint	gxGetIntegerv( GLenum pname ){ GLint iv; glGetIntegerv( pname, &iv ); return iv; }
+inline bool		gxGetBooleanv( GLenum pname ){ GLboolean bv; glGetBooleanv( pname, &bv ); return bv!=0; }
 inline GLint64	gxGetInteger64v( GLenum pname ){ GLint64 iv; glGetInteger64v( pname, &iv ); return iv; }
 inline GLfloat	gxGetFloatv( GLenum pname ){ GLfloat fv; glGetFloatv( pname, &fv ); return fv; }
 inline GLint	gxGetInternalFormativ( GLenum target, GLint internal_format, GLenum pname ){ GLint iv; glGetInternalformativ( target, internal_format, pname, 1, &iv ); return iv; }
@@ -210,9 +211,11 @@ namespace gl {
 		GLuint bind_range( GLuint index, GLintptr offset, GLsizeiptr size, bool b_bind=true ){ GLuint b0=binding(); if(base_bindable(target)&&(!b_bind||b0!=ID)) glBindBufferRange( target, index, b_bind?ID:0, offset, size ); return b0; }
 		__forceinline bool base_bindable( GLenum target1 ){ return target1==GL_SHADER_STORAGE_BUFFER||target1==GL_UNIFORM_BUFFER||target1==GL_TRANSFORM_FEEDBACK_BUFFER||target1==GL_ATOMIC_COUNTER_BUFFER; }
 
-		void set_data( GLsizeiptr size, GLenum usage, const void* data=nullptr ){ if(glNamedBufferData) glNamedBufferData(ID,size,data,usage); else { GLuint b0=bind(); glBufferData(target,size,data,usage); glBindBuffer(target,b0); } }
 		void set_storage( GLsizeiptr size, const void* data, GLbitfield flags=GL_MAP_WRITE_BIT|GL_DYNAMIC_STORAGE_BIT ){ if(glNamedBufferStorage) glNamedBufferStorage(ID,size,data,flags); else { GLuint b0=bind(); glBufferStorage(target,size,data,flags); glBindBuffer(target,b0); } }
+		void set_data( GLsizeiptr size, GLenum usage, const void* data=nullptr ){ if(glNamedBufferData) glNamedBufferData(ID,size,data,usage); else { GLuint b0=bind(); glBufferData(target,size,data,usage); glBindBuffer(target,b0); } }
 		void set_sub_data( GLsizeiptr size, GLvoid* data, GLintptr offset=0 ){ if(glNamedBufferSubData) glNamedBufferSubData(ID,offset,size,data); else { GLuint b0=bind(); glBufferSubData(target,offset,size,data); glBindBuffer(target,b0); } }
+		void get_data( GLvoid* data, GLsizeiptr size=0 ){ get_sub_data( data, size, 0 ); }
+		void get_sub_data( GLvoid* data, GLsizeiptr size, GLintptr offset=0 ){ if(glGetNamedBufferSubData) glGetNamedBufferSubData(ID,offset,size?size:this->size(),data); else if(glGetBufferSubData){ GLuint b0=bind(); glGetBufferSubData(target,offset,size?size:this->size(),data); glBindBuffer(target,b0); } }
 		void copy_data( Buffer* write_buffer, GLsizei size=0 ){ copy_sub_data( write_buffer, size?size:this->size() ); }
 		void copy_sub_data( Buffer* write_buffer, GLsizei size, GLintptr read_offset=0, GLintptr write_offset=0 ){ if(glCopyNamedBufferSubData) glCopyNamedBufferSubData(ID,write_buffer->ID,read_offset,write_offset,size); else printf("Buffer::copySubData(): glCopyNamedBufferSubData==nullptr (only supports named mode)\n" ); }
 		void* map( GLenum access=GL_READ_ONLY, GLenum target=0 ){ if(target==0) return glMapNamedBuffer(ID,access); bind(); return glMapBuffer(target,access); }
@@ -630,6 +633,7 @@ namespace gl {
 		void bind_layers( Texture* t0, GLint mipLevel0, Texture* t1=nullptr, GLint mipLevel1=0, Texture* t2=nullptr, GLint mipLevel2=0, Texture* t3=nullptr, GLint mipLevel3=0, Texture* t4=nullptr, GLint mipLevel4=0, Texture* t5=nullptr, GLint mipLevel5=0, Texture* t6=nullptr, GLint mipLevel6=0, Texture* t7=nullptr, GLint mipLevel7=0 ); // t needs to be multi-layers
 		void bind_layers( Texture* t0, Texture* t1=nullptr, Texture* t2=nullptr, Texture* t3=nullptr, Texture* t4=nullptr, Texture* t5=nullptr, Texture* t6=nullptr, Texture* t7=nullptr ){ bind_layers(t0,0,t1,0,t2,0,t3,0,t4,0,t5,0,t6,0,t7,0); } // t needs to be multi-layers
 		void bind_depth_buffer( GLint width, GLint height, GLint layers, bool multisample, GLsizei multisamples );
+		void unbind_depth_buffer();
 		void check_status(){ GLenum s=glCheckNamedFramebufferStatus?glCheckNamedFramebufferStatus(ID,GL_FRAMEBUFFER):glCheckFramebufferStatus(GL_FRAMEBUFFER); if(s==GL_FRAMEBUFFER_COMPLETE) return; if(s==GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT\n", name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT\n", name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER\n", name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER\n", name ); else if(s==GL_FRAMEBUFFER_UNSUPPORTED) printf( "[%s] GL_FRAMEBUFFER_UNSUPPORTED\n", name ); }
 		void read_pixels( GLenum attachment, GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLvoid* img ){ if(ID) glNamedFramebufferReadBuffer(ID,GL_COLOR_ATTACHMENT0+attachment); else glReadBuffer(GL_BACK); glReadPixels( x, y, width, height, format, type, img ); }
 		void set_viewport( GLint x, GLint y, GLsizei width, GLsizei height ){ glViewport( x, y, width, height ); }
@@ -666,41 +670,37 @@ namespace gl {
 	{
 		if(ID==0){ bind(false); return; }
 
-		// regardless of direct_state_access, it is still necessary, because draw functions are not aware where they are drawn.
+		// still necessary, regardless of direct_state_access, because draw functions are not aware where they are drawn.
 		glBindFramebuffer( GL_FRAMEBUFFER, ID );
 
 		gl::Texture*	T[MAX_COLOR_ATTACHMENTS]	= {t0,t1,t2,t3,t4,t5,t6,t7};
 		GLint			L[MAX_COLOR_ATTACHMENTS]	= {layer0,layer1,layer2,layer3,layer4,layer5,layer6,layer7};
 		GLint			M[MAX_COLOR_ATTACHMENTS]	= {mipLevel0,mipLevel1,mipLevel2,mipLevel3,mipLevel4,mipLevel5,mipLevel6,mipLevel7};
 
-		uint num_draw_buffers=0;
+		uint draw_buffer_count=0;
 		for( int k=0; k < MAX_COLOR_ATTACHMENTS; k++ )
 		{
 			gl::Texture* t = T[k];
 			GLenum target = t ? (active_targets[k]=t->target) : active_targets[k];
 			if(target==GL_TEXTURE_3D||target==GL_TEXTURE_1D_ARRAY||target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY) glFramebufferTextureLayer( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0+k, t?t->ID:0, t?M[k]:0, t?L[k]:0 );
 			else if(target==GL_TEXTURE_1D||target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_BUFFER||target==GL_TEXTURE_RECTANGLE) glFramebufferTexture( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0+k, t?t->ID:0, t?M[k]:0 );
-			if(t) num_draw_buffers++; else active_targets[k]=0;
+			if(t) draw_buffer_count++; else active_targets[k]=0;
 		}
 
 		// detach all depth buffers for no-attachments
-		if(num_draw_buffers==0)
-		{
-			glBindRenderbuffer( GL_RENDERBUFFER, 0 );
-			glFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, 0 );
-			glFramebufferTexture( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, 0, 0 );
-			return;
-		}
+		if(draw_buffer_count==0){ unbind_depth_buffer(); return; } // detach all color/depth buffers for no-attachments
 
 		// if there are attachments, set viewport and bind depth buffer
 		GLint width=t0->width(mipLevel0), height=t0->height(mipLevel0);
 		glViewport( 0, 0, width, height );
+		
+		// bind depth buffer, when depth test is enabled
 		bool b_multisample = active_targets[0]==GL_TEXTURE_2D_MULTISAMPLE||active_targets[0]==GL_TEXTURE_2D_MULTISAMPLE_ARRAY;
 		bind_depth_buffer( width, height, 1, b_multisample, b_multisample&&T[0]?T[0]->multisamples():1 );
-
+		
 		// set the draw buffers, even without attachments; then check the status
-		if(glNamedFramebufferDrawBuffers)	glNamedFramebufferDrawBuffers( ID, num_draw_buffers, draw_buffers() );
-		else								glDrawBuffers( num_draw_buffers, draw_buffers() );
+		if(glNamedFramebufferDrawBuffers)	glNamedFramebufferDrawBuffers( ID, draw_buffer_count, draw_buffers() );
+		else								glDrawBuffers( draw_buffer_count, draw_buffers() );
 		check_status();
 	}
 
@@ -771,6 +771,13 @@ namespace gl {
 			if(glNamedFramebufferTexture) glNamedFramebufferTexture( ID, GL_DEPTH_ATTACHMENT, idx, 0 );
 			else { glBindFramebuffer(GL_FRAMEBUFFER,ID); glBindRenderbuffer(GL_RENDERBUFFER,idx); glFramebufferTexture( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, idx, 0 ); }
 		}
+	}
+
+	inline void Framebuffer::unbind_depth_buffer()
+	{
+		glBindRenderbuffer( GL_RENDERBUFFER, 0 );
+		glFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, 0 );
+		glFramebufferTexture( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, 0, 0 );
 	}
 
 	inline void Framebuffer::bind_no_attachments( GLint width, GLint height, GLint layers, GLint samples )
