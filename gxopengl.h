@@ -124,7 +124,7 @@ gl::Texture*		gxCreateTextureCube(const char*,GLint,GLsizei,GLsizei,GLsizei,GLin
 gl::Texture*		gxCreateTextureBuffer(const char*,gl::Buffer*,GLint);
 gl::Texture*		gxCreateTextureRectangle(const char*,GLsizei,GLsizei,GLint,GLvoid*);
 gl::Texture*		gxCreateTextureView(gl::Texture*,GLuint,GLuint,GLuint,GLuint,bool,GLenum);
-gl::Buffer*			gxCreateBuffer(const char*,GLenum,GLsizeiptr,GLenum,const void*);
+gl::Buffer*			gxCreateBuffer(const char*,GLenum,GLsizeiptr,GLenum,const void*,GLbitfield);
 gl::Program*		gxCreateProgram(const char*,const char*,const std::map<GLuint,std::string>&,const char*,std::vector<const char*>*);
 gl::Program*		gxCreateProgram( const char*,const char*,const char*,const char*,const char*);
 gl::VertexArray*	gxCreateQuadVertexArray();
@@ -211,13 +211,12 @@ namespace gl {
 		GLuint bind_range( GLuint index, GLintptr offset, GLsizeiptr size, bool b_bind=true ){ GLuint b0=binding(); if(base_bindable(target)&&(!b_bind||b0!=ID)) glBindBufferRange( target, index, b_bind?ID:0, offset, size ); return b0; }
 		__forceinline bool base_bindable( GLenum target1 ){ return target1==GL_SHADER_STORAGE_BUFFER||target1==GL_UNIFORM_BUFFER||target1==GL_TRANSFORM_FEEDBACK_BUFFER||target1==GL_ATOMIC_COUNTER_BUFFER; }
 
-		void set_storage( GLsizeiptr size, const void* data, GLbitfield flags=GL_MAP_WRITE_BIT|GL_DYNAMIC_STORAGE_BIT ){ if(glNamedBufferStorage) glNamedBufferStorage(ID,size,data,flags); else { GLuint b0=bind(); glBufferStorage(target,size,data,flags); glBindBuffer(target,b0); } }
-		void set_data( GLsizeiptr size, GLenum usage, const void* data=nullptr ){ if(glNamedBufferData) glNamedBufferData(ID,size,data,usage); else { GLuint b0=bind(); glBufferData(target,size,data,usage); glBindBuffer(target,b0); } }
 		void set_sub_data( GLsizeiptr size, GLvoid* data, GLintptr offset=0 ){ if(glNamedBufferSubData) glNamedBufferSubData(ID,offset,size,data); else { GLuint b0=bind(); glBufferSubData(target,offset,size,data); glBindBuffer(target,b0); } }
 		void get_data( GLvoid* data, GLsizeiptr size=0 ){ get_sub_data( data, size, 0 ); }
 		void get_sub_data( GLvoid* data, GLsizeiptr size, GLintptr offset=0 ){ if(glGetNamedBufferSubData) glGetNamedBufferSubData(ID,offset,size?size:this->size(),data); else if(glGetBufferSubData){ GLuint b0=bind(); glGetBufferSubData(target,offset,size?size:this->size(),data); glBindBuffer(target,b0); } }
 		void copy_data( Buffer* write_buffer, GLsizei size=0 ){ copy_sub_data( write_buffer, size?size:this->size() ); }
 		void copy_sub_data( Buffer* write_buffer, GLsizei size, GLintptr read_offset=0, GLintptr write_offset=0 ){ if(glCopyNamedBufferSubData) glCopyNamedBufferSubData(ID,write_buffer->ID,read_offset,write_offset,size); else printf("Buffer::copySubData(): glCopyNamedBufferSubData==nullptr (only supports named mode)\n" ); }
+		void clear_data( GLenum internalformat, GLenum format, GLenum type, const void* data, GLintptr offset=0, GLsizeiptr size=0 ){ if(!glClearBufferData||!glClearBufferSubData) return; if(!size&&!offset){ GLuint b0=bind(true); glClearBufferData(target,internalformat,format,type,data); bind(b0); return; } GLuint b0=bind(true); glClearBufferSubData(target,internalformat,offset,size?size:parameteriv(GL_BUFFER_SIZE),format,type,data); bind(b0); }
 		void* map( GLenum access=GL_READ_ONLY, GLenum target=0 ){ if(target==0) return glMapNamedBuffer(ID,access); bind(); return glMapBuffer(target,access); }
 		void* map_range( GLintptr offset, GLsizeiptr length, GLenum access=GL_MAP_READ_BIT, GLenum target=0 ){ if(target==0) return glMapNamedBufferRange(ID,offset,length,access); bind(); return glMapBufferRange(target,offset,length,access); }
 		void unmap( GLenum target=0 ){ if(target==0&&glUnmapNamedBuffer) glUnmapNamedBuffer(ID); else glUnmapBuffer(target); }
@@ -593,7 +592,7 @@ namespace gl {
 		void set_uniform( const std::string& name, Texture* t ){ if(active_program) active_program->set_uniform(name.c_str(),t); }
 
 		// uniform buffer/block
-		gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name); if(b&&b->size()!=size){ static std::set<std::string> warns; auto it=warns.find(name); if(it==warns.end()){ warns.insert(name); printf("uniform_buffer(%s).size(=%d)!=%d\n",name,int(b->size()),int(size));} } if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr); if(b){ bind_uniform_buffer(name,b); return uniform_buffer_map[name]=b; } printf("[%s] unable to create uniform buffer [%s]\n", this->name, name); return nullptr; }
+		gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name); if(b&&b->size()!=size){ static std::set<std::string> warns; auto it=warns.find(name); if(it==warns.end()){ warns.insert(name); printf("uniform_buffer(%s).size(=%d)!=%d\n",name,int(b->size()),int(size));} } if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr,GL_DYNAMIC_STORAGE_BIT|GL_MAP_WRITE_BIT); if(b){ bind_uniform_buffer(name,b); return uniform_buffer_map[name]=b; } printf("[%s] unable to create uniform buffer [%s]\n", this->name, name); return nullptr; }
 		gl::Buffer* get_uniform_buffer( const char* name ){ auto it=uniform_buffer_map.find(name); return it==uniform_buffer_map.end()?nullptr:it->second; }
 		GLuint get_uniform_block_binding( const char* name ){ GLint binding=active_program?active_program->get_uniform_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint binding=program->get_uniform_block_binding(name); if(binding!=-1) return binding; } return -1; }
 		void bind_uniform_buffer( const char* name, gl::Buffer* ub=nullptr /* if nullptr, use default buffer */ ){ gl::Buffer* b=ub?ub:get_uniform_buffer(name); GLuint binding=get_uniform_block_binding(name); if(b&&binding!=-1) b->bind_base(binding); else if(!b) printf( "[%s] bind_uniform_buffer(): unable to find uniform buffer %s\n", this->name, name ); else printf( "[%s] bind_uniform_buffer(): unable to find uniform buffer binding %s\n", this->name, name ); }
@@ -832,11 +831,15 @@ inline gl::Query* gxCreateQuery( const char* name, GLenum target=GL_TIME_ELAPSED
 	return new gl::Query(ID,name,target);
 }
 
-inline gl::Buffer* gxCreateBuffer( const char* name, GLenum target, GLsizeiptr size, GLenum usage, const void* data=nullptr )
+inline gl::Buffer* gxCreateBuffer( const char* name, GLenum target, GLsizeiptr size, GLenum usage, const void* data=nullptr, GLbitfield storage_flags=GL_DYNAMIC_STORAGE_BIT|GL_MAP_READ_BIT|GL_MAP_WRITE_BIT )
 {
 	GLuint ID; if(glCreateBuffers) glCreateBuffers(1,&ID); else glGenBuffers(1,&ID); if(ID==0){ printf( "Unable to create buffer[%s]", name ); return nullptr; }	// glCreateBuffers() also initializes objects, while glGenBuffers() do not initialze until bind() is called
 	gl::Buffer* buffer = new gl::Buffer(ID,name,target);
-	buffer->set_data( size, usage, data );
+
+	if(glNamedBufferStorage) glNamedBufferStorage(ID,size,data,storage_flags);
+	else if(glBufferStorage){ GLuint b0=buffer->bind(); glBufferStorage(target,size,data,storage_flags); glBindBuffer(target,b0); }
+	else if(glNamedBufferData) glNamedBufferData(ID,size,data,usage);
+	else if(glBufferData){ GLuint b0=buffer->bind(); glBufferData(target,size,data,usage); glBindBuffer(target,b0); }
 
 	return buffer;
 }
@@ -848,7 +851,7 @@ inline gl::VertexArray* gxCreateVertexArray( const char* name, vertex* p_vertice
 	GLuint ID=gxCreateVertexArray(); if(ID==0) return nullptr;
 	gl::VertexArray* va = new gl::VertexArray( ID, name );
 
-	va->vertex_buffer = gxCreateBuffer( "vertexBuffer", GL_ARRAY_BUFFER, sizeof(vertex)*vertex_count, usage, p_vertices ); if(va->vertex_buffer==nullptr){ printf( "%s(): unable to create vertex_buffer\n", __FUNCTION__ ); delete va; return nullptr; }
+	va->vertex_buffer = gxCreateBuffer( "vertexBuffer", GL_ARRAY_BUFFER, sizeof(vertex)*vertex_count, usage, p_vertices, 0 ); if(va->vertex_buffer==nullptr){ printf( "%s(): unable to create vertex_buffer\n", __FUNCTION__ ); delete va; return nullptr; }
 	if(p_indices&&index_count){ va->index_buffer = gxCreateBuffer( "indexBuffer", GL_ELEMENT_ARRAY_BUFFER, sizeof(uint)*index_count, usage, p_indices ); if(va->index_buffer==nullptr){ printf( "%s(): unable to create index_buffer\n", __FUNCTION__ ); delete va; return nullptr; } }
 
 	// use fixed binding (without direct state access)
