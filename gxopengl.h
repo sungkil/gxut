@@ -255,7 +255,7 @@ namespace gl {
 		void bind_image_texture( GLuint unit, GLenum access=GL_READ_ONLY /* or GL_WRITE_ONLY or GL_READ_WRITE */ , GLint level=0, GLenum format=0, bool bLayered=false, GLint layer=0 ){ glBindImageTexture( unit, ID, level, bLayered?GL_TRUE:GL_FALSE, layer, access, format?format:internal_format() ); }
 
 		// query and bind back
-		inline GLint get_texture_parameteriv( GLenum pname ) const { GLint iv; if(glGetTextureParameteriv) glGetTextureParameteriv(ID,pname,&iv ); else { GLuint b0=gxGetIntegerv(target_binding); glBindTexture(target,ID); glGetTexParameteriv(target,pname,&iv ); glBindTexture(target,b0); } return iv; }
+		inline GLint get_texture_parameteriv( GLenum pname ) const { GLint iv; if(glGetTextureParameteriv) glGetTextureParameteriv(ID,pname,&iv); else { GLuint b0=gxGetIntegerv(target_binding); glBindTexture(target,ID); glGetTexParameteriv(target,pname,&iv ); glBindTexture(target,b0); } return iv; }
 		inline GLint get_texture_level_parameteriv( GLenum pname, GLint level ) const { GLint iv; if(glGetTextureLevelParameteriv) glGetTextureLevelParameteriv(ID,level,pname,&iv); else { GLuint b0=gxGetIntegerv(target_binding); glBindTexture(target,ID); glGetTexLevelParameteriv(target,level,pname,&iv); glBindTexture(target,b0); } return iv; }
 		inline void texture_parameteri( GLenum pname, GLint param ) const { if(glTextureParameteri) glTextureParameteri(ID,pname,param); else { GLuint b0=gxGetIntegerv(target_binding); glBindTexture(target,ID); glTexParameteri(target,pname,param); glBindTexture(target,b0); } }
 		inline void texture_parameterf( GLenum pname, GLfloat param ) const { if(glTextureParameterf) glTextureParameterf(ID,pname,param); else { GLuint b0=gxGetIntegerv(target_binding); glBindTexture(target,ID); glTexParameterf(target,pname,param); glBindTexture(target,b0); } }
@@ -1489,9 +1489,6 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLu
 	new(t1) gl::Texture(ID1,name1,target,internal_format,src->format(),src->type(),src->crtheap);
 	t1->key = key;
 
-	// multisamples
-	t1->_multisamples = src->_multisamples;
-
 	// correct min_filter, mag_filter
 	if(levels==1)
 	{
@@ -1501,17 +1498,20 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLu
 
 	// create view and set attributes
 	glTextureView( t1->ID, target, src->ID, internal_format, min_level, levels, min_layer, layers);
-	t1->set_filter( min_filter, mag_filter );
-	t1->set_wrap( wrap );
-
+	
 	// set dimensions
+	t1->_multisamples = src->_multisamples;
 	t1->_width	= src->_width;
 	t1->_height	= src->_height;
 	t1->_depth	= layers;
 	t1->_levels	= levels;
 
-	for( gl::Texture* t=src; t; t=t->next ) if(t->next==nullptr){ t->next=t1; break; }
+	// filter should be set after dimensions
+	t1->set_filter( min_filter, mag_filter );
+	t1->set_wrap( wrap );
 
+	// add to linked list for search
+	for( gl::Texture* t=src; t; t=t->next ) if(t->next==nullptr){ t->next=t1; break; }
 	return t1;
 }
 
