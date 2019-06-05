@@ -331,6 +331,7 @@ namespace gl {
 		inline static uint crc( GLuint min_level, GLuint levels, GLuint min_layer, GLuint layers, bool force_array, GLenum target ){ struct info { GLuint min_level, levels, min_layer, layers; bool force_array; GLenum target; }; info i={min_level,levels,min_layer,layers,force_array,target}; return gl::crc32c(&i,sizeof(i)); }
 		inline Texture* view( GLuint min_level, GLuint levels, GLuint min_layer=0, GLuint layers=1, GLint internal_format=0, GLenum target=0 ){ return gxCreateTextureView(this,min_level,levels,min_layer,layers,false,target); } // view support (> OpenGL 4.3)
 		inline Texture* slice( GLuint layer, GLuint level=0 ){ return view(level,1,layer,1); }
+		inline Texture* last_mip( GLuint layer=0 ){ return view(_levels-1,1,layer,1); }
 		inline Texture* array_view(){ return (layers()>1)?this:gxCreateTextureView(this,0,mip_levels(),0,layers(),true,0); }
 
 		// dimensions
