@@ -145,8 +145,8 @@ inline bool parser_t::parse( int argc, const wchar_t** argv )
 {
 	// configure attributes
 	std::vector<argument_t*> required; for( auto& a : arguments ) if(!a.optional) required.push_back(&a);
-	int		nr=int(required.size());
-	bool	help_exists = false;
+	int	 nr=int(required.size());
+	bool b_help_exists = false;
 
 	// test prerequisite
 	if(nr>0&&argc<2) return usage();
@@ -156,7 +156,7 @@ inline bool parser_t::parse( int argc, const wchar_t** argv )
 	{
 		const wchar_t* a = argv[k]; if(!a[0]) continue;
 		if(a[0]!=L'-'){ if(r>=nr) arguments.push_back(argument_t()); arguments[r++].value = a; continue; } // increase array to accept excessive arguments
-		if(_wcsicmp(a,L"-h")==0||_wcsicmp(a,L"--help")==0){ help_exists=true; continue; } // test whether help exists
+		if(_wcsicmp(a,L"-h")==0||_wcsicmp(a,L"--help")==0){ b_help_exists=true; continue; } // test whether help exists
 		if(!a[1]) continue;	// skip too short options
 
 		bool b_short = a[1]!=L'-';
@@ -200,7 +200,7 @@ inline bool parser_t::parse( int argc, const wchar_t** argv )
 	}
 
 	// if help show usage
-	if( help_exists ) usage();
+	if( b_help_exists ){ usage(); return false; }
 
 	// check the value provided for subargument
 	for( auto& o : options )

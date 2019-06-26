@@ -428,7 +428,6 @@ __noinline inline void path::subdirs_recursive( path& dir, path::scan_t& si ) co
 	while(FindNextFileW(h,&fd))
 	{
 		if((fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)==0) continue;
-		if((fd.dwFileAttributes&FILE_ATTRIBUTE_HIDDEN)!=0) continue;
 		if(f[0]==L'.'){ if(!f[1]||memcmp(f+1,L".",4)==0||memcmp(f+1,L"git",8)==0) continue; } // skip .git
 		size_t fl=wcslen(f); memcpy(p,f,sizeof(wchar_t)*fl); p[fl]=L'\\';p[fl+1]=0;
 		if(si.recursive) sdir.emplace_back(t);
