@@ -32,10 +32,35 @@
 #if defined(__has_include) && __has_include(<SDKDDKVer.h>)
 	#include <SDKDDKVer.h>
 #endif
+// prerequiste macros
+#ifndef NOMINMAX
+	#define NOMINMAX // suppress definition of min/max in <windows.h>
+#endif
 // C standard
 #include <inttypes.h>	// defines int64_t, uint64_t
 #include <math.h>
-#include <stdio.h>
+#include <stdarg.h>
+#if !defined(GX_USE_STD_PRINTF) && (defined(_WIN32)||defined(_WIN64)) // Windows
+	#define	printf	std_printf	// disable default printf
+	#define	wprintf std_wprintf	// disable default wprintf
+		#include <stdio.h>
+		#include <wchar.h>
+		#include <cstdio>
+		#include <cwchar>
+	#undef	printf
+	#undef	wprintf
+	// drop-in replacement of printf, where non-rex applications fallbacks to stdout
+	int __cdecl printf( const char* fmt, ... );
+	int __cdecl wprintf( const wchar_t* fmt, ... );
+	#ifndef REX_FACTORY_IMPL
+		#include <windows.h>
+		inline int __cdecl printf( const char* fmt, ... ){ static int(*f)(const char*,va_list)=(int(*)(const char*,va_list)) GetProcAddress(GetModuleHandleW(nullptr),"mvprintf"); va_list a; va_start(a,fmt); int r=f?f(fmt,a):vprintf(fmt,a); va_end(a); return r; }
+		inline int __cdecl wprintf( const wchar_t* fmt, ... ){ static int(*f)(const wchar_t*,va_list)=(int(*)(const wchar_t*,va_list)) GetProcAddress(GetModuleHandleW(nullptr),"mvwprintf"); va_list a; va_start(a,fmt); int r=f?f(fmt,a):vwprintf(fmt,a); va_end(a); return r; }
+	#endif
+#else
+	#include <stdio.h>
+	#include <wchar.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 // STL
@@ -51,10 +76,8 @@
 	#include <unordered_map>
 	#include <unordered_set>
 #endif
+// Windows
 #if defined(_WIN32)||defined(_WIN64) // Windows
-	#ifndef NOMINMAX
-		#define NOMINMAX // suppress definition of min/max
-	#endif
 	#include <windows.h>
 #endif
 // platform-specific
@@ -87,9 +110,6 @@
 		#pragma clang diagnostic ignored "-Wclang-cl-pch"					// clang bugs show still warnings
 	#endif
 #endif
-// printf replacements: define implementation somewhere to use this
-extern int (*gprintf)( const char*, ... );
-extern int (*gwprintf)( const wchar_t*, ... );
 // utility functions
 template <class T> std::nullptr_t safe_free( T*& p ){if(p){free(p);p=nullptr;} return nullptr; }
 template <class T> std::nullptr_t safe_delete( T*& p ){if(p){delete p;p=nullptr;} return nullptr; }

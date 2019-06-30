@@ -234,7 +234,7 @@ __noinline inline std::vector<uchar> compress( void* ptr, size_t size, bool b_gz
 {
 	z_stream s; memset(&s,0,sizeof(decltype(s)));
 	int ret = b_gzip?deflateInit2_(&s,-1,8,MAX_WBITS+16,8,0,ZLIB_VERSION,sizeof(s)):deflateInit_(&s,-1,ZLIB_VERSION,sizeof(s));
-	if(ret!=0/*Z_OK*/){ printf("%s(): failed in deflateInit()\n", __FUNCTION__ ); return std::vector<uchar>(); }
+	if(ret!=0/*Z_OK*/) return std::vector<uchar>();
 	
 	std::vector<uchar> buff(capacity(size));
 	static const uint chunk = 0x8000;
@@ -456,7 +456,7 @@ __noinline inline bool binary_cache::compress( bool rm_src )
 	if(!cache_path().exists()) return false;
 	HZIP hZip = CreateZip( zip_path(), nullptr );
 	if(ZR_OK==ZipAdd( hZip, cache_path().name(), cache_path() )){ CloseZip(hZip); if(rm_src) cache_path().rmfile(); return true; }
-	else { wprintf( L"Unable to compress %s\n", cache_path().name() ); CloseZip( hZip ); return false; }
+	else { wprintf( L"Unable to compress %s\n", cache_path().name().c_str() ); CloseZip( hZip ); return false; }
 }
 
 __noinline inline bool binary_cache::decompress()

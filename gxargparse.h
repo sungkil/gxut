@@ -109,8 +109,8 @@ struct parser_t
 	std::vector<std::wstring>		others( const std::string& name="" ) const;
 
 	// error handling, debugging
-	bool exit( const char* fmt, ... ){ va_list a; va_start(a,fmt); const char* w=vformat(a,fmt); va_end(a); printf( "[%s] %s\nUse -h option to see usage.\n", name(), trim(w,"\n") ); return false; }
-	bool exit( const wchar_t* fmt, ... ){ va_list a; va_start(a,fmt); const wchar_t* w=vformat(a,fmt); va_end(a); printf( "[%s] %s\nUse -h option to see usage.\n", name(), trim(wtoa(w),"\n") ); return false; }
+	bool exit( const char* fmt, ... ){ va_list a; va_start(a,fmt); const char* w=vformat(fmt,a); va_end(a); fprintf( stdout, "[%s] %s\nUse -h option to see usage.\n", name(), trim(w,"\n") ); return false; }
+	bool exit( const wchar_t* fmt, ... ){ va_list a; va_start(a,fmt); const wchar_t* w=vformat(fmt,a); va_end(a); fprintf( stdout, "[%s] %s\nUse -h option to see usage.\n", name(), trim(wtoa(w),"\n") ); return false; }
 	void dump();
 
 protected:
@@ -253,31 +253,31 @@ inline bool parser_t::usage( const char* alt_name )
 	const char* fmt=sfmt.c_str();
 
 	// now, prints the results
-	printf( "\n%s version %04d-%02d-%02d\n", name(), gx::compiler::year(), gx::compiler::month(), gx::compiler::day() );
-	if(!author.empty()&&since_year>0) printf( "copyright (c) %d-%d by %s\n", since_year, gx::compiler::year(), author.c_str());
-	if(!sheader.empty()) printf( "\n%s\n\n", sheader.c_str() );
+	fprintf( stdout, "\n%s version %04d-%02d-%02d\n", name(), gx::compiler::year(), gx::compiler::month(), gx::compiler::day() );
+	if(!author.empty()&&since_year>0) fprintf( stdout, "copyright (c) %d-%d by %s\n", since_year, gx::compiler::year(), author.c_str());
+	if(!sheader.empty()) fprintf( stdout, "\n%s\n\n", sheader.c_str() );
 
-	printf( "usage: %s", name() );
-	if(!options.empty()) printf( " [option]" ); else printf( " [-h|--help]" );
-	for( auto& a : arguments ) if(!a.name.empty()) printf( " %s%s%s", a.optional?"[":"",a.name.c_str(),a.optional?"]":"" );
-	printf( " ...\n\n" );
+	fprintf( stdout, "usage: %s", name() );
+	if(!options.empty()) fprintf( stdout, " [option]" ); else fprintf( stdout, " [-h|--help]" );
+	for( auto& a : arguments ) if(!a.name.empty()) fprintf( stdout, " %s%s%s", a.optional?"[":"",a.name.c_str(),a.optional?"]":"" );
+	fprintf( stdout, " ...\n\n" );
 
 	if(!req_args.empty()||!opt_args.empty())
 	{
-		printf( "arguments:\n");
-		for( auto& a : req_args ) printf( fmt, a.first.c_str(), a.second.c_str() );
-		for( auto& a : opt_args ) printf( fmt, a.first.c_str(), a.second.c_str() );
-		printf( "\n" );
+		fprintf( stdout, "arguments:\n");
+		for( auto& a : req_args ) fprintf( stdout, fmt, a.first.c_str(), a.second.c_str() );
+		for( auto& a : opt_args ) fprintf( stdout, fmt, a.first.c_str(), a.second.c_str() );
+		fprintf( stdout, "\n" );
 	}
 
 	if(!opts.empty())
 	{
-		printf( "options:\n");
-		for( auto& o : opts ) printf(fmt, o.first.c_str(), o.second.c_str() );
-		printf( "\n" );
+		fprintf( stdout, "options:\n");
+		for( auto& o : opts ) fprintf( stdout,fmt, o.first.c_str(), o.second.c_str() );
+		fprintf( stdout, "\n" );
 	}
 
-	if(!sfooter.empty()) printf( "%s\n\n", sfooter.c_str() );
+	if(!sfooter.empty()) fprintf( stdout, "%s\n\n", sfooter.c_str() );
 
 	return false;
 }
@@ -304,12 +304,12 @@ inline void parser_t::dump()
 	std::string sfmt = format(" %%-%ds   = %%s\n",cap+4); const char* fmt=sfmt.c_str();
 
 	// now, print
-	printf("******************************\n");
-	printf("[arguments]\n");
-	for(auto& a:args) printf( fmt, a.first.c_str(), a.second.c_str() );
-	printf("\n[options]\n");
-	for(auto& o:opts) printf( fmt, o.first.c_str(), o.second.c_str() );
-	printf("******************************\n\n");
+	fprintf( stdout, "******************************\n");
+	fprintf( stdout, "[arguments]\n");
+	for(auto& a:args) fprintf( stdout, fmt, a.first.c_str(), a.second.c_str() );
+	fprintf( stdout, "\n[options]\n");
+	for(auto& o:opts) fprintf( stdout, fmt, o.first.c_str(), o.second.c_str() );
+	fprintf( stdout, "******************************\n\n");
 }
 
 //***********************************************

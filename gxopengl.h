@@ -76,7 +76,7 @@ inline GLenum gxGetTargetBinding( GLenum target )
 		{GL_TIME_ELAPSED,0},
 	};
 	auto it=t.find(target); if(it!=t.end()) return it->second;
-	if(target) printf( "%s(): unable to find target binding for 0x%04X\n",__FUNCTION__,target);
+	if(target) printf( "%s(): unable to find target binding for 0x%04X\n",__func__,target);
 	return 0;
 }
 
@@ -847,13 +847,13 @@ inline gl::Buffer* gxCreateBuffer( const char* name, GLenum target, GLsizeiptr s
 
 inline gl::VertexArray* gxCreateVertexArray( const char* name, vertex* p_vertices, size_t vertex_count, uint* p_indices=nullptr, size_t index_count=0, GLenum usage=GL_STATIC_DRAW )
 {
-	if(vertex_count==0){ printf( "%s(%s): vertex_count==0\n", __FUNCTION__, name ); return nullptr; }
+	if(vertex_count==0){ printf( "%s(%s): vertex_count==0\n", __func__, name ); return nullptr; }
 
 	GLuint ID=gxCreateVertexArray(); if(ID==0) return nullptr;
 	gl::VertexArray* va = new gl::VertexArray( ID, name );
 
-	va->vertex_buffer = gxCreateBuffer( "vertexBuffer", GL_ARRAY_BUFFER, sizeof(vertex)*vertex_count, usage, p_vertices, 0 ); if(va->vertex_buffer==nullptr){ printf( "%s(): unable to create vertex_buffer\n", __FUNCTION__ ); delete va; return nullptr; }
-	if(p_indices&&index_count){ va->index_buffer = gxCreateBuffer( "indexBuffer", GL_ELEMENT_ARRAY_BUFFER, sizeof(uint)*index_count, usage, p_indices ); if(va->index_buffer==nullptr){ printf( "%s(): unable to create index_buffer\n", __FUNCTION__ ); delete va; return nullptr; } }
+	va->vertex_buffer = gxCreateBuffer( "vertexBuffer", GL_ARRAY_BUFFER, sizeof(vertex)*vertex_count, usage, p_vertices, 0 ); if(va->vertex_buffer==nullptr){ printf( "%s(): unable to create vertex_buffer\n", __func__ ); delete va; return nullptr; }
+	if(p_indices&&index_count){ va->index_buffer = gxCreateBuffer( "indexBuffer", GL_ELEMENT_ARRAY_BUFFER, sizeof(uint)*index_count, usage, p_indices ); if(va->index_buffer==nullptr){ printf( "%s(): unable to create index_buffer\n", __func__ ); delete va; return nullptr; } }
 
 	// use fixed binding (without direct state access)
 	va->bind();
@@ -873,14 +873,14 @@ inline gl::VertexArray* gxCreateVertexArray( const char* name, vertex* p_vertice
 inline gl::VertexArray* gxCreateQuadVertexArray()
 {
 	static vertex vertices[] = { {vec3(-1,-1,0),vec3(0,0,1),vec2(0,0)}, {vec3(1,-1,0),vec3(0,0,1),vec2(1,0)}, {vec3(-1,1,0),vec3(0,0,1),vec2(0,1)}, {vec3(1,1,0),vec3(0,0,1),vec2(1,1)} }; // strip ordering [0, 1, 3, 2]
-	gl::VertexArray* va = gxCreateVertexArray( "QUAD", vertices, std::extent<decltype(vertices)>::value ); if(!va) printf( "%s(): Unable to create QUAD\n", __FUNCTION__ );
+	gl::VertexArray* va = gxCreateVertexArray( "QUAD", vertices, std::extent<decltype(vertices)>::value ); if(!va) printf( "%s(): Unable to create QUAD\n", __func__ );
 	return va;
 }
 
 inline gl::VertexArray* gxCreatePointVertexArray( GLsizei width, GLsizei height )
 {
 	std::vector<vertex> pts(width*height); for(int y=0,k=0;y<height;y++)for(int x=0;x<width;x++,k++) pts[k]={vec3(float(x),float(y),0.0f),vec3(0.0f,0.0f,1.0f),vec2(x/float(width-1),y/float(height-1))};
-	gl::VertexArray* va = gxCreateVertexArray( "PTS", &pts[0], pts.size() ); if(!va) printf( "%s(): Unable to create PTS(%dx%d)\n", __FUNCTION__, width, height );
+	gl::VertexArray* va = gxCreateVertexArray( "PTS", &pts[0], pts.size() ); if(!va) printf( "%s(): Unable to create PTS(%dx%d)\n", __func__, width, height );
 	return va;
 }
 
@@ -1163,16 +1163,16 @@ inline void glfxDeleteParser( glfx::IParser** pp_parser ){ if(!pp_parser||!(*pp_
 inline gl::Effect* gxCreateEffect( const char* name, const char* effect_source, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr )
 {
 #ifndef GLFX_PARSER_IMPL
-	static glfx::IParser*(*glfxCreateParser)() = (glfx::IParser*(*)()) GetProcAddress(GetModuleHandleW(nullptr),"glfxCreateParser"); if(glfxCreateParser==nullptr){ printf( "%s(): unable to link to glfxCreateParser()\n", __FUNCTION__ ); return nullptr; }
-	static void(*glfxDeleteParser)(glfx::IParser**) = (void(*)(glfx::IParser**)) GetProcAddress(GetModuleHandleW(nullptr),"glfxDeleteParser"); if(glfxDeleteParser==nullptr){ printf( "%s(): unable to link to glfxDeleteParser()\n", __FUNCTION__ ); return nullptr; }
+	static glfx::IParser*(*glfxCreateParser)() = (glfx::IParser*(*)()) GetProcAddress(GetModuleHandleW(nullptr),"glfxCreateParser"); if(glfxCreateParser==nullptr){ printf( "%s(): unable to link to glfxCreateParser()\n", __func__ ); return nullptr; }
+	static void(*glfxDeleteParser)(glfx::IParser**) = (void(*)(glfx::IParser**)) GetProcAddress(GetModuleHandleW(nullptr),"glfxDeleteParser"); if(glfxDeleteParser==nullptr){ printf( "%s(): unable to link to glfxDeleteParser()\n", __func__ ); return nullptr; }
 #endif
 
 	// preprocess source code
 	std::string src; if(p_macro&&p_macro[0]) src=p_macro; if(!src.empty()&&src.back()!='\n') src+='\n'; src+=effect_source;
 
 	// load shaders from effect
-	glfx::IParser* parser = glfxCreateParser(); if(parser==nullptr){ printf( "%s(): unable to create parser()\n", __FUNCTION__ ); return nullptr; }
-	if(!parser->parse(src.c_str())){ printf( "%s(%s)\n%s\n", __FUNCTION__, name, parser->parse_log() ); return nullptr; }
+	glfx::IParser* parser = glfxCreateParser(); if(parser==nullptr){ printf( "%s(): unable to create parser()\n", __func__ ); return nullptr; }
+	if(!parser->parse(src.c_str())){ printf( "%s(%s)\n%s\n", __func__, name, parser->parse_log() ); return nullptr; }
 
 	gl::Effect* e = p_effect_to_append ? p_effect_to_append : new gl::Effect(0, name);
 	for( int k=0, kn=parser->program_count(); k<kn; k++ )
@@ -1192,7 +1192,7 @@ inline bool gl::Effect::attach( const char* name, const char* effect_source, con
 
 inline gl::Framebuffer* gxCreateFramebuffer( const char* name=nullptr )
 {
-	if(!name){ printf( "%s(): name==nullptr\n", __FUNCTION__ ); return nullptr; }
+	if(!name){ printf( "%s(): name==nullptr\n", __func__ ); return nullptr; }
 	GLuint ID=0; if(glCreateFramebuffers) glCreateFramebuffers( 1, &ID ); else glGenFramebuffers(1,&ID); if(ID==0){ printf( "Unable to create buffer[%s]", name ); return nullptr; }
 	return new gl::Framebuffer(ID,name&&name[0]?name:"");	// if name is nullptr, return default FBO
 }
@@ -1205,8 +1205,8 @@ inline gl::TransformFeedback* gxCreateTransformFeedback( const char* name )
 
 inline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsizei width, GLsizei layers=1, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr, bool force_array=false )
 {
-	if(layers>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "%s(): layer (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", __FUNCTION__, layers, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
-	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __FUNCTION__ ); return nullptr; }
+	if(layers>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "%s(): layer (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", __func__, layers, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
+	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
 
 	GLenum target = layers>1||force_array?GL_TEXTURE_1D_ARRAY:GL_TEXTURE_1D;
 	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
@@ -1243,8 +1243,8 @@ inline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsizei w
 
 inline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsizei width, GLsizei height, GLsizei layers=1, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr, bool force_array=false, bool multisample=false, GLsizei multisamples=4 )
 {
-	if(layers>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "%s: layer (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", __FUNCTION__, layers, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
-	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __FUNCTION__ ); return nullptr; }
+	if(layers>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "%s: layer (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", __func__, layers, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
+	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
 
 	GLenum target = layers>1||force_array?(multisample?GL_TEXTURE_2D_MULTISAMPLE_ARRAY:GL_TEXTURE_2D_ARRAY):(multisample?GL_TEXTURE_2D_MULTISAMPLE:GL_TEXTURE_2D);
 	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
@@ -1258,7 +1258,7 @@ inline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsizei w
 	// multipsamples
 	GLint max_samples = multisample?gxGetInternalFormativ( target, internal_format, GL_SAMPLES ):1;
 	texture->_multisamples = multisample?min(multisamples,max_samples):1;
-	if(multisample&&multisamples>max_samples) printf("%s(): input multisamples (=%d) is clamped to max_samples (=%d)\n", __FUNCTION__, multisamples, max_samples );
+	if(multisample&&multisamples>max_samples) printf("%s(): input multisamples (=%d) is clamped to max_samples (=%d)\n", __func__, multisamples, max_samples );
 
 	// allocate storage
 	GLenum e0 = glGetError(); // previous error from others
@@ -1267,11 +1267,11 @@ inline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsizei w
 	else if(target==GL_TEXTURE_2D_MULTISAMPLE){			glTexStorage2DMultisample(target, multisamples, internal_format, width, height, GL_TRUE ); }
 	else if(target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY){	glTexStorage3DMultisample(target, multisamples, internal_format, width, height, layers, GL_TRUE ); }
 	GLenum e1 = glGetError(); // texture error 
-	if(e1!=GL_NO_ERROR&&e1!=e0){ printf( "%s(%s): error %s\n", __FUNCTION__, name, 	gxGetErrorString(e1) ); delete texture; return nullptr; }
+	if(e1!=GL_NO_ERROR&&e1!=e0){ printf( "%s(%s): error %s\n", __func__, name, 	gxGetErrorString(e1) ); delete texture; return nullptr; }
 
 	// test if the format is immutable
 	GLint b_immutable; glGetTexParameteriv( target, GL_TEXTURE_IMMUTABLE_FORMAT, &b_immutable );
-	if(!b_immutable) printf( "%s(): %s is not immutable\n", __FUNCTION__, name );
+	if(!b_immutable) printf( "%s(): %s is not immutable\n", __func__, name );
 
 	// set dimensions
 	texture->_width		= width;
@@ -1296,7 +1296,7 @@ inline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsizei w
 
 inline gl::Texture* gxCreateTexture3D( const char* name, GLint levels, GLsizei width, GLsizei height, GLsizei depth, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr )
 {
-	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __FUNCTION__ ); return nullptr; }
+	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
 
 	GLenum target = GL_TEXTURE_3D;
 	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
@@ -1334,9 +1334,9 @@ inline gl::Texture* gxCreateTexture3D( const char* name, GLint levels, GLsizei w
 
 inline gl::Texture* gxCreateTextureCube( const char* name, GLint levels, GLsizei width, GLsizei height, GLsizei count=1, GLint internal_format=GL_RGBA16F, GLvoid* data[6]=nullptr, bool force_array=false )
 {
-	if(count*6>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "%s(): count*6 (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", __FUNCTION__, count*6, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
-	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __FUNCTION__ ); return nullptr; }
-	if(width==0||height==0){ printf( "%s(%s): width==0 or height==0", __FUNCTION__, name ); return nullptr; }
+	if(count*6>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "%s(): count*6 (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", __func__, count*6, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
+	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
+	if(width==0||height==0){ printf( "%s(%s): width==0 or height==0", __func__, name ); return nullptr; }
 
 	GLenum target = count>1||force_array?GL_TEXTURE_CUBE_MAP_ARRAY:GL_TEXTURE_CUBE_MAP;
 	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
@@ -1385,7 +1385,7 @@ inline gl::Texture* gxCreateTextureCube( const char* name, GLint levels, GLsizei
 
 inline gl::Texture* gxCreateTextureBuffer( const char* name, gl::Buffer* buffer, GLint internal_format=GL_RGBA16F )
 {
-	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __FUNCTION__ ); return nullptr; }
+	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
 
 	GLenum target = GL_TEXTURE_BUFFER;
 	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
@@ -1414,7 +1414,7 @@ inline gl::Texture* gxCreateTextureBuffer( const char* name, gl::Buffer* buffer,
 
 inline gl::Texture* gxCreateTextureRectangle( const char* name, GLsizei width, GLsizei height, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr )
 {
-	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __FUNCTION__ ); return nullptr; }
+	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
 
 	GLenum target = GL_TEXTURE_RECTANGLE;
 	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
