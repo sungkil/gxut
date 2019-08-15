@@ -264,6 +264,7 @@ struct camera : public camera_t
 	mat4		perspective_dx() const { mat4 m = projection_matrix; m._33 = dfar/(dnear-dfar); m._34*=0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
 	vec2		plane_size(float ecd = 1.0f) const { return vec2(2.0f/projection_matrix._11, 2.0f/projection_matrix._22)*ecd; } // plane size (width, height) at eye-coordinate distance 1
 	float		lens_radius() const { return F / fn * 0.5f; }
+	float		coc_scale( int image_height ){ float uf=(F*df)/fabs(df-F); /*image distance*/ float ps=plane_size(uf).y/float(image_height); if(ps<0) printf("camera::coc_scale(): pixel_scale<0\n"); /*pixel_scale*/ return lens_radius()*F/(df-F)/ps; /*image-space*/ }
 	void		update_depth_clips(const bbox* bound) { if (!bound) return; bbox b=view_matrix*(*bound); vec2 z(max(0.001f,-b.M.z),max(0.001f,-b.m.z)); dnear=max(max(bound->radius()*0.00001f, 50.0f),z.x*0.99f); dfar=max(max(dnear+1.0f,dnear*1.01f),z.y*1.01f); }
 	void		update_view_frustum() { frustum.update(projection_matrix*view_matrix); }
 	bool		cull(bbox& b) const { return frustum.cull(b); }
