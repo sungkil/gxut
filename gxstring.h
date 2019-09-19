@@ -87,13 +87,18 @@
 	#define GX_PLATFORM "x64"
 #endif
 #if defined(_MSC_VER) && !defined(__clang__) // Visual Studio with cl
-	#pragma optimize( "gsy", on )
+	#pragma optimize( "gs", on )
 	#pragma check_stack( off )
 	#pragma strict_gs_check( off )
 	#pragma float_control(except,off)
 	#ifndef __noinline
 		#define __noinline __declspec(noinline)
 	#endif
+	#pragma warning( disable: 4201 ) // nameless struct/union
+	#pragma warning( disable: 4100 ) // unreferenced formal parameter
+	#pragma warning( disable: 4244 ) // int to wchar_t, possible loss of data
+	#pragma warning( disable: 4324 ) // alignment padding
+	#pragma warning( disable: 4458 ) // hiding class member
 #else // GCC or Clang
 	#ifndef __noinline
 		#define __noinline __attribute__((noinline))
@@ -157,8 +162,8 @@ inline wchar_t* strcat( wchar_t* _Dest, const wchar_t* _Src ){ return wcscat(_De
 inline wchar_t* strncat( wchar_t* _Dest, const wchar_t* _Src, size_t _Count ){ return wcsncat(_Dest,_Src,_Count); }
 inline int strcmp( const wchar_t* _Str1, const wchar_t* _Str2 ){ return wcscmp(_Str1,_Str2); }
 inline int strncmp( const wchar_t* _Str1, const wchar_t* _Str2, size_t _MaxCount ){ return wcsncmp(_Str1,_Str2,_MaxCount); }
-inline const wchar_t* strchr( const wchar_t* _Str, int _Val ){ return wcschr(_Str,_Val); }
-inline wchar_t* strchr( wchar_t* _Str, int _Val ){ return wcschr(_Str,_Val); }
+inline const wchar_t* strchr( const wchar_t* _Str, int _Val ){ return wcschr(_Str,wchar_t(_Val)); }
+inline wchar_t* strchr( wchar_t* _Str, int _Val ){ return wcschr(_Str,wchar_t(_Val)); }
 inline const wchar_t* strstr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return wcsstr(_Str1,_Str2); }
 inline wchar_t* strstr( wchar_t* _Str1, const wchar_t* _Str2 ){ return wcsstr(_Str1,_Str2); }
 inline wchar_t* strtok_s( wchar_t* _Str, const wchar_t* _Delim, wchar_t** context ){ return wcstok_s(_Str,_Delim,context); } // VS2015 fixes to ISO C Standard

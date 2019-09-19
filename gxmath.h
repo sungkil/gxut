@@ -87,13 +87,18 @@
 	#define GX_PLATFORM "x64"
 #endif
 #if defined(_MSC_VER) && !defined(__clang__) // Visual Studio with cl
-	#pragma optimize( "gsy", on )
+	#pragma optimize( "gs", on )
 	#pragma check_stack( off )
 	#pragma strict_gs_check( off )
 	#pragma float_control(except,off)
 	#ifndef __noinline
 		#define __noinline __declspec(noinline)
 	#endif
+	#pragma warning( disable: 4201 ) // nameless struct/union
+	#pragma warning( disable: 4100 ) // unreferenced formal parameter
+	#pragma warning( disable: 4244 ) // int to wchar_t, possible loss of data
+	#pragma warning( disable: 4324 ) // alignment padding
+	#pragma warning( disable: 4458 ) // hiding class member
 #else // GCC or Clang
 	#ifndef __noinline
 		#define __noinline __attribute__((noinline))
@@ -373,7 +378,7 @@ static_assert(sizeof(vec3)==(sizeof(float)*3),"sizeof(vec3)!=sizeof(float)*3" );
 static_assert(sizeof(vec4)==(sizeof(float)*4),"sizeof(vec4)!=sizeof(float)*4" );
 
 // basic math types for computer graphics
-struct alignas(32) vertex { vec3 pos; vec3 norm; vec2 tex; };	// default vertex layout
+struct vertex { vec3 pos; vec3 norm; vec2 tex; };	// default vertex layout
 struct bbox_t { alignas(16) vec3 m=-3.402823466e+38F; alignas(16) vec3 M=3.402823466e+38F; }; // bounding box in std140 layout; FLT_MAX = 3.402823466e+38F
 
 //*************************************

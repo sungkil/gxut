@@ -546,7 +546,7 @@ namespace gl {
 			u.textureID=-1; u.texture=nullptr; bool bTexture=gxIsSamplerType(u.type);
 			if(bTexture){ u.textureID=texID++; if(glProgramUniform1i)glProgramUniform1i(ID,u.ID,u.textureID);else glUniform1i(u.ID,u.textureID); } // setting sampler locations avoids validation error in Intel Compiler
 			uniform_cache[u.name]=u; if(u.array_size==1) continue;
-			GLchar name[256]; strcpy(name,u.name); GLint loc=0; GLchar* bracket=strchr(name,'['); if(bracket) bracket[0]='\0';
+			GLchar name[256]; strcpy(name,u.name); GLchar* bracket=strchr(name,'['); if(bracket) bracket[0]='\0';
 			for( GLint loc=bracket?1:0;loc<u.array_size;loc++){ Uniform u1=u;sprintf(u1.name,"%s[%d]",name,loc);u1.ID=glGetUniformLocation(ID,u1.name);if(u1.ID==-1)continue;u1.array_size=u.array_size-loc;if(bTexture)u1.textureID=texID++;uniform_cache[u1.name]=u1; }
 		}
 		if(program0>=0) glUseProgram(program0); // restore the original program
@@ -595,11 +595,11 @@ namespace gl {
 		// uniform buffer/block
 		gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name); if(b&&b->size()!=size){ static std::set<std::string> warns; auto it=warns.find(name); if(it==warns.end()){ warns.insert(name); printf("uniform_buffer(%s).size(=%d)!=%d\n",name,int(b->size()),int(size));} } if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr,GL_DYNAMIC_STORAGE_BIT|GL_MAP_WRITE_BIT); if(b){ bind_uniform_buffer(name,b); return uniform_buffer_map[name]=b; } printf("[%s] unable to create uniform buffer [%s]\n", this->name, name); return nullptr; }
 		gl::Buffer* get_uniform_buffer( const char* name ){ auto it=uniform_buffer_map.find(name); return it==uniform_buffer_map.end()?nullptr:it->second; }
-		GLuint get_uniform_block_binding( const char* name ){ GLint binding=active_program?active_program->get_uniform_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint binding=program->get_uniform_block_binding(name); if(binding!=-1) return binding; } return -1; }
+		GLint get_uniform_block_binding( const char* name ){ GLint binding=active_program?active_program->get_uniform_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_uniform_block_binding(name); if(b!=-1) return b; } return -1; }
 		void bind_uniform_buffer( const char* name, gl::Buffer* ub=nullptr /* if nullptr, use default buffer */ ){ gl::Buffer* b=ub?ub:get_uniform_buffer(name); GLuint binding=get_uniform_block_binding(name); if(b&&binding!=-1) b->bind_base(binding); else if(!b) printf( "[%s] bind_uniform_buffer(): unable to find uniform buffer %s\n", this->name, name ); else printf( "[%s] bind_uniform_buffer(): unable to find uniform buffer binding %s\n", this->name, name ); }
 
 		// blocks: uniform and shader_storage
-		GLuint get_shader_storage_block_binding( const char* name ){ GLint binding=active_program?active_program->get_shader_storage_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint binding=program->get_shader_storage_block_binding(name); if(binding!=-1) return binding; } printf( "[%s] bind_uniform_buffer(): unable to find shader storage block binding %s\n", this->name, name ); return -1; }
+		GLint get_shader_storage_block_binding( const char* name ){ GLint binding=active_program?active_program->get_shader_storage_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_shader_storage_block_binding(name); if(b!=-1) return b; } printf( "[%s] bind_uniform_buffer(): unable to find shader storage block binding %s\n", this->name, name ); return -1; }
 		void bind_shader_storage_buffer( const char* name, Buffer* buffer ){ GLint binding=get_shader_storage_block_binding(name); if(binding<0) return; if(buffer->target==GL_SHADER_STORAGE_BUFFER) buffer->bind_base(binding); else buffer->bind_base_as(GL_SHADER_STORAGE_BUFFER,binding); }
 
 		// draw or compute

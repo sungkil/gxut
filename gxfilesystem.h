@@ -87,13 +87,18 @@
 	#define GX_PLATFORM "x64"
 #endif
 #if defined(_MSC_VER) && !defined(__clang__) // Visual Studio with cl
-	#pragma optimize( "gsy", on )
+	#pragma optimize( "gs", on )
 	#pragma check_stack( off )
 	#pragma strict_gs_check( off )
 	#pragma float_control(except,off)
 	#ifndef __noinline
 		#define __noinline __declspec(noinline)
 	#endif
+	#pragma warning( disable: 4201 ) // nameless struct/union
+	#pragma warning( disable: 4100 ) // unreferenced formal parameter
+	#pragma warning( disable: 4244 ) // int to wchar_t, possible loss of data
+	#pragma warning( disable: 4324 ) // alignment padding
+	#pragma warning( disable: 4458 ) // hiding class member
 #else // GCC or Clang
 	#ifndef __noinline
 		#define __noinline __attribute__((noinline))
@@ -189,7 +194,7 @@ struct path
 
 	// split path
 	struct split_t { wchar_t *drive, *dir, *fname, *ext; };
-	split_t split( wchar_t* drive=nullptr, wchar_t* dir=nullptr, wchar_t* fname=nullptr, wchar_t* ext=nullptr ) const { split_t si={drive,dir,fname,ext};_wsplitpath_s(data,si.drive,si.drive?_MAX_DRIVE:0,si.dir,si.dir?_MAX_DIR:0,si.fname,si.fname?_MAX_FNAME:0,si.ext,si.ext?_MAX_EXT:0);if(si.drive&&si.drive[0]) si.drive[0]=::toupper(si.drive[0]); return si;}
+	split_t split( wchar_t* drive=nullptr, wchar_t* dir=nullptr, wchar_t* fname=nullptr, wchar_t* ext=nullptr ) const { split_t si={drive,dir,fname,ext};_wsplitpath_s(data,si.drive,si.drive?_MAX_DRIVE:0,si.dir,si.dir?_MAX_DIR:0,si.fname,si.fname?_MAX_FNAME:0,si.ext,si.ext?_MAX_EXT:0);if(si.drive&&si.drive[0]) si.drive[0]=wchar_t(::toupper(si.drive[0])); return si;}
 
 	// destructor/constuctors
 	~path(){free(data);}
@@ -286,7 +291,7 @@ struct path
 	path remove_backslash()	const { path p(*this); size_t len=wcslen(p.data); if(len&&p.data[len-1]=='\\'){p.data[len-1]=L'\0';} return p; }
 	path remove_slash()		const { path p(*this); size_t len=wcslen(p.data); if(len&&p.data[len-1]=='/'){p.data[len-1]=L'\0';} return p; }
 	path auto_quote()		const { if(data[0]==0||wcschr(data,L' ')==nullptr||(data[0]==L'\"'&&data[wcslen(data)-1]==L'\"')) return *this; path p; swprintf_s(p,capacity,L"\"%s\"",data); return p; }
-	path unix()				const {	path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; p.data[1]=::tolower(p.data[0]); p.data[0]=L'/'; return p; }
+	path unix()				const {	path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; p.data[1]=wchar_t(::tolower(p.data[0])); p.data[0]=L'/'; return p; }
 	path cygwin()			const { path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; path p2; swprintf_s( p2, capacity, L"/cygdrive/%c%s", ::tolower(p[0]), p.data+2 ); return p2; }
 	
 	// path info/operations
@@ -309,10 +314,13 @@ struct path
 	// get/set attributes
 	bool exists() const {				if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES; }
 	bool is_dir() const {				if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_DIRECTORY)!=0; }
+	bool is_root_dir() const {			if(!data[0]) return false; size_t l=length(); return is_dir()&&l<4&&l>1&&data[1]==L':'; }
 	bool is_hidden() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_HIDDEN)!=0; }
 	bool is_readonly() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_READONLY)!=0; }
+	bool is_system() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_SYSTEM)!=0; }
 	void set_hidden( bool h ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(data,a=h?(a|FILE_ATTRIBUTE_HIDDEN):(a^FILE_ATTRIBUTE_HIDDEN)); }
 	void set_readonly( bool r ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(data,a=r?(a|FILE_ATTRIBUTE_READONLY):(a^FILE_ATTRIBUTE_READONLY)); }
+	void set_system( bool s ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(data,a=s?(a|FILE_ATTRIBUTE_SYSTEM):(a^FILE_ATTRIBUTE_SYSTEM)); }
 
 	// chdir/make/copy/delete file/dir operations
 	void chdir() const { if(is_dir()) _wchdir(data); }

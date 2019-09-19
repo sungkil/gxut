@@ -116,7 +116,7 @@ struct isect
 	union { float tfar=FLT_MAX, theta; };	// farthest intersection (gxut) or incident angle (oxut)
 	bool	hit=0;							// is intersected? and padding
 	vec2	bc;								// barycentric coordinates at t
-	uint	g=-1;							// index of an intersected geometry
+	uint	g=0xffffffff;					// index of an intersected geometry
 };
 
 //*************************************
@@ -322,7 +322,7 @@ struct acc_t
 {
 	enum { NONE, BVH, KDTREE } model = NONE;
 	mesh*		p_mesh = nullptr;	// should be set to mesh
-	uint		geom = -1;			// should be set for geometry BVH, -1 for mesh BVH
+	uint		geom = 0xffffffff;	// should be set for geometry BVH, -1 for mesh BVH
 	virtual bool intersect(const ray& r, std::vector<uint>* hit_prims = nullptr) = 0; // return primitive (i.e., geometry) indices
 	virtual bool intersect(const ray& r, isect* pi) = 0;
 	virtual void release() = 0;
@@ -758,7 +758,7 @@ __noinline inline mesh* create_box_mesh(const bbox& box, const char* name = "box
 	if (double_sided) { auto& i = m->indices; for (size_t k = 0, f = use_quads ? 4 : 3, kn = i.size() / f; k < kn; k++) for (size_t j = 0; j < f; j++) i.emplace_back(i[(k + 1)*f - j - 1]); } // insert indices (for CW)
 
 	// create object and geometry
-	m->create_object(name, ((bbox*)&box))->create_geometry(0, uint(m->indices.size()), (bbox*)&box, -1);
+	m->create_object(name, ((bbox*)&box))->create_geometry(0, uint(m->indices.size()), (bbox*)&box, size_t(-1));
 
 	return m;
 }
