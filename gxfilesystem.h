@@ -198,7 +198,7 @@ struct path
 
 	// destructor/constuctors
 	~path(){free(data);}
-	path():data((wchar_t*)malloc(sizeof(wchar_t)*capacity+sizeof(attrib_t))){data[0]=0;clear_cache();}
+	path(){ static const size_t sz=sizeof(wchar_t)*capacity+sizeof(attrib_t); data=(wchar_t*)malloc(sz); data[0]=0; clear_cache(); }
 	path( const path& p ):path(){ wcscpy(data,p); cache()=p.cache(); } // do not canonicalize for copy constructor
 	path( path&& p ):path(){ std::swap(data,p.data); std::swap(cache(),p.cache()); }
 	path( const wchar_t* s ):path(){ wcscpy(data,s); canonicalize(); }
@@ -295,10 +295,10 @@ struct path
 	path cygwin()			const { path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; path p2; swprintf_s( p2, capacity, L"/cygdrive/%c%s", ::tolower(p[0]), p.data+2 ); return p2; }
 	
 	// path info/operations
-	path drive() const { path d; split(d.data); return d; }
+	path drive() const { static wchar_t d[_MAX_DRIVE+1]; _wsplitpath_s(data,d,_MAX_DRIVE,nullptr,0,nullptr,0,nullptr,0);if(*d) *d=wchar_t(::toupper(*d)); path p; wcscpy(p.data,d); return p; }
 	path dir() const { path p; if(wcschr(data,L'\\')==nullptr) return L".\\"; split_t si=split(__wcsbuf(),__wcsbuf()); wcscpy(p.data,wcscat(si.drive,si.dir)); size_t len=wcslen(p.data); if(len>0&&p.data[len-1]!='\\'){p.data[len]='\\';p.data[len+1]=L'\0';} return p; }
 	path name( bool with_ext=true ) const { split_t si=split(nullptr,nullptr,__wcsbuf(),__wcsbuf()); return with_ext?wcscat(si.fname,si.ext):si.fname; }
-	path ext() const { path e; split_t si=split(nullptr,nullptr,nullptr,e.data); return e.empty()?e:path(e.data+1); }
+	path ext() const { static wchar_t e[_MAX_EXT+1]; _wsplitpath_s(data,nullptr,0,nullptr,0,nullptr,0,e,_MAX_EXT); if(*e==0) return path(); path p; wcscpy(p.data,e+1); return p; }
 	path parent() const { return dir().remove_backslash().dir(); }
 	path remove_first_dot()	const { return (wcslen(data)>2&&data[0]==L'.'&&data[1]==L'\\') ? path(data+2) : *this; }
 	path remove_ext() const { split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
@@ -604,8 +604,10 @@ namespace gx { struct timer_t
 	inline void begin(){ x=now(); }
 	inline double end(){ return (y=now())-x; }
 	inline double delta(){ return y-x; }
-	static double now(){ static double c=0; if(c==0){ int64_t f;QueryPerformanceFrequency((LARGE_INTEGER*)&f);c=1000.0/double(f);} static int64_t e=0; if(e==0){auto* ef=(int64_t(*)()) GetProcAddress(GetModuleHandleW(nullptr),"rex_timer_epoch");if(ef)e=ef();else QueryPerformanceCounter((LARGE_INTEGER*)&e);} int64_t i; QueryPerformanceCounter((LARGE_INTEGER*)&i); return double(i-e)*c; } // if rex found, use its epoch; otherwise, use a local epoch
+	static double now(){ static double c=__init_now_c(); static int64_t e=__init_now_e(); static int64_t i; static LARGE_INTEGER* p=(LARGE_INTEGER*)&i;QueryPerformanceCounter(p); return double(i-e)*c; } // if rex found, use its epoch; otherwise, use a local epoch
 	static timer_t* singleton(){ static timer_t i; return &i; }
+	static double __init_now_c(){ int64_t f;QueryPerformanceFrequency((LARGE_INTEGER*)&f);return 1000.0/double(f); }
+	static int64_t __init_now_e(){ auto* ef=(int64_t(*)()) GetProcAddress(GetModuleHandleW(nullptr),"rex_timer_epoch");int64_t e;if(ef)e=ef();else QueryPerformanceCounter((LARGE_INTEGER*)&e); return e;}
 };}
 #endif
 
