@@ -40,7 +40,7 @@
 #include <inttypes.h>	// defines int64_t, uint64_t
 #include <math.h>
 #include <stdarg.h>
-#if !defined(GX_USE_STD_PRINTF) && (defined(_WIN32)||defined(_WIN64)) // Windows
+#if !defined(GX_USE_STD_PRINTF) && defined(_MSC_VER) // in VS
 	#define	printf	std_printf	// disable default printf
 	#define	wprintf std_wprintf	// disable default wprintf
 		#include <stdio.h>

@@ -82,6 +82,7 @@ struct parser_t
 {
 	std::vector<argument_t>	arguments;
 	std::vector<option_t>	options;
+	bool					b_help_exists = false;
 
 	// attributes
 	inline const char* name() const { static const std::string n=path::module_path().name(false).wtoa(); return n.c_str(); }
@@ -90,6 +91,7 @@ struct parser_t
 	inline void footer( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); sfooter=trim(&buff[0]); va_end(a); }
 	inline void copyright( const char* author, int since_year ){ this->author=author; this->since_year=since_year; }
 	inline bool exists( const std::string& name ) const;
+	inline bool help_exists() const { return b_help_exists; }
 
 	// short template functions
 	argument_t& add_argument( const char* name ){ arguments.push_back(argument_t()); auto& a=arguments.back(); a.name=name; return a; }
@@ -106,6 +108,7 @@ struct parser_t
 	template<> inline std::string	get<std::string>( const std::string& name ) const { return wtoa(get<std::wstring>(name).c_str()); }
 	template<> inline path			get<path>( const std::string& name ) const { return get<std::wstring>(name).c_str(); }
 	template<> inline int			get<int>( const std::string& name ) const { return _wtoi(get<std::wstring>(name).c_str()); }
+	template<> inline uint			get<uint>( const std::string& name ) const { return uint(_wtoi(get<std::wstring>(name).c_str())); }
 	std::vector<std::wstring>		others( const std::string& name="" ) const;
 
 	// error handling, debugging
@@ -122,6 +125,7 @@ protected:
 
 inline bool parser_t::exists( const std::string& name ) const
 {
+	if(name=="h"||name=="help") return b_help_exists;
 	auto* o = find_option(name.c_str()); if(o) return o->instance>0;
 	for( auto& a : arguments ){ if(_stricmp(a.name.c_str(),name.c_str())==0) return a.value_exists(); }
 	return false;
@@ -146,7 +150,6 @@ inline bool parser_t::parse( int argc, const wchar_t** argv )
 	// configure attributes
 	std::vector<argument_t*> required; for( auto& a : arguments ) if(!a.optional) required.push_back(&a);
 	int	 nr=int(required.size());
-	bool b_help_exists = false;
 
 	// test prerequisite
 	if(nr>0&&argc<2) return usage();
@@ -244,9 +247,9 @@ inline bool parser_t::usage( const char* alt_name )
 
 	// find the longest front length
 	size_t cap=0;
-	for( auto& a : req_args )	cap=std::max(cap,a.first.length());
-	for( auto& a : opt_args )	cap=std::max(cap,a.first.length());
-	for( auto& o : opts )		cap=std::max(cap,o.first.length());
+	for( auto& a : req_args )	cap=cap>a.first.length()?cap:a.first.length();
+	for( auto& a : opt_args )	cap=cap>a.first.length()?cap:a.first.length();
+	for( auto& o : opts )		cap=cap>o.first.length()?cap:o.first.length();
 	if(cap==0) return exit("no argument/options found\n");
 
 	std::string sfmt=format(" %%-%ds %%s\n",int(cap+4));
@@ -298,8 +301,8 @@ inline void parser_t::dump()
 
 	// find the max length
 	size_t cap=0;
-	for( auto& a:args ) cap=std::max(cap,a.first.size());
-	for( auto& o:opts ) cap=std::max(cap,o.first.size());
+	for( auto& a:args ) cap=cap>a.first.size()?cap:a.first.size();
+	for( auto& o:opts ) cap=cap>o.first.size()?cap:o.first.size();
 	if(cap==0) return void(exit( "cap==0\n"));
 	std::string sfmt = format(" %%-%ds   = %%s\n",cap+4); const char* fmt=sfmt.c_str();
 
