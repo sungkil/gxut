@@ -169,7 +169,7 @@ inline bool parser_t::parse( int argc, const wchar_t** argv )
 		// split by equal
 		std::wstring new_value;
 		const char* eq=strchr(name.c_str(),'=');
-		if(name.length()>2&&eq)
+		if(name.length()>=2&&eq)
 		{
 			new_value = atow(trim(eq+1,"'")); // ignored in combination mode; allows additional '='
 			name = name.substr(0,size_t(eq-name.c_str()));
@@ -183,7 +183,7 @@ inline bool parser_t::parse( int argc, const wchar_t** argv )
 				char sn[2]={n,0};
 				option_t* p=find_option(sn);
 				if(!p) return exit( "unrecognized option: -%s in {%s}", sn, name.c_str() );
-				if(p->use_subarg) return exit( "-%s: -%s is not a simple flag that can be used in combination.", name.c_str(), sn );
+				if(p->use_subarg) return exit( "-%s: %s is not a simple flag that can be used in combination.", name.c_str(), sn );
 				p->instance=1;
 			}
 			continue;
@@ -192,6 +192,7 @@ inline bool parser_t::parse( int argc, const wchar_t** argv )
 		// find option by name
 		option_t* p=find_option(name.c_str()); if(!p) return exit( "unrecognized option: %s", name.c_str() );
 		if(!p->use_subarg){ p->instance=1; continue; }
+		else p->instance++;
 
 		// find non-inline sub-arguments
 		if(new_value.empty()){ while(k<argc-1){ if(argv[k+1][0]!=L'-') new_value=argv[++k]; break; } }
@@ -199,7 +200,6 @@ inline bool parser_t::parse( int argc, const wchar_t** argv )
 
 		if(0==p->instance||p->value.empty())	p->value = new_value;
 		else									p->others.push_back(new_value);
-		p->instance++;
 	}
 
 	// if help show usage
@@ -226,6 +226,13 @@ inline bool parser_t::parse( int argc, const wchar_t** argv )
 inline bool parser_t::usage( const char* alt_name )
 {
 	std::vector<std::pair<std::string,std::string>> req_args, opt_args, opts;
+
+	// print options for multi-line help
+	static auto print_option = []( const char* fmt, const char* o, const char* h )
+	{
+		auto v = explode(trim(h),"\r\n");
+		for(size_t j=0;j<v.size();j++) fprintf( stdout, fmt, j?"":o, v[j].c_str() );
+	};
 
 	// process arguments to requried/optional
 	for( auto& a : arguments )
@@ -261,22 +268,22 @@ inline bool parser_t::usage( const char* alt_name )
 	if(!sheader.empty()) fprintf( stdout, "\n%s\n\n", sheader.c_str() );
 
 	fprintf( stdout, "usage: %s", name() );
-	if(!options.empty()) fprintf( stdout, " [option]" ); else fprintf( stdout, " [-h|--help]" );
+	if(!options.empty()) fprintf( stdout, " [options...]" ); else fprintf( stdout, " [-h|--help]" );
 	for( auto& a : arguments ) if(!a.name.empty()) fprintf( stdout, " %s%s%s", a.optional?"[":"",a.name.c_str(),a.optional?"]":"" );
 	fprintf( stdout, " ...\n\n" );
 
 	if(!req_args.empty()||!opt_args.empty())
 	{
 		fprintf( stdout, "arguments:\n");
-		for( auto& a : req_args ) fprintf( stdout, fmt, a.first.c_str(), a.second.c_str() );
-		for( auto& a : opt_args ) fprintf( stdout, fmt, a.first.c_str(), a.second.c_str() );
+		for( auto& a : req_args ) print_option( fmt, a.first.c_str(), a.second.c_str() );
+		for( auto& a : opt_args ) print_option( fmt, format("[%s]",a.first.c_str()), a.second.c_str() );
 		fprintf( stdout, "\n" );
 	}
 
 	if(!opts.empty())
 	{
 		fprintf( stdout, "options:\n");
-		for( auto& o : opts ) fprintf( stdout,fmt, o.first.c_str(), o.second.c_str() );
+		for( auto& o : opts ) print_option( fmt, o.first.c_str(), o.second.c_str() );
 		fprintf( stdout, "\n" );
 	}
 

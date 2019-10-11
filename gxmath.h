@@ -40,9 +40,15 @@
 #include <inttypes.h>	// defines int64_t, uint64_t
 #include <math.h>
 #include <stdarg.h>
-#if !defined(GX_USE_STD_PRINTF) && defined(_MSC_VER) // in VS
-	#define	printf	std_printf	// disable default printf
-	#define	wprintf std_wprintf	// disable default wprintf
+#if (defined(_USRDLL)||defined(GX_REDIR_IMPL))&&!defined(GX_NO_REDIR)&&defined(_MSC_VER) // printf redirection in rex with VS
+	#ifndef GX_REDIR
+		#define GX_REDIR
+	#endif
+	#if defined(_INC_STDIO) && !defined(GX_REDIR_IMPL)
+		#error do not include <stdio.h> or define GX_NO_REDIR before gxut headers
+	#endif
+	#define	printf	__printf	// rename default printf
+	#define	wprintf __wprintf	// rename default wprintf
 		#include <stdio.h>
 		#include <wchar.h>
 		#include <cstdio>
@@ -52,14 +58,11 @@
 	// drop-in replacement of printf, where non-rex applications fallbacks to stdout
 	int __cdecl printf( const char* fmt, ... );
 	int __cdecl wprintf( const wchar_t* fmt, ... );
-	#ifndef REX_FACTORY_IMPL
-		#include <windows.h>
-		inline int __cdecl printf( const char* fmt, ... ){ static int(*f)(const char*,va_list)=(int(*)(const char*,va_list)) GetProcAddress(GetModuleHandleW(nullptr),"mvprintf"); va_list a; va_start(a,fmt); int r=f?f(fmt,a):vprintf(fmt,a); va_end(a); return r; }
-		inline int __cdecl wprintf( const wchar_t* fmt, ... ){ static int(*f)(const wchar_t*,va_list)=(int(*)(const wchar_t*,va_list)) GetProcAddress(GetModuleHandleW(nullptr),"mvwprintf"); va_list a; va_start(a,fmt); int r=f?f(fmt,a):vwprintf(fmt,a); va_end(a); return r; }
-	#endif
 #else
 	#include <stdio.h>
 	#include <wchar.h>
+	#include <cstdio>
+	#include <cwchar>
 #endif
 #include <stdlib.h>
 #include <string.h>

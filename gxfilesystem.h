@@ -40,9 +40,15 @@
 #include <inttypes.h>	// defines int64_t, uint64_t
 #include <math.h>
 #include <stdarg.h>
-#if !defined(GX_USE_STD_PRINTF) && defined(_MSC_VER) // in VS
-	#define	printf	std_printf	// disable default printf
-	#define	wprintf std_wprintf	// disable default wprintf
+#if (defined(_USRDLL)||defined(GX_REDIR_IMPL))&&!defined(GX_NO_REDIR)&&defined(_MSC_VER) // printf redirection in rex with VS
+	#ifndef GX_REDIR
+		#define GX_REDIR
+	#endif
+	#if defined(_INC_STDIO) && !defined(GX_REDIR_IMPL)
+		#error do not include <stdio.h> or define GX_NO_REDIR before gxut headers
+	#endif
+	#define	printf	__printf	// rename default printf
+	#define	wprintf __wprintf	// rename default wprintf
 		#include <stdio.h>
 		#include <wchar.h>
 		#include <cstdio>
@@ -52,14 +58,11 @@
 	// drop-in replacement of printf, where non-rex applications fallbacks to stdout
 	int __cdecl printf( const char* fmt, ... );
 	int __cdecl wprintf( const wchar_t* fmt, ... );
-	#ifndef REX_FACTORY_IMPL
-		#include <windows.h>
-		inline int __cdecl printf( const char* fmt, ... ){ static int(*f)(const char*,va_list)=(int(*)(const char*,va_list)) GetProcAddress(GetModuleHandleW(nullptr),"mvprintf"); va_list a; va_start(a,fmt); int r=f?f(fmt,a):vprintf(fmt,a); va_end(a); return r; }
-		inline int __cdecl wprintf( const wchar_t* fmt, ... ){ static int(*f)(const wchar_t*,va_list)=(int(*)(const wchar_t*,va_list)) GetProcAddress(GetModuleHandleW(nullptr),"mvwprintf"); va_list a; va_start(a,fmt); int r=f?f(fmt,a):vwprintf(fmt,a); va_end(a); return r; }
-	#endif
 #else
 	#include <stdio.h>
 	#include <wchar.h>
+	#include <cstdio>
+	#include <cwchar>
 #endif
 #include <stdlib.h>
 #include <string.h>
@@ -370,6 +373,7 @@ struct path
 	SYSTEMTIME msystemtime() const { return FileTimeToSystemTime(mfiletime()); }
 	void set_filetime( const FILETIME* ctime, const FILETIME* atime, const FILETIME* mtime ) const { HANDLE h=CreateFileW(data,FILE_WRITE_ATTRIBUTES,0,nullptr,OPEN_EXISTING,0,nullptr); if(!h)return; auto& c=cache(); if(ctime) c.ftCreationTime=*ctime; if(atime) c.ftLastAccessTime=*atime; if(mtime) c.ftLastWriteTime=*mtime; SetFileTime(h, ctime, atime, mtime ); CloseHandle(h); }
 	void set_filetime( const FILETIME& f ) const { set_filetime(&f,&f,&f); }
+	void set_filetime( const path& other ) const { if(!other.exists()) return; other.update_cache(); auto& c=other.cache(); set_filetime(&c.ftCreationTime,&c.ftLastAccessTime,&c.ftLastWriteTime); }
 
 	// module/working directories
 	static inline path module_path( HMODULE h_module=nullptr ){ static path m; if(!m.empty()&&!h_module) return m; path p;GetModuleFileNameW(h_module,p,path::capacity);p[0]=::toupper(p[0]); p=p.canonical(); return h_module?p:(m=p); } // 'module' conflicts with C++ modules
@@ -379,10 +383,10 @@ struct path
 
 	// system/global path attributes
 	struct system { static inline path temp(); static inline path system_dir(){static path s;if(!s.empty())return s;GetSystemDirectoryW(s,path::capacity);return s=s.add_backslash();} };
-	struct global { static inline path temp(); };
+	struct global { static inline path temp( const char* subdir=nullptr ); };
 
 	// utilities
-	static path temp( const wchar_t* subkey=L"" );
+	static path temp( const wchar_t* subkey=nullptr, const char* subdir=nullptr );
 	static path serial( path dir, const wchar_t* prefix, const wchar_t* postfix, int numzero=4 );
 	inline path key() const { if(!*data)return path();path d;size_t n=0;for(size_t k=0,kn=length();k<kn;k++){wchar_t c=data[k];if(c!=L':'&&c!=L' ') d[n++]=(c==L'\\'||c==L'/')?L'.':(::tolower(c));}if(d[n-1]==L'.')n--;d[n]=0;return d; }
 	inline path tolower() const { path d;size_t l=length();for(size_t k=0;k<l;k++)d[k]=::tolower(data[k]);d[l]=L'\0'; return d; }
@@ -479,16 +483,22 @@ __noinline inline path path::serial( path dir, const wchar_t* prefix, const wcha
 // temp directories
 
 inline path path::system::temp(){ static path t; if(!t.empty()) return t; GetTempPathW(path::capacity,t);t=t.absolute().add_backslash();t[0]=::toupper(t[0]); return t; }
+inline path path::global::temp( const char* subdir )
+{
 #ifdef REX_FACTORY_IMPL
-inline path path::global::temp(){ static path t = path::system::temp()+L".rex\\"; return t; }
+	if(!subdir) subdir = ".rex\\";
 #else
-inline path path::global::temp(){ static path t = path::system::temp()+L".gxut\\"; return t; }
+	if(!subdir) subdir = ".gxut\\";
 #endif
+	path t = path::system::temp();
+	if(subdir&&subdir[0]) t+=path(subdir).add_backslash();
+	return t;
+}
 
 //***********************************************
-__noinline inline path path::temp( const wchar_t* subkey )
+__noinline inline path path::temp( const wchar_t* subkey, const char* subdir )
 {
-	static path g=global::temp(),mod=path(L"local\\")+module_dir().key().add_backslash();
+	static path g=global::temp(subdir),mod=path(L"local\\")+module_dir().key().add_backslash();
 	path key = (subkey&&subkey[0])?path(subkey).key().add_backslash():mod;
 	path t = key.empty()?g:g+key; if(!t.exists()) t.mkdir();
 	return t;
