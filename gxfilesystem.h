@@ -329,9 +329,9 @@ struct path
 	void chdir() const { if(is_dir()) _wchdir(data); }
 	bool mkdir() const { if(exists()) return false; path p=to_backslash().remove_backslash(), d; wchar_t* ctx;for( wchar_t* t=wcstok_s(p,L"\\",&ctx); t; t=wcstok_s(nullptr,L"\\", &ctx) ){ d+=t;d+=L"\\"; if(!d.exists()&&_wmkdir(d.data)!=0) return false; } return true; } // make all super directories
 	bool create_directory() const { return mkdir(); }
-	bool copy_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()||dst.empty()) return false; if(dst.is_dir()||dst.back()==L'\\') dst=dst.add_backslash()+name(); if(!dst.dir().exists()) dst.dir().mkdir(); if(dst.exists()&&overwrite){ if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } return CopyFileW( data, dst, overwrite?FALSE:TRUE )?true:false; }
+	bool copy_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()||dst.empty()) return false; if(dst.is_dir()||dst.back()==L'\\') dst=dst.add_backslash()+name(); dst.dir().mkdir(); if(dst.exists()&&overwrite){ if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } return bool(CopyFileW( data, dst, overwrite?FALSE:TRUE )); }
 	bool move_file( path dst, bool overwrite=true ) const { if(!copy_file(dst,overwrite)) return false; return delete_file(); }
-	void* read_file( size_t* read_size ) const { FILE* fp=_wfopen(data,L"rb"); if(!fp) return nullptr; fseek(fp,0,SEEK_END); size_t size=ftell(fp); if(read_size) *read_size=size; fseek(fp,0,SEEK_SET); 	if(size==0){ fclose(fp); return nullptr; } void* ptr=malloc(size); if(ptr) fread(ptr,size,1,fp); fclose(fp); return ptr; }
+	void* read_file( size_t* read_size ) const { FILE* fp=_wfopen(data,L"rb"); if(!fp) return nullptr; fseek(fp,0,SEEK_END); size_t size=ftell(fp); if(read_size) *read_size=size; fseek(fp,0,SEEK_SET); if(size==0){ fclose(fp); return nullptr; } void* ptr=malloc(size); if(ptr) fread(ptr,size,1,fp); fclose(fp); return ptr; }
 #ifndef _INC_SHELLAPI
 	bool rmdir() const { if(!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); _wrmdir(data); return true; }
 	bool rmfile() const { return delete_file(); }
