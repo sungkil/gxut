@@ -350,9 +350,8 @@ struct acc_t
 {
 	enum { NONE, BVH, KDTREE } model = NONE;
 	mesh*			p_mesh = nullptr;	// should be set to mesh
-	virtual bool	intersect(const ray& r, std::vector<uint>* hit_prims = nullptr) = 0; // return primitive (i.e., geometry) indices
-	virtual bool	intersect(const ray& r, isect* pi) = 0;
 	virtual void	release() = 0;
+	virtual bool	intersect( const ray& r, isect* pi )=0;
 	virtual void*	node_ptr( size_t index )=0;
 };
 
@@ -505,11 +504,10 @@ struct mesh
 	void update_bound(bool bRecalcTris=false);
 
 	// intersection
-	bool intersect(const ray& r, std::vector<uint>* hit_prims=nullptr, bool use_acc=true) const;
 	bool intersect(const ray& r, isect* pi=nullptr, bool use_acc=true) const;
 
 	// utility
-	void dump_binary( const wchar_t* dir=L""); // dump the vertex/index buffers as binary files
+	void dump_binary( const wchar_t* dir=L"" ); // dump the vertex/index buffers as binary files
 };
 
 //*************************************
@@ -713,26 +711,12 @@ __noinline inline bool geometry::intersect( const ray& r, isect* pi ) const
 	return i.hit;
 }
 
-__noinline inline bool mesh::intersect( const ray& r, std::vector<uint>* hit_prims, bool use_acc ) const
-{
-	if(acc&&use_acc) return acc->intersect(r, hit_prims);
-
-	std::vector<uint> m;
-	for( auto& g : geometries )
-	{
-		if(!(g.matrix()*g.box).intersect(r, nullptr)) continue;
-		m.emplace_back(g.ID);
-	}
-	if(hit_prims) *hit_prims = m;
-	return !m.empty();
-}
-
 __noinline inline bool mesh::intersect( const ray& r, isect* pi, bool use_acc ) const
 {
 	if(acc&&use_acc) return acc->intersect(r, pi);
 
-	std::vector<uint> hit_prims; if(!intersect(r, &hit_prims)) return false;
-	isect m; for(auto prim : hit_prims) { isect i; if(!geometries[prim].intersect(r, &i) || i.t > m.t) continue; m = i; }
+	std::vector<uint> ghits; for( auto& g : geometries ){ if((g.matrix()*g.box).intersect(r, nullptr)) ghits.emplace_back(g.ID); } if(ghits.empty()) return false; // first, intersect geometries
+	isect m; for(auto prim : ghits) { isect i; if(!geometries[prim].intersect(r,&i)||i.t>m.t) continue; m=i; } // then, intersect triangle primitives
 	if(m.hit&&pi) *pi = m;
 	return m.hit;
 }
