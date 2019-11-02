@@ -129,7 +129,6 @@ struct isect
 	vec3	norm;							// normal at intersection
 	float	t=FLT_MAX;						// nearest intersection: t<0 indicates inverted intersection on spherical surfaces
 	union { float tfar=FLT_MAX, theta; };	// farthest intersection (gxut) or incident angle (oxut)
-	bool	hit=0;							// is intersected? and padding
 	vec2	bc;								// barycentric coordinates at t
 	uint	g=0xffffffff;					// index of an intersected geometry
 };
@@ -197,7 +196,8 @@ struct bbox : public bbox_t
 	inline const bbox& scale(float sx, float sy, float sz) { vec3 c=center(); m=c+(m-c)*vec3(sx, sy, sz); M=c+(M-c)*vec3(sx,sy,sz); return *this; }
 
 	// intersection
-	inline bool intersect(const ray& r, isect* pi=nullptr);
+	inline bool intersect( ray r );
+	inline bool intersect( ray r, isect& h );
 };
 
 inline bbox operator*(const mat4& m, const bbox& b) { bbox b1=b; return b1.expand(m); }
@@ -209,9 +209,7 @@ struct sphere
 {
 	vec3	pos;
 	float	radius;
-
-	// intersection
-	inline bool intersect(const ray& r, isect* pi = nullptr);
+	inline bool intersect( ray r, isect& h );
 };
 
 //*************************************
@@ -351,7 +349,7 @@ struct acc_t
 	enum { NONE, BVH, KDTREE } model = NONE;
 	mesh*			p_mesh = nullptr;	// should be set to mesh
 	virtual void	release() = 0;
-	virtual bool	intersect( const ray& r, isect* pi )=0;
+	virtual bool	intersect( ray r, isect& h )=0;
 	virtual void*	node_ptr( size_t index )=0;
 };
 
@@ -412,7 +410,7 @@ struct geometry
 	inline void*		offset() const { return (void*)(sizeof(geometry)*ID); } // for rendering commands
 	inline uint			face_count() const { return count/3; }
 	inline float		surface_area() const;
-	inline bool			intersect(const ray& r, isect* pi=nullptr) const; // linear intersection
+	inline bool			intersect( ray r, isect& h ) const; // linear intersection
 	inline bool			acc_empty() const { return acc_count==0; }
 	inline void*		acc_begin() const;
 	inline void*		acc_end() const;
@@ -504,10 +502,10 @@ struct mesh
 	void update_bound(bool bRecalcTris=false);
 
 	// intersection
-	bool intersect(const ray& r, isect* pi=nullptr, bool use_acc=true) const;
+	bool intersect( ray r, isect& h, bool use_acc=true ) const;
 
 	// utility
-	void dump_binary( const wchar_t* dir=L"" ); // dump the vertex/index buffers as binary files
+	void dump_binary( const wchar_t* dir=L""); // dump the vertex/index buffers as binary files
 };
 
 //*************************************
@@ -625,100 +623,100 @@ __noinline inline ray gen_primary_ray( camera* cam, float x, float y )	// (x,y) 
 }
 
 // triangle intersection: isect=(pos,t), bc=(s,t)
-__noinline inline bool intersect( const ray& r, const vec3& v0, const vec3& v1, const vec3& v2, isect* pi=nullptr )
+__noinline inline bool intersect( ray r, vec3 v0, vec3 v1, vec3 v2, isect& h )
 {
-	if(pi) pi->hit = false;
-
 	// http://geomalgorithms.com/a06-_intersect-2.html#intersect3D_RayTriangle
 	vec3 u=v1-v0, v=v2-v0, n=u.cross(v); if(n.length2()<0.000001f) return false;	// degenerate case: non-triangle
 	float b=dot(n,r.dir); if(b>-0.000001f) return false;							// skip backfaces or rays lying on the plane
 	float t=dot(n,v0-r.pos)/b; if(t<r.t||t>r.tfar) return false;					// out of range of [tnear,tfar]
-	vec3 ipos = r.pos + r.dir*t, w = ipos - v0;
+	vec3 ipos = r.pos + r.dir*t, w = ipos-v0;
 
 	// test on barycentric coordinate
 	float uu=dot(u,u),uv=dot(u,v),vv=dot(v,v),wu=dot(w,u),wv=dot(w,v),D=uv*uv-uu*vv;
 	float bs=(uv*wv-vv*wu)/D; if(bs<0||bs>1.0f)			return false;
 	float bt=(uv*wu-uu*wv)/D; if(bt<0||(bs+bt)>1.0f)	return false;
 
-	if(pi)
-	{
-		pi->pos = ipos;
-		pi->norm = n.normalize();
-		pi->bc = vec2(bs, bt);
-		pi->t = t;
-		pi->tfar = t;
-		pi->hit = true;
-	}
-
+	h.pos = ipos;
+	h.norm = normalize(n);
+	h.bc = vec2(bs, bt);
+	h.t = t;
+	h.tfar = t;
 	return true;
 }
 
 // box intersection
-__noinline inline bool bbox::intersect( const ray& r, isect* pi )
+__noinline inline bool bbox::intersect( ray r )
 {
-	if(pi) pi->hit = false;
-
-	float t0 = r.t, t1 = r.tfar;
-	for(int k = 0; k < 3; k++)
+	float t0=r.t, t1=r.tfar;
+	for(int k=0; k<3; k++)
 	{
-		float i = 1.0f / r.d[k];
-		if(i < 0) { t0 = max(t0, (M[k] - r.o[k])*i); t1 = min(t1, (m[k] - r.o[k])*i); }
-		else { t0 = max(t0, (m[k] - r.o[k])*i); t1 = min(t1, (M[k] - r.o[k])*i); }
-		if(t0 > t1) return false;
+		float i = 1.0f/r.d[k];
+		if(i<0){t0=max(t0,(M[k]-r.o[k])*i);t1=min(t1,(m[k]-r.o[k])*i); }
+		else {	t0=max(t0,(m[k]-r.o[k])*i);t1=min(t1,(M[k]-r.o[k])*i); }
+		if(t0>t1) return false;
+	}
+	return true;
+}
+
+__noinline inline bool bbox::intersect( ray r, isect& h )
+{
+	float t0=r.t, t1=r.tfar;
+	for(int k=0; k<3; k++)
+	{
+		float i = 1.0f/r.d[k];
+		if(i<0){t0=max(t0,(M[k]-r.o[k])*i);t1=min(t1,(m[k]-r.o[k])*i); }
+		else {	t0=max(t0,(m[k]-r.o[k])*i);t1=min(t1,(M[k]-r.o[k])*i); }
+		if(t0>t1) return false;
 	}
 
-	if(pi)
-	{
-		pi->t = t0;
-		pi->tfar = t1;
-		pi->hit = true;
-	}
-
+	h.t=t0;
+	h.tfar=t1;
 	return true;
 }
 
 // sphere intersection
-__noinline inline bool sphere::intersect( const ray& r, isect* pi )
+__noinline inline bool sphere::intersect( ray r, isect& h )
 {
-	if(pi) pi->hit = false;
-
 	vec3 pc = r.pos - pos;
 	float B = dot(pc, r.dir);
 	float C = dot(pc, pc) - radius * radius;
-	float B2C = B * B - C; if(B2C < 0.0f) return false; // no surface hit
+	float B2C = B*B-C; if(B2C < 0.0f) return false; // no surface hit
 
-	if(pi)
-	{
-		pi->t = sqrt(B2C)*sign(radius*r.dir.z) - B;
-		pi->pos = r.dir*pi->t + r.pos;	// update intersection point
-		pi->norm = normalize(pi->pos - pos); pi->norm *= -sign(dot(pi->norm, r.dir));
-		pi->theta = acos(dot(-r.dir, pi->norm)); if(pi->theta < 0) pi->theta = 0.0f;	// incident angle: preclude division by zero
-		pi->hit = true;
-	}
+	h.t = sqrt(B2C)*sign(radius*r.dir.z) - B;
+	h.pos = r.dir*h.t + r.pos;	// update intersection point
+	h.norm = normalize(h.pos - pos); h.norm *= -sign(dot(h.norm, r.dir));
+	h.theta = acos(dot(-r.dir, h.norm)); if(h.theta < 0) h.theta = 0.0f;	// incident angle: preclude division by zero
+
 	return true;
 }
 
-__noinline inline bool geometry::intersect( const ray& r, isect* pi ) const
+__noinline inline bool geometry::intersect( ray r, isect& h ) const
 {
-	isect i, t; i.hit = false;
 	mat4 m = matrix();
 	const vertex* V = &root->vertices[0];
 	const uint* I = &root->indices[first_index];
-	for(uint k = 0, kn = count / 3; k < kn; k++, I += 3)
-		if(::intersect(r, m*V[I[0]].pos, m*V[I[1]].pos, m*V[I[2]].pos, &t) && t.t < i.t) i = t;
-
-	if(pi&&i.hit) { *pi = i; pi->g = this->ID; }
-	return i.hit;
+	h.g = 0xffffffff;
+	for( uint k=0, kn=count/3; k<kn; k++, I+=3 )
+	{
+		isect i; if(!::intersect(r,m*V[I[0]].pos,m*V[I[1]].pos,m*V[I[2]].pos,i)||i.t>h.t) continue;
+		h=i; h.g=ID;
+	}
+	return h.g!=0xffffffff;
 }
 
-__noinline inline bool mesh::intersect( const ray& r, isect* pi, bool use_acc ) const
+__noinline inline bool mesh::intersect( ray r, isect& h, bool use_acc ) const
 {
-	if(acc&&use_acc) return acc->intersect(r, pi);
+	if(acc&&use_acc) return acc->intersect(r,h);
 
-	std::vector<uint> ghits; for( auto& g : geometries ){ if((g.matrix()*g.box).intersect(r, nullptr)) ghits.emplace_back(g.ID); } if(ghits.empty()) return false; // first, intersect geometries
-	isect m; for(auto prim : ghits) { isect i; if(!geometries[prim].intersect(r,&i)||i.t>m.t) continue; m=i; } // then, intersect triangle primitives
-	if(m.hit&&pi) *pi = m;
-	return m.hit;
+	h.g=0xffffffff;
+	h.t=FLT_MAX;
+	for( auto& g : geometries )
+	{
+		if(!(g.matrix()*g.box).intersect(r)) continue;
+		isect i; if(!g.intersect(r,i)||i.t>h.t) continue;
+		h=i; h.g=g.ID;
+	}
+	return h.g!=0xffffffff;
 }
 
 //*************************************
