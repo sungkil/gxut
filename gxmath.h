@@ -382,7 +382,7 @@ static_assert(sizeof(vec4)==(sizeof(float)*4),"sizeof(vec4)!=sizeof(float)*4" );
 
 // basic math types for computer graphics
 struct vertex { vec3 pos; vec3 norm; vec2 tex; };	// default vertex layout
-struct bbox_t { alignas(16) vec3 m=-3.402823466e+38F; alignas(16) vec3 M=3.402823466e+38F; }; // bounding box in std140 layout; FLT_MAX = 3.402823466e+38F
+struct bbox_t { vec3 m=3.402823466e+38F; uint __0; vec3 M=-3.402823466e+38F; uint __1; }; // bounding box in std140 layout; FLT_MAX = 3.402823466e+38F; __0, __1: padding
 
 //*************************************
 // std::hash support here
