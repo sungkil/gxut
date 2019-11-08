@@ -357,7 +357,7 @@ struct acc_t
 struct bvh_t : public acc_t // two-level hierarchy: mesh or geometry
 {
 	// second: offset to right child of interior node; index: primitive index in index buffer
-	struct node { vec3 m=FLT_MAX; uint second; vec3 M=-FLT_MAX; uint parent:30, axis:2; bbox& box(){ return reinterpret_cast<bbox&>(*this); } __forceinline uint index(){ return second; } __forceinline bool is_leaf() const {return axis==3;} };
+	struct node { vec3 m=FLT_MAX; uint second_or_index; vec3 M=-FLT_MAX; uint parent:30, axis:2; bbox& box(){ return reinterpret_cast<bbox&>(*this); }  __forceinline bool is_leaf() const {return axis==3;} };
 	std::vector<node> nodes;
 	virtual bool intersect( ray r, isect& h );
 };
@@ -761,8 +761,8 @@ __noinline inline bool bvh_t::intersect( ray r, isect& h )
 		// intersect geometries
 		bvh_t::node& gnode = nodes[n=gstack[s]];
 		if(!::intersect(gnode.box(),r)) continue;
-		if(!gnode.is_leaf()){ gstack[s+of[gnode.axis]]=n+1; gstack[s+!of[gnode.axis]]=gnode.second; s+=2; continue; } // push childs for interior intersection 
-		auto& g = G[gnode.index()]; if(g.acc_empty()) continue;
+		if(!gnode.is_leaf()){ gstack[s+of[gnode.axis]]=n+1; gstack[s+!of[gnode.axis]]=gnode.second_or_index; s+=2; continue; } // push childs for interior intersection; second
+		auto& g = G[gnode.second_or_index]; if(g.acc_empty()) continue; // actually, index
 
 		// intersect primitives
 		bvh_t::node* B = &nodes[g.acc_first_index];
@@ -770,10 +770,10 @@ __noinline inline bool bvh_t::intersect( ray r, isect& h )
 		{
 			bvh_t::node& pnode = B[j=pstack[t]];
 			if(!::intersect(pnode.box(),r)) continue;
-			if(!pnode.is_leaf()){ pstack[t+of[pnode.axis]]=j+1; pstack[t+!of[pnode.axis]]=pnode.second; t+=2; continue; } // intersection on interior: push the children
+			if(!pnode.is_leaf()){ pstack[t+of[pnode.axis]]=j+1; pstack[t+!of[pnode.axis]]=pnode.second_or_index; t+=2; continue; } // intersection on interior: push the children
 			
 			// intersection on leaf nodes
-			uint prim=pnode.index();
+			uint prim=pnode.second_or_index; // acutally, index
 			vec3 v0=V[I[prim+0]].pos, v1=V[I[prim+1]].pos, v2=V[I[prim+2]].pos;
 			isect i; if(!::intersect(r,v0,v1,v2,i)||i.t>h.t) continue;
 			h = i;
