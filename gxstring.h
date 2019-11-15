@@ -449,7 +449,7 @@ inline double9 wtod9( const std::wstring& w ){	return wtod9(w.c_str()); }
 inline double16 wtod16( const std::wstring& w ){return wtod16(w.c_str()); }
 
 // hexadecimanal conversion
-inline const char* tohex( void* ptr, size_t size ){ unsigned char* u=(unsigned char*)ptr; char *buff=_strbuf(size*2), *b=buff; for(int k=0;k<size;k++,u++,b+=2) sprintf(b,"%02x",*u); buff[size*2]=0; return buff; }
+inline const char* tohex( void* ptr, size_t size ){ unsigned char* u=(unsigned char*)ptr; char *buff=_strbuf(size*2), *b=buff; for(size_t k=0;k<size;k++,u++,b+=2) sprintf(b,"%02x",*u); buff[size*2]=0; return buff; }
 inline const char* tohex( int i ){ return tohex(&i,sizeof(i)); }
 inline const char* tohex( int2 i ){ return tohex(&i,sizeof(i)); }
 inline const char* tohex( int3 i ){ return tohex(&i,sizeof(i)); }

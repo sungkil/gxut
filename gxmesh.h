@@ -625,12 +625,12 @@ __noinline inline bool intersect( ray r, vec3 v0, vec3 v1, vec3 v2, isect& h )
 	vec3 u=v1-v0, v=v2-v0, n=u.cross(v); if(n.length2()<0.000001f) return false;	// degenerate case: non-triangle
 	float b=dot(n,r.dir); if(b>-0.000001f) return false;							// skip backfaces or rays lying on the plane
 	float t=dot(n,v0-r.pos)/b; if(t<r.t||t>r.tfar) return false;					// out of range of [tnear,tfar]
-	vec3 ipos = r.pos + r.dir*t, w = ipos-v0;
+	vec3 ipos=r.pos+r.dir*t, w=ipos-v0;
 
 	// test on barycentric coordinate
 	float uu=dot(u,u),uv=dot(u,v),vv=dot(v,v),wu=dot(w,u),wv=dot(w,v),D=uv*uv-uu*vv;
-	float bs=(uv*wv-vv*wu)/D; if(bs<0||bs>1.0f)			return false;
-	float bt=(uv*wu-uu*wv)/D; if(bt<0||(bs+bt)>1.0f)	return false;
+	float bs=(uv*wv-vv*wu)/D; if(bs<0||bs>1.0f)		return false;
+	float bt=(uv*wu-uu*wv)/D; if(bt<0||bs+bt>1.0f)	return false;
 
 	h.pos = ipos;
 	h.norm = normalize(n);
@@ -665,6 +665,7 @@ __noinline inline bool intersect( bbox_t b, ray r )
 		else {	t0=max(t0,(b.m[k]-r.o[k])*i);t1=min(t1,(b.M[k]-r.o[k])*i); }
 		if(t0>t1) return false;
 	}
+
 	return true;
 }
 
@@ -753,9 +754,9 @@ __noinline inline bool bvh_t::intersect( ray r, isect& h )
 	vertex*		V = &p_mesh->vertices[0];
 	uint*		I = &p_mesh->indices[0];
 	geometry*	G = &p_mesh->geometries[0];
-	
+
 	const uvec3 of = {uint(r.d.x<0?1:0),uint(r.d.y<0?1:0),uint(r.d.z<0?1:0) };
-	uint gstack[256], pstack[256];
+	uint gstack[64], pstack[64];
 	for( int s=gstack[0]=0, n=0; s>=0; s-- )
 	{
 		// intersect geometries
@@ -769,9 +770,17 @@ __noinline inline bool bvh_t::intersect( ray r, isect& h )
 		for( int t=pstack[0]=0, j=0; t>=0; t-- )
 		{
 			bvh_t::node& pnode = B[j=pstack[t]];
-			if(!::intersect(pnode.box(),r)) continue;
-			if(!pnode.is_leaf()){ pstack[t+of[pnode.axis]]=j+1; pstack[t+!of[pnode.axis]]=pnode.second_or_index; t+=2; continue; } // intersection on interior: push the children
-			
+			if(!pnode.is_leaf())
+			{
+				if(::intersect(pnode.box(),r))
+				{
+					pstack[t+of[pnode.axis]]=j+1;
+					pstack[t+!of[pnode.axis]]=pnode.second_or_index;
+					t+=2;
+				}
+				continue; // intersection on interior: push the children
+			}
+
 			// intersection on leaf nodes
 			uint prim=pnode.second_or_index; // acutally, index
 			vec3 v0=V[I[prim+0]].pos, v1=V[I[prim+1]].pos, v2=V[I[prim+2]].pos;
