@@ -597,7 +597,8 @@ __noinline inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
 	// create vertices/geometries
 	auto& i = proxy->indices; for(auto& g : geometries)
 	{
-		proxy->objects[g.object_index].create_geometry(i.size(), i0.size(), &g.box);
+		auto* pg=proxy->objects[g.object_index].create_geometry(i.size(), i0.size(), &g.box);
+		pg->shader_matrix=objects[g.object_index].matrix; // initial assignment to shader_matrix
 		for(auto& j : i0) i.emplace_back(j + uint(proxy->vertices.size()));
 		mat4 m = mat4::translate(g.box.center())*mat4::scale(g.box.size()*0.5f);
 		for(uint k=0; k<8; k++){ v.pos=(m*corners[k]).xyz; proxy->vertices.emplace_back(v); }
