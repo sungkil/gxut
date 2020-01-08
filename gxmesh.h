@@ -398,7 +398,7 @@ struct geometry
 	cull_t	cull;				// 8-bit cull mask
 	bool	bg=false;			// is it background object?
 	bbox	box;				// transform-unbaked bounding box
-	mat4	shader_matrix;		// reserved for shader usage; in C++, use object::matrix (with mesh::update_matrix())
+	mat4	mtx;				// transformation matrix (the same for all object geometries)
 
 	geometry() = delete; // no default ctor to enforce to assign root
 	geometry(mesh* p_mesh): root(p_mesh){}
@@ -406,7 +406,6 @@ struct geometry
 
 	inline object*		parent() const;
 	inline const char*	name() const;
-	inline mat4			matrix() const;
 	inline void*		offset() const { return (void*)(sizeof(geometry)*ID); } // for rendering commands
 	inline uint			face_count() const { return count/3; }
 	inline float		surface_area() const;
@@ -422,8 +421,6 @@ static_assert(sizeof(geometry)==144,	"sizeof(geometry) should be 144, when align
 // a set of geometries for batch control (not related to the rendering)
 struct object
 {
-	mat4	matrix;				// group transformation
-	bbox	box;				// transformation-baked bounding box (expanded by geometry box and transformation)
 	uint	ID=-1;
 	float	level=0;			// real-number LOD
 	uint	instance=0;
@@ -432,8 +429,8 @@ struct object
 	mesh*	root=nullptr;
 
 	object() = delete;  // no default ctor to enforce to assign parent
-	object(mesh* p_mesh):root(p_mesh){}
-	object(mesh* p_mesh, uint id, const char* name, bbox* box=nullptr) :ID(id), root(p_mesh){ strcpy(this->name, name); if(box) this->box = *box; }
+	object( mesh* p_mesh):root(p_mesh){}
+	object( mesh* p_mesh, uint id, const char* name ) :ID(id), root(p_mesh){ strcpy(this->name, name); }
 
 	// face/geometry query
 	inline bool empty() const;
@@ -441,6 +438,9 @@ struct object
 	inline uint geometry_count() const;
 	inline geometry* find_geometry(uint index) const;
 	inline std::vector<geometry*> find_geometries() const;
+	
+	// attributes computed on the fly
+	inline bbox box() const { bbox b; for( auto* g : find_geometries()) b.expand(g->mtx*g->box); return b; }
 
 	// create helpers
 	inline geometry* create_geometry(size_t first_index, size_t index_count=0, bbox* box=nullptr, size_t mat_index=-1);
@@ -487,16 +487,17 @@ struct mesh
 	mesh* shrink_to_fit(){ vertices.shrink_to_fit(); indices.shrink_to_fit(); objects.shrink_to_fit(); geometries.shrink_to_fit(); materials.shrink_to_fit(); return this; }
 
 	// face/object/proxy/material helpers
-	uint face_count(int level=0) const { uint kn=uint(geometries.size())/levels; auto* g=&geometries[kn*level]; uint f=0; for(uint k=0; k<kn; k++, g++) f+=g->count; return f/3; }
-	object* create_object(const char* name, bbox* _box=nullptr){ objects.emplace_back(object(this, uint(objects.size()), name, _box)); return &objects.back(); }
-	object* create_object(const object& o){ objects.emplace_back(o); auto& o1=objects.back(); o1.root=this; o1.ID=uint(objects.size())-1; return &o1; }
-	object*	find_object(const char* name){ for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) return &objects[k]; return nullptr; }
-	inline mesh* create_proxy(bool use_quads=false, bool double_sided=false); // proxy mesh helpers: e.g., bounding box
+	uint face_count( int level=0 ) const { uint kn=uint(geometries.size())/levels; auto* g=&geometries[kn*level]; uint f=0; for(uint k=0; k<kn; k++, g++) f+=g->count; return f/3; }
+	object* create_object( const char* name ){ objects.emplace_back(object(this, uint(objects.size()), name)); return &objects.back(); }
+	object* create_object( const object& o ){ objects.emplace_back(o); auto& o1=objects.back(); o1.root=this; o1.ID=uint(objects.size())-1; return &o1; }
+	object*	find_object( const char* name ){ for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) return &objects[k]; return nullptr; }
+	std::vector<object*> find_objects( const char* name ){ std::vector<object*> v; for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) v.push_back(&objects[k]); return v; }
+	inline mesh* create_proxy( bool use_quads=false, bool double_sided=false ); // proxy mesh helpers: e.g., bounding box
 	std::vector<material> pack_materials() const { std::vector<material> p; auto& m = materials; p.resize(m.size()); for(size_t k=0, kn=p.size(); k<kn; k++) p[k]=m[k]; return p; }
 
 	// update for matrix/bound
 	inline bool is_dynamic() const { for(size_t k=0, kn=objects.size()/instance_count; k<kn; k++) if(objects[k].attrib.dynamic) return true; return false; }
-	inline void update_matrix(bool transpose=false){ if(!transpose) for(auto& g:geometries) g.shader_matrix=objects[g.object_index].matrix; else for(auto& g:geometries) g.shader_matrix=objects[g.object_index].matrix.transpose(); }
+	//@@inline void update_matrix( bool transpose=false ){ if(!transpose) for(auto& g:geometries) g.shader_matrix=objects[g.object_index].matrix; else for(auto& g:geometries) g.shader_matrix=objects[g.object_index].matrix.transpose(); }
 	void update_bound(bool bRecalcTris=false);
 
 	// intersection
@@ -523,7 +524,6 @@ struct volume
 // late implementations for geometry
 
 inline object* geometry::parent() const { return root && object_index < root->objects.size() ? &root->objects[object_index] : nullptr; }
-inline mat4 geometry::matrix() const { auto* p=parent(); return p ? p->matrix : mat4::identity(); }
 inline const char* geometry::name() const { auto* p=parent(); return p ? p->name : ""; }
 inline float geometry::surface_area() const { if(count==0) return 0.0f; if(root->vertices.empty()||root->indices.empty()) return 0.0f; vertex* v=&root->vertices[0]; uint* i=&root->indices[0]; float sa=0.0f; for(uint k=first_index, kn=k+count; k<kn; k+=3) sa+=(v[i[k+1]].pos-v[i[k+0]].pos).cross(v[i[k+2]].pos-v[i[k+0]].pos).length()*0.5f; return sa; }
 
@@ -559,14 +559,13 @@ __noinline inline mesh& mesh::operator=( mesh&& other ) // move assignment opera
 
 __noinline inline void mesh::update_bound( bool bRecalcTris )
 {
-	box.clear(); for(auto& obj : objects) obj.box.clear();
+	box.clear();
 	for(size_t k = 0, kn = geometries.size(), gn = kn / instance_count; k < kn; k++)
 	{
 		auto& g = geometries[k], g0 = geometries[k%gn];
 		if(g.instance > 0) g.box = g0.box; else if(bRecalcTris){ g.box.clear(); vertex* V = &vertices[0]; uint* I = &indices[0]; for(uint j = g.first_index, jn = j + g.count; j < jn; j += 3) g.box.expand(V[I[j + 0]].pos, V[I[j + 1]].pos, V[I[j + 2]].pos); }
-		g.parent()->box.expand(g.matrix()*g.box);
+		box.expand(g.mtx*g.box);
 	}
-	for(auto& obj : objects) box.expand(obj.box);
 }
 
 __noinline inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
@@ -598,7 +597,7 @@ __noinline inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
 	auto& i = proxy->indices; for(auto& g : geometries)
 	{
 		auto* pg=proxy->objects[g.object_index].create_geometry(i.size(), i0.size(), &g.box);
-		pg->shader_matrix=objects[g.object_index].matrix; // initial assignment to shader_matrix
+		//@@ pg->shader_matrix=objects[g.object_index].matrix; // initial assignment to shader_matrix
 		for(auto& j : i0) i.emplace_back(j + uint(proxy->vertices.size()));
 		mat4 m = mat4::translate(g.box.center())*mat4::scale(g.box.size()*0.5f);
 		for(uint k=0; k<8; k++){ v.pos=(m*corners[k]).xyz; proxy->vertices.emplace_back(v); }
@@ -720,13 +719,12 @@ __noinline inline bool sphere::intersect( ray r, isect& h )
 
 __noinline inline bool geometry::intersect( ray r, isect& h ) const
 {
-	mat4 m = matrix();
 	const vertex* V = &root->vertices[0];
 	const uint* I = &root->indices[first_index];
 	h.g = 0xffffffff;
 	for( uint k=0, kn=count/3; k<kn; k++, I+=3 )
 	{
-		isect i; if(!::intersect(r,m*V[I[0]].pos,m*V[I[1]].pos,m*V[I[2]].pos,i)||i.t>h.t) continue;
+		isect i; if(!::intersect(r,mtx*V[I[0]].pos,mtx*V[I[1]].pos,mtx*V[I[2]].pos,i)||i.t>h.t) continue;
 		h=i; h.g=ID;
 	}
 	return h.g!=0xffffffff;
@@ -740,7 +738,7 @@ __noinline inline bool mesh::intersect( ray r, isect& h, bool use_acc ) const
 	h.t=FLT_MAX;
 	for( auto& g : geometries )
 	{
-		if(!(g.matrix()*g.box).intersect(r)) continue;
+		if(!(g.mtx*g.box).intersect(r)) continue;
 		isect i; if(!g.intersect(r,i)||i.t>h.t) continue;
 		h=i; h.g=g.ID;
 	}
@@ -845,7 +843,8 @@ __noinline inline mesh* create_box_mesh( const bbox& box, const char* name="box"
 	if(double_sided){ auto& i=m->indices; for(size_t k=0, f=use_quads?4:3, kn=i.size()/f; k<kn; k++) for(size_t j=0; j<f; j++) i.emplace_back(i[(k+1)*f-j-1]); } // insert indices (for CW)
 
 	// create object and geometry
-	m->create_object(name, ((bbox*)&box))->create_geometry(0, uint(m->indices.size()), (bbox*)&box, size_t(-1));
+	auto* obj = m->create_object(name);
+	auto* geom = obj->create_geometry(0, uint(m->indices.size()), (bbox*)&box, size_t(-1));
 
 	return m;
 }
