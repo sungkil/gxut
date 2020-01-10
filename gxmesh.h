@@ -392,11 +392,11 @@ struct geometry
 	uint	material_index=-1;
 	uint	acc_count=0;		// count of bvh node for a BVH built on geometry primitives
 	uint	acc_first_index=0;	// index of first bvh node for a BVH built on geometry primitives; a single BVH is defined in mesh
-	mesh*	root=nullptr;		// pointer to mesh; should be align at 8-byte boundary
+	mesh*	root=nullptr;		// pointer to mesh; should be aligned at 8-byte boundary
 	uint	object_index=-1;
 	ushort	instance=0;			// host-side instance ID (up to 2^16: 65536)
 	cull_t	cull;				// 8-bit cull mask
-	bool	bg=false;			// is it background object?
+	bool	bg=false;			// is this a background object?
 	bbox	box;				// transform-unbaked bounding box
 	mat4	mtx;				// transformation matrix (the same for all object geometries)
 
@@ -421,30 +421,58 @@ static_assert(sizeof(geometry)==144,	"sizeof(geometry) should be 144, when align
 // a set of geometries for batch control (not related to the rendering)
 struct object
 {
-	uint	ID=-1;
-	float	level=0;			// real-number LOD
-	uint	instance=0;
-	struct { bool dynamic=false, bg=false; } attrib; // dynamic: potential matrix changes; background: backdrops such as floor/ground; set in other plugins (e.g., AnimateMesh)
-	char	name[_MAX_PATH]={0};
-	mesh*	root=nullptr;
+	uint				ID=-1;
+	float				level=0;				// real-number LOD
+	uint				instance=0;
+	char				name[_MAX_PATH]={0};
+	mesh*				root=nullptr;
+	bbox				box;
+	std::vector<uint>	children;				// indices to child geometries
+	struct {bool dynamic=false,bg=false;} attrib;	// dynamic: potential matrix changes; background: backdrops such as floor/ground; set in other plugins (e.g., AnimateMesh)
 
 	object() = delete;  // no default ctor to enforce to assign parent
-	object( mesh* p_mesh):root(p_mesh){}
+	object( mesh* p_mesh ):root(p_mesh){}
 	object( mesh* p_mesh, uint id, const char* name ) :ID(id), root(p_mesh){ strcpy(this->name, name); }
 
-	// face/geometry query
-	inline bool empty() const;
-	inline uint face_count() const;
-	inline uint geometry_count() const;
-	inline geometry* find_geometry(uint index) const;
-	inline std::vector<geometry*> find_geometries() const;
-	
-	// attributes computed on the fly
-	inline bbox box() const { bbox b; for( auto* g : find_geometries()) b.expand(g->mtx*g->box); return b; }
+	// query and attributes
+	inline bool empty() const { return children.empty(); }
+	inline uint size() const { return uint(children.size()); }
+	inline uint face_count() const { uint n=0; for( auto& g : *this ) n+=g.face_count(); return n; }
+	inline bbox update_bound(){ box.clear(); for( auto& g : *this ) box.expand(g.mtx*g.box); return box; }
 
 	// create helpers
-	inline geometry* create_geometry(size_t first_index, size_t index_count=0, bbox* box=nullptr, size_t mat_index=-1);
-	inline geometry* create_geometry(const geometry& other);
+	inline geometry* create_geometry( size_t first_index, size_t index_count=0, bbox* box=nullptr, size_t mat_index=-1 );
+	inline geometry* create_geometry( const geometry& other );
+
+	// iterator types
+	struct iterator
+	{
+		using value_type = geometry;
+		using reference = value_type&;
+		using pointer = value_type*;
+		using iterator_category = std::forward_iterator_tag;
+
+		iterator( mesh* p_mesh, uint object_index, size_t idx=0 ):root(p_mesh),parent(object_index),index(uint(idx)){}
+		iterator operator++(){ ++index; return *this; }
+		iterator operator++(int){ auto self=*this; index++; return self; }
+		reference operator*();
+		pointer operator->();
+		const reference operator*() const { return operator*(); }
+		const pointer operator->() const { return operator->(); }
+		bool operator==( const iterator& rhs ) const { return memcmp(this,&rhs,sizeof(*this))==0; }
+		bool operator!=( const iterator& rhs ) const { return memcmp(this,&rhs,sizeof(*this))!=0; }
+	
+	protected:
+		uint	index, parent;
+		mesh*	root;
+	};
+
+	// iterators
+	iterator begin(){return iterator(root,ID);}			const iterator begin() const { return begin(); }
+	iterator end(){return iterator(root,ID,size());}	const iterator end() const { return end(); }
+	geometry& front();									const geometry& front() const { return front(); }
+	geometry& back();									const geometry& back() const { return back(); }
+	geometry& operator[]( size_t i );					const geometry& operator[] ( size_t i ) const { return operator[](i); }
 };
 
 //*************************************
@@ -486,10 +514,12 @@ struct mesh
 	void release(){ if(!vertices.empty()){ vertices.clear(); vertices.shrink_to_fit(); } if(!indices.empty()){ indices.clear(); indices.shrink_to_fit(); } if(!geometries.empty()){ geometries.clear(); geometries.shrink_to_fit(); } objects.clear(); objects.shrink_to_fit(); materials.clear(); materials.shrink_to_fit(); if(acc){ acc->release(); acc = nullptr; } }
 	mesh* shrink_to_fit(){ vertices.shrink_to_fit(); indices.shrink_to_fit(); objects.shrink_to_fit(); geometries.shrink_to_fit(); materials.shrink_to_fit(); return this; }
 
-	// face/object/proxy/material helpers
+	// face/object/geometry/proxy/material helpers
 	uint face_count( int level=0 ) const { uint kn=uint(geometries.size())/levels; auto* g=&geometries[kn*level]; uint f=0; for(uint k=0; k<kn; k++, g++) f+=g->count; return f/3; }
 	object* create_object( const char* name ){ objects.emplace_back(object(this, uint(objects.size()), name)); return &objects.back(); }
 	object* create_object( const object& o ){ objects.emplace_back(o); auto& o1=objects.back(); o1.root=this; o1.ID=uint(objects.size())-1; return &o1; }
+	geometry* create_geometry( size_t first_index, size_t index_count=0, bbox* box=nullptr, size_t mat_index=-1 ){ geometries.emplace_back(geometry(this, uint(geometries.size()), -1, uint(first_index), uint(index_count), box, uint(mat_index))); return &geometries.back(); }
+	geometry* create_geometry( const geometry& other ){ auto& v=geometries; uint gid=uint(v.size()); v.emplace_back(other); v.back().ID=gid; return &v.back(); }
 	object*	find_object( const char* name ){ for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) return &objects[k]; return nullptr; }
 	std::vector<object*> find_objects( const char* name ){ std::vector<object*> v; for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) v.push_back(&objects[k]); return v; }
 	inline mesh* create_proxy( bool use_quads=false, bool double_sided=false ); // proxy mesh helpers: e.g., bounding box
@@ -497,8 +527,7 @@ struct mesh
 
 	// update for matrix/bound
 	inline bool is_dynamic() const { for(size_t k=0, kn=objects.size()/instance_count; k<kn; k++) if(objects[k].attrib.dynamic) return true; return false; }
-	//@@inline void update_matrix( bool transpose=false ){ if(!transpose) for(auto& g:geometries) g.shader_matrix=objects[g.object_index].matrix; else for(auto& g:geometries) g.shader_matrix=objects[g.object_index].matrix.transpose(); }
-	void update_bound(bool bRecalcTris=false);
+	void update_bound( bool b_recalc_tris=false );
 
 	// intersection
 	bool intersect( ray r, isect& h, bool use_acc=true ) const;
@@ -530,13 +559,26 @@ inline float geometry::surface_area() const { if(count==0) return 0.0f; if(root-
 //*************************************
 // late implementations for object
 
-inline bool object::empty() const { auto* g = &root->geometries[0]; for(uint k = 0, kn = uint(root->geometries.size()); k < kn; k++, g++) if(g->parent() == this) return false; return true; }
-inline uint object::geometry_count() const { uint n = 0; for(auto& g : root->geometries) if(g.parent() == this) n++; return n; }
-inline uint object::face_count() const { auto* g = &root->geometries[0]; uint f = 0; for(uint k = 0, kn = uint(root->geometries.size()); k < kn; k++) if(g[k].parent() == this) f += g[k].face_count(); return f; }
-inline geometry* object::find_geometry(uint index) const { auto* g = &root->geometries[0]; uint n = 0; for(uint k = 0, kn = uint(root->geometries.size()); k < kn; k++, g++) if(g->parent() == this && (n++) == index) return g; return nullptr; }
-inline std::vector<geometry*> object::find_geometries() const { auto* g = &root->geometries[0]; std::vector<geometry*> gl; for(uint k = 0, kn = uint(root->geometries.size()); k < kn; k++, g++) if(g->parent() == this) gl.emplace_back(g); return gl; }
-inline geometry* object::create_geometry(size_t first_index, size_t index_count, bbox* box, size_t mat_index){ auto& g = root->geometries; g.emplace_back(geometry(root, uint(g.size()), this->ID, uint(first_index), uint(index_count), box, uint(mat_index))); return &g.back(); }
-inline geometry* object::create_geometry(const geometry& other){ auto& g = root->geometries; g.emplace_back(other); auto* p = &g.back(); p->ID = uint(g.size()) - 1; return p; }
+inline geometry* object::create_geometry( size_t first_index, size_t index_count, bbox* box, size_t mat_index )
+{
+	auto& v = root->geometries; uint gid=uint(v.size());
+	v.emplace_back(geometry(root, gid, this->ID, uint(first_index), uint(index_count), box, uint(mat_index)));
+	children.emplace_back(gid);
+	return &v.back();
+}
+
+inline geometry* object::create_geometry( const geometry& other )
+{
+	auto& v = root->geometries; uint gid=uint(v.size());
+	v.emplace_back(other);
+	auto* g=&v.back(); g->ID=gid; children.emplace_back(gid); return g;
+}
+
+inline object::iterator::reference object::iterator::operator*(){ auto g=root->objects[parent].children[index]; return root->geometries[g]; }
+inline object::iterator::pointer object::iterator::operator->(){ auto g=root->objects[parent].children[index]; return &root->geometries[g]; }
+inline geometry& object::front(){ return root->geometries[children.front()]; }
+inline geometry& object::back(){ return root->geometries[children.back()]; }
+inline geometry& object::operator[]( size_t i ){ return root->geometries[i]; }
 
 //*************************************
 // late implementations for mesh
@@ -557,15 +599,27 @@ __noinline inline mesh& mesh::operator=( mesh&& other ) // move assignment opera
 	return *this;
 }
 
-__noinline inline void mesh::update_bound( bool bRecalcTris )
+__noinline inline void mesh::update_bound( bool b_recalc_tris )
 {
-	box.clear();
-	for(size_t k = 0, kn = geometries.size(), gn = kn / instance_count; k < kn; k++)
+	// update geometry first
+	size_t kn=geometries.size(), gn=kn/instance_count;
+	if(b_recalc_tris)
 	{
-		auto& g = geometries[k], g0 = geometries[k%gn];
-		if(g.instance > 0) g.box = g0.box; else if(bRecalcTris){ g.box.clear(); vertex* V = &vertices[0]; uint* I = &indices[0]; for(uint j = g.first_index, jn = j + g.count; j < jn; j += 3) g.box.expand(V[I[j + 0]].pos, V[I[j + 1]].pos, V[I[j + 2]].pos); }
-		box.expand(g.mtx*g.box);
+		for( size_t k=0; k<gn; k++ )
+		{
+			auto& g = geometries[k]; g.box.clear();
+			vertex* V=&vertices[0]; uint* I=&indices[g.first_index];
+			for( uint j=0, jn=g.count; j<jn; j+=3, I+=3)
+				g.box.expand( V[I[0]].pos, V[I[1]].pos, V[I[2]].pos );
+		}
 	}
+
+	for( size_t k=gn; k<kn; k++ ) geometries[k].box=geometries[k%gn].box;
+
+	// update objects and mesh
+	box.clear();
+	for( auto& obj : objects )
+		box.expand(obj.update_bound());
 }
 
 __noinline inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
@@ -597,7 +651,6 @@ __noinline inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
 	auto& i = proxy->indices; for(auto& g : geometries)
 	{
 		auto* pg=proxy->objects[g.object_index].create_geometry(i.size(), i0.size(), &g.box);
-		//@@ pg->shader_matrix=objects[g.object_index].matrix; // initial assignment to shader_matrix
 		for(auto& j : i0) i.emplace_back(j + uint(proxy->vertices.size()));
 		mat4 m = mat4::translate(g.box.center())*mat4::scale(g.box.size()*0.5f);
 		for(uint k=0; k<8; k++){ v.pos=(m*corners[k]).xyz; proxy->vertices.emplace_back(v); }
