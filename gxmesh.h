@@ -517,23 +517,17 @@ struct mesh
 	// face/object/geometry/proxy/material helpers
 	uint face_count( int level=0 ) const { uint kn=uint(geometries.size())/levels; auto* g=&geometries[kn*level]; uint f=0; for(uint k=0; k<kn; k++, g++) f+=g->count; return f/3; }
 	object* create_object( const char* name ){ objects.emplace_back(object(this, uint(objects.size()), name)); return &objects.back(); }
-	object* create_object( const object& o ){ objects.emplace_back(o); auto& o1=objects.back(); o1.root=this; o1.ID=uint(objects.size())-1; return &o1; }
-	geometry* create_geometry( size_t first_index, size_t index_count=0, bbox* box=nullptr, size_t mat_index=-1 ){ geometries.emplace_back(geometry(this, uint(geometries.size()), -1, uint(first_index), uint(index_count), box, uint(mat_index))); return &geometries.back(); }
-	geometry* create_geometry( const geometry& other ){ auto& v=geometries; uint gid=uint(v.size()); v.emplace_back(other); v.back().ID=gid; return &v.back(); }
+	object* create_object( const object& other ){ objects.emplace_back(other); auto& o1=objects.back(); o1.root=this; o1.ID=uint(objects.size())-1; return &o1; }
 	object*	find_object( const char* name ){ for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) return &objects[k]; return nullptr; }
 	std::vector<object*> find_objects( const char* name ){ std::vector<object*> v; for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) v.push_back(&objects[k]); return v; }
 	inline mesh* create_proxy( bool use_quads=false, bool double_sided=false ); // proxy mesh helpers: e.g., bounding box
 	std::vector<material> pack_materials() const { std::vector<material> p; auto& m = materials; p.resize(m.size()); for(size_t k=0, kn=p.size(); k<kn; k++) p[k]=m[k]; return p; }
+	void dump_binary( const wchar_t* dir=L""); // dump the vertex/index buffers as binary files
 
-	// update for matrix/bound
+	// bound, dynamic, intersection
 	inline bool is_dynamic() const { for(size_t k=0, kn=objects.size()/instance_count; k<kn; k++) if(objects[k].attrib.dynamic) return true; return false; }
 	void update_bound( bool b_recalc_tris=false );
-
-	// intersection
 	bool intersect( ray r, isect& h, bool use_acc=true ) const;
-
-	// utility
-	void dump_binary( const wchar_t* dir=L""); // dump the vertex/index buffers as binary files
 };
 
 //*************************************
