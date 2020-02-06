@@ -176,13 +176,39 @@ inline bool operator<(  const FILETIME& f1, const FILETIME& f2 ){ return Compare
 inline bool operator>=( const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)>=0; }
 inline bool operator<=( const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)<=0; }
 
+//***********************************************
+// common constants
+static const int GX_MAX_PATH = 1024;	// MAX_PATH == 260
+
+//***********************************************
+// volume information
+namespace os {
+//***********************************************
+struct volume_t
+{
+	static const int	capacity = GX_MAX_PATH; // MAX_PATH == 260
+	const wchar_t		root[3]={0};
+	wchar_t				name[capacity+1]={0};
+	unsigned long		serial_number=0;
+	unsigned long		maximum_component_length=0;
+	struct { unsigned long flags=0; wchar_t name[capacity+1]={0}; } filesystem;
+
+	// query
+	bool exists() const { return serial_number!=0&&filesystem.name[0]!=0; }
+	bool is_exfat() const { return _wcsicmp(filesystem.name,L"exFAT")==0; }
+	bool is_ntfs() const { return _wcsicmp(filesystem.name,L"NTFS")==0; }
+	bool is_fat32() const { return _wcsicmp(filesystem.name,L"FAT32")==0; }
+};
+//***********************************************
+} // namespace os
+
 struct path
 {
 	typedef WIN32_FILE_ATTRIBUTE_DATA attrib_t; // auxiliary cache information from scan()
 	typedef struct _stat stat_t; // use "struct _stat" instead of "_stat" for C-compatibility
 
 	static const int max_buffers	= 4096;
-	static const int capacity		= 1024;	// MAX_PATH == 260
+	static const int capacity		= GX_MAX_PATH; // MAX_PATH == 260
 
 	// get shared buffer for return values
 	static inline wchar_t*			__wcsbuf(){ static wchar_t buff[max_buffers][capacity]; static int i=0; return buff[(i++)%std::extent<decltype(buff)>::value]; }
@@ -298,6 +324,7 @@ struct path
 	path cygwin()			const { path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; path p2; swprintf_s( p2, capacity, L"/cygdrive/%c%s", ::tolower(p[0]), p.data+2 ); return p2; }
 	
 	// path info/operations
+	os::volume_t volume() const { os::volume_t v; if(is_unc()||is_rsync()) return v; path d=drive(); if(d.empty()||!isalpha(d[0])) return v; wcscpy(d.data+1,L":"); if(!d.exists()) return v; if(GetVolumeInformationW( d.c_str(), v.name, os::volume_t::capacity, &v.serial_number, &v.maximum_component_length, &v.filesystem.flags, v.filesystem.name, os::volume_t::capacity )) return v; return os::volume_t(); }
 	path drive() const { static wchar_t d[_MAX_DRIVE+1]; _wsplitpath_s(data,d,_MAX_DRIVE,nullptr,0,nullptr,0,nullptr,0);if(*d) *d=wchar_t(::toupper(*d)); path p; wcscpy(p.data,d); return p; }
 	path dir() const { path p; if(wcschr(data,L'\\')==nullptr) return L".\\"; split_t si=split(__wcsbuf(),__wcsbuf()); wcscpy(p.data,wcscat(si.drive,si.dir)); size_t len=wcslen(p.data); if(len>0&&p.data[len-1]!='\\'){p.data[len]='\\';p.data[len+1]=L'\0';} return p; }
 	path name( bool with_ext=true ) const { split_t si=split(nullptr,nullptr,__wcsbuf(),__wcsbuf()); return with_ext?wcscat(si.fname,si.ext):si.fname; }
