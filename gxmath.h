@@ -868,6 +868,7 @@ __forceinline float saturate( float f ){ return clamp(f,0.0f,1.0f); }
 __forceinline vec2 saturate( const vec2& v ){ return vec2(saturate(v.x),saturate(v.y)); }
 __forceinline vec3 saturate( const vec3& v ){ return vec3(saturate(v.x),saturate(v.y),saturate(v.z)); }
 __forceinline vec4 saturate(const  vec4& v ){ return vec4(saturate(v.x),saturate(v.y),saturate(v.z),saturate(v.w)); }
+__forceinline int sign( int f ){ return f>0?1:f<0?-1:0; }
 __forceinline float sign( float f ){ return f>0.0f?1.0f:f<0.0f?-1.0f:0; }
 __forceinline vec2 sign( const vec2& v ){ return vec2(sign(v.x),sign(v.y)); }
 __forceinline vec3 sign( const vec3& v ){ return vec3(sign(v.x),sign(v.y),sign(v.z)); }

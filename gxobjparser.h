@@ -302,7 +302,7 @@ inline bool load_mtl( path filePath, std::vector<material_impl>& mats )
 	for( auto& m : mats)
 	{
 		std::vector<wchar_t*> v = {m.path.alpha,m.path.bump,m.path.diffuse,m.path.cube,m.path.normal};
-		for( auto* p : v ) if(p[0]&&path(p).is_absolute()) wcscpy(p,path(p).relative(mtl_dir).remove_first_dot());
+		for( auto* p : v ) if(p[0]&&path(p).is_absolute()) wcscpy(p,path(p).relative(false,mtl_dir));
 	}
 
 	// postprocessing for materials

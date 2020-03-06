@@ -333,7 +333,7 @@ struct path
 	path remove_first_dot()	const { return (wcslen(data)>2&&data[0]==L'.'&&data[1]==L'\\') ? path(data+2) : *this; }
 	path remove_ext() const { split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
 	std::vector<path> explode() const { path slashed=to_slash(); std::vector<path> L;L.reserve(8); wchar_t* ctx; for(wchar_t* t=wcstok_s(slashed.data,L"/",&ctx);t;t=wcstok_s(0,L"/",&ctx)) L.emplace_back(t); return L; }
-	std::vector<path> relative_ancestors() const { std::vector<path> a, e=dir().relative().explode(); if(e.empty()) return a; a.reserve(8); path t=e.front().absolute()+L"\\"; a.emplace_back(t); for(size_t k=1,kn=e.size();k<kn;k++)a.emplace_back(t+=e[k]+L"\\"); return a; }
+	std::vector<path> relative_ancestors() const { std::vector<path> a, e=dir().relative(true).explode(); if(e.empty()) return a; a.reserve(8); path t=e.front().absolute()+L"\\"; a.emplace_back(t); for(size_t k=1,kn=e.size();k<kn;k++)a.emplace_back(t+=e[k]+L"\\"); return a; }
 
 	// attribute by stats
 	inline stat_t	stat() const { stat_t s={0}; if(exists()) _wstat(data,&s); return s; }
@@ -379,7 +379,8 @@ struct path
 	inline bool is_rsync() const { auto* p=wcsstr(data,L":\\"); if(!p) p=wcsstr(data,L":/"); return p!=nullptr&&p>data+1; }
 	inline bool is_subdir( const path& parent ) const { path p=parent.canonical(); return _wcsnicmp(canonical(),p,p.size())==0; } // do not check existence
 	inline path absolute( const wchar_t* base=L"" ) const { if(!data[0]) return *this; return _wfullpath(__wcsbuf(),(!*base||is_absolute())?data:wcscat(wcscpy(__wcsbuf(),path(base).add_backslash()),data),capacity); }	// do not directly return for non-canonicalized path
-	inline path relative( const wchar_t* from=L"" ) const;
+	inline path relative( bool first_dot=false, const wchar_t* from=L"" ) const;
+	inline path relative_slash( bool first_dot=false, const wchar_t* from=L"" ) const { return relative(first_dot,from).to_slash(); }
 	inline path canonical() const { path p=*this; p.canonicalize(); return p; } // not necessarily absolute: return relative path as well
 
 	// create process
@@ -531,7 +532,7 @@ __noinline inline path path::temp( const wchar_t* subkey, const char* subdir )
 	return t;
 }
 
-__noinline inline path path::relative( const wchar_t* from ) const
+__noinline inline path path::relative( bool first_dot, const wchar_t* from ) const
 {
 	if(is_relative()) return *this;
 
@@ -550,7 +551,8 @@ __noinline inline path path::relative( const wchar_t* from ) const
 	result.canonicalize();
 
 	// 3. if empty dir, then attach ./
-	if(result[0]==0||result[0]!=L'.') result=path(".\\")+result;
+	if(first_dot&&(result[0]==0||result[0]!=L'.')) result=path(".\\")+result;
+	
 	return this->is_dir()?result:result+name();
 }
 
