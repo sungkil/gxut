@@ -638,4 +638,25 @@ __noinline inline const T* str_replace( const T* _Src, T _Find, T _Replace )
 }
 
 //***********************************************
+// 14. pattern matching
+// - simple ?/* is supported
+// - posix-style **/* (subdirectory matching) is not implemented yet
+
+template <class T>
+__noinline inline bool glob( const T* str, const T* pattern )
+{
+	static const T q=T('?'), a=T('*');
+	int n=int(strlen(str)), m=int(strlen(pattern)); if(m==0) return n==0;
+	int i,j,t,p; for(i=0,j=0,t=-1,p=-1;i<n;)
+	{
+		if(str[i]==pattern[j]||(j<m&&pattern[j]==q)){i++;j++;}
+		else if(j<m&&pattern[j]==a){t=i;p=j;j++;}
+		else if(p!=-1){j=p+1;i=t+1;t++;}
+		else return false;
+	}
+	while(j<m&&pattern[j]==a)j++;
+	return j==m;
+}
+
+//***********************************************
 #endif // __GX_STRING_H__

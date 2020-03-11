@@ -421,8 +421,10 @@ struct path
 	inline path toupper() const { path d;size_t l=length();for(size_t k=0;k<l;k++)d[k]=::toupper(data[k]);d[l]=L'\0'; return d; }
 
 	// scan/findfile: ext_filter (specific extensions delimited by semicolons), str_filter (path should contain this string)
-	std::vector<path> scan( bool recursive=true, const wchar_t* ext_filter=nullptr, const wchar_t* str_filter=nullptr ) const;
-	std::vector<path> subdirs( bool recursive=true, const wchar_t* str_filter=nullptr ) const;
+	static bool glob( const wchar_t* str, size_t slen, const wchar_t* pattern, size_t plen );
+	inline bool glob( const wchar_t* pattern, size_t plen=0 ) const { return glob( data, size(), pattern, plen ); }
+	std::vector<path> scan( bool recursive=true, const wchar_t* ext_filter=nullptr, const wchar_t* pattern=nullptr ) const;
+	std::vector<path> subdirs( bool recursive=true, const wchar_t* pattern=nullptr ) const;
 
 protected:
 
@@ -430,7 +432,7 @@ protected:
 	__forceinline bool		cache_exists() const { attrib_t* c=(attrib_t*)(data+capacity); return c->ftLastWriteTime.dwHighDateTime>0&&c->dwFileAttributes==INVALID_FILE_ATTRIBUTES; }
 	void canonicalize(); // remove redundant dir indicates such as "..", "."
 
-	struct scan_t { std::vector<path> result; bool recursive; bool has_ext; std::vector<std::wstring> exts; const wchar_t* str; size_t slen; };
+	struct scan_t { std::vector<path> result; bool recursive; bool has_ext; std::vector<std::wstring> exts; const wchar_t* pattern; size_t plen; bool b_glob; };
 	void scan_recursive( path& dir, scan_t& si ) const;
 	void subdirs_recursive( path& dir, scan_t& si ) const;
 
@@ -439,17 +441,32 @@ protected:
 
 //***********************************************
 // definitions of long inline member functions
-__noinline inline std::vector<path> path::scan( bool recursive, const wchar_t* ext_filter, const wchar_t* str_filter ) const
+__noinline inline bool path::glob( const wchar_t* str, size_t slen, const wchar_t* pattern, size_t plen )
+{
+	static const wchar_t q=L'?', a=L'*';
+	int n=int(slen?slen:wcslen(str)), m=int(plen?plen:wcslen(pattern)); if(m==0) return n==0;
+	int i,j,t,p; for(i=0,j=0,t=-1,p=-1;i<n;)
+	{
+		if(str[i]==pattern[j]||(j<m&&pattern[j]==q)){i++;j++;}
+		else if(j<m&&pattern[j]==a){t=i;p=j;j++;}
+		else if(p!=-1){j=p+1;i=t+1;t++;}
+		else return false;
+	}
+	while(j<m&&pattern[j]==a)j++;
+	return j==m;
+}
+
+__noinline inline std::vector<path> path::scan( bool recursive, const wchar_t* ext_filter, const wchar_t* pattern ) const
 {
 	std::vector<std::wstring> exts; if(ext_filter&&ext_filter[0]){ wchar_t ef[4096]={0}, *ctx=nullptr; wcscpy(ef,ext_filter); for(wchar_t* e=wcstok_s(ef,L";",&ctx);e;e=wcstok_s(nullptr,L";",&ctx)) if(e[0]) exts.push_back(std::wstring(L".")+e); }
-	scan_t si={{},recursive,!exts.empty(),exts,str_filter,str_filter?wcslen(str_filter):0};
+	scan_t si={{},recursive,!exts.empty(),exts,pattern,pattern?wcslen(pattern):0,pattern&&(wcschr(pattern,L'*')||wcschr(pattern,L'?')) };
 	if(!is_dir()) return si.result; path src=(is_relative()?absolute(L".\\"):*this).add_backslash();
 	si.result.reserve(1<<16);scan_recursive(src,si);si.result.shrink_to_fit();return si.result;
 }
 
-__noinline inline std::vector<path> path::subdirs( bool recursive, const wchar_t* str_filter ) const
+__noinline inline std::vector<path> path::subdirs( bool recursive, const wchar_t* pattern ) const
 {
-	scan_t si={{},recursive,false,{},str_filter,str_filter?wcslen(str_filter):0};
+	scan_t si={{},recursive,false,{},pattern,pattern?wcslen(pattern):0,pattern&&(wcschr(pattern,L'*')||wcschr(pattern,L'?'))};
 	if(!is_dir()) return si.result; path src=(is_relative()?absolute(L".\\"):*this).add_backslash();
 	si.result.reserve(1<<12);subdirs_recursive(src,si);si.result.shrink_to_fit();return si.result;
 }
@@ -466,7 +483,7 @@ __noinline inline void path::scan_recursive( path& dir, path::scan_t& si ) const
 		size_t fl=wcslen(f);
 		if((fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)==0)
 		{
-			if((si.has_ext&&!__wcsiext(f,&si.exts,fl))||(si.slen>0&&!__wcsistr(f,fl,si.str,si.slen))) continue;
+			if((si.has_ext&&!__wcsiext(f,&si.exts,fl))||(si.plen>0&&(!si.b_glob?__wcsistr(f,fl,si.pattern,si.plen)==nullptr:!glob(f,fl,si.pattern,si.plen)))) continue;
 			memcpy(p,f,sizeof(wchar_t)*fl); p[fl]=0; t.clear_cache(); si.result.emplace_back(t);
 		}
 		else if(si.recursive&&(fd.dwFileAttributes&FILE_ATTRIBUTE_HIDDEN)==0)
@@ -491,7 +508,9 @@ __noinline inline void path::subdirs_recursive( path& dir, path::scan_t& si ) co
 		if(f[0]==L'.'){ if(!f[1]||memcmp(f+1,L".",4)==0||memcmp(f+1,L"git",8)==0) continue; } // skip .git
 		size_t fl=wcslen(f); memcpy(p,f,sizeof(wchar_t)*fl); p[fl]=L'\\';p[fl+1]=0;
 		if(si.recursive) sdir.emplace_back(t);
-		if(si.slen==0) si.result.emplace_back(t); else if(__wcsistr(f,fl,si.str,si.slen)) si.result.emplace_back(t);
+		if(si.pattern==0) si.result.emplace_back(t);
+		else if(!si.b_glob&&__wcsistr(f,fl,si.pattern,si.plen)) si.result.emplace_back(t);
+		else if(si.b_glob&&glob(f,fl,si.pattern,si.plen)) si.result.emplace_back(t);
 	}
 	FindClose(h);
 	for(auto& c:sdir) subdirs_recursive(c,si);
