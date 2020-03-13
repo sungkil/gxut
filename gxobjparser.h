@@ -432,7 +432,7 @@ inline mesh* load_mesh_cache( path file_path )
 	FILE* fp = _wfopen( cachePath, L"rb" );
 	if(fp==nullptr){ wprintf(L"Unable to open %s\n",cachePath.c_str()); return nullptr; }
 
-	char buff[8192], mtl_name[1024];
+	char buff[8192], mtl_name[1024], map_names[4096];
 
 	// 0. get parserid
 	fgets(buff,8192,fp); // get parser id
@@ -469,15 +469,16 @@ inline mesh* load_mesh_cache( path file_path )
 		material_impl* m = &p_mesh->materials.back();
 
 		// get material attribute
-		fgets(buff,8192,fp); sscanf(buff,"material[%*d] %s %f %f %f %f %f %f %f %f %f %s\n",
-						m->name,
-						&m->color[0], &m->color[1], &m->color[2], &m->color[3],
-						&m->specular, &m->beta, &m->emissive, &m->n,
-						&m->bump_scale,
-						buff );
+		fgets(buff,8192,fp);
+		sscanf(buff,"material[%*d] %s %f %f %f %f %f %f %f %f %f %s\n",
+			m->name,
+			&m->color[0], &m->color[1], &m->color[2], &m->color[3],
+			&m->specular, &m->beta, &m->emissive, &m->n,
+			&m->bump_scale,
+			map_names );
 
 		// read maps
-		std::vector<std::string> vs = explode(buff,";");
+		std::vector<std::string> vs = explode(map_names,";");
 		for( size_t j=0; j < vs.size(); j++ )
 		{
 			if(vs[j].empty()) continue;
@@ -507,8 +508,8 @@ inline mesh* load_mesh_cache( path file_path )
 	{
 		object* obj = p_mesh->create_object("");
 		fgets(buff,8192,fp);
-		sscanf(buff,"object[%d] %s ", &obj->ID, obj->name );
-		sscanf(buff,"%f %f %f %f %f %f\n", &obj->box.m[0], &obj->box.m[1], &obj->box.m[2], &obj->box.M[0], &obj->box.M[1], &obj->box.M[2] );
+		sscanf(buff,"object[%d] %s %f %f %f %f %f %f\n", &obj->ID, obj->name,
+			&obj->box.m[0], &obj->box.m[1], &obj->box.m[2], &obj->box.M[0], &obj->box.M[1], &obj->box.M[2] ); // do not separate sscanf
 	}
 
 	// 7. get geometry list
