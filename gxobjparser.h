@@ -432,7 +432,7 @@ inline mesh* load_mesh_cache( path file_path )
 	FILE* fp = _wfopen( cachePath, L"rb" );
 	if(fp==nullptr){ wprintf(L"Unable to open %s\n",cachePath.c_str()); return nullptr; }
 
-	char buff[8192], mtl_name[1024], map_names[4096];
+	char buff[8192], mtl_name[1024];
 
 	// 0. get parserid
 	fgets(buff,8192,fp); // get parser id
@@ -468,9 +468,11 @@ inline mesh* load_mesh_cache( path file_path )
 		p_mesh->materials.emplace_back(material_impl(uint(p_mesh->materials.size())));
 		material_impl* m = &p_mesh->materials.back();
 
-		// get material attribute
 		fgets(buff,8192,fp);
-		sscanf(buff,"material[%*d] %s %f %f %f %f %f %f %f %f %f %s\n",
+
+		// get material attribute
+		char map_names[4096]={0}; // should be reset for optional reading
+		uint read_count = sscanf(buff,"material[%*d] %s %f %f %f %f %f %f %f %f %f %s\n",
 			m->name,
 			&m->color[0], &m->color[1], &m->color[2], &m->color[3],
 			&m->specular, &m->beta, &m->emissive, &m->n,
