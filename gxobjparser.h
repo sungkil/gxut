@@ -123,11 +123,13 @@ inline path generate_normal_map( const path& bump_path, float bump_scale )
 
 	// convert uchar bumpmap to 1-channel float image
 	image* bump = gx::create_image( bump0->width, bump0->height, 32, 1 );
-	for( int y=0, yn=bump->height; y<yn; y++ )
+	int yn=bump->height, c0=bump0->channels, xn=bump->width;
+	#pragma omp parallel for
+	for( int y=0; y<yn; y++ )
 	{
-		uchar* src = (uchar*) (bump0->data+y*bump0->stride());
-		float* dst = (float*) (bump->data+y*bump->stride());
-		for( int x=0, c=bump0->channels, xn=bump->width; x<xn; x++, src+=c, dst++ ) dst[0] = float(src[0])/255.0f;
+		uchar* src = bump0->ptr<uchar>(y);
+		float* dst = bump->ptr<float>(y);
+		for( int x=0; x<xn; x++, src+=c0, dst++ ) dst[0] = float(src[0])/255.0f;
 	}
 
 	// create normal image
@@ -137,12 +139,14 @@ inline path generate_normal_map( const path& bump_path, float bump_scale )
 	bump_scale = min(1000.0f,1.0f/(bump_scale+0.000001f));
 	uchar *B=bump->data, *N=normal->data;
 	int NW=int(normal->stride()), BW=int(bump->stride());
-	for( int y=0, yn=bump->height, xn=bump->width; y<yn; y++ )
+	
+	#pragma omp parallel for
+	for( int y=0; y<yn; y++ )
 	{
 		uchar3* dst = (uchar3*)(N+y*NW);
-		float* src2 = (float*) (B+((y-1+yn)%yn)*BW);
-		float* src1 = (float*) (B+y*BW);
-		float* src0 = (float*) (B+((y+1)%yn)*BW);
+		float* src2 = (float*)(B+((y-1+yn)%yn)*BW);
+		float* src1 = (float*)(B+y*BW);
+		float* src0 = (float*)(B+((y+1)%yn)*BW);
 
 		for( int x=0; x<xn; x++, dst++ )
 		{
@@ -174,19 +178,17 @@ inline path generate_normal_map( const path& bump_path, float bump_scale )
 inline void generate_normal_maps( std::vector<material_impl>& mats, path mesh_dir )
 {
 	std::map<path,path> done;
-	for( uint k=0; k < mats.size(); k++ )
+	for( auto& m : mats )
 	{
-		path normal_path, bump_path=mesh_dir+mats[k].path.bump;
-		if(mats[k].path.bump[0]==L'\0'||!bump_path.exists()) continue;
-
-		auto it=done.find(bump_path.c_str());
-		if(it!=done.end()) normal_path=it->second;
-		else
+		path normal_path, bump_path=mesh_dir+m.path.bump;
+		if(m.path.bump[0]==L'\0'||!bump_path.exists()) continue;
+		if(done.find(bump_path.c_str())==done.end())
 		{
-			normal_path = generate_normal_map( bump_path, mats[k].bump_scale );
-			if(!normal_path.empty()&&normal_path.exists()) done.emplace(bump_path,normal_path);
+			normal_path = generate_normal_map( bump_path, m.bump_scale );
+			if(normal_path.exists()) done.emplace(bump_path,normal_path);
 		}
-		if(normal_path.exists()) wcscpy( mats[k].path.normal, normal_path.name() );
+		normal_path = done[bump_path]; if(!normal_path.exists()) continue;
+		wcscpy( m.path.normal, normal_path.name() );
 	}
 }
 
@@ -606,8 +608,8 @@ inline mesh* load_obj( path file_path, float* pLoadingTime=nullptr, void(*flush_
 	//*****************************************************
 	// 1.1 decompress zip file and remove it later after saving the cache
 	path dec_path;
-	bool use_archive = archive_ext_map.find(file_path.ext().c_str())!=archive_ext_map.end();
-	if(use_archive)
+	bool b_use_archive = archive_ext_map.find(file_path.ext().c_str())!=archive_ext_map.end();
+	if(b_use_archive)
 	{
 		wprintf( L"Decompressing %s ...", file_path.name().c_str() );
 		auto dt = std::async(obj::decompress,file_path);
@@ -687,7 +689,7 @@ inline mesh* load_obj( path file_path, float* pLoadingTime=nullptr, void(*flush_
 		}
 #else
 	char key[4096];
-	for( uint k=1; fgets(key,sizeof(key),fp); k++ )
+	for( int k=1; fgets(key,sizeof(key),fp); k++ )
 	{
 		int len=int(strlen(key));
 		if(len<2||key[0]=='#') continue;
@@ -831,7 +833,7 @@ inline mesh* load_obj( path file_path, float* pLoadingTime=nullptr, void(*flush_
 	save_mesh_cache( p_mesh );
 
 	// remove decompressed file
-	if(use_archive&&dec_path.exists()) dec_path.delete_file();
+	if(b_use_archive&&dec_path.exists()) dec_path.delete_file();
 
 	// logging
 	t.end();
