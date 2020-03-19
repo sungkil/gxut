@@ -662,10 +662,10 @@ namespace gx { struct timer_t
 	inline void begin(){ x=now(); }
 	inline double end(){ return (y=now())-x; }
 	inline double delta(){ return y-x; }
-	static double now(){ static double c=__init_now_c(); static int64_t e=__init_now_e(); static int64_t i; static LARGE_INTEGER* p=(LARGE_INTEGER*)&i;QueryPerformanceCounter(p); return double(i-e)*c; } // if rex found, use its epoch; otherwise, use a local epoch
+	static double now(){ double c=freq_scale(); int64_t e=epoch(); LARGE_INTEGER li; QueryPerformanceCounter(&li); return double(li.QuadPart-e)*c; } // if rex found, use its epoch; otherwise, use a local epoch
 	static timer_t* singleton(){ static timer_t i; return &i; }
-	static double __init_now_c(){ int64_t f;QueryPerformanceFrequency((LARGE_INTEGER*)&f);return 1000.0/double(f); }
-	static int64_t __init_now_e(){ auto* ef=(int64_t(*)()) GetProcAddress(GetModuleHandleW(nullptr),"rex_timer_epoch");int64_t e;if(ef)e=ef();else QueryPerformanceCounter((LARGE_INTEGER*)&e); return e;}
+	static double freq_scale(){ static double c=0; if(c==0){ LARGE_INTEGER li; QueryPerformanceFrequency(&li); c=1000.0/double(li.QuadPart); } return c; }
+	static int64_t epoch(){ static int64_t e=0; if(e==0){ auto* ef=(int64_t(*)()) GetProcAddress(GetModuleHandleW(nullptr),"rex_timer_epoch"); e=ef?ef():0; if(e==0){ LARGE_INTEGER li; QueryPerformanceCounter(&li); e=li.QuadPart;} } return e; }
 };}
 #endif
 
