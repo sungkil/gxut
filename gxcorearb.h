@@ -40,14 +40,44 @@ extern "C" {
 #define GL_VERSION_1_0 1
 typedef void GLvoid;
 typedef unsigned int GLenum;
-typedef float GLfloat;
+typedef __int32					khronos_int32_t;
+typedef unsigned __int32		khronos_uint32_t;
+typedef __int64					khronos_int64_t;
+typedef unsigned __int64		khronos_uint64_t;
+typedef signed   char			khronos_int8_t;
+typedef unsigned char			khronos_uint8_t;
+typedef signed   short int		khronos_int16_t;
+typedef unsigned short int		khronos_uint16_t;
+typedef          float			khronos_float_t;
+typedef khronos_uint64_t		khronos_utime_nanoseconds_t;
+typedef khronos_int64_t			khronos_stime_nanoseconds_t;
+#ifdef _M_X64
+typedef signed   long long int	khronos_intptr_t;
+typedef unsigned long long int	khronos_uintptr_t;
+typedef signed   long long int	khronos_ssize_t;
+typedef unsigned long long int	khronos_usize_t;
+#else
+typedef signed   long int		khronos_intptr_t;
+typedef unsigned long int		khronos_uintptr_t;
+typedef signed   long int		khronos_ssize_t;
+typedef unsigned long int		khronos_usize_t;
+#endif
+#ifndef KHRONOS_MAX_ENUM
+#define KHRONOS_MAX_ENUM 0x7FFFFFFF
+#endif
+typedef enum {
+	KHRONOS_FALSE = 0,
+	KHRONOS_TRUE  = 1,
+	KHRONOS_BOOLEAN_ENUM_FORCE_SIZE = KHRONOS_MAX_ENUM
+} khronos_boolean_enum_t;
+typedef khronos_float_t GLfloat;
 typedef int GLint;
 typedef int GLsizei;
 typedef unsigned int GLbitfield;
 typedef double GLdouble;
 typedef unsigned int GLuint;
 typedef unsigned char GLboolean;
-typedef unsigned char GLubyte;
+typedef khronos_uint8_t GLubyte;
 #define GL_DEPTH_BUFFER_BIT               0x00000100
 #define GL_STENCIL_BUFFER_BIT             0x00000400
 #define GL_COLOR_BUFFER_BIT               0x00004000
@@ -273,7 +303,7 @@ typedef void (APIENTRYP PFNGLVIEWPORTPROC) (GLint x, GLint y, GLsizei width, GLs
 
 #ifndef GL_VERSION_1_1
 #define GL_VERSION_1_1 1
-typedef float GLclampf;
+typedef khronos_float_t GLclampf;
 typedef double GLclampd;
 #define GL_COLOR_LOGIC_OP                 0x0BF2
 #define GL_POLYGON_OFFSET_UNITS           0x2A00
@@ -480,17 +510,6 @@ typedef void (APIENTRYP PFNGLBLENDEQUATIONPROC) (GLenum mode);
 
 #ifndef GL_VERSION_1_5
 #define GL_VERSION_1_5 1
-#ifdef _M_X64
-typedef signed   long long int khronos_intptr_t;
-typedef unsigned long long int khronos_uintptr_t;
-typedef signed   long long int khronos_ssize_t;
-typedef unsigned long long int khronos_usize_t;
-#else
-typedef signed   long  int     khronos_intptr_t;
-typedef unsigned long  int     khronos_uintptr_t;
-typedef signed   long  int     khronos_ssize_t;
-typedef unsigned long  int     khronos_usize_t;
-#endif
 typedef khronos_ssize_t GLsizeiptr;
 typedef khronos_intptr_t GLintptr;
 #define GL_BUFFER_SIZE                    0x8764
@@ -545,9 +564,9 @@ typedef void (APIENTRYP PFNGLGETBUFFERPOINTERVPROC) (GLenum target, GLenum pname
 #ifndef GL_VERSION_2_0
 #define GL_VERSION_2_0 1
 typedef char GLchar;
-typedef short GLshort;
-typedef signed char GLbyte;
-typedef unsigned short GLushort;
+typedef khronos_int16_t GLshort;
+typedef khronos_int8_t GLbyte;
+typedef khronos_uint16_t GLushort;
 #define GL_BLEND_EQUATION_RGB             0x8009
 #define GL_VERTEX_ATTRIB_ARRAY_ENABLED    0x8622
 #define GL_VERTEX_ATTRIB_ARRAY_SIZE       0x8623
@@ -751,7 +770,7 @@ typedef void (APIENTRYP PFNGLUNIFORMMATRIX4X3FVPROC) (GLint location, GLsizei co
 
 #ifndef GL_VERSION_3_0
 #define GL_VERSION_3_0 1
-typedef unsigned short GLhalf;
+typedef khronos_uint16_t GLhalf;
 #define GL_COMPARE_REF_TO_TEXTURE         0x884E
 #define GL_CLIP_DISTANCE0                 0x3000
 #define GL_CLIP_DISTANCE1                 0x3001
@@ -1149,45 +1168,8 @@ typedef void (APIENTRYP PFNGLUNIFORMBLOCKBINDINGPROC) (GLuint program, GLuint un
 #ifndef GL_VERSION_3_2
 #define GL_VERSION_3_2 1
 typedef struct __GLsync *GLsync;
-#ifndef GLEXT_64_TYPES_DEFINED
-/* This code block is duplicated in glxext.h, so must be protected */
-#define GLEXT_64_TYPES_DEFINED
-/* Define int32_t, int64_t, and uint64_t types for UST/MSC */
-/* (as used in the GL_EXT_timer_query extension). */
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
-#include <inttypes.h>
-#elif defined(__sun__) || defined(__digital__)
-#include <inttypes.h>
-#if defined(__STDC__)
-#if defined(__arch64__) || defined(_LP64)
-typedef long int int64_t;
-typedef unsigned long int uint64_t;
-#else
-typedef long long int int64_t;
-typedef unsigned long long int uint64_t;
-#endif /* __arch64__ */
-#endif /* __STDC__ */
-#elif defined( __VMS ) || defined(__sgi)
-#include <inttypes.h>
-#elif defined(__SCO__) || defined(__USLC__)
-#include <stdint.h>
-#elif defined(__UNIXOS2__) || defined(__SOL64__)
-typedef long int int32_t;
-typedef long long int int64_t;
-typedef unsigned long long int uint64_t;
-#elif defined(_WIN32) && defined(__GNUC__)
-#include <stdint.h>
-#elif defined(_WIN32)
-typedef __int32 int32_t;
-typedef __int64 int64_t;
-typedef unsigned __int64 uint64_t;
-#else
-/* Fallback if nothing above works */
-#include <inttypes.h>
-#endif
-#endif
-typedef uint64_t GLuint64;
-typedef int64_t GLint64;
+typedef khronos_uint64_t GLuint64;
+typedef khronos_int64_t GLint64;
 #define GL_CONTEXT_CORE_PROFILE_BIT       0x00000001
 #define GL_CONTEXT_COMPATIBILITY_PROFILE_BIT 0x00000002
 #define GL_LINES_ADJACENCY                0x000A
@@ -1263,7 +1245,7 @@ typedef void (APIENTRYP PFNGLDELETESYNCPROC) (GLsync sync);
 typedef GLenum (APIENTRYP PFNGLCLIENTWAITSYNCPROC) (GLsync sync, GLbitfield flags, GLuint64 timeout);
 typedef void (APIENTRYP PFNGLWAITSYNCPROC) (GLsync sync, GLbitfield flags, GLuint64 timeout);
 typedef void (APIENTRYP PFNGLGETINTEGER64VPROC) (GLenum pname, GLint64 *data);
-typedef void (APIENTRYP PFNGLGETSYNCIVPROC) (GLsync sync, GLenum pname, GLsizei bufSize, GLsizei *length, GLint *values);
+typedef void (APIENTRYP PFNGLGETSYNCIVPROC) (GLsync sync, GLenum pname, GLsizei count, GLsizei *length, GLint *values);
 typedef void (APIENTRYP PFNGLGETINTEGER64I_VPROC) (GLenum target, GLuint index, GLint64 *data);
 typedef void (APIENTRYP PFNGLGETBUFFERPARAMETERI64VPROC) (GLenum target, GLenum pname, GLint64 *params);
 typedef void (APIENTRYP PFNGLFRAMEBUFFERTEXTUREPROC) (GLenum target, GLenum attachment, GLuint texture, GLint level);
@@ -1428,8 +1410,8 @@ typedef void (APIENTRYP PFNGLGETUNIFORMDVPROC) (GLuint program, GLint location, 
 typedef GLint (APIENTRYP PFNGLGETSUBROUTINEUNIFORMLOCATIONPROC) (GLuint program, GLenum shadertype, const GLchar *name);
 typedef GLuint (APIENTRYP PFNGLGETSUBROUTINEINDEXPROC) (GLuint program, GLenum shadertype, const GLchar *name);
 typedef void (APIENTRYP PFNGLGETACTIVESUBROUTINEUNIFORMIVPROC) (GLuint program, GLenum shadertype, GLuint index, GLenum pname, GLint *values);
-typedef void (APIENTRYP PFNGLGETACTIVESUBROUTINEUNIFORMNAMEPROC) (GLuint program, GLenum shadertype, GLuint index, GLsizei bufsize, GLsizei *length, GLchar *name);
-typedef void (APIENTRYP PFNGLGETACTIVESUBROUTINENAMEPROC) (GLuint program, GLenum shadertype, GLuint index, GLsizei bufsize, GLsizei *length, GLchar *name);
+typedef void (APIENTRYP PFNGLGETACTIVESUBROUTINEUNIFORMNAMEPROC) (GLuint program, GLenum shadertype, GLuint index, GLsizei bufSize, GLsizei *length, GLchar *name);
+typedef void (APIENTRYP PFNGLGETACTIVESUBROUTINENAMEPROC) (GLuint program, GLenum shadertype, GLuint index, GLsizei bufSize, GLsizei *length, GLchar *name);
 typedef void (APIENTRYP PFNGLUNIFORMSUBROUTINESUIVPROC) (GLenum shadertype, GLsizei count, const GLuint *indices);
 typedef void (APIENTRYP PFNGLGETUNIFORMSUBROUTINEUIVPROC) (GLenum shadertype, GLint location, GLuint *params);
 typedef void (APIENTRYP PFNGLGETPROGRAMSTAGEIVPROC) (GLuint program, GLenum shadertype, GLenum pname, GLint *values);
@@ -1692,7 +1674,7 @@ typedef void (APIENTRYP PFNGLGETDOUBLEI_VPROC) (GLenum target, GLuint index, GLd
 typedef void (APIENTRYP PFNGLDRAWARRAYSINSTANCEDBASEINSTANCEPROC) (GLenum mode, GLint first, GLsizei count, GLsizei instancecount, GLuint baseinstance);
 typedef void (APIENTRYP PFNGLDRAWELEMENTSINSTANCEDBASEINSTANCEPROC) (GLenum mode, GLsizei count, GLenum type, const void *indices, GLsizei instancecount, GLuint baseinstance);
 typedef void (APIENTRYP PFNGLDRAWELEMENTSINSTANCEDBASEVERTEXBASEINSTANCEPROC) (GLenum mode, GLsizei count, GLenum type, const void *indices, GLsizei instancecount, GLint basevertex, GLuint baseinstance);
-typedef void (APIENTRYP PFNGLGETINTERNALFORMATIVPROC) (GLenum target, GLenum internalformat, GLenum pname, GLsizei bufSize, GLint *params);
+typedef void (APIENTRYP PFNGLGETINTERNALFORMATIVPROC) (GLenum target, GLenum internalformat, GLenum pname, GLsizei count, GLint *params);
 typedef void (APIENTRYP PFNGLGETACTIVEATOMICCOUNTERBUFFERIVPROC) (GLuint program, GLuint bufferIndex, GLenum pname, GLint *params);
 typedef void (APIENTRYP PFNGLBINDIMAGETEXTUREPROC) (GLuint unit, GLuint texture, GLint level, GLboolean layered, GLint layer, GLenum access, GLenum format);
 typedef void (APIENTRYP PFNGLMEMORYBARRIERPROC) (GLbitfield barriers);
@@ -1971,7 +1953,7 @@ typedef void (APIENTRYP PFNGLDISPATCHCOMPUTEINDIRECTPROC) (GLintptr indirect);
 typedef void (APIENTRYP PFNGLCOPYIMAGESUBDATAPROC) (GLuint srcName, GLenum srcTarget, GLint srcLevel, GLint srcX, GLint srcY, GLint srcZ, GLuint dstName, GLenum dstTarget, GLint dstLevel, GLint dstX, GLint dstY, GLint dstZ, GLsizei srcWidth, GLsizei srcHeight, GLsizei srcDepth);
 typedef void (APIENTRYP PFNGLFRAMEBUFFERPARAMETERIPROC) (GLenum target, GLenum pname, GLint param);
 typedef void (APIENTRYP PFNGLGETFRAMEBUFFERPARAMETERIVPROC) (GLenum target, GLenum pname, GLint *params);
-typedef void (APIENTRYP PFNGLGETINTERNALFORMATI64VPROC) (GLenum target, GLenum internalformat, GLenum pname, GLsizei bufSize, GLint64 *params);
+typedef void (APIENTRYP PFNGLGETINTERNALFORMATI64VPROC) (GLenum target, GLenum internalformat, GLenum pname, GLsizei count, GLint64 *params);
 typedef void (APIENTRYP PFNGLINVALIDATETEXSUBIMAGEPROC) (GLuint texture, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth);
 typedef void (APIENTRYP PFNGLINVALIDATETEXIMAGEPROC) (GLuint texture, GLint level);
 typedef void (APIENTRYP PFNGLINVALIDATEBUFFERSUBDATAPROC) (GLuint buffer, GLintptr offset, GLsizeiptr length);
@@ -1983,7 +1965,7 @@ typedef void (APIENTRYP PFNGLMULTIDRAWELEMENTSINDIRECTPROC) (GLenum mode, GLenum
 typedef void (APIENTRYP PFNGLGETPROGRAMINTERFACEIVPROC) (GLuint program, GLenum programInterface, GLenum pname, GLint *params);
 typedef GLuint (APIENTRYP PFNGLGETPROGRAMRESOURCEINDEXPROC) (GLuint program, GLenum programInterface, const GLchar *name);
 typedef void (APIENTRYP PFNGLGETPROGRAMRESOURCENAMEPROC) (GLuint program, GLenum programInterface, GLuint index, GLsizei bufSize, GLsizei *length, GLchar *name);
-typedef void (APIENTRYP PFNGLGETPROGRAMRESOURCEIVPROC) (GLuint program, GLenum programInterface, GLuint index, GLsizei propCount, const GLenum *props, GLsizei bufSize, GLsizei *length, GLint *params);
+typedef void (APIENTRYP PFNGLGETPROGRAMRESOURCEIVPROC) (GLuint program, GLenum programInterface, GLuint index, GLsizei propCount, const GLenum *props, GLsizei count, GLsizei *length, GLint *params);
 typedef GLint (APIENTRYP PFNGLGETPROGRAMRESOURCELOCATIONPROC) (GLuint program, GLenum programInterface, const GLchar *name);
 typedef GLint (APIENTRYP PFNGLGETPROGRAMRESOURCELOCATIONINDEXPROC) (GLuint program, GLenum programInterface, const GLchar *name);
 typedef void (APIENTRYP PFNGLSHADERSTORAGEBLOCKBINDINGPROC) (GLuint program, GLuint storageBlockIndex, GLuint storageBlockBinding);
@@ -2237,7 +2219,7 @@ typedef void (APIENTRYP PFNGLPRIMITIVEBOUNDINGBOXARBPROC) (GLfloat minX, GLfloat
 
 #ifndef GL_ARB_bindless_texture
 #define GL_ARB_bindless_texture 1
-typedef uint64_t GLuint64EXT;
+typedef khronos_uint64_t GLuint64EXT;
 #define GL_UNSIGNED_INT64_ARB             0x140F
 typedef GLuint64 (APIENTRYP PFNGLGETTEXTUREHANDLEARBPROC) (GLuint texture);
 typedef GLuint64 (APIENTRYP PFNGLGETTEXTURESAMPLERHANDLEARBPROC) (GLuint texture, GLuint sampler);
@@ -3014,6 +2996,8 @@ typedef void (APIENTRYP PFNGLTEXBUFFERARBPROC) (GLenum target, GLenum internalfo
 
 #ifndef GL_ARB_viewport_array
 #define GL_ARB_viewport_array 1
+typedef void (APIENTRYP PFNGLDEPTHRANGEARRAYDVNVPROC) (GLuint first, GLsizei count, const GLdouble *v);
+typedef void (APIENTRYP PFNGLDEPTHRANGEINDEXEDDNVPROC) (GLuint index, GLdouble n, GLdouble f);
 #endif /* GL_ARB_viewport_array */
 
 #ifndef GL_KHR_texture_compression_astc_hdr
@@ -3055,6 +3039,13 @@ typedef void (APIENTRYP PFNGLTEXBUFFERARBPROC) (GLenum target, GLenum internalfo
 #ifndef GL_KHR_texture_compression_astc_sliced_3d
 #define GL_KHR_texture_compression_astc_sliced_3d 1
 #endif /* GL_KHR_texture_compression_astc_sliced_3d */
+
+#ifndef GL_MESA_framebuffer_flip_y
+#define GL_MESA_framebuffer_flip_y 1
+#define GL_FRAMEBUFFER_FLIP_Y_MESA        0x8BBB
+typedef void (APIENTRYP PFNGLFRAMEBUFFERPARAMETERIMESAPROC) (GLenum target, GLenum pname, GLint param);
+typedef void (APIENTRYP PFNGLGETFRAMEBUFFERPARAMETERIVMESAPROC) (GLenum target, GLenum pname, GLint *params);
+#endif /* GL_MESA_framebuffer_flip_y */
 
 #ifndef GL_NV_conservative_raster
 #define GL_NV_conservative_raster 1
@@ -3243,6 +3234,7 @@ e(ARB_viewport_array)
 e(KHR_texture_compression_astc_hdr)
 e(KHR_texture_compression_astc_ldr)
 e(KHR_texture_compression_astc_sliced_3d)
+e(MESA_framebuffer_flip_y)
 e(NV_conservative_raster)
 e(NV_conservative_raster_dilate)
 e(NV_conservative_raster_pre_snap)
@@ -4008,6 +4000,10 @@ f(BUFFERPAGECOMMITMENTARB,BufferPageCommitmentARB)
 f(NAMEDBUFFERPAGECOMMITMENTEXT,NamedBufferPageCommitmentEXT)
 f(TEXPAGECOMMITMENTARB,TexPageCommitmentARB)
 f(TEXBUFFERARB,TexBufferARB)
+f(DEPTHRANGEARRAYDVNV,DepthRangeArraydvNV)
+f(DEPTHRANGEINDEXEDDNV,DepthRangeIndexeddNV)
+f(FRAMEBUFFERPARAMETERIMESA,FramebufferParameteriMESA)
+f(GETFRAMEBUFFERPARAMETERIVMESA,GetFramebufferParameterivMESA)
 f(SUBPIXELPRECISIONBIASNV,SubpixelPrecisionBiasNV)
 f(CONSERVATIVERASTERPARAMETERFNV,ConservativeRasterParameterfNV)
 f(CONSERVATIVERASTERPARAMETERINV,ConservativeRasterParameteriNV)
@@ -4814,6 +4810,10 @@ g(BUFFERPAGECOMMITMENTARB,BufferPageCommitmentARB)
 g(NAMEDBUFFERPAGECOMMITMENTEXT,NamedBufferPageCommitmentEXT)
 g(TEXPAGECOMMITMENTARB,TexPageCommitmentARB)
 g(TEXBUFFERARB,TexBufferARB)
+g(DEPTHRANGEARRAYDVNV,DepthRangeArraydvNV)
+g(DEPTHRANGEINDEXEDDNV,DepthRangeIndexeddNV)
+g(FRAMEBUFFERPARAMETERIMESA,FramebufferParameteriMESA)
+g(GETFRAMEBUFFERPARAMETERIVMESA,GetFramebufferParameterivMESA)
 g(SUBPIXELPRECISIONBIASNV,SubpixelPrecisionBiasNV)
 g(CONSERVATIVERASTERPARAMETERFNV,ConservativeRasterParameterfNV)
 g(CONSERVATIVERASTERPARAMETERINV,ConservativeRasterParameteriNV)
@@ -4962,6 +4962,7 @@ e(ARB_viewport_array)
 e(KHR_texture_compression_astc_hdr)
 e(KHR_texture_compression_astc_ldr)
 e(KHR_texture_compression_astc_sliced_3d)
+e(MESA_framebuffer_flip_y)
 e(NV_conservative_raster)
 e(NV_conservative_raster_dilate)
 e(NV_conservative_raster_pre_snap)
@@ -4977,8 +4978,12 @@ e(NV_conservative_raster_underestimation)
 	GetComputerNameA( cname, &cl ); for( size_t k=0, kn=strlen(cname); k<kn; k++ ) cname[k] = tolower(cname[k]);
 
 	// check if unsupported exists
-	char log_path[_MAX_PATH]={0}; sprintf( log_path, "gxcorearb.%s.log", cname ); if(_access(log_path,0)==0) return;
+	char log_path[_MAX_PATH]={0}; sprintf( log_path, "data\\log\\gxcorearb.%s.log", cname ); if(_access(log_path,0)==0) return;
 	if(unsupported_functions.empty()&&unsupported_extensions.empty()) return;
+
+	// create directory for logging
+	if(_access("data\\",0)!=0) _mkdir("data\\");
+	if(_access("data\\log\\",0)!=0) _mkdir("data\\log\\");
 
 	// leave a log for unsupported
 	printf( "[gxcorearb] see %s for unavailable OpenGL extensions\n", log_path );
