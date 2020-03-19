@@ -112,8 +112,8 @@ struct parser_t
 	std::vector<std::wstring>		others( const std::string& name="" ) const;
 
 	// error handling, debugging
-	bool exit( const char* fmt, ... ){ va_list a; va_start(a,fmt); const char* w=vformat(fmt,a); va_end(a); fprintf( stdout, "[%s] %s\nUse -h option to see usage.\n", name(), trim(w,"\n") ); return false; }
-	bool exit( const wchar_t* fmt, ... ){ va_list a; va_start(a,fmt); const wchar_t* w=vformat(fmt,a); va_end(a); fprintf( stdout, "[%s] %s\nUse -h option to see usage.\n", name(), trim(wtoa(w),"\n") ); return false; }
+	bool exit( const char* fmt, ... ){ va_list a; va_start(a,fmt); const char* w=vformat(fmt,a); va_end(a); char msg[2048]; sprintf_s( msg, 2048, "[%s] %s\nUse -h option to see usage.\n", name(), trim(w,"\n") ); fprintf( stdout, msg ); return false; }
+	bool exit( const wchar_t* fmt, ... ){ va_list a; va_start(a,fmt); const wchar_t* w=vformat(fmt,a); va_end(a); wchar_t msg[2048]; swprintf_s( msg, 2048, L"[%s] %s\nUse -h option to see usage.\n", wname(), trim(w,L"\n") ); fwprintf( stdout, msg ); return false; }
 	void dump();
 
 protected:
