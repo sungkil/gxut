@@ -527,7 +527,7 @@ struct mat3
 	__forceinline operator const float9& () const { return reinterpret_cast<const float9&>(*this); }
 
 	// comparison operators
-	__forceinline bool operator==( const mat3& m ) const { for( int k=0; k<std::extent<decltype(a)>::value; k++ ) if(std::abs(a[k]-m[k])>precision<float>::value()) return false; return true; }
+	__forceinline bool operator==( const mat3& m ) const { for( size_t k=0; k<std::extent<decltype(a)>::value; k++ ) if(std::abs(a[k]-m[k])>precision<float>::value()) return false; return true; }
 	__forceinline bool operator!=( const mat3& m ) const { return !operator==(m); }
 
 	// unary operators
@@ -542,13 +542,13 @@ struct mat3
 	__forceinline vec3& rvec3( int row ){ return reinterpret_cast<vec3&>(a[row*3]); }
 
 	// addition/subtraction operators
-	__forceinline mat3& operator+=( const mat3& m ){ for( int k=0; k < std::extent<decltype(a)>::value; k++ ) a[k]+=m[k]; return *this; }
-	__forceinline mat3& operator-=( const mat3& m ){ for( int k=0; k < std::extent<decltype(a)>::value; k++ ) a[k]-=m[k]; return *this; }
+	__forceinline mat3& operator+=( const mat3& m ){ for( size_t k=0; k < std::extent<decltype(a)>::value; k++ ) a[k]+=m[k]; return *this; }
+	__forceinline mat3& operator-=( const mat3& m ){ for( size_t k=0; k < std::extent<decltype(a)>::value; k++ ) a[k]-=m[k]; return *this; }
 	__forceinline mat3 operator+( const mat3& m ) const { return mat3(*this).operator+=(m); }
 	__forceinline mat3 operator-( const mat3& m ) const { return mat3(*this).operator-=(m); }
 
 	// multiplication operators
-	__forceinline mat3& operator*=( float f ){ for( int k=0; k < std::extent<decltype(a)>::value; k++ ) a[k]*=f; return *this; }
+	__forceinline mat3& operator*=( float f ){ for( size_t k=0; k < std::extent<decltype(a)>::value; k++ ) a[k]*=f; return *this; }
 	__forceinline mat3& operator*=( const mat3& m ){ mat3 t=m.transpose(); for(uint k=0;k<3;k++) rvec3(k)=t.operator*(rvec3(k)); return *this; } // a bit tricky implementation
 	__forceinline mat3 operator*( float f ) const { return mat3(*this).operator*=(f); }
 	__forceinline mat3 operator*( const mat3& m ) const { return mat3(*this).operator*=(m); }
@@ -609,7 +609,7 @@ struct mat4
 	__forceinline operator mat2() const { return mat2(_11,_12,_21,_22); }
 
 	// comparison operators
-	__forceinline bool operator==( const mat4& m ) const { for( int k=0; k<std::extent<decltype(a)>::value; k++ ) if(std::abs(a[k]-m[k])>precision<float>::value()) return false; return true; }
+	__forceinline bool operator==( const mat4& m ) const { for( size_t k=0; k<std::extent<decltype(a)>::value; k++ ) if(std::abs(a[k]-m[k])>precision<float>::value()) return false; return true; }
 	__forceinline bool operator!=( const mat4& m ) const { return !operator==(m); }
 
 	// unary operators
@@ -627,13 +627,13 @@ struct mat4
 	__forceinline vec3& rvec3( int row ){ return reinterpret_cast<vec3&>(a[row*4]); }
 
 	// addition/subtraction operators
-	__forceinline mat4& operator+=( const mat4& m ){ for( int k=0; k < std::extent<decltype(a)>::value; k++ ) a[k]+=m[k]; return *this; }
-	__forceinline mat4& operator-=( const mat4& m ){ for( int k=0; k < std::extent<decltype(a)>::value; k++ ) a[k]-=m[k]; return *this; }
+	__forceinline mat4& operator+=( const mat4& m ){ for( size_t k=0; k < std::extent<decltype(a)>::value; k++ ) a[k]+=m[k]; return *this; }
+	__forceinline mat4& operator-=( const mat4& m ){ for( size_t k=0; k < std::extent<decltype(a)>::value; k++ ) a[k]-=m[k]; return *this; }
 	__forceinline mat4 operator+( const mat4& m ) const { return mat4(*this).operator+=(m); }
 	__forceinline mat4 operator-( const mat4& m ) const { return mat4(*this).operator-=(m); }
 
 	// multiplication operators
-	__forceinline mat4& operator*=( float f ){ for( int k=0; k < std::extent<decltype(a)>::value; k++ ) a[k]*=f; return *this; }
+	__forceinline mat4& operator*=( float f ){ for( size_t k=0; k < std::extent<decltype(a)>::value; k++ ) a[k]*=f; return *this; }
 	__forceinline mat4& operator*=( const mat4& m ){ mat4 t=m.transpose(); for(uint k=0;k<4;k++) rvec4(k)=t.operator*(rvec4(k)); return *this; } // a bit tricky implementation
 	__forceinline mat4 operator*( float f ) const { return mat4(*this).operator*=(f); }
 	__forceinline mat4 operator*( const mat4& m ) const { return mat4(*this).operator*=(m); }
