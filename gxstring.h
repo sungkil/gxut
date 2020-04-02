@@ -545,7 +545,7 @@ __noinline inline std::vector<std::basic_string<T,std::char_traits<T>,std::alloc
 explode( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T> > > vs; vs.reserve(32);
-	T *ctx, *token = (T*) strtok_s(__tstrdup(src),seps,&ctx);
+	T *ctx, *token = strtok_s(__tstrdup(src),seps,&ctx);
 	while(token!=nullptr){ vs.emplace_back(token); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }
@@ -555,7 +555,7 @@ __noinline inline std::set<std::basic_string<T,std::char_traits<T>,std::allocato
 explode_set( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::set<std::basic_string<T,std::char_traits<T>,std::allocator<T> > > vs;
-	T *ctx, *token = (T*)strtok_s(__tstrdup(src), seps, &ctx);
+	T *ctx, *token = strtok_s(__tstrdup(src), seps, &ctx);
 	while(token!=nullptr){ vs.emplace(token); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }
@@ -564,7 +564,7 @@ template <class T>
 __noinline inline std::vector<int> explodei( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<int> vs; vs.reserve(32);
-	T *ctx, *token = (T*)strtok_s(__tstrdup(src), seps, &ctx);
+	T *ctx, *token = strtok_s(__tstrdup(src), seps, &ctx);
 	while(token!=nullptr){ vs.emplace_back(atoi(token)); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }
@@ -573,7 +573,7 @@ template <class T>
 __noinline inline std::vector<unsigned int> explodeu( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<unsigned int> vs; vs.reserve(32);
-	T *ctx, *token = (T*)strtok_s(__tstrdup(src), seps, &ctx);
+	T *ctx, *token = strtok_s(__tstrdup(src), seps, &ctx);
 	while(token!=nullptr){ vs.emplace_back(atou(token)); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }
@@ -582,7 +582,7 @@ template <class T>
 __noinline inline std::vector<float> explodef( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<float>  vs; vs.reserve(32);
-	T *ctx, *token = (T*)strtok_s(__tstrdup(src), seps, &ctx);
+	T *ctx, *token = strtok_s(__tstrdup(src), seps, &ctx);
 	while(token!=nullptr){ vs.emplace_back(float(fast::atof(token))); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }
@@ -591,7 +591,7 @@ template <class T>
 __noinline inline std::vector<double> exploded( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<double>  vs; vs.reserve(32);
-	T *ctx, *token = (T*)strtok_s(__tstrdup(src), seps, &ctx);
+	T *ctx, *token = strtok_s(__tstrdup(src), seps, &ctx);
 	while(token!=nullptr){ vs.emplace_back(double(fast::atof(token))); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }

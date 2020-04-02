@@ -631,14 +631,53 @@ namespace nocase
 
 //***********************************************
 // operating-system utilities
-inline BOOL CALLBACK enum_windows_proc( HWND hwnd , LPARAM pProcessList ){((std::vector<HWND>*)pProcessList)->emplace_back(hwnd);return TRUE;}
-inline std::vector<HWND> enum_windows( const wchar_t* filter=nullptr ){std::vector<HWND> v;EnumWindows(enum_windows_proc,(LPARAM)(&v));return v;}
+inline const char* get_last_error(){ static char buff[4096]={0};DWORD e=GetLastError();char *s;FormatMessageA( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,e,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPSTR)&s,0,nullptr);sprintf(buff,"%s (code=%x)",s,uint(e));LocalFree(s);return buff; }
 inline void exit( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fprintf( stdout, "[%s] %s", path::module_path().name(false).wtoa(), &buff[0] ); exit(EXIT_FAILURE); }
 inline void exit( const wchar_t* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<wchar_t> buff(_vscwprintf(fmt,a)+1); vswprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fwprintf( stdout, L"[%s] %s", path::module_path().name(false).c_str(), &buff[0] ); exit(EXIT_FAILURE); }
-inline const char* get_last_error(){ static char buff[4096]={0};DWORD e=GetLastError();char *s;FormatMessageA( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,e,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPSTR)&s,0,nullptr);sprintf(buff,"%s (code=%x)",s,uint(e));LocalFree(s);return buff; }
 #if !defined(__GNUC__)&&((__cplusplus>199711L)||(_MSC_VER>=1600/*VS2010*/))
 inline void usleep( int us ){ std::this_thread::sleep_for(std::chrono::microseconds(us)); }
 #endif
+
+//***********************************************
+namespace os {
+//***********************************************
+
+inline std::vector<HWND> enum_windows( const wchar_t* filter=nullptr )
+{
+	auto __enum_windows_proc = []( HWND hwnd , LPARAM pProcessList ) -> BOOL { ((std::vector<HWND>*)pProcessList)->emplace_back(hwnd); return TRUE; };
+	std::vector<HWND> v; EnumWindows(__enum_windows_proc,(LPARAM)(&v));
+	return v;
+}
+	
+inline const wchar_t* env_var( const wchar_t* key )
+{
+	static std::vector<wchar_t> buff(4096);
+	size_t size_required = GetEnvironmentVariableW( key, &buff[0], DWORD(buff.size()) );
+	if(size_required>buff.size()){ buff.resize(size_required); GetEnvironmentVariableW( key, &buff[0], DWORD(buff.size()) ); }
+	return &buff[0];
+}
+
+inline const std::vector<path>& env_path()
+{
+	static std::vector<path> v; v.reserve(64); if(!v.empty()) return v;
+	wchar_t* buff = (wchar_t*) env_var( L"PATH" ); if(!buff||!*buff) return v;
+	for(wchar_t *ctx,*token=wcstok_s(buff,L";",&ctx);token;token=wcstok_s(nullptr,L";",&ctx))
+	{
+		if(!*token) continue;
+		path t=path(token).canonical().add_backslash();
+		if(t.is_absolute()&&t.exists()) v.emplace_back(t);
+	}
+	return v;
+}
+
+inline path search_env_path( path file_name )
+{
+	for( const auto& e : env_path() ) if((e+file_name).exists()) return e+file_name;
+	return path();
+}
+
+//***********************************************
+} // namespace os
 
 //***********************************************
 // compiler utility
