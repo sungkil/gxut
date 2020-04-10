@@ -153,6 +153,9 @@ using double9	= tarray9<double>;	using double16	= tarray16<double>;
 #include <io.h>			// low-level io functions
 #include <time.h>
 #include <deque>
+#if defined(__has_include) && __has_include(<psapi.h>)
+	#include <psapi.h>	// EnumProcesses
+#endif
 #ifndef __GNUC__		// MinGW has a problem with threads
 	#include <thread>	// usleep
 	#include <chrono>	// microtimer
@@ -199,6 +202,24 @@ struct volume_t
 	bool is_ntfs() const { return _wcsicmp(filesystem.name,L"NTFS")==0; }
 	bool is_fat32() const { return _wcsicmp(filesystem.name,L"FAT32")==0; }
 };
+
+class mutex_t
+{
+	HANDLE h_mutex=nullptr;
+public:
+	mutex_t( const wchar_t* name );
+	~mutex_t(){ close(); }
+	operator bool() const { return h_mutex!=nullptr; }
+	HANDLE& close(){ if(h_mutex) CloseHandle(h_mutex); return h_mutex=0; }
+};
+
+inline mutex_t::mutex_t( const wchar_t* name )
+{
+	close()=CreateMutexW(0,FALSE,name); DWORD e=GetLastError();
+	for(uint k=0,kn=256;k<kn&&e==ERROR_ALREADY_EXISTS;k++){ close()=CreateMutexW(0,FALSE,name);e=GetLastError(); Sleep(10); }
+	if(e==ERROR_ALREADY_EXISTS) close();
+}
+
 //***********************************************
 } // namespace os
 
@@ -328,11 +349,12 @@ struct path
 	path drive() const { static wchar_t d[_MAX_DRIVE+1]; _wsplitpath_s(data,d,_MAX_DRIVE,nullptr,0,nullptr,0,nullptr,0);if(*d) *d=wchar_t(::toupper(*d)); path p; wcscpy(p.data,d); return p; }
 	path dir() const { path p; if(wcschr(data,L'\\')==nullptr) return L".\\"; split_t si=split(__wcsbuf(),__wcsbuf()); wcscpy(p.data,wcscat(si.drive,si.dir)); size_t len=wcslen(p.data); if(len>0&&p.data[len-1]!='\\'){p.data[len]='\\';p.data[len+1]=L'\0';} return p; }
 	path name( bool with_ext=true ) const { split_t si=split(nullptr,nullptr,__wcsbuf(),__wcsbuf()); return with_ext?wcscat(si.fname,si.ext):si.fname; }
+	path dir_name() const { if(!wcschr(data,L'\\')) return L""; return dir().remove_backslash().name(); }
 	path ext() const { static wchar_t e[_MAX_EXT+1]; _wsplitpath_s(data,nullptr,0,nullptr,0,nullptr,0,e,_MAX_EXT); if(*e==0) return path(); path p; wcscpy(p.data,e+1); return p; }
 	path parent() const { return dir().remove_backslash().dir(); }
 	path remove_first_dot()	const { return (wcslen(data)>2&&data[0]==L'.'&&data[1]==L'\\') ? path(data+2) : *this; }
 	path remove_ext() const { split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
-	std::vector<path> explode() const { path slashed=to_slash(); std::vector<path> L;L.reserve(8); wchar_t* ctx; for(wchar_t* t=wcstok_s(slashed.data,L"/",&ctx);t;t=wcstok_s(0,L"/",&ctx)) L.emplace_back(t); return L; }
+	std::vector<path> explode( const wchar_t* delim=L"/") const	{ std::vector<path> L; if(!delim||!*delim) return L; path s=wcscmp(delim,L"/")==0?to_slash():*this; L.reserve(16); wchar_t* ctx; for(wchar_t* t=wcstok_s(s.data,delim,&ctx);t;t=wcstok_s(0,delim,&ctx)){ if(*t) L.emplace_back(t); } return L; }
 	std::vector<path> relative_ancestors() const { std::vector<path> a, e=dir().relative(true).explode(); if(e.empty()) return a; a.reserve(8); path t=e.front().absolute()+L"\\"; a.emplace_back(t); for(size_t k=1,kn=e.size();k<kn;k++)a.emplace_back(t+=e[k]+L"\\"); return a; }
 
 	// attribute by stats
@@ -348,6 +370,7 @@ struct path
 	bool is_hidden() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_HIDDEN)!=0; }
 	bool is_readonly() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_READONLY)!=0; }
 	bool is_system() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_SYSTEM)!=0; }
+	bool is_junction() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_REPARSE_POINT)!=0; }
 	void set_hidden( bool h ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(data,a=h?(a|FILE_ATTRIBUTE_HIDDEN):(a^FILE_ATTRIBUTE_HIDDEN)); }
 	void set_readonly( bool r ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(data,a=r?(a|FILE_ATTRIBUTE_READONLY):(a^FILE_ATTRIBUTE_READONLY)); }
 	void set_system( bool s ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(data,a=s?(a|FILE_ATTRIBUTE_SYSTEM):(a^FILE_ATTRIBUTE_SYSTEM)); }
@@ -357,21 +380,23 @@ struct path
 	bool mkdir() const { if(exists()) return false; path p=to_backslash().remove_backslash(), d; wchar_t* ctx;for( wchar_t* t=wcstok_s(p,L"\\",&ctx); t; t=wcstok_s(nullptr,L"\\", &ctx) ){ d+=t;d+=L"\\"; if(!d.exists()&&_wmkdir(d.data)!=0) return false; } return true; } // make all super directories
 	bool create_directory() const { return mkdir(); }
 	bool copy_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()||dst.empty()) return false; if(dst.is_dir()||dst.back()==L'\\') dst=dst.add_backslash()+name(); dst.dir().mkdir(); if(dst.exists()&&overwrite){ if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } return bool(CopyFileW( data, dst, overwrite?FALSE:TRUE )); }
-	bool move_file( path dst, bool overwrite=true ) const { if(!copy_file(dst,overwrite)) return false; return delete_file(); }
-	void* read_file( size_t* read_size ) const { FILE* fp=_wfopen(data,L"rb"); if(!fp) return nullptr; fseek(fp,0,SEEK_END); size_t size=ftell(fp); if(read_size) *read_size=size; fseek(fp,0,SEEK_SET); if(size==0){ fclose(fp); return nullptr; } void* ptr=malloc(size); if(ptr) fread(ptr,size,1,fp); fclose(fp); return ptr; }
+	bool move_file( path dst ) const { return is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(data,dst.c_str())!=0 : !copy_file(dst,true) ? false: rmfile(); }
 #ifndef _INC_SHELLAPI
 	bool rmdir() const { if(!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); _wrmdir(data); return true; }
 	bool rmfile() const { return delete_file(); }
 	bool delete_file() const { if(!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); return DeleteFileW(data)==TRUE; }
 #else
-	bool copy_dir( path dst, bool overwrite=true ) const { if(!is_dir()) return false;wchar_t* from=__wcsbuf();swprintf_s(from,capacity,L"%s\\*\0",data);dst[dst.size()+1]=L'\0'; SHFILEOPSTRUCTW fop={0};fop.wFunc=FO_COPY;fop.fFlags=FOF_ALLOWUNDO|FOF_SILENT|FOF_NOCONFIRMATION;fop.pFrom=from;fop.pTo=dst;return SHFileOperationW(&fop)==0; }
-	bool move_dir( path dst, bool overwrite=true ) const { if(!copy_dir(dst,overwrite)) return false; return rmdir(); }
 	bool rmdir() const { if(!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={0};fop.wFunc=FO_DELETE;fop.fFlags=FOF_ALLOWUNDO|FOF_SILENT|FOF_NOCONFIRMATION;fop.pFrom=data;data[wcslen(data)+1]=L'\0';return SHFileOperationW(&fop)==0;}
 	bool rmfile( bool b_undo=false ) const { return delete_file(b_undo); }
 	bool delete_file( bool b_undo=false ) const { if(!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={0};fop.wFunc=FO_DELETE;fop.fFlags=(b_undo?FOF_ALLOWUNDO:0)|FOF_SILENT|FOF_NOCONFIRMATION|FOF_FILESONLY;fop.pFrom=data;data[wcslen(data)+1]=L'\0';return SHFileOperationW(&fop)==0;}
+	bool copy_dir( path dst, bool overwrite=true ) const { if(!is_dir()) return false;wchar_t* from=__wcsbuf();swprintf_s(from,capacity,L"%s\\*\0",data);dst[dst.size()+1]=L'\0'; SHFILEOPSTRUCTW fop={0};fop.wFunc=FO_COPY;fop.fFlags=FOF_ALLOWUNDO|FOF_SILENT|FOF_NOCONFIRMATION;fop.pFrom=from;fop.pTo=dst;return SHFileOperationW(&fop)==0; }
+	bool move_dir( path dst ) const { return !is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(data,dst.c_str())!=0 : !copy_dir(dst,true) ? false: rmdir(); }
 	void open( const wchar_t* args=nullptr, bool bShowWindow=true ) const {path cmd;swprintf(cmd,capacity,L"\"%s\"",data);ShellExecuteW(GetDesktopWindow(),L"Open",cmd,args,nullptr,bShowWindow?SW_SHOW:SW_HIDE);}
 #endif
 
+	// read file content
+	void* read_file( size_t* read_size ) const { FILE* fp=_wfopen(data,L"rb"); if(!fp) return nullptr; fseek(fp,0,SEEK_END); size_t size=ftell(fp); if(read_size) *read_size=size; fseek(fp,0,SEEK_SET); if(size==0){ fclose(fp); return nullptr; } void* ptr=malloc(size); if(ptr) fread(ptr,size,1,fp); fclose(fp); return ptr; }
+	
 	// relative/absolute path
 	inline bool is_absolute() const { return (data[0]!=0&&data[1]==L':')||memcmp(data,L"\\\\",sizeof(wchar_t)*2)==0||memcmp(data,L"//",sizeof(wchar_t)*2)==0||wcsstr(data,L":\\")!=nullptr||wcsstr(data,L":/")!=nullptr; }
 	inline bool is_relative() const { return !is_absolute(); }
@@ -422,7 +447,10 @@ struct path
 
 	// scan/findfile: ext_filter (specific extensions delimited by semicolons), str_filter (path should contain this string)
 	static bool glob( const wchar_t* str, size_t slen, const wchar_t* pattern, size_t plen );
+	static bool iglob( const wchar_t* str, size_t slen, const wchar_t* pattern, size_t plen ); // case-insensitive
 	inline bool glob( const wchar_t* pattern, size_t plen=0 ) const { return glob( data, size(), pattern, plen ); }
+	inline bool iglob( const wchar_t* pattern, size_t plen=0 ) const { return iglob( data, size(), pattern, plen ); } // case-insensitive
+
 	std::vector<path> scan( bool recursive=true, const wchar_t* ext_filter=nullptr, const wchar_t* pattern=nullptr ) const;
 	std::vector<path> subdirs( bool recursive=true, const wchar_t* pattern=nullptr ) const;
 
@@ -430,7 +458,7 @@ protected:
 
 	__forceinline attrib_t& cache() const { return *((attrib_t*)(data+capacity)); }
 	__forceinline bool		cache_exists() const { attrib_t* c=(attrib_t*)(data+capacity); return c->ftLastWriteTime.dwHighDateTime>0&&c->dwFileAttributes==INVALID_FILE_ATTRIBUTES; }
-	void canonicalize(); // remove redundant dir indicates such as "..", "."
+	void canonicalize(); // remove redundancies in directories (e.g., "../some/..", "./" )
 
 	struct scan_t { std::vector<path> result; bool recursive; bool has_ext; std::vector<std::wstring> exts; const wchar_t* pattern; size_t plen; bool b_glob; };
 	void scan_recursive( path& dir, scan_t& si ) const;
@@ -448,6 +476,21 @@ __noinline inline bool path::glob( const wchar_t* str, size_t slen, const wchar_
 	int i,j,t,p; for(i=0,j=0,t=-1,p=-1;i<n;)
 	{
 		if(str[i]==pattern[j]||(j<m&&pattern[j]==q)){i++;j++;}
+		else if(j<m&&pattern[j]==a){t=i;p=j;j++;}
+		else if(p!=-1){j=p+1;i=t+1;t++;}
+		else return false;
+	}
+	while(j<m&&pattern[j]==a)j++;
+	return j==m;
+}
+
+__noinline inline bool path::iglob( const wchar_t* str, size_t slen, const wchar_t* pattern, size_t plen )
+{
+	static const wchar_t q=L'?', a=L'*';
+	int n=int(slen?slen:wcslen(str)), m=int(plen?plen:wcslen(pattern)); if(m==0) return n==0;
+	int i,j,t,p; for(i=0,j=0,t=-1,p=-1;i<n;)
+	{
+		if(::tolower(str[i])==::tolower(pattern[j])||(j<m&&pattern[j]==q)){i++;j++;}
 		else if(j<m&&pattern[j]==a){t=i;p=j;j++;}
 		else if(p!=-1){j=p+1;i=t+1;t++;}
 		else return false;
@@ -641,6 +684,41 @@ inline void usleep( int us ){ std::this_thread::sleep_for(std::chrono::microseco
 //***********************************************
 namespace os {
 //***********************************************
+
+#ifdef _PSAPI_H_
+inline DWORD current_process(){ static DWORD curr_pid = GetCurrentProcessId(); return curr_pid; }
+inline const std::vector<DWORD>& enum_process()
+{
+	static std::vector<DWORD> pids(4096);
+	DWORD cb_needed, npids;
+
+	if(!EnumProcesses( &pids[0], DWORD(pids.size())*sizeof(DWORD), &cb_needed)){ pids.clear(); return pids; }
+	for( npids=cb_needed/sizeof(DWORD); npids>=pids.size(); npids=cb_needed/sizeof(DWORD) )
+	{
+		pids.resize(npids*2);
+		if(!EnumProcesses( &pids[0], DWORD(pids.size())*sizeof(DWORD), &cb_needed)){ pids.clear(); return pids; }
+	}
+	pids.resize(npids);
+	return pids;
+}
+
+inline std::vector<DWORD> find_process( const wchar_t* process_name )
+{
+	std::vector<DWORD> v;
+	static wchar_t buff[4096];
+	static DWORD curr_pid = GetCurrentProcessId();
+	for( auto pid : enum_process() )
+	{
+		HMODULE hMod; DWORD cbNeeded;
+		HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ,FALSE,pid); if(!hProcess) continue;
+		if(!EnumProcessModules(hProcess,&hMod,sizeof(hMod),&cbNeeded)) continue;
+		GetModuleBaseNameW(hProcess,hMod,buff,sizeof(buff)/sizeof(wchar_t) );
+		CloseHandle(hProcess);
+		if(_wcsicmp(buff,process_name)==0&&pid!=curr_pid) v.push_back(pid);
+	}
+	return v;
+}
+#endif
 
 inline std::vector<HWND> enum_windows( const wchar_t* filter=nullptr )
 {
