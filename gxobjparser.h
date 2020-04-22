@@ -124,7 +124,6 @@ inline path generate_normal_map( const path& bump_path, float bump_scale )
 	// convert uchar bumpmap to 1-channel float image
 	image* bump = gx::create_image( bump0->width, bump0->height, 32, 1 );
 	int yn=bump->height, c0=bump0->channels, xn=bump->width;
-	#pragma omp parallel for
 	for( int y=0; y<yn; y++ )
 	{
 		uchar* src = bump0->ptr<uchar>(y);
@@ -140,7 +139,6 @@ inline path generate_normal_map( const path& bump_path, float bump_scale )
 	uchar *B=bump->data, *N=normal->data;
 	int NW=int(normal->stride()), BW=int(bump->stride());
 	
-	#pragma omp parallel for
 	for( int y=0; y<yn; y++ )
 	{
 		uchar3* dst = (uchar3*)(N+y*NW);

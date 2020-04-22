@@ -264,7 +264,7 @@ struct path
 	path& operator=( const std::wstring& s ){ return operator=(s.c_str()); }
 	path& operator=( const std::string& s ){ return operator=(s.c_str()); }
 
-	// operator overloading: concatenations
+	// concatenations
 	path& operator+=( const path& p ){ wcscat(data,p.data+((p.data[0]==L'.'&&p.data[1]==L'\\'&&p.data[2])?2:0)); canonicalize(); return *this; }
 	path& operator+=( const wchar_t* s ){ wcscat(data,s+((s[0]==L'.'&&s[1]==L'\\'&&s[2])?2:0)); canonicalize(); return *this; }
 	path& operator+=( const char* s ){ return operator+=(path(s)); }
@@ -282,6 +282,12 @@ struct path
 	path operator+( const char* s ) const { return clone().operator+=(s); }
 	path operator+( const std::wstring& s ) const { return clone().operator+=(s.c_str()); }
 	path operator+( const std::string& s ) const { return clone().operator+=(s.c_str()); }
+
+	path cat( const path& p ) const { return clone().operator+=(p); }
+	path cat( const wchar_t* s ) const { return clone().operator+=(s); }
+	path cat( const char* s ) const { return clone().operator+=(s); }
+	path cat( const std::wstring& s ) const { return clone().operator+=(s.c_str()); }
+	path cat( const std::string& s ) const { return clone().operator+=(s.c_str()); }
 
 	path operator/( const path& p ) const { return clone().operator/=(p); }
 	path operator/( const wchar_t* s ) const { return clone().operator/=(s); }
@@ -371,6 +377,9 @@ struct path
 	bool is_readonly() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_READONLY)!=0; }
 	bool is_system() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_SYSTEM)!=0; }
 	bool is_junction() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_REPARSE_POINT)!=0; }
+	bool has_file( const path& file_name ) const { return is_dir()&&cat(file_name).exists(); }
+
+	// set attributes
 	void set_hidden( bool h ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(data,a=h?(a|FILE_ATTRIBUTE_HIDDEN):(a^FILE_ATTRIBUTE_HIDDEN)); }
 	void set_readonly( bool r ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(data,a=r?(a|FILE_ATTRIBUTE_READONLY):(a^FILE_ATTRIBUTE_READONLY)); }
 	void set_system( bool s ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(data,a=s?(a|FILE_ATTRIBUTE_SYSTEM):(a^FILE_ATTRIBUTE_SYSTEM)); }
