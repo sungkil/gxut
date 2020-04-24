@@ -369,7 +369,7 @@ struct path
 	inline void		update_cache() const { auto& c=cache(); if(!GetFileAttributesExW(data,GetFileExInfoStandard,&c)||c.dwFileAttributes==INVALID_FILE_ATTRIBUTES){ memset(&c,0,sizeof(attrib_t)); c.dwFileAttributes=INVALID_FILE_ATTRIBUTES; return; } c.ftLastWriteTime = DiscardFileTimeMilliseconds(c.ftLastWriteTime); }
 	inline void		clear_cache() const { attrib_t* a=(attrib_t*)(data+capacity); memset(a,0,sizeof(attrib_t)); a->dwFileAttributes=INVALID_FILE_ATTRIBUTES; }
 
-	// get/set attributes
+	// get attributes
 	bool exists() const {				if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES; }
 	bool is_dir() const {				if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_DIRECTORY)!=0; }
 	bool is_root_dir() const {			if(!data[0]) return false; size_t l=length(); return is_dir()&&l<4&&l>1&&data[1]==L':'; }
@@ -377,12 +377,16 @@ struct path
 	bool is_readonly() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_READONLY)!=0; }
 	bool is_system() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_SYSTEM)!=0; }
 	bool is_junction() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_REPARSE_POINT)!=0; }
-	bool has_file( const path& file_name ) const { return is_dir()&&cat(file_name).exists(); }
+	bool is_ssh() const {				if(!data[0]) return false; return wcsstr(data+2,L":\\")!=nullptr||wcsstr(data+2,L":/")!=nullptr; }
+	bool is_synology() const {			if(!data[0]) return false; return __wcsistr(data,L":\\volume")!=nullptr||__wcsistr(data,L":/volume")!=nullptr; }
 
 	// set attributes
 	void set_hidden( bool h ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(data,a=h?(a|FILE_ATTRIBUTE_HIDDEN):(a^FILE_ATTRIBUTE_HIDDEN)); }
 	void set_readonly( bool r ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(data,a=r?(a|FILE_ATTRIBUTE_READONLY):(a^FILE_ATTRIBUTE_READONLY)); }
 	void set_system( bool s ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(data,a=s?(a|FILE_ATTRIBUTE_SYSTEM):(a^FILE_ATTRIBUTE_SYSTEM)); }
+
+	// directory attributes
+	bool has_file( const path& file_name ) const { return is_dir()&&cat(file_name).exists(); }
 
 	// chdir/make/copy/delete file/dir operations
 	void chdir() const { if(is_dir()) _wchdir(data); }
