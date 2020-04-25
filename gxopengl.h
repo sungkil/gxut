@@ -20,6 +20,7 @@
 
 #include "gxmath.h"
 #include "gxstring.h"
+#include "gxos.h"
 #include "gxfilesystem.h"
 #include <malloc.h>
 
@@ -167,22 +168,22 @@ namespace gl {
 	};
 
 	//***********************************************
-#ifdef __GX_TIMER__
+#ifdef __GX_OS_TIMER__
 	struct timer_t : public GLObject
 	{
 		const GLuint	ID1=0;
 		union { double2 result; struct { double x, y; }; };	// Async OpenGL Timestamp: (begin,end)
-		gx::timer_t&	qpc;	// synchronous QueryPerformance CPU counter: reference to external or internal counter
-		gx::timer_t		qpc0;	// synchronous QueryPerformance CPU counter: internal counter instance
+		os::timer_t&	qpc;	// synchronous QueryPerformance CPU counter: reference to external or internal counter
+		os::timer_t		qpc0;	// synchronous QueryPerformance CPU counter: internal counter instance
 		bool			complete=false;
 
 		static double&	offset(){ static double f=0; return f; }
-		static void		sync_with_qpc(){ static int64_t e=epoch(); glFinish(); double i=0,j=0;uint k;for(k=0;k<16;k++){j+=(gxGetInteger64v(GL_TIMESTAMP)-e)/1000000.0;i+=gx::timer_t::now();} offset()=(i-j)/double(k); glFinish(); }
+		static void		sync_with_qpc(){ static int64_t e=epoch(); glFinish(); double i=0,j=0;uint k;for(k=0;k<16;k++){j+=(gxGetInteger64v(GL_TIMESTAMP)-e)/1000000.0;i+=os::timer_t::now();} offset()=(i-j)/double(k); glFinish(); }
 		static int64_t	epoch(){ static int64_t e=0; if(e) return e; auto* ef=(int64_t(*)()) GetProcAddress(GetModuleHandleW(nullptr),"rex_timer_epoch_GL"); if(ef) return e=ef(); else if(glGetInteger64v){ printf( "gl::Timer::epoch(): unable to get rex_timer_epoch_GL()\n" ); glGetInteger64v(GL_TIMESTAMP,&e); return e; } printf( "gl::epoch(): unable to get the epoch of OpenGL\n" ); return e=-1; }
 
 		// constructor: initialized with the internal qpc or an external qpc
 		timer_t():timer_t(qpc0){}
-		timer_t(gx::timer_t& t):GLObject(gxCreateQuery(GL_TIMESTAMP),"",GL_TIMESTAMP),ID1(gxCreateQuery(target)),qpc(t){ result=qpc.result=dvec2(0.0); }
+		timer_t(os::timer_t& t):GLObject(gxCreateQuery(GL_TIMESTAMP),"",GL_TIMESTAMP),ID1(gxCreateQuery(target)),qpc(t){ result=qpc.result=dvec2(0.0); }
 		virtual ~timer_t() override { GLuint idx[2]={ID,ID1}; glDeleteQueries(2,idx); }
 
 		// gl::Timer specific implementations
@@ -197,7 +198,7 @@ namespace gl {
 		inline double	now(){ return (gxGetInteger64v(GL_TIMESTAMP)-epoch())/1000000.0+offset(); }
 		inline void		clear(){ qpc.begin();qpc.end();result=qpc.result; complete=true; }
 	};
-#endif // __GX_TIMER__
+#endif // __GX_OS_TIMER__
 
 	//***********************************************
 	struct Buffer : public GLObject

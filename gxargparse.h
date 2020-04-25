@@ -18,10 +18,20 @@
 #ifndef __GX_ARGPARSE_H__
 #define __GX_ARGPARSE_H__
 #ifdef __has_include
+	#if __has_include("gxmath.h")
+		#include "gxmath.h"
+	#elif __has_include(<gxmath.h>)
+		#include <gxmath.h>
+	#endif
 	#if __has_include("gxstring.h")
 		#include "gxstring.h"
 	#elif __has_include(<gxstring.h>)
 		#include <gxstring.h>
+	#endif
+	#if __has_include("gxos.h")
+		#include "gxos.h"
+	#elif __has_include(<gxos.h>)
+		#include <gxos.h>
 	#endif
 	#if __has_include("gxfilesystem.h")
 		#include "gxfilesystem.h"

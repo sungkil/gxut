@@ -1,6 +1,7 @@
 #pragma once
 #include <gxut/gxstring.h>
 #include <gxut/gxfilesystem.h>
+#include <gxut/gxos.h>
 #include <gxut/gxmath.h>
 #include <gxut/gxmesh.h>
 #include <future>
@@ -594,7 +595,7 @@ path obj::decompress( const path& file_path )
 //*************************************
 inline mesh* load_obj( path file_path, float* pLoadingTime=nullptr, void(*flush_messages)(const char*)=nullptr )
 {
-	gx::timer_t t; t.begin();
+	os::timer_t t; t.begin();
 
 	mesh* p_mesh = nullptr;
 	if(!file_path.exists()){ wprintf(L"%s not exists",file_path.c_str()); return nullptr; }

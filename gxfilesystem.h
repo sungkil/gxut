@@ -153,13 +153,6 @@ using double9	= tarray9<double>;	using double16	= tarray16<double>;
 #include <io.h>			// low-level io functions
 #include <time.h>
 #include <deque>
-#if defined(__has_include) && __has_include(<psapi.h>)
-	#include <psapi.h>	// EnumProcesses
-#endif
-#ifndef __GNUC__		// MinGW has a problem with threads
-	#include <thread>	// usleep
-	#include <chrono>	// microtimer
-#endif
 
 //***********************************************
 // Win32-like filetime utilities
@@ -183,46 +176,6 @@ inline bool operator<=( const FILETIME& f1, const FILETIME& f2 ){ return Compare
 // common constants
 static const int GX_MAX_PATH = 1024;	// MAX_PATH == 260
 
-//***********************************************
-// volume information
-namespace os {
-//***********************************************
-struct volume_t
-{
-	static const int	capacity = GX_MAX_PATH; // MAX_PATH == 260
-	const wchar_t		root[3]={0};
-	wchar_t				name[capacity+1]={0};
-	unsigned long		serial_number=0;
-	unsigned long		maximum_component_length=0;
-	struct { unsigned long flags=0; wchar_t name[capacity+1]={0}; } filesystem;
-
-	// query
-	bool exists() const { return serial_number!=0&&filesystem.name[0]!=0; }
-	bool is_exfat() const { return _wcsicmp(filesystem.name,L"exFAT")==0; }
-	bool is_ntfs() const { return _wcsicmp(filesystem.name,L"NTFS")==0; }
-	bool is_fat32() const { return _wcsicmp(filesystem.name,L"FAT32")==0; }
-};
-
-class mutex_t
-{
-	HANDLE h_mutex=nullptr;
-public:
-	mutex_t( const wchar_t* name );
-	~mutex_t(){ close(); }
-	operator bool() const { return h_mutex!=nullptr; }
-	HANDLE& close(){ if(h_mutex) CloseHandle(h_mutex); return h_mutex=0; }
-};
-
-inline mutex_t::mutex_t( const wchar_t* name )
-{
-	close()=CreateMutexW(0,FALSE,name); DWORD e=GetLastError();
-	for(uint k=0,kn=256;k<kn&&e==ERROR_ALREADY_EXISTS;k++){ close()=CreateMutexW(0,FALSE,name);e=GetLastError(); Sleep(10); }
-	if(e==ERROR_ALREADY_EXISTS) close();
-}
-
-//***********************************************
-} // namespace os
-
 struct path
 {
 	typedef WIN32_FILE_ATTRIBUTE_DATA attrib_t; // auxiliary cache information from scan()
@@ -241,6 +194,23 @@ struct path
 	static inline const wchar_t*	__wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return __wcsistr(_Str1,wcslen(_Str1),_Str2,wcslen(_Str2)); }
 	static inline bool				__wcsiext( const wchar_t* fname, std::vector<std::wstring>* exts, size_t fl ){ for(size_t k=0,kn=exts->size();k<kn;k++){size_t el=exts->operator[](k).size();if(el<fl&&_wcsicmp(exts->operator[](k).c_str(),fname+fl-el)==0) return true; } return false; }
 	static inline bool				__wcsiext( const wchar_t* fname, std::vector<std::wstring>* exts ){ return __wcsiext(fname,exts,wcslen(fname)); }
+
+	// disk volume
+	struct volume_t
+	{
+		static const int	capacity = GX_MAX_PATH; // MAX_PATH == 260
+		const wchar_t		root[3]={0};
+		wchar_t				name[capacity+1]={0};
+		unsigned long		serial_number=0;
+		unsigned long		maximum_component_length=0;
+		struct { unsigned long flags=0; wchar_t name[capacity+1]={0}; } filesystem;
+
+		// query
+		bool exists() const { return serial_number!=0&&filesystem.name[0]!=0; }
+		bool is_exfat() const { return _wcsicmp(filesystem.name,L"exFAT")==0; }
+		bool is_ntfs() const { return _wcsicmp(filesystem.name,L"NTFS")==0; }
+		bool is_fat32() const { return _wcsicmp(filesystem.name,L"FAT32")==0; }
+	};
 
 	// split path
 	struct split_t { wchar_t *drive, *dir, *fname, *ext; };
@@ -333,7 +303,7 @@ struct path
 	inline size_t size()		const { return data[0]==0?0:wcslen(data); }
 	inline size_t length()		const { return data[0]==0?0:wcslen(data); }
 	inline uint64_t file_size() const { if(!cache_exists()) update_cache(); auto& c=cache(); return uint64_t(c.nFileSizeHigh)<<32ull|uint64_t(c.nFileSizeLow); }
-	
+
 	// crc32c/md5 checksums
 	inline uint crc32c() const;	// implemented in gxmath.h
 	inline uint4 md5() const;	// implemented in gxmemory.h
@@ -349,9 +319,9 @@ struct path
 	path auto_quote()		const { if(data[0]==0||wcschr(data,L' ')==nullptr||(data[0]==L'\"'&&data[wcslen(data)-1]==L'\"')) return *this; path p; swprintf_s(p,capacity,L"\"%s\"",data); return p; }
 	path unix()				const {	path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; p.data[1]=wchar_t(::tolower(p.data[0])); p.data[0]=L'/'; return p; }
 	path cygwin()			const { path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; path p2; swprintf_s( p2, capacity, L"/cygdrive/%c%s", ::tolower(p[0]), p.data+2 ); return p2; }
-	
+
 	// path info/operations
-	os::volume_t volume() const { os::volume_t v; if(is_unc()||is_rsync()) return v; path d=drive(); if(d.empty()||!isalpha(d[0])) return v; wcscpy(d.data+1,L":"); if(!d.exists()) return v; if(GetVolumeInformationW( d.c_str(), v.name, os::volume_t::capacity, &v.serial_number, &v.maximum_component_length, &v.filesystem.flags, v.filesystem.name, os::volume_t::capacity )) return v; return os::volume_t(); }
+	volume_t volume() const { volume_t v; if(is_unc()||is_rsync()) return v; path d=drive(); if(d.empty()||!isalpha(d[0])) return v; wcscpy(d.data+1,L":"); if(!d.exists()) return v; if(GetVolumeInformationW( d.c_str(), v.name, volume_t::capacity, &v.serial_number, &v.maximum_component_length, &v.filesystem.flags, v.filesystem.name, volume_t::capacity )) return v; return volume_t(); }
 	path drive() const { static wchar_t d[_MAX_DRIVE+1]; _wsplitpath_s(data,d,_MAX_DRIVE,nullptr,0,nullptr,0,nullptr,0);if(*d) *d=wchar_t(::toupper(*d)); path p; wcscpy(p.data,d); return p; }
 	path dir() const { path p; if(wcschr(data,L'\\')==nullptr) return L".\\"; split_t si=split(__wcsbuf(),__wcsbuf()); wcscpy(p.data,wcscat(si.drive,si.dir)); size_t len=wcslen(p.data); if(len>0&&p.data[len-1]!='\\'){p.data[len]='\\';p.data[len+1]=L'\0';} return p; }
 	path name( bool with_ext=true ) const { split_t si=split(nullptr,nullptr,__wcsbuf(),__wcsbuf()); return with_ext?wcscat(si.fname,si.ext):si.fname; }
@@ -409,7 +379,7 @@ struct path
 
 	// read file content
 	void* read_file( size_t* read_size ) const { FILE* fp=_wfopen(data,L"rb"); if(!fp) return nullptr; fseek(fp,0,SEEK_END); size_t size=ftell(fp); if(read_size) *read_size=size; fseek(fp,0,SEEK_SET); if(size==0){ fclose(fp); return nullptr; } void* ptr=malloc(size); if(ptr) fread(ptr,size,1,fp); fclose(fp); return ptr; }
-	
+
 	// relative/absolute path
 	inline bool is_absolute() const { return (data[0]!=0&&data[1]==L':')||memcmp(data,L"\\\\",sizeof(wchar_t)*2)==0||memcmp(data,L"//",sizeof(wchar_t)*2)==0||wcsstr(data,L":\\")!=nullptr||wcsstr(data,L":/")!=nullptr; }
 	inline bool is_relative() const { return !is_absolute(); }
@@ -555,7 +525,7 @@ __noinline inline void path::scan_recursive( path& dir, path::scan_t& si ) const
 __noinline inline void path::subdirs_recursive( path& dir, path::scan_t& si ) const
 {
 	WIN32_FIND_DATAW fd; HANDLE h=FindFirstFileExW(dir+L"*.*",FindExInfoBasic/*minimal(faster)*/,&fd,FindExSearchNameMatch,0,FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
-	path t; size_t dl=wcslen(dir); memcpy(t.data,dir.data,dl*sizeof(wchar_t)); wchar_t *f=fd.cFileName, *p=t.data+dl; 
+	path t; size_t dl=wcslen(dir); memcpy(t.data,dir.data,dl*sizeof(wchar_t)); wchar_t *f=fd.cFileName, *p=t.data+dl;
 	std::vector<path> sdir; if(si.recursive) sdir.reserve(16);
 
 	while(FindNextFileW(h,&fd))
@@ -627,7 +597,7 @@ __noinline inline path path::relative( bool first_dot, const wchar_t* from ) con
 
 	// 3. if empty dir, then attach ./
 	if(first_dot&&(result[0]==0||result[0]!=L'.')) result=path(".\\")+result;
-	
+
 	return this->is_dir()?result:result+name();
 }
 
@@ -686,60 +656,20 @@ namespace nocase
 }
 
 //***********************************************
-// operating-system utilities
-inline const char* get_last_error(){ static char buff[4096]={0};DWORD e=GetLastError();char *s;FormatMessageA( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,e,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPSTR)&s,0,nullptr);sprintf(buff,"%s (code=%x)",s,uint(e));LocalFree(s);return buff; }
-inline void exit( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fprintf( stdout, "[%s] %s", path::module_path().name(false).wtoa(), &buff[0] ); exit(EXIT_FAILURE); }
-inline void exit( const wchar_t* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<wchar_t> buff(_vscwprintf(fmt,a)+1); vswprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fwprintf( stdout, L"[%s] %s", path::module_path().name(false).c_str(), &buff[0] ); exit(EXIT_FAILURE); }
-#if !defined(__GNUC__)&&((__cplusplus>199711L)||(_MSC_VER>=1600/*VS2010*/))
-inline void usleep( int us ){ std::this_thread::sleep_for(std::chrono::microseconds(us)); }
-#endif
+// compiler utility
+namespace gx { namespace compiler
+{
+	inline int mtoi( const char* month ){ if(!month||!month[0]||!month[1]||!month[2]) return 0; char a=tolower(month[0]), b=tolower(month[1]), c=tolower(month[2]); if(a=='j'){ if(b=='a') return 1; if(c=='n') return 6; return 7; } if(a=='f') return 2; if(a=='m'){ if(c=='r') return 3; return 5; } if(a=='a'){ if(b=='p') return 4; return 8; } if(a=='s') return 9; if(a=='o') return 10; if(a=='n') return 11; return 12; }
+	inline int year(){ static int y=0; if(y) return y; char buff[64]; sscanf(__DATE__,"%*s %*s %s", buff); return y=atoi(buff); }
+	inline int month(){ static int m=0; if(m) return m; char buff[64]={0}; sscanf(__DATE__,"%s", buff); return m=mtoi(buff); }
+	inline int day(){ static int d=0; if(d) return d; char buff[64]; sscanf(__DATE__,"%*s %s %*s", buff); return d=atoi(buff); }
+}}
 
+//***********************************************
+// os implementations, having dependency to path
 //***********************************************
 namespace os {
 //***********************************************
-
-#ifdef _PSAPI_H_
-inline DWORD current_process(){ static DWORD curr_pid = GetCurrentProcessId(); return curr_pid; }
-inline const std::vector<DWORD>& enum_process()
-{
-	static std::vector<DWORD> pids(4096);
-	DWORD cb_needed, npids;
-
-	if(!EnumProcesses( &pids[0], DWORD(pids.size())*sizeof(DWORD), &cb_needed)){ pids.clear(); return pids; }
-	for( npids=cb_needed/sizeof(DWORD); npids>=pids.size(); npids=cb_needed/sizeof(DWORD) )
-	{
-		pids.resize(npids*2);
-		if(!EnumProcesses( &pids[0], DWORD(pids.size())*sizeof(DWORD), &cb_needed)){ pids.clear(); return pids; }
-	}
-	pids.resize(npids);
-	return pids;
-}
-
-inline std::vector<DWORD> find_process( const wchar_t* process_name )
-{
-	std::vector<DWORD> v;
-	static wchar_t buff[4096];
-	static DWORD curr_pid = GetCurrentProcessId();
-	for( auto pid : enum_process() )
-	{
-		HMODULE hMod; DWORD cbNeeded;
-		HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ,FALSE,pid); if(!hProcess) continue;
-		if(!EnumProcessModules(hProcess,&hMod,sizeof(hMod),&cbNeeded)) continue;
-		GetModuleBaseNameW(hProcess,hMod,buff,sizeof(buff)/sizeof(wchar_t) );
-		CloseHandle(hProcess);
-		if(_wcsicmp(buff,process_name)==0&&pid!=curr_pid) v.push_back(pid);
-	}
-	return v;
-}
-#endif
-
-inline std::vector<HWND> enum_windows( const wchar_t* filter=nullptr )
-{
-	auto __enum_windows_proc = []( HWND hwnd , LPARAM pProcessList ) -> BOOL { ((std::vector<HWND>*)pProcessList)->emplace_back(hwnd); return TRUE; };
-	std::vector<HWND> v; EnumWindows(__enum_windows_proc,(LPARAM)(&v));
-	return v;
-}
-	
 inline const wchar_t* env_var( const wchar_t* key )
 {
 	static std::vector<wchar_t> buff(4096);
@@ -766,53 +696,9 @@ inline path search_env_path( path file_name )
 	for( const auto& e : env_path() ) if((e+file_name).exists()) return e+file_name;
 	return path();
 }
-
 //***********************************************
 } // namespace os
-
 //***********************************************
-// compiler utility
-namespace gx { namespace compiler
-{
-	inline int mtoi( const char* month ){ if(!month||!month[0]||!month[1]||!month[2]) return 0; char a=tolower(month[0]), b=tolower(month[1]), c=tolower(month[2]); if(a=='j'){ if(b=='a') return 1; if(c=='n') return 6; return 7; } if(a=='f') return 2; if(a=='m'){ if(c=='r') return 3; return 5; } if(a=='a'){ if(b=='p') return 4; return 8; } if(a=='s') return 9; if(a=='o') return 10; if(a=='n') return 11; return 12; }
-	inline int year(){ static int y=0; if(y) return y; char buff[64]; sscanf(__DATE__,"%*s %*s %s", buff); return y=atoi(buff); }
-	inline int month(){ static int m=0; if(m) return m; char buff[64]={0}; sscanf(__DATE__,"%s", buff); return m=mtoi(buff); }
-	inline int day(){ static int d=0; if(d) return d; char buff[64]; sscanf(__DATE__,"%*s %s %*s", buff); return d=atoi(buff); }
-}}
-
-//***********************************************
-// timer
-#ifndef __GX_TIMER__
-#define __GX_TIMER__
-namespace gx { struct timer_t
-{
-	union { double2 result; struct { double x, y; }; };
-	inline timer_t(){ begin(); }
-	inline void clear(){ x=y=now(); }
-	inline void begin(){ x=now(); }
-	inline double end(){ return (y=now())-x; }
-	inline double delta(){ return y-x; }
-	static double now(){ double c=freq_scale(); int64_t e=epoch(); LARGE_INTEGER li; QueryPerformanceCounter(&li); return double(li.QuadPart-e)*c; } // if rex found, use its epoch; otherwise, use a local epoch
-	static timer_t* singleton(){ static timer_t i; return &i; }
-	static double freq_scale(){ static double c=0; if(c==0){ LARGE_INTEGER li; QueryPerformanceFrequency(&li); c=1000.0/double(li.QuadPart); } return c; }
-	static int64_t epoch(){ static int64_t e=0; if(e==0){ auto* ef=(int64_t(*)()) GetProcAddress(GetModuleHandleW(nullptr),"rex_timer_epoch"); e=ef?ef():0; if(e==0){ LARGE_INTEGER li; QueryPerformanceCounter(&li); e=li.QuadPart;} } return e; }
-};}
-#endif
-
-//***********************************************
-// general dynamic linking wrapper with DLL
-struct dll_t
-{
-	HMODULE hdll = nullptr;
-
-	~dll_t(){ release(); }
-	void release(){ if(hdll){ FreeLibrary(hdll); hdll=nullptr; }  }
-	path file_path(){ path f; if(hdll) GetModuleFileNameW(hdll,f,path::capacity); return f; }
-	bool load( const wchar_t* dll_path ){ return nullptr!=(hdll=LoadLibraryW(dll_path)); }
-	template <class T> T get_proc_address( const char* name ) const { return hdll==nullptr?nullptr:(T)GetProcAddress(hdll,name); }
-	template <class T> T* get_proc_address( const char* name, T*& p ) const { return hdll==nullptr?p=nullptr:p=(T*)GetProcAddress(hdll,name); }
-	operator bool() const { return hdll!=nullptr; }
-};
 
 //***********************************************
 #endif // __GX_FILESYSTEM__
