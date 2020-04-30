@@ -517,7 +517,6 @@ struct mesh
 	// face/object/geometry/proxy/material helpers
 	uint face_count( int level=0 ) const { uint kn=uint(geometries.size())/levels; auto* g=&geometries[kn*level]; uint f=0; for(uint k=0; k<kn; k++, g++) f+=g->count; return f/3; }
 	object* create_object( const char* name ){ objects.emplace_back(object(this, uint(objects.size()), name)); return &objects.back(); }
-	object* create_object( const object& other ){ objects.emplace_back(other); auto& o1=objects.back(); o1.root=this; o1.ID=uint(objects.size())-1; return &o1; }
 	object*	find_object( const char* name ){ for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) return &objects[k]; return nullptr; }
 	std::vector<object*> find_objects( const char* name ){ std::vector<object*> v; for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) v.push_back(&objects[k]); return v; }
 	inline mesh* create_proxy( bool use_quads=false, bool double_sided=false ); // proxy mesh helpers: e.g., bounding box
@@ -579,13 +578,13 @@ inline geometry& object::operator[]( size_t i ){ return root->geometries[i]; }
 
 __noinline inline mesh& mesh::operator=( mesh&& other ) // move assignment operator
 {
-	vertices = std::move(other.vertices);
-	indices = std::move(other.indices);
-	geometries = std::move(other.geometries);
-	objects = std::move(other.objects);
-	materials = std::move(other.materials);
-	size_t offset = sizeof(decltype(vertices)) + sizeof(decltype(indices)) + sizeof(decltype(geometries)) + sizeof(decltype(objects)) + sizeof(decltype(materials));
-	memcpy(((char*)this) + offset, ((char*)&other) + offset, sizeof(mesh) - offset);
+	size_t offset = 0;
+	vertices = std::move(other.vertices);		offset += sizeof(decltype(vertices));
+	indices = std::move(other.indices);			offset += sizeof(decltype(indices));
+	objects = std::move(other.objects);			offset += sizeof(decltype(objects));
+	geometries = std::move(other.geometries);	offset += sizeof(decltype(geometries));
+	materials = std::move(other.materials);		offset += sizeof(decltype(materials));
+	memcpy(((char*)this)+offset, ((char*)&other)+offset, sizeof(mesh)-offset);
 	if(acc) acc->p_mesh=this;
 	for(auto& o:objects) o.root=this;
 	for(auto& g:geometries) g.root=this;
