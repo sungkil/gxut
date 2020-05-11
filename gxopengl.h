@@ -127,7 +127,6 @@ gl::Texture*		gxCreateTextureRectangle(const char*,GLsizei,GLsizei,GLint,GLvoid*
 gl::Texture*		gxCreateTextureView(gl::Texture*,GLuint,GLuint,GLuint,GLuint,bool,GLenum);
 gl::Buffer*			gxCreateBuffer(const char*,GLenum,GLsizeiptr,GLenum,const void*,GLbitfield);
 gl::Program*		gxCreateProgram(const char*,const char*,const std::map<GLuint,std::string>&,const char*,std::vector<const char*>*);
-gl::Program*		gxCreateProgram( const char*,const char*,const char*,const char*,const char*);
 gl::VertexArray*	gxCreateQuadVertexArray();
 gl::VertexArray*	gxCreatePointVertexArray( GLsizei width, GLsizei height );
 
@@ -576,9 +575,14 @@ namespace gl {
 		GLuint get_uniform_block_binding( const char* name ){ auto* ub=get_uniform_block(name); return ub?ub->get_binding():-1; }
 		GLuint get_shader_storage_block_binding( const char* name ){ const GLenum prop = GL_BUFFER_BINDING; GLint binding;glGetProgramResourceiv(ID,GL_SHADER_STORAGE_BLOCK,glGetProgramResourceIndex(ID,GL_SHADER_STORAGE_BLOCK,name),1,&prop,1,nullptr,&binding); return binding; }
 
-		std::map<std::string,Uniform> uniform_cache;
-		std::set<std::string> invalid_uniform_cache;
-		std::map<std::string,UniformBlock> uniform_block_map;
+		// query source
+		const char* get_shader_source( GLuint shader_type ) const { auto it=shader_source_map.find(shader_type); return it==shader_source_map.end()?"":it->second.c_str(); }
+
+		// member variables
+		std::map<GLuint,std::string>		shader_source_map;
+		std::map<std::string,Uniform>		uniform_cache;
+		std::set<std::string>				invalid_uniform_cache;
+		std::map<std::string,UniformBlock>	uniform_block_map;
 		static std::set<Program*>& get_instances(){ static std::set<Program*> i; return i; }
 	};
 
@@ -673,8 +677,7 @@ namespace gl {
 		size_t size() const { return programs.size(); }
 		Program* get_program( const char* programName ) const { for(uint k=0;k<programs.size();k++)if(_stricmp(programs[k]->name,programName)==0) return programs[k]; printf("Unable to find program \"%s\" in effect \"%s\"\n", programName, name ); return nullptr; }
 		Program* get_program( uint index ) const { if(index<programs.size()) return programs[index]; else { printf("[%s] Out-of-bound program index\n", name ); return nullptr; } }
-		bool create_program( const char* prefix, const char* name, const std::map<GLuint,std::string>& shaderSourceMap, const char* pMacro=nullptr, std::vector<const char*>* tfVaryings=nullptr ){ Program* program=gxCreateProgram(prefix,name,shaderSourceMap,pMacro,tfVaryings); if(!program) return false; programs.emplace_back(program); auto& m=program->uniform_block_map;for(auto& it:m){gl::Program::UniformBlock& ub=it.second;ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size);} return true; }
-		bool create_program( const char* prefix, const char* name, const char* vertShaderSource, const char* fragShaderSource, const char* pMacro=nullptr ){ std::map<GLuint,std::string> ssm={std::make_pair(GL_VERTEX_SHADER,vertShaderSource),std::make_pair(GL_FRAGMENT_SHADER,fragShaderSource)}; return create_program(prefix,name,ssm,pMacro,nullptr); }
+		bool create_program( const char* prefix, const char* name, const std::map<GLuint,std::string>& shaderSourceMap, const char* p_macro=nullptr, std::vector<const char*>* tfVaryings=nullptr ){ Program* program=gxCreateProgram(prefix,name,shaderSourceMap,p_macro,tfVaryings); if(!program) return false; programs.emplace_back(program); auto& m=program->uniform_block_map;for(auto& it:m){gl::Program::UniformBlock& ub=it.second;ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size);} return true; }
 		bool attach( const char* name, const char* effect_source, const char* p_macro=nullptr );
 
 		Program::Uniform* get_uniform( const char* name ){ return active_program?active_program->get_uniform(name):nullptr; }
@@ -1118,20 +1121,27 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 
 	// 4. try to load binary cache
 	GLuint binary_program_ID = gxLoadProgramBinary( pname, crc );
-	if(binary_program_ID&&gxCheckProgramLink(name, binary_program_ID,false)){ gl::Program* program = new gl::Program(binary_program_ID, name); program->update_uniform_cache(); program->update_uniform_block(); return program; }
-
-	__int64 freq;	QueryPerformanceFrequency((LARGE_INTEGER*)&freq);
-	__int64 tbegin;	QueryPerformanceCounter((LARGE_INTEGER*)&tbegin);
-
-	printf( "Compiling %s ... ", pname );
-
+	if(binary_program_ID&&gxCheckProgramLink(name, binary_program_ID,false))
+	{
+		gl::Program* program = new gl::Program(binary_program_ID, name);
+		program->shader_source_map = shader_source_map;
+		program->update_uniform_cache();
+		program->update_uniform_block();
+		return program;
+	}
+	
 	// 5. create program first
 	GLuint program_ID = glCreateProgram();
 	gl::Program* program = new gl::Program( program_ID, name );
+	program->shader_source_map = shader_source_map;
 
 	// 6. compile and attach shaders
+	__int64 freq;	QueryPerformanceFrequency((LARGE_INTEGER*)&freq);
+	__int64 tbegin;	QueryPerformanceCounter((LARGE_INTEGER*)&tbegin);
+	printf( "Compiling %s ... ", pname );
+
 	std::vector<GLuint> attached_shaders;
-	for( auto& it : shader_source_map )
+	for( auto& it : program->shader_source_map )
 	{
 		GLuint shader_type = it.first;
 		GLuint shader_ID = gxCompileShaderSource( shader_type, format("%s",pname), it.second.c_str() );
@@ -1203,14 +1213,6 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 	printf( "completed in %.1f ms\n", (float)(double(tend-tbegin)/double(freq)*1000.0) );
 
 	return program;
-}
-
-inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const char* vert_shader_source, const char* frag_shader_source, const char* p_macro )
-{
-	std::map<GLuint,std::string> shader_source_map;
-	shader_source_map[ GL_VERTEX_SHADER ] = vert_shader_source?vert_shader_source:"";
-	shader_source_map[ GL_FRAGMENT_SHADER ] = frag_shader_source?frag_shader_source:"";
-	return gxCreateProgram( prefix, name, shader_source_map, p_macro, nullptr );
 }
 
 inline gl::Effect* gxCreateEffect( const char* name )
