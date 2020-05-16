@@ -150,8 +150,8 @@ template<> inline std::wstring parser_t::get<std::wstring>( const std::string& n
 inline std::vector<std::wstring> parser_t::others( const std::string& name ) const
 {
 	std::vector<std::wstring> v;
-	if(name.empty()) for(auto& a:arguments) if(a.name.empty()) v.push_back(a.value);	// unnamed arguments
-	auto* o = find_option(name.c_str()); if(o&&o->instance>1) v=o->others;				// optioan others
+	if(name.empty()){ for(auto& a:arguments){ if(a.name.empty()) v.push_back(a.value); } }	// unnamed arguments
+	else{ auto* o=find_option(name.c_str()); if(o&&o->instance>1) v=o->others; }			// named options
 	return v;
 }
 
@@ -168,7 +168,12 @@ inline bool parser_t::parse( int argc, const wchar_t** argv )
 	int r=0; for( int k=1; k<argc; k++ )
 	{
 		const wchar_t* a = argv[k]; if(!a[0]) continue;
-		if(a[0]!=L'-'){ if(r>=nr) arguments.push_back(argument_t()); arguments[r++].value = a; continue; } // increase array to accept excessive arguments
+		if(a[0]!=L'-')
+		{
+			if(r>=int(arguments.size())) arguments.push_back(argument_t()); // increase array to accept excessive arguments
+			arguments[r++].value = a;
+			continue;
+		} 
 		if(_wcsicmp(a,L"-h")==0||_wcsicmp(a,L"--help")==0){ b_help_exists=true; continue; } // test whether help exists
 		if(!a[1]) continue;	// skip too short options
 
