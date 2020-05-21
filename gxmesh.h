@@ -900,4 +900,27 @@ inline mesh* create_box_mesh( const char* name="box", bool use_quads=false, bool
 	return create_box_mesh(bbox{ vec3(-half_size), vec3(half_size) }, name, use_quads, double_sided);
 }
 
+__noinline inline mesh* create_box_lines( const bbox& box, const char* name="box" )
+{
+	mesh* m = new mesh();
+
+	// vertex definitions
+	for(uint k = 0; k < 8; k++) m->vertices.emplace_back(vertex{ box.corner(k), vec3(0.0f), vec2(0.0f) });
+
+	// index definitions (CCW: counterclockwise by default)
+	m->indices = {	0, 3, 3, 2, 2, 1, 1, 0, /*bottom*/ 4, 5, 5, 6, 6, 7, 7, 4, /*top*/   0, 1, 1, 5, 5, 4, 4, 0, /*left*/
+					2, 3, 3, 7, 7, 6, 6, 2, /*right*/  1, 2, 2, 6, 6, 5, 5, 1, /*front*/ 3, 0, 0, 4, 4, 7, 7, 3 /*back*/ };
+
+	// create object and geometry
+	auto* obj = m->create_object(name);
+	auto* geom = obj->create_geometry(0, uint(m->indices.size()), (bbox*)&box, size_t(-1));
+
+	return m;
+}
+
+inline mesh* create_box_lines( const char* name="box", float half_size=1.0f )
+{
+	return create_box_lines(bbox{ vec3(-half_size), vec3(half_size) }, name);
+}
+
 #endif // __GX_MESH_H__
