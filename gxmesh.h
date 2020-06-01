@@ -347,7 +347,7 @@ struct cull_t
 struct acc_t
 {
 	enum { NONE, BVH, KDTREE } model = NONE;
-	mesh*		 p_mesh = nullptr;	// should be set to mesh
+	mesh*	p_mesh = nullptr;	// should be set to mesh
 	virtual void release() = 0;
 	virtual bool intersect( ray r, isect& h )=0;
 };
@@ -366,9 +366,10 @@ struct bvh_t : public acc_t // two-level hierarchy: mesh or geometry
 // KDtree
 struct kdtree_t : public acc_t // two-level hierarchy: mesh or geometry
 {
-	struct node { float pos; uint parent; uint second:29, has_left:1, axis:2; __forceinline bool is_leaf() const {return axis==3;} };
+	struct node { union { float pos; uint count; }; uint second_or_index; uint parent:30, axis:2; __forceinline bool is_leaf() const {return axis==3;} };
 	std::vector<node> nodes;
-	virtual bool intersect( ray r, isect& h )=0; // not implemented yet
+	std::vector<uint> ordered_prims;
+	virtual bool intersect( ray r, isect& h );
 };
 
 //*************************************
