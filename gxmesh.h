@@ -348,8 +348,10 @@ struct acc_t
 {
 	enum { NONE, BVH, KDTREE } model = NONE;
 	mesh*	p_mesh = nullptr;	// should be set to mesh
-	virtual void release() = 0;
+	virtual ~acc_t(){}			// should be virtual to enforce to call inherited destructors
+	virtual void release()=0;
 	virtual bool intersect( ray r, isect& h )=0;
+	uint	node_count( uint geometry_index=-1 ) const;		// return the geometry BVH for -1, otherwise for primitive BVH
 };
 
 //*************************************
@@ -357,7 +359,13 @@ struct acc_t
 struct bvh_t : public acc_t // two-level hierarchy: mesh or geometry
 {
 	// second: offset to right child of interior node; index: primitive index in index buffer
-	struct node { vec3 m=FLT_MAX; uint second_or_index; vec3 M=-FLT_MAX; uint parent:30, axis:2; bbox& box(){ return reinterpret_cast<bbox&>(*this); }  __forceinline bool is_leaf() const {return axis==3;} };
+	struct node
+	{
+		vec3 m=FLT_MAX; uint second_or_index;
+		vec3 M=-FLT_MAX; uint parent:30, axis:2;
+		const bbox& box() const { return reinterpret_cast<const bbox&>(*this); }
+		__forceinline bool is_leaf() const { return axis==3; }
+	};
 	std::vector<node> nodes;
 	virtual bool intersect( ray r, isect& h );
 };
@@ -366,7 +374,14 @@ struct bvh_t : public acc_t // two-level hierarchy: mesh or geometry
 // KDtree
 struct kdtree_t : public acc_t // single-level hierarchy
 {
-	struct node { union { float pos; uint count; }; uint second_or_index; uint parent:30, axis:2; uint geometry; __forceinline bool is_leaf() const {return axis==3;} };
+	struct node
+	{
+		union { float pos; uint count; };
+		uint second_or_index;
+		uint geometry;
+		uint parent:30, axis:2;
+		__forceinline bool is_leaf() const { return axis==3; }
+	};
 	std::vector<node> nodes;
 	std::vector<ivec2> ordered_prims;
 	virtual bool intersect( ray r, isect& h );
@@ -509,10 +524,10 @@ struct mesh
 	mesh(){ vertices.reserve(1<<20); indices.reserve(1<<20); objects.reserve(1<<16); geometries.reserve(1<<16); materials.reserve(1<<16); }
 	inline mesh(mesh&& other){ operator=(std::move(other)); } // move constructor
 	inline mesh& operator=(mesh&& other); // move assignment operator
-	~mesh(){ release(); }
+	virtual ~mesh(){ release(); }
 
 	// release/memory
-	void release(){ if(!vertices.empty()){ vertices.clear(); vertices.shrink_to_fit(); } if(!indices.empty()){ indices.clear(); indices.shrink_to_fit(); } if(!geometries.empty()){ geometries.clear(); geometries.shrink_to_fit(); } objects.clear(); objects.shrink_to_fit(); materials.clear(); materials.shrink_to_fit(); if(acc){ acc->release(); acc = nullptr; } }
+	void release(){ if(!vertices.empty()){ vertices.clear(); vertices.shrink_to_fit(); } if(!indices.empty()){ indices.clear(); indices.shrink_to_fit(); } if(!geometries.empty()){ geometries.clear(); geometries.shrink_to_fit(); } objects.clear(); objects.shrink_to_fit(); materials.clear(); materials.shrink_to_fit(); }
 	mesh* shrink_to_fit(){ vertices.shrink_to_fit(); indices.shrink_to_fit(); objects.shrink_to_fit(); geometries.shrink_to_fit(); materials.shrink_to_fit(); return this; }
 
 	// face/object/geometry/proxy/material helpers
@@ -790,6 +805,14 @@ __noinline inline bool mesh::intersect( ray r, isect& h, bool use_acc ) const
 		h=i; h.g=g.ID;
 	}
 	return h.g!=0xffffffff;
+}
+
+inline uint acc_t::node_count( uint geometry_index ) const
+{
+	if(!p_mesh) return 0; auto& g=p_mesh->geometries; if(g.empty()) return 0;
+	if(geometry_index>=0&&geometry_index<g.size()) return g[geometry_index].acc_count;
+	if(geometry_index==-1) return g.front().acc_first_index; // counter of the geometry-level acceleration structures
+	return 0; // other exception
 }
 
 // two-level intersection on two-level BVHs
