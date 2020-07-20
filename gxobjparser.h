@@ -334,7 +334,7 @@ inline path get_mesh_cache_path( path file_path )
 }
 
 // parser's id: to differetiate the parser implementations
-inline uint64_t get_mesh_cache_id( const char* timestamp )
+inline uint64_t get_mesh_parser_id( const char* timestamp )
 {
 	return uint64_t(std::hash<std::string>{}(std::string(__TIMESTAMP__)+std::string(__GX_MESH_H_TIMESTAMP__)+timestamp));
 }
@@ -347,7 +347,7 @@ inline bool mesh_cache_exists( path file_path )
 	fclose(fp);
 
 	// compare parser id (timestamp)
-	return pid==get_mesh_cache_id(file_path.mtimestamp());
+	return pid==get_mesh_parser_id(file_path.mtimestamp());
 }
 
 inline void save_mesh_cache( mesh* pMesh )
@@ -357,12 +357,12 @@ inline void save_mesh_cache( mesh* pMesh )
 	FILE* fp = _wfopen( cache_path, L"w" ); if(fp==nullptr){ wprintf(L"Unable to open %s\n",cache_path.c_str()); return; }
 
 	// 0. save the parser's id to reflect the revision of the parser and mesh's timestamp
-	fprintf( fp, "%llu\n", get_mesh_cache_id(file_path.mtimestamp()) );
+	fprintf( fp, "%llu\n", get_mesh_parser_id(file_path.mtimestamp()) );
 
 	// 1. save time stamp of the mesh file and material file
 	path mtl_path = file_path.dir()+pMesh->mtl_path;
 	fprintf( fp, "mtllib: %s\n", wcslen(pMesh->mtl_path)==0?"default":wtoa(pMesh->mtl_path) );
-	fprintf( fp, "%llu\n", get_mesh_cache_id(mtl_path.mtimestamp()) );
+	fprintf( fp, "%llu\n", get_mesh_parser_id(mtl_path.mtimestamp()) );
 
 	// 2. boundingbox and numface
 	fprintf( fp, "mesh_box: %f %f %f %f %f %f\n", pMesh->box.m[0], pMesh->box.m[1], pMesh->box.m[2], pMesh->box.M[0], pMesh->box.M[1], pMesh->box.M[2]);
@@ -446,7 +446,7 @@ inline mesh* load_mesh_cache( path file_path )
 	fgets(buff,8192,fp);
 	const char* mtl_timestamp = mtl_path.exists()&&mtl_path!=L"default"?mtl_path.mtimestamp():"";
 	uint64_t mat_cache_id; sscanf(buff, "%llu\n", &mat_cache_id );
-	if(mtl_path.exists()&&get_mesh_cache_id(mtl_timestamp)!=mat_cache_id) return nullptr;	// there was a change on the existing mtl file
+	if(mtl_path.exists()&&get_mesh_parser_id(mtl_timestamp)!=mat_cache_id) return nullptr;	// there was a change on the existing mtl file
 
 	//*****************************************************
 	// now create mesh

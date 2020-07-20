@@ -346,11 +346,13 @@ struct cull_t
 // acceleration structures
 struct acc_t
 {
-	enum { NONE, BVH, KDTREE } model = NONE;
+	enum model_t { NONE, BVH, KDTREE } model = NONE;
+	enum method_t { SAH, MIDDLE, EQUAL_COUNTS };
 	mesh*	p_mesh = nullptr;	// should be set to mesh
+
 	virtual ~acc_t(){}			// should be virtual to enforce to call inherited destructors
 	virtual void release()=0;
-	virtual bool intersect( ray r, isect& h )=0;
+	virtual bool intersect( ray r, isect& h ) const = 0;
 	uint	node_count( uint geometry_index=-1 ) const;		// return the geometry BVH for -1, otherwise for primitive BVH
 };
 
@@ -367,7 +369,7 @@ struct bvh_t : public acc_t // two-level hierarchy: mesh or geometry
 		__forceinline bool is_leaf() const { return axis==3; }
 	};
 	std::vector<node> nodes;
-	virtual bool intersect( ray r, isect& h );
+	virtual bool intersect( ray r, isect& h ) const;
 };
 
 //*************************************
@@ -384,7 +386,7 @@ struct kdtree_t : public acc_t // single-level hierarchy
 	};
 	std::vector<node> nodes;
 	std::vector<ivec2> ordered_prims;
-	virtual bool intersect( ray r, isect& h );
+	virtual bool intersect( ray r, isect& h ) const;
 };
 
 //*************************************
@@ -510,7 +512,7 @@ struct mesh
 
 	// acceleration and dynamics
 	bbox		box;
-	acc_t*		acc=nullptr;		// BVH or KD-tree
+	acc_t*		acc=nullptr; // BVH or KD-tree
 
 	// LOD and instancing
 	uint		levels=1;			// LOD levels
@@ -601,7 +603,7 @@ __noinline inline mesh& mesh::operator=( mesh&& other ) // move assignment opera
 	geometries = std::move(other.geometries);	offset += sizeof(decltype(geometries));
 	materials = std::move(other.materials);		offset += sizeof(decltype(materials));
 	memcpy(((char*)this)+offset, ((char*)&other)+offset, sizeof(mesh)-offset);
-	if(acc) acc->p_mesh=this;
+	if(acc) acc->p_mesh = this;
 	for(auto& o:objects) o.root=this;
 	for(auto& g:geometries) g.root=this;
 
@@ -816,7 +818,7 @@ inline uint acc_t::node_count( uint geometry_index ) const
 }
 
 // two-level intersection on two-level BVHs
-__noinline inline bool bvh_t::intersect( ray r, isect& h )
+__noinline inline bool bvh_t::intersect( ray r, isect& h ) const
 {
 	h.g=0xffffffff;
 	
@@ -829,16 +831,16 @@ __noinline inline bool bvh_t::intersect( ray r, isect& h )
 	for( int s=gstack[0]=0, n=0; s>=0; s-- )
 	{
 		// intersect geometries
-		bvh_t::node& gnode = nodes[n=gstack[s]];
+		const bvh_t::node& gnode = nodes[n=gstack[s]];
 		if(!::intersect(gnode.box(),r)) continue;
 		if(!gnode.is_leaf()){ gstack[s+of[gnode.axis]]=n+1; gstack[s+!of[gnode.axis]]=gnode.second_or_index; s+=2; continue; } // push childs for interior intersection; second
 		auto& g = G[gnode.second_or_index]; if(g.acc_empty()) continue; // actually, index
 
 		// intersect primitives
-		bvh_t::node* B = &nodes[g.acc_first_index];
+		const bvh_t::node* B = &nodes[g.acc_first_index];
 		for( int t=pstack[0]=0, j=0; t>=0; t-- )
 		{
-			bvh_t::node& pnode = B[j=pstack[t]];
+			const bvh_t::node& pnode = B[j=pstack[t]];
 			if(!pnode.is_leaf())
 			{
 				if(::intersect(pnode.box(),r))
