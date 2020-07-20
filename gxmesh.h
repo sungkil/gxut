@@ -817,54 +817,6 @@ inline uint acc_t::node_count( uint geometry_index ) const
 	return 0; // other exception
 }
 
-// two-level intersection on two-level BVHs
-__noinline inline bool bvh_t::intersect( ray r, isect& h ) const
-{
-	h.g=0xffffffff;
-	
-	vertex*		V = &p_mesh->vertices[0];
-	uint*		I = &p_mesh->indices[0];
-	geometry*	G = &p_mesh->geometries[0];
-
-	const uvec3 of = {uint(r.d.x<0?1:0),uint(r.d.y<0?1:0),uint(r.d.z<0?1:0) };
-	uint gstack[64], pstack[64];
-	for( int s=gstack[0]=0, n=0; s>=0; s-- )
-	{
-		// intersect geometries
-		const bvh_t::node& gnode = nodes[n=gstack[s]];
-		if(!::intersect(gnode.box(),r)) continue;
-		if(!gnode.is_leaf()){ gstack[s+of[gnode.axis]]=n+1; gstack[s+!of[gnode.axis]]=gnode.second_or_index; s+=2; continue; } // push childs for interior intersection; second
-		auto& g = G[gnode.second_or_index]; if(g.acc_empty()) continue; // actually, index
-
-		// intersect primitives
-		const bvh_t::node* B = &nodes[g.acc_first_index];
-		for( int t=pstack[0]=0, j=0; t>=0; t-- )
-		{
-			const bvh_t::node& pnode = B[j=pstack[t]];
-			if(!pnode.is_leaf())
-			{
-				if(::intersect(pnode.box(),r))
-				{
-					pstack[t+of[pnode.axis]]=j+1;
-					pstack[t+!of[pnode.axis]]=pnode.second_or_index;
-					t+=2;
-				}
-				continue; // intersection on interior: push the children
-			}
-
-			// intersection on leaf nodes
-			uint prim=pnode.second_or_index; // acutally, index
-			vec3 v0=V[I[prim+0]].pos, v1=V[I[prim+1]].pos, v2=V[I[prim+2]].pos;
-			isect i; if(!::intersect(r,v0,v1,v2,i)||i.t>h.t) continue;
-			h = i;
-			h.g = g.ID;
-		}
-	}
-
-	return h.g!=0xffffffff;
-}
-
-
 //*************************************
 // utility
 #ifdef __GX_FILESYSTEM_H__
