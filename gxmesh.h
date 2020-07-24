@@ -384,8 +384,8 @@ struct kdtree_t : public acc_t // single-level hierarchy
 		uint parent:30, axis:2;
 		__forceinline bool is_leaf() const { return axis==3; }
 	};
-	std::vector<node> nodes;
-	std::vector<ivec2> ordered_prims;
+	std::vector<node>	nodes;
+	std::vector<ivec2>	prims; // ordered primitives (face index, geometry index)
 	virtual bool intersect( ray r, isect& h ) const;
 };
 
