@@ -720,6 +720,8 @@ namespace gl {
 	struct Framebuffer : public GLObject
 	{
 		struct depth_key_t { union { struct {uint width:16, height:16, multisamples:8, layers:16, renderbuffer:1, dummy:7;}; uint64_t value; }; depth_key_t():value(0){} };
+		struct state_t { bool depth_test=true, cull_face=true, blend=false, wireframe[2]={false,false}; } _state_stack;
+		static const GLint MAX_COLOR_ATTACHMENTS=8;
 
 		Framebuffer( GLuint ID, const char* name ) : GLObject(ID,name,GL_FRAMEBUFFER),b_color_mask(true),b_depth_mask(true){ memset(active_targets,0,sizeof(active_targets)); glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA ); }
 		virtual ~Framebuffer() override { glBindFramebuffer(GL_FRAMEBUFFER,0); glBindRenderbuffer(GL_RENDERBUFFER,0);memset(active_targets,0,sizeof(active_targets)); GLuint id=ID; if(ID) glDeleteFramebuffers(1,&id); for(auto& it:depth_buffers){const depth_key_t& key=reinterpret_cast<const depth_key_t&>(it.first); if(key.renderbuffer) glDeleteRenderbuffers(1,&it.second); else glDeleteTextures(1,&it.second); } depth_buffers.clear(); }
@@ -731,6 +733,7 @@ namespace gl {
 		void bind_layers( Texture* t0, GLint mipLevel0, Texture* t1=nullptr, GLint mipLevel1=0, Texture* t2=nullptr, GLint mipLevel2=0, Texture* t3=nullptr, GLint mipLevel3=0, Texture* t4=nullptr, GLint mipLevel4=0, Texture* t5=nullptr, GLint mipLevel5=0, Texture* t6=nullptr, GLint mipLevel6=0, Texture* t7=nullptr, GLint mipLevel7=0 ); // t needs to be multi-layers
 		void bind_layers( Texture* t0, Texture* t1=nullptr, Texture* t2=nullptr, Texture* t3=nullptr, Texture* t4=nullptr, Texture* t5=nullptr, Texture* t6=nullptr, Texture* t7=nullptr ){ bind_layers(t0,0,t1,0,t2,0,t3,0,t4,0,t5,0,t6,0,t7,0); } // t needs to be multi-layers
 		void bind_depth_buffer( GLint width, GLint height, GLint layers, bool multisample, GLsizei multisamples );
+		static void unbind(){ glBindFramebuffer( GL_FRAMEBUFFER, 0 ); }
 		void unbind_depth_buffer();
 		void check_status(){ GLenum s=glCheckNamedFramebufferStatus?glCheckNamedFramebufferStatus(ID,GL_FRAMEBUFFER):glCheckFramebufferStatus(GL_FRAMEBUFFER); if(s==GL_FRAMEBUFFER_COMPLETE) return; if(s==GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT\n", name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT\n", name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER\n", name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER\n", name ); else if(s==GL_FRAMEBUFFER_UNSUPPORTED) printf( "[%s] GL_FRAMEBUFFER_UNSUPPORTED\n", name ); }
 		void read_pixels( GLenum attachment, GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLvoid* img ){ if(ID) glNamedFramebufferReadBuffer(ID,GL_COLOR_ATTACHMENT0+attachment); else glReadBuffer(GL_BACK); glReadPixels( x, y, width, height, format, type, img ); }
@@ -744,10 +747,12 @@ namespace gl {
 		void set_color_depth_mask( bool mask, bool b_force_mask=false ){ set_color_mask(mask,b_force_mask); set_depth_mask(mask,b_force_mask); }
 		void set_read_buffer( GLenum mode ){ if(glNamedFramebufferReadBuffer) glNamedFramebufferReadBuffer( ID, mode ); else glReadBuffer( mode ); }
 		void set_draw_buffer( GLenum mode ){ if(glNamedFramebufferDrawBuffer) glNamedFramebufferDrawBuffer( ID, mode ); else glDrawBuffer( mode ); }
-
-		static const GLint MAX_COLOR_ATTACHMENTS=8;
-		static void unbind(){ glBindFramebuffer( GL_FRAMEBUFFER, 0 ); }
+		
 		static void set_state( bool b_depth_test, bool b_cull_face, bool b_blend=false, bool b_wireframe=false ){ b_depth_test?glEnable(GL_DEPTH_TEST):glDisable(GL_DEPTH_TEST); b_cull_face?glEnable(GL_CULL_FACE):glDisable(GL_CULL_FACE); b_blend?glEnable(GL_BLEND):glDisable(GL_BLEND); glPolygonMode(GL_FRONT_AND_BACK,b_wireframe?GL_LINE:GL_FILL); }
+		static void get_state( bool* b_depth_test, bool* b_cull_face, bool* b_blend, bool* b_wireframe=nullptr ){ if(b_depth_test) *b_depth_test=gxGetBooleanv(GL_DEPTH_TEST); if(b_cull_face) *b_cull_face=gxGetBooleanv(GL_CULL_FACE); if(b_blend) *b_blend=gxGetBooleanv(GL_BLEND); if(b_wireframe){ GLint pm[2]; glGetIntegerv(GL_POLYGON_MODE,pm); *b_wireframe=pm[0]==GL_LINE; } }
+		void push_state(){ GLint pm[2]; glGetIntegerv(GL_POLYGON_MODE,pm); _state_stack={gxGetBooleanv(GL_DEPTH_TEST),gxGetBooleanv(GL_CULL_FACE),gxGetBooleanv(GL_BLEND),pm[0]==GL_LINE,pm[1]==GL_LINE}; }
+		void pop_state(){ set_state(_state_stack.depth_test,_state_stack.cull_face,_state_stack.blend,_state_stack.wireframe[0]); if(_state_stack.wireframe[0]!=_state_stack.wireframe[1])glPolygonMode(GL_BACK,_state_stack.wireframe[1]?GL_LINE:GL_FILL); }
+
 		static void set_blend_func( GLenum sfactor, GLenum dfactor ){ glBlendFunc( sfactor, dfactor ); }
 		static void set_blend_func_separate( GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha ){ glBlendFuncSeparate( sfactorRGB, dfactorRGB, sfactorAlpha, dfactorAlpha ); }
 		static void set_multisample( bool b_multisample ){ b_multisample ? glEnable(GL_MULTISAMPLE):glDisable(GL_MULTISAMPLE); }
