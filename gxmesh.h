@@ -74,8 +74,8 @@ struct light_t
 	uint	object_index:24;	// ID of object bound to this light
 
 	// transformation to camera (eye-coordinate) space
-	vec4	ecpos(mat4& view_matrix) const { return pos.a==0 ? vec4(mat3(view_matrix)*pos.xyz, 0.0f) : view_matrix*pos; }
-	vec3	ecnorm(mat4& view_matrix) const { return mat3(view_matrix)*normal; }
+	vec4	ecpos( const mat4& view_matrix ) const { return pos.a==0 ? vec4(mat3(view_matrix)*pos.xyz, 0.0f) : view_matrix*pos; }
+	vec3	ecnorm( const mat4& view_matrix ) const { return mat3(view_matrix)*normal; }
 	vec3	dir() const { return normalize(pos.xyz); }				// directions and angles against view vector
 	float	phi() const { vec3 d=dir(); return atan2(d.y,d.x); }	// angle on the xy plane orthogonal to the optical axis
 	float	theta() const { return acos(dir().z); }					// angle between outgoing light direction and the optical axis
@@ -538,7 +538,7 @@ struct mesh
 	object*	find_object( const char* name ){ for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) return &objects[k]; return nullptr; }
 	std::vector<object*> find_objects( const char* name ){ std::vector<object*> v; for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) v.push_back(&objects[k]); return v; }
 	inline mesh* create_proxy( bool use_quads=false, bool double_sided=false ); // proxy mesh helpers: e.g., bounding box
-	std::vector<material> pack_materials() const { std::vector<material> p; auto& m = materials; p.resize(m.size()); for(size_t k=0, kn=p.size(); k<kn; k++) p[k]=m[k]; return p; }
+	std::vector<material> pack_materials() const { std::vector<material> p; auto& m=materials; p.resize(m.size()); for(size_t k=0,kn=p.size();k<kn;k++) p[k]=m[k]; return p; }
 	void dump_binary( const wchar_t* dir=L""); // dump the vertex/index buffers as binary files
 
 	// bound, dynamic, intersection
