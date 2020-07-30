@@ -47,6 +47,8 @@ struct ID3D11ShaderResourceView;
 struct geometry;
 struct object;
 struct mesh;
+// camera
+struct camera_t;
 
 //*************************************
 // 16-byte aligned light for direct lights
@@ -213,21 +215,41 @@ struct sphere
 };
 
 //*************************************
+// view frustum for culling
+struct frustum_t : public std::array<vec4, 6> // left, right, top, bottom, near, far
+{
+	__forceinline frustum_t() = default;
+	__forceinline frustum_t( frustum_t&& ) = default;
+	__forceinline frustum_t( const frustum_t& ) = default;
+	__forceinline frustum_t( const mat4& view_matrix, const mat4& projection_matrix ){ update(projection_matrix*view_matrix); }
+	__forceinline frustum_t( camera_t& c );
+	__forceinline frustum_t( vpl_t& c ){ update(c); }
+	__forceinline frustum_t& operator=( frustum_t&& ) = default;
+	__forceinline frustum_t& operator=( const frustum_t& ) = default;
+
+	__forceinline frustum_t& update( const mat4& view_projection_matrix ){ auto* planes = data(); for(int k=0;k<6;k++){planes[k]=view_projection_matrix.rvec4(k>>1)*float(1-(k&1)*2)+view_projection_matrix.rvec4(3);planes[k]/=planes[k].xyz.length();} return *this; }
+	__forceinline frustum_t& update( camera_t& c );
+	__forceinline frustum_t& update( vpl_t& c ){ return update(c.projection_matrix*c.view_matrix); }
+	__forceinline bool cull( const bbox_t&  b) const { vec4 pv; pv.w=1.0f; for(int k=0;k<6;k++){ const vec4& plane=operator[](k); for(int j=0;j<3;j++)pv[j]=plane[j]>0?b.M[j]:b.m[j]; if(pv.dot(plane)<0)return true;} return false; }
+};
+
+//*************************************
 // Thin-lens camera definition
 #ifndef __cplusplus
 struct camera_t // std140 layout for OpenGL uniform buffer objects
 {
 	mat4	view_matrix, projection_matrix;
 	float	fovy, aspect, dnear, dfar;
-	vec3	eye, center, up;
+	vec4	eye, center, up;			// 16-bytes aligned for std140 layout
+	float	F, E, df, fn;
 };
-
 #else
 struct camera_t
 {
 	mat4 view_matrix, projection_matrix;
 	union { struct { union {float fovy, height;}; float aspect,dnear,dfar; }; vec4 pp; }; // fov in radians; height for orthographic projection; pp=perspective parameters
-	alignas(16)	vec3 eye, center, up;	// lookAt params (16-bytes aligned for std140 layout)
+	alignas(16) vec3 eye, center, up;	// lookAt params (16-bytes aligned for std140 layout)
+	float F, E, df, fn;					// focal distance, lens radius, focusing depth (in object distance), f-number
 
 	camera_t() = default;
 	camera_t(camera_t&& c) = default;
@@ -237,24 +259,6 @@ struct camera_t
 };
 static_assert(sizeof(camera_t)%16==0, "size of struct camera_t should be aligned at 16-byte boundary");
 #endif
-
-// view frustum for culling
-struct frustum_t : public std::array<vec4, 6> // left, right, top, bottom, near, far
-{
-	__forceinline frustum_t() = default;
-	__forceinline frustum_t( frustum_t&& ) = default;
-	__forceinline frustum_t( const frustum_t& ) = default;
-	__forceinline frustum_t( const mat4& view_matrix, const mat4& projection_matrix ){ update(projection_matrix*view_matrix); }
-	__forceinline frustum_t( camera_t& c ){ update(c); }
-	__forceinline frustum_t( vpl_t& c ){ update(c); }
-	__forceinline frustum_t& operator=( frustum_t&& ) = default;
-	__forceinline frustum_t& operator=( const frustum_t& ) = default;
-
-	__forceinline frustum_t& update( const mat4& view_projection_matrix ){ auto* planes = data(); for(int k=0;k<6;k++){planes[k]=view_projection_matrix.rvec4(k>>1)*float(1-(k&1)*2)+view_projection_matrix.rvec4(3);planes[k]/=planes[k].xyz.length();} return *this; }
-	__forceinline frustum_t& update( camera_t& c ){ return update(c.projection_matrix*c.view_matrix); }
-	__forceinline frustum_t& update( vpl_t& c ){ return update(c.projection_matrix*c.view_matrix); }
-	__forceinline bool cull( const bbox_t&  b) const { vec4 pv; pv.w=1.0f; for(int k=0;k<6;k++){ const vec4& plane=operator[](k); for(int j=0;j<3;j++)pv[j]=plane[j]>0?b.M[j]:b.m[j]; if(pv.dot(plane)<0)return true;} return false; }
-};
 
 struct stereo_t
 {
@@ -267,22 +271,23 @@ struct stereo_t
 struct camera : public camera_t
 {
 	vec3		dir;					// dir = center - eye (view direction vector)
-	float		F, fn, df;				// focal distance, f-number, focusing depth (in object distance)
 	int			frame = RAND_MAX;		// frame used for this camera; used in a motion tracer
 	frustum_t	frustum;				// view frustum for culling
 	camera_t	prev;					// placeholder for the camera at the previous frame
 	stereo_t	stereo;					// stereo rendering attributes
 
-	mat4		inverse_view_matrix() const { return mat4::look_at_inverse(eye, center, up); } // works without eye, center, up
-	mat4		perspective_dx() const { mat4 m = projection_matrix; m._33 = dfar/(dnear-dfar); m._34*=0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
-	vec2		plane_size(float ecd = 1.0f) const { return vec2(2.0f/projection_matrix._11, 2.0f/projection_matrix._22)*ecd; } // plane size (width, height) at eye-coordinate distance 1
-	float		lens_radius() const { return F / fn * 0.5f; }
-	float		coc_scale() const { return (F/fn*0.5f)*0.5f/df/tan(fovy*0.5f); }
-	void		update_depth_clips(const bbox* bound){ if(!bound) return; bbox b=view_matrix*(*bound); vec2 z(max(0.001f,-b.M.z),max(0.001f,-b.m.z)); dnear=max(max(bound->radius()*0.00001f, 50.0f),z.x*0.99f); dfar=max(max(dnear+1.0f,dnear*1.01f),z.y*1.01f); }
-	void		update_view_frustum(){ frustum.update(projection_matrix*view_matrix); }
-	bool		cull( const bbox_t& b ) const { return frustum.cull(b); }
-	void		update_stereo(){ if(!stereo.model) return; float s=0.5f*stereo.ipd, o=s*dnear/df, t=dnear*tanf(0.5f*fovy*(fovy<PI<float>?1.0f:PI<float>/180.0f)), R=t*aspect; vec3 stereo_dir = normalize(cross(dir, up))*s; auto& l=stereo.left=*this; l.eye-=stereo_dir; l.center-=stereo_dir; l.view_matrix=mat4::look_at(l.eye, l.center, l.up); l.projection_matrix=mat4::perspective_off_center(-R+o, R+o, t, -t, dnear, dfar); auto& r=stereo.right=*this; r.eye+=stereo_dir; r.center+=stereo_dir; r.view_matrix=mat4::look_at(r.eye, r.center, r.up); r.projection_matrix=mat4::perspective_off_center(-R-o, R-o, t, -t, dnear, dfar);}
+	mat4	inverse_view_matrix() const { return mat4::look_at_inverse(eye,center,up); } // works without eye, center, up
+	float	coc_scale() const { return (F/fn*0.5f)*0.5f/df/tan(fovy*0.5f); } // E (lens_radius) = F/fn*0.5f
+	mat4	perspective_dx() const { mat4 m = projection_matrix; m._33 = dfar/(dnear-dfar); m._34*=0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
+	vec2	plane_size(float ecd = 1.0f) const { return vec2(2.0f/projection_matrix._11, 2.0f/projection_matrix._22)*ecd; } // plane size (width, height) at eye-coordinate distance 1
+	void	update_depth_clips(const bbox* bound){ if(!bound) return; bbox b=view_matrix*(*bound); vec2 z(max(0.001f,-b.M.z),max(0.001f,-b.m.z)); dnear=max(max(bound->radius()*0.00001f, 50.0f),z.x*0.99f); dfar=max(max(dnear+1.0f,dnear*1.01f),z.y*1.01f); }
+	void	update_view_frustum(){ frustum.update(projection_matrix*view_matrix); }
+	bool	cull( const bbox_t& b ) const { return frustum.cull(b); }
+	void	update_stereo(){ if(!stereo.model) return; float s=0.5f*stereo.ipd, o=s*dnear/df, t=dnear*tanf(0.5f*fovy*(fovy<PI<float>?1.0f:PI<float>/180.0f)), R=t*aspect; vec3 stereo_dir = normalize(cross(dir,up))*s; auto& l=stereo.left=*this; l.eye-=stereo_dir; l.center-=stereo_dir; l.view_matrix=mat4::look_at(l.eye, l.center, l.up); l.projection_matrix=mat4::perspective_off_center(-R+o, R+o, t, -t, dnear, dfar); auto& r=stereo.right=*this; r.eye+=stereo_dir; r.center+=stereo_dir; r.view_matrix=mat4::look_at(r.eye,r.center,r.up); r.projection_matrix=mat4::perspective_off_center(-R-o, R-o, t, -t, dnear, dfar);}
 };
+
+__forceinline frustum_t::frustum_t( camera_t& c ){ update(c); }
+__forceinline frustum_t& frustum_t::update( camera_t& c ){ return update(c.projection_matrix*c.view_matrix); }
 
 //*************************************
 // material definition (std140 layout, aligned at 16-byte/vec4 boundaries)
@@ -675,7 +680,7 @@ __noinline inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
 
 __noinline inline ray gen_primary_ray( camera* cam, float x, float y )	// (x,y) in [0,1]
 {
-	const vec3& eye = cam->eye, center = cam->center, up = cam->up;
+	const vec3& eye = cam->eye.xyz, center = cam->center.xyz, up = cam->up.xyz;
 	float fh = tan(cam->fovy*0.5f)*2.0f, fw = fh * cam->aspect;		// frustum height/width in NDC
 	vec3 epos = vec3(fw*(x - 0.5f), fh*(y - 0.5f), -1.0f);			// pixel position on the image plane: make sure to have negative depth
 	mat4 I = mat4::look_at_inverse(eye, center, up);					// inverse view matrix
