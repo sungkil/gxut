@@ -156,7 +156,7 @@ using double9	= tarray9<double>;	using double16	= tarray16<double>;
 
 //***********************************************
 // Win32-like filetime utilities
-inline uint64_t FileTimeOffset( uint days, uint hours=0, uint mins=0, uint secs=0, uint mss=0 ){ return 10000ull*(mss+1000ull*secs+60*1000ull*mins+60*60*1000ull*hours+24*60*60*1000ull*days); } // FILETIME in 100 ns scale
+inline int64_t FileTimeOffset( int days, int hours=0, int mins=0, int secs=0, int mss=0 ){ return 10000ll*(mss+1000ll*secs+60*1000ll*mins+60*60*1000ll*hours+24*60*60*1000ll*days); } // FILETIME in 100 ns scale
 inline FILETIME DiscardFileTimeMilliseconds( FILETIME f ){uint64_t u=((uint64_t(f.dwHighDateTime)<<32|uint64_t(f.dwLowDateTime))/10000000)*10000000;return FILETIME{DWORD(u&0xffffffff),DWORD(u>>32)};} // 1ms = 10000 in FILETIME
 inline SYSTEMTIME FileTimeToSystemTime( const FILETIME& f ){ SYSTEMTIME s; FileTimeToSystemTime(&f,&s); return s; }
 inline FILETIME SystemTimeToFileTime( const SYSTEMTIME& s ){ FILETIME f; SystemTimeToFileTime(&s,&f); return f; }

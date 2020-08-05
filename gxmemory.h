@@ -39,6 +39,7 @@ struct mem_t
 
 	__forceinline mem_t(){ ptr=nullptr; size=0; }
 	__forceinline mem_t( size_t _size, const void* _ptr=nullptr ){ ptr=(void*)_ptr; size=_size; }
+	virtual ~mem_t(){}
 	__forceinline void* alloc( size_t _size, ptrdiff_t elems=1 ){ return ptr=malloc(size=_size*elems); }
 	__forceinline void free(){ if(ptr) ::free(ptr); size=0; }
 	__forceinline void* cpy( void* src, size_t _size ){ return memcpy(ptr,src,_size); }
@@ -60,7 +61,7 @@ template <class T> class mmap // memory-mapped file (similarly to virtual memory
 	static const wchar_t* _uname(){ static wchar_t fileName[256]; SYSTEMTIME s; GetSystemTime( &s ); wsprintfW( fileName, L"%p%02d%02d%02d%02d%04d%05d", GetCurrentThreadId(), s.wDay, s.wHour, s.wMinute, s.wSecond, s.wMilliseconds, rand() ); return fileName; } // make unique file name
 	mmap( size_t n, size_t chunk=(1<<16) ):size(n),_chunk(chunk){ size_t s=size*sizeof(T); hFileMap=CreateFileMappingW( INVALID_HANDLE_VALUE /* use pagefile */, nullptr, PAGE_READWRITE, DWORD(s>>32), DWORD(s&0xffffffff), _uname() ); }
 	mmap( const wchar_t* file_path, size_t n=0, size_t chunk=(1<<16) ):size(n),_chunk(chunk) /* if n>0 or n != existing file size, a new file with n is created */ { struct _stat st={0}; bool file_exists=_waccess(file_path,0)==0; if(file_exists) _wstat(file_path,&st); size_t file_size=st.st_size; bool b_open = file_size>0&&(n==0||n==file_size); if(b_open) size=file_size/sizeof(T); else if(file_exists) _wunlink(file_path); hFile = CreateFileW( file_path, GENERIC_READ|GENERIC_WRITE, 0, nullptr, b_open?OPEN_EXISTING:CREATE_ALWAYS, FILE_FLAG_RANDOM_ACCESS, nullptr ); if(hFile==INVALID_HANDLE_VALUE){ size=0; _chunk=0; return; } size_t memsize=sizeof(T)*size; hFileMap=CreateFileMappingW( hFile, nullptr, PAGE_READWRITE, DWORD(uint64_t(memsize)>>32), DWORD(memsize&0xffffffff), nullptr ); if(hFileMap==INVALID_HANDLE_VALUE){ size=0; _chunk=0; CloseHandle(hFile); return; } }
-	~mmap(){ if(hFile!=INVALID_HANDLE_VALUE) CloseHandle(hFile); hFile=INVALID_HANDLE_VALUE; if(hFileMap!=INVALID_HANDLE_VALUE) CloseHandle(hFileMap); hFileMap=INVALID_HANDLE_VALUE; }
+	virtual ~mmap(){ if(hFile!=INVALID_HANDLE_VALUE) CloseHandle(hFile); hFile=INVALID_HANDLE_VALUE; if(hFileMap!=INVALID_HANDLE_VALUE) CloseHandle(hFileMap); hFileMap=INVALID_HANDLE_VALUE; }
 	T* map( size_t offset=0, size_t n=0 ){ size_t s=offset*sizeof(T); return n==0&&size==0?nullptr:(T*)MapViewOfFile( hFileMap, FILE_MAP_READ|FILE_MAP_WRITE, DWORD(uint64_t(s)>>32), DWORD(s&0xffffffff), (n?n:size)*sizeof(T) ); }
 	void unmap( T* p ){ if(p){FlushViewOfFile(p,0);UnmapViewOfFile(p);} }
 
@@ -135,7 +136,7 @@ struct szip_t : public izip_t
 	ISzAlloc		alloc_impl = {SzAlloc,SzFree};
 	ISzAlloc		alloc_temp = {SzAllocTemp,SzFreeTemp};
 
-	virtual ~szip_t(){ release(); }
+	~szip_t(){ release(); }
 	szip_t( const path& _file_path ){file_path=_file_path;file_stream=new CFileInStream();if(InFile_OpenW(&file_stream->file,file_path.absolute())!=0){printf("unable to InFile_OpenW(%s)\n",wtoa(file_path.c_str()));return;} FileInStream_CreateVTable(file_stream);LookToRead2_CreateVTable(look_stream=new CLookToRead2(),0);look_stream->buf=(Byte*)alloc_impl.Alloc(&alloc_impl,1<<18);look_stream->bufSize=1<<18;look_stream->pos=look_stream->size=0;look_stream->realStream=&file_stream->vt;crc_generate_table();}
 	szip_t( void* ptr, size_t size ){ if(!ptr||!size) return; crc_generate_table(); MemInStream_Init(mem_stream = new CMemInStream(),ptr,size); }
 
@@ -159,19 +160,19 @@ struct resource_t : public mem_t
 	const LPCWSTR	type = nullptr;
 	izip_t*			zip = nullptr;
 
-	__forceinline resource_t( LPCWSTR lpType, HMODULE _hModule=nullptr ):hModule(_hModule),hres(nullptr),hmem(nullptr),type(lpType),zip(nullptr){}
-	__forceinline ~resource_t(){ release(); }
-	__forceinline void release(){ if(hmem){ /*UnlockResource(hmem);*/ FreeResource(hmem); hmem=nullptr; } if(zip){ zip->release(); delete zip; zip=nullptr; } }
-	__forceinline bool find( LPCWSTR lpName ){ return (hres=FindResourceW( hModule, lpName, type ))!=nullptr; }
-	__forceinline bool find( int res_id ){ return find(MAKEINTRESOURCEW(res_id)); }
+	resource_t( LPCWSTR lpType, HMODULE _hModule=nullptr ):hModule(_hModule),hres(nullptr),hmem(nullptr),type(lpType),zip(nullptr){}
+	~resource_t(){ release(); }
+	void release(){ if(hmem){ /*UnlockResource(hmem);*/ FreeResource(hmem); hmem=nullptr; } if(zip){ zip->release(); delete zip; zip=nullptr; } }
+	bool find( LPCWSTR lpName ){ return (hres=FindResourceW( hModule, lpName, type ))!=nullptr; }
+	bool find( int res_id ){ return find(MAKEINTRESOURCEW(res_id)); }
 
-	__forceinline bool load(){ if(!hres||!(hmem=LoadResource(hModule,hres))) return false; size=SizeofResource(hModule,hres); ptr=LockResource(hmem); return size!=0; }
-	__forceinline bool load( LPCWSTR lpName ){ return find(lpName)&&load(); }
-	__forceinline bool load( int res_id ){ return find(res_id)&&load(); }
+	bool load(){ if(!hres||!(hmem=LoadResource(hModule,hres))) return false; size=SizeofResource(hModule,hres); ptr=LockResource(hmem); return size!=0; }
+	bool load( LPCWSTR lpName ){ return find(lpName)&&load(); }
+	bool load( int res_id ){ return find(res_id)&&load(); }
 
 	// loading for specific types
-	__forceinline std::wstring load_wstring(){ if(type!=MAKEINTRESOURCEW(6/*string 6*/)||!load()) return L""; std::wstring w; w.resize(size/sizeof(wchar_t)); memcpy((void*)w.c_str(),ptr,size); return w; }
-	__forceinline izip_t* load_zip()
+	std::wstring load_wstring(){ if(type!=MAKEINTRESOURCEW(6/*string 6*/)||!load()) return L""; std::wstring w; w.resize(size/sizeof(wchar_t)); memcpy((void*)w.c_str(),ptr,size); return w; }
+	izip_t* load_zip()
 	{
 		if(!load()||!ptr||size<6) return nullptr;
 		zip=nullptr;
