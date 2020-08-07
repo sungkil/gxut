@@ -365,16 +365,16 @@ struct acc_t
 // Bounding volume hierarchy
 struct bvh_t : public acc_t // two-level hierarchy: mesh or geometry
 {
-	// second: offset to right child of interior node; index: primitive index in index buffer
 	struct node
 	{
-		vec3 m=FLT_MAX; uint second_or_index;
+		vec3 m=FLT_MAX; uint second_or_index;		// second: offset to right child of interior node; index: primitive index in index buffer
 		vec3 M=-FLT_MAX; uint parent:30, axis:2;
 		const bbox& box() const { return reinterpret_cast<const bbox&>(*this); }
 		__forceinline bool is_leaf() const { return axis==3; }
 	};
 	std::vector<node> nodes;
 	virtual bool intersect( ray r, isect& h ) const;
+	virtual bool has_prims() const;
 };
 
 //*************************************
@@ -517,7 +517,7 @@ struct mesh
 
 	// acceleration and dynamics
 	bbox		box;
-	acc_t*		acc=nullptr; // BVH or KD-tree
+	acc_t*		acc=nullptr;		// BVH or KD-tree
 
 	// LOD and instancing
 	uint		levels=1;			// LOD levels
@@ -819,7 +819,11 @@ inline uint acc_t::node_count( uint geometry_index ) const
 {
 	if(!p_mesh) return 0; auto& g=p_mesh->geometries; if(g.empty()) return 0;
 	if(geometry_index>=0&&geometry_index<g.size()) return g[geometry_index].acc_count;
-	if(geometry_index==-1) return g.front().acc_first_index; // counter of the geometry-level acceleration structures
+	if(geometry_index==-1) // counter of the geometry-level acceleration structures
+	{
+		if(model==BVH)			return uint(((bvh_t*)this)->nodes.size());
+		else if(model==KDTREE)	return uint(((kdtree_t*)this)->nodes.size());
+	}
 	return 0; // other exception
 }
 
