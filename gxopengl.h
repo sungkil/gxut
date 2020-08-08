@@ -134,6 +134,12 @@ gl::VertexArray*	gxCreatePointVertexArray( GLsizei width, GLsizei height );
 //***********************************************
 namespace gl {
 //***********************************************
+	
+	namespace context
+	{
+		inline bool is_core_profile(){ static GLint mask=0; if(mask==0) glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &mask); return mask==GL_CONTEXT_CORE_PROFILE_BIT; }
+		inline bool is_compatibility_profile(){ static GLint mask=0; if(mask==0) glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &mask); return mask==GL_CONTEXT_COMPATIBILITY_PROFILE_BIT; } 
+	}
 
 	//***********************************************
 	struct GLObject

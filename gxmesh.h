@@ -523,6 +523,9 @@ struct mesh
 	uint		levels=1;			// LOD levels
 	uint		instance_count=1;	// number of instances. The instances are physically added into objects
 
+	// proxy mesh
+	mesh*		proxy=nullptr;		// created and released in GLMesh 
+
 	// auxiliary information
 	wchar_t		file_path[_MAX_PATH]={0};	// mesh file path
 	wchar_t		mtl_path[_MAX_PATH]={0};	// material file path (e.g., *.mtl)
@@ -641,7 +644,7 @@ __noinline inline void mesh::update_bound( bool b_recalc_tris )
 
 __noinline inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
 {
-	mesh* proxy = new mesh();
+	proxy = new mesh();
 
 	// direct copy
 	proxy->objects = objects;
@@ -668,6 +671,7 @@ __noinline inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
 	auto& i = proxy->indices; for(auto& g : geometries)
 	{
 		auto* pg=proxy->objects[g.object_index].create_geometry(i.size(), i0.size(), &g.box);
+		pg->mtx = g.mtx;
 		for(auto& j : i0) i.emplace_back(j + uint(proxy->vertices.size()));
 		mat4 m = mat4::translate(g.box.center())*mat4::scale(g.box.size()*0.5f);
 		for(uint k=0; k<8; k++){ v.pos=(m*corners[k]).xyz; proxy->vertices.emplace_back(v); }
