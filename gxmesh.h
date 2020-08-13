@@ -455,7 +455,7 @@ struct object
 
 	object() = delete;  // no default ctor to enforce to assign parent
 	object( mesh* p_mesh ):root(p_mesh){}
-	object( mesh* p_mesh, uint id, const char* name ) :ID(id), root(p_mesh){ strcpy(this->name, name); }
+	object( mesh* p_mesh, uint id, const char* name ):ID(id), root(p_mesh){ strcpy(this->name, name); }
 
 	// query and attributes
 	inline bool empty() const { return children.empty(); }
@@ -537,8 +537,8 @@ struct mesh
 	virtual ~mesh(){ release(); }
 
 	// release/memory
-	void release(){ if(!vertices.empty()){ vertices.clear(); vertices.shrink_to_fit(); } if(!indices.empty()){ indices.clear(); indices.shrink_to_fit(); } if(!geometries.empty()){ geometries.clear(); geometries.shrink_to_fit(); } objects.clear(); objects.shrink_to_fit(); materials.clear(); materials.shrink_to_fit(); }
-	mesh* shrink_to_fit(){ vertices.shrink_to_fit(); indices.shrink_to_fit(); objects.shrink_to_fit(); geometries.shrink_to_fit(); materials.shrink_to_fit(); return this; }
+	void release(){ vertices.clear(); indices.clear(); geometries.clear(); objects.clear(); materials.clear(); shrink_to_fit(); }
+	mesh* shrink_to_fit(){ vertices.shrink_to_fit(); indices.shrink_to_fit(); geometries.shrink_to_fit(); objects.shrink_to_fit(); materials.shrink_to_fit(); return this; }
 
 	// face/object/geometry/proxy/material helpers
 	uint face_count( int level=0 ) const { uint kn=uint(geometries.size())/levels; auto* g=&geometries[kn*level]; uint f=0; for(uint k=0; k<kn; k++, g++) f+=g->count; return f/3; }
