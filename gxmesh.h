@@ -509,7 +509,7 @@ struct mesh
 	std::vector<material_impl>	materials;
 
 	// volitile spaces for GPU buffers
-	union {
+	union buffers_t {
 		struct { gl::VertexArray* vertex; gl::Buffer *geometry, *count; }; // vertex array, geometry/command buffer, count buffer for OpenGL
 		struct { ID3D10Buffer *vertex, *index; } d3d10; // vertex/index buffers for D3D
 		struct { ID3D11Buffer *vertex, *index; } d3d11; // vertex/index buffers for D3D
@@ -532,8 +532,8 @@ struct mesh
 
 	// constructor
 	mesh(){ vertices.reserve(1<<20); indices.reserve(1<<20); objects.reserve(1<<16); geometries.reserve(1<<16); materials.reserve(1<<16); }
-	inline mesh(mesh&& other){ operator=(std::move(other)); } // move constructor
-	inline mesh& operator=(mesh&& other); // move assignment operator
+	mesh(mesh&& other){ operator=(std::move(other)); } // move constructor
+	mesh& operator=(mesh&& other); // move assignment operator
 	virtual ~mesh(){ release(); }
 
 	// release/memory
@@ -546,7 +546,8 @@ struct mesh
 	object* create_object( const char* name ){ objects.emplace_back(object(this, uint(objects.size()), name)); return &objects.back(); }
 	object*	find_object( const char* name ){ for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) return &objects[k]; return nullptr; }
 	std::vector<object*> find_objects( const char* name ){ std::vector<object*> v; for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) v.push_back(&objects[k]); return v; }
-	inline mesh* create_proxy( bool use_quads=false, bool double_sided=false ); // proxy mesh helpers: e.g., bounding box
+	mesh* create_proxy( bool use_quads=false, bool double_sided=false );	// proxy mesh helpers: e.g., bounding box
+	void update_proxy();													// update existing proxy with newer matrices
 	std::vector<material> pack_materials() const { std::vector<material> p; auto& m=materials; p.resize(m.size()); for(size_t k=0,kn=p.size();k<kn;k++) p[k]=m[k]; return p; }
 	void dump_binary( const wchar_t* dir=L""); // dump the vertex/index buffers as binary files
 
@@ -647,15 +648,10 @@ __noinline inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
 	proxy = new mesh();
 
 	// direct copy
-	proxy->objects = objects;
+	proxy->objects = objects; for(auto& o : proxy->objects) o.root = proxy; // correction of mesh pointers
 	proxy->materials.clear();	// proxy not use materials
-	proxy->box = box;
-	proxy->acc = acc;			// use the same acceleration structures
 	proxy->instance_count = instance_count;
 	wcscpy(proxy->file_path, file_path);
-
-	// correction of mesh pointers
-	for(auto& o : proxy->objects) o.root = proxy;
 
 	// index definitions (CCW: counterclockwise by default)
 	std::vector<uint> i0;
@@ -664,8 +660,11 @@ __noinline inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
 	if(double_sided){ for(size_t k=0, f=use_quads?4:3, kn=i0.size()/f; k<kn; k++) for(size_t j=0; j<f; j++) i0.emplace_back(i0[(k+1)*f-j-1]); } // insert indices (for CW)
 
 	// default corner/vertex definition
-	bbox cv(-1.0f, 1.0f); vec4 corners[8]; for(uint k = 0; k < 8; k++) corners[k] = vec4(cv.corner(k), 1.0f);
+	bbox cv(-1.0f, 1.0f); vec4 corners[8]; for(uint k=0; k<8; k++) corners[k] = vec4(cv.corner(k), 1.0f);
 	vertex v = { vec3(0.0f), vec3(0.0f), vec2(0.0f) };
+
+	proxy->box = box;
+	proxy->acc = acc;	// use the same acceleration structures
 
 	// create vertices/geometries
 	auto& i = proxy->indices; for(auto& g : geometries)
@@ -674,10 +673,26 @@ __noinline inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
 		pg->mtx = g.mtx;
 		for(auto& j : i0) i.emplace_back(j + uint(proxy->vertices.size()));
 		mat4 m = mat4::translate(g.box.center())*mat4::scale(g.box.size()*0.5f);
-		for(uint k=0; k<8; k++){ v.pos=(m*corners[k]).xyz; proxy->vertices.emplace_back(v); }
+		for(uint k=0; k<8; k++){ v.norm=corners[k].xyz; /*actually not used*/ v.pos=(m*corners[k]).xyz; proxy->vertices.emplace_back(v); }
 	}
 
 	return proxy;
+}
+
+__noinline inline void mesh::update_proxy()
+{
+	if(!proxy) return;
+	if(proxy->instance_count!=instance_count){ printf("%s(): proxy->instance_count!=instance_count\n",__func__); return; }
+
+	proxy->box = box;
+	proxy->acc = acc;	// use the same acceleration structures
+
+	for(auto& g : geometries)
+	{
+		proxy->geometries[g.ID].mtx = g.mtx;
+		mat4 m = mat4::translate(g.box.center())*mat4::scale(g.box.size()*0.5f);
+		for( uint k=0; k<8; k++ ){ auto& v = proxy->vertices[g.ID*8+k]; v.pos = (m*vec4(v.norm,1.0f)).xyz; }
+	}
 }
 
 //*************************************
