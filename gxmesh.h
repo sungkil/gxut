@@ -643,7 +643,45 @@ __noinline inline void mesh::update_bound( bool b_recalc_tris )
 		box.expand(obj.update_bound());
 }
 
-__noinline inline mesh* mesh::create_proxy( bool double_sided, bool use_quads )
+__noinline inline std::vector<uint> get_box_indices( bool double_sided, bool quads )
+{
+	std::vector<uint> v; // index definitions (CCW: counterclockwise by default)
+	if(quads)	v = { 0, 3, 2, 1, /*bottom*/ 4, 5, 6, 7, /*top*/ 0, 1, 5, 4, /*left*/ 2, 3, 7, 6, /*right*/ 1, 2, 6, 5, /*front*/ 3, 0, 4, 7 /*back*/ };
+	else		v = { 0, 2, 1, 0, 3, 2, /*bottom*/ 4, 5, 6, 4, 6, 7, /*top*/ 0, 1, 5, 0, 5, 4, /*left*/ 2, 3, 6, 3, 7, 6, /*right*/ 1, 2, 6, 1, 6, 5, /*front*/ 0, 4, 3, 3, 4, 7 /*back*/ };
+	if(double_sided){ for(size_t k=0, f=quads?4:3, kn=v.size()/f; k<kn; k++) for(size_t j=0; j<f; j++) v.emplace_back(v[(k+1)*f-j-1]); } // insert indices (for CW)
+	return v;
+}
+
+__noinline inline std::vector<uint> get_box_line_indices()
+{
+	return std::vector<uint>{
+		0, 3, 3, 2, 2, 1, 1, 0, /*bottom*/ 4, 5, 5, 6, 6, 7, 7, 4, /*top*/   0, 1, 1, 5, 5, 4, 4, 0, /*left*/
+		2, 3, 3, 7, 7, 6, 6, 2, /*right*/  1, 2, 2, 6, 6, 5, 5, 1, /*front*/ 3, 0, 0, 4, 4, 7, 7, 3 /*back*/ };
+}
+
+//*************************************
+// mesh utilities
+__noinline inline mesh* create_box_mesh( bbox box=bbox{vec3(-1.0f),vec3(1.0f)}, const char* name="box", bool double_sided=false, bool quads=false )
+{
+	mesh* m = new mesh();
+	
+	// create box vertices
+	for( auto& c : box.corners() ) m->vertices.emplace_back(vertex{c,vec3(0.0f),vec2(0.0f)});
+
+	// create box triangle/quad elements
+	auto indices = std::move(get_box_indices( double_sided, quads ));
+	m->indices.insert(m->indices.end(),indices.begin(),indices.end());
+	m->create_object(name)->create_geometry(0,uint(m->indices.size()),(bbox*)&box,size_t(-1));
+
+	// create box line elements
+	auto line_indices = std::move(get_box_line_indices());
+	m->indices.insert(m->indices.end(),line_indices.begin(),line_indices.end());
+	m->create_object(format("%s.lines",name))->create_geometry(uint(indices.size()),uint(line_indices.size()),(bbox*)&box, size_t(-1));
+
+	return m;
+}
+
+__noinline inline mesh* mesh::create_proxy( bool double_sided, bool quads )
 {
 	proxy = new mesh();
 
@@ -652,19 +690,13 @@ __noinline inline mesh* mesh::create_proxy( bool double_sided, bool use_quads )
 	proxy->materials.clear();	// proxy not use materials
 	proxy->instance_count = instance_count;
 	wcscpy(proxy->file_path, file_path);
-
-	// index definitions (CCW: counterclockwise by default)
-	std::vector<uint> i0;
-	if(use_quads)	i0 = { 0, 3, 2, 1, /*bottom*/ 4, 5, 6, 7, /*top*/ 0, 1, 5, 4, /*left*/ 2, 3, 7, 6, /*right*/ 1, 2, 6, 5, /*front*/ 3, 0, 4, 7 /*back*/ };
-	else			i0 = { 0, 2, 1, 0, 3, 2, /*bottom*/ 4, 5, 6, 4, 6, 7, /*top*/ 0, 1, 5, 0, 5, 4, /*left*/ 2, 3, 6, 3, 7, 6, /*right*/ 1, 2, 6, 1, 6, 5, /*front*/ 0, 4, 3, 3, 4, 7 /*back*/ };
-	if(double_sided){ for(size_t k=0, f=use_quads?4:3, kn=i0.size()/f; k<kn; k++) for(size_t j=0; j<f; j++) i0.emplace_back(i0[(k+1)*f-j-1]); } // insert indices (for CW)
-
-	// default corner/vertex definition
-	bbox cv(-1.0f, 1.0f); vec4 corners[8]; for(uint k=0; k<8; k++) corners[k] = vec4(cv.corner(k), 1.0f);
-	vertex v = { vec3(0.0f), vec3(0.0f), vec2(0.0f) };
-
 	proxy->box = box;
 	proxy->acc = acc;	// use the same acceleration structures
+
+	// default corner/vertex definition
+	auto corners = bbox(-1.0f, 1.0f).corners();
+	vertex v = { vec3(0.0f), vec3(0.0f), vec2(0.0f) };
+	std::vector<uint> i0 = get_box_indices(double_sided,quads);
 
 	// create vertices/geometries
 	auto& i = proxy->indices; for(auto& g : geometries)
@@ -673,7 +705,7 @@ __noinline inline mesh* mesh::create_proxy( bool double_sided, bool use_quads )
 		pg->mtx = g.mtx;
 		for(auto& j : i0) i.emplace_back(j + uint(proxy->vertices.size()));
 		mat4 m = mat4::translate(g.box.center())*mat4::scale(g.box.size()*0.5f);
-		for(uint k=0; k<8; k++){ v.norm=corners[k].xyz; /*actually not used*/ v.pos=(m*corners[k]).xyz; proxy->vertices.emplace_back(v); }
+		for(uint k=0; k<8; k++){ v.norm=corners[k]; /*actually not used*/ v.pos=(m*vec4(corners[k],1.0f)).xyz; proxy->vertices.emplace_back(v); }
 	}
 
 	return proxy;
@@ -879,45 +911,6 @@ __noinline inline bool clip_line( vec2 p, vec2 q, vec2 lb, vec2 rt, vec2* p1=nul
 	if(p1&&t.x > 0.0f) *p1 = lerp(p, q, t.x);		// new p
 	if(q1&&t.y < 1.0f) *q1 = lerp(p, q, t.y);		// new q
 	return false;
-}
-
-//*************************************
-// mesh utilities
-__noinline inline mesh* create_box_mesh( bbox box=bbox{vec3(-1.0f),vec3(1.0f)}, const char* name="box", bool double_sided=false, bool quads=false )
-{
-	mesh* m = new mesh();
-
-	// vertex definitions
-	for(uint k = 0; k < 8; k++) m->vertices.emplace_back(vertex{ box.corner(k), vec3(0.0f), vec2(0.0f) });
-
-	// index definitions (CCW: counterclockwise by default)
-	if(quads)	m->indices = { 0, 3, 2, 1, /*bottom*/ 4, 5, 6, 7, /*top*/ 0, 1, 5, 4, /*left*/ 2, 3, 7, 6, /*right*/ 1, 2, 6, 5, /*front*/ 3, 0, 4, 7 /*back*/ };
-	else		m->indices = { 0, 2, 1, 0, 3, 2, /*bottom*/ 4, 5, 6, 4, 6, 7, /*top*/ 0, 1, 5, 0, 5, 4, /*left*/ 2, 3, 6, 3, 7, 6, /*right*/ 1, 2, 6, 1, 6, 5, /*front*/ 0, 4, 3, 3, 4, 7 /*back*/ };
-	if(double_sided){ auto& i=m->indices; for(size_t k=0, f=quads?4:3, kn=i.size()/f; k<kn; k++) for(size_t j=0; j<f; j++) i.emplace_back(i[(k+1)*f-j-1]); } // insert indices (for CW)
-
-	// create object and geometry
-	auto* obj = m->create_object(name);
-	auto* geom = obj->create_geometry(0, uint(m->indices.size()), (bbox*)&box, size_t(-1));
-
-	return m;
-}
-
-__noinline inline mesh* create_box_lines( bbox box=bbox{vec3(-1.0f),vec3(1.0f)}, const char* name="box" )
-{
-	mesh* m = new mesh();
-
-	// vertex definitions
-	for(uint k = 0; k < 8; k++) m->vertices.emplace_back(vertex{ box.corner(k), vec3(0.0f), vec2(0.0f) });
-
-	// index definitions (CCW: counterclockwise by default)
-	m->indices = {	0, 3, 3, 2, 2, 1, 1, 0, /*bottom*/ 4, 5, 5, 6, 6, 7, 7, 4, /*top*/   0, 1, 1, 5, 5, 4, 4, 0, /*left*/
-					2, 3, 3, 7, 7, 6, 6, 2, /*right*/  1, 2, 2, 6, 6, 5, 5, 1, /*front*/ 3, 0, 0, 4, 4, 7, 7, 3 /*back*/ };
-
-	// create object and geometry
-	auto* obj = m->create_object(name);
-	auto* geom = obj->create_geometry(0, uint(m->indices.size()), (bbox*)&box, size_t(-1));
-
-	return m;
 }
 
 #endif // __GX_MESH_H__
