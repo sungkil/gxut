@@ -954,7 +954,7 @@ inline gl::Buffer* gxCreateBuffer( const char* name, GLenum target, GLsizeiptr s
 	return buffer;
 }
 
-inline gl::VertexArray* gxCreateVertexArray( const char* name, vertex* p_vertices, size_t vertex_count, uint* p_indices=nullptr, size_t index_count=0, GLenum usage=GL_STATIC_DRAW )
+inline gl::VertexArray* gxCreateVertexArray( const char* name, const vertex* p_vertices, size_t vertex_count, const uint* p_indices=nullptr, size_t index_count=0, GLenum usage=GL_STATIC_DRAW )
 {
 	if(vertex_count==0){ printf( "%s(%s): vertex_count==0\n", __func__, name ); return nullptr; }
 
@@ -978,6 +978,18 @@ inline gl::VertexArray* gxCreateVertexArray( const char* name, vertex* p_vertice
 
 	return va;
 }
+
+inline gl::VertexArray* gxCreateVertexArray( const char* name, const std::vector<vertex>& vertices, const std::vector<uint>& indices, GLenum usage=GL_STATIC_DRAW )
+{
+	return vertices.empty()?nullptr:gxCreateVertexArray(name,&vertices[0],vertices.size(),&indices[0],indices.size(),usage);
+}
+
+#ifdef __GX_MESH_H__
+inline gl::VertexArray* gxCreateVertexArray( const char* name, mesh* p_mesh, GLenum usage=GL_STATIC_DRAW )
+{
+	return p_mesh?gxCreateVertexArray(name,&p_mesh->vertices[0],p_mesh->vertices.size(),&p_mesh->indices[0],p_mesh->indices.size(),usage):nullptr;
+}
+#endif
 
 inline gl::VertexArray* gxCreateQuadVertexArray()
 {

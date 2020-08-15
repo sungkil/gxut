@@ -546,7 +546,7 @@ struct mesh
 	object* create_object( const char* name ){ objects.emplace_back(object(this, uint(objects.size()), name)); return &objects.back(); }
 	object*	find_object( const char* name ){ for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) return &objects[k]; return nullptr; }
 	std::vector<object*> find_objects( const char* name ){ std::vector<object*> v; for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) v.push_back(&objects[k]); return v; }
-	mesh* create_proxy( bool use_quads=false, bool double_sided=false );	// proxy mesh helpers: e.g., bounding box
+	mesh* create_proxy( bool double_sided=false, bool use_quads=false );	// proxy mesh helpers: e.g., bounding box
 	void update_proxy();													// update existing proxy with newer matrices
 	std::vector<material> pack_materials() const { std::vector<material> p; auto& m=materials; p.resize(m.size()); for(size_t k=0,kn=p.size();k<kn;k++) p[k]=m[k]; return p; }
 	void dump_binary( const wchar_t* dir=L""); // dump the vertex/index buffers as binary files
@@ -643,7 +643,7 @@ __noinline inline void mesh::update_bound( bool b_recalc_tris )
 		box.expand(obj.update_bound());
 }
 
-__noinline inline mesh* mesh::create_proxy( bool use_quads, bool double_sided )
+__noinline inline mesh* mesh::create_proxy( bool double_sided, bool use_quads )
 {
 	proxy = new mesh();
 
@@ -883,7 +883,7 @@ __noinline inline bool clip_line( vec2 p, vec2 q, vec2 lb, vec2 rt, vec2* p1=nul
 
 //*************************************
 // mesh utilities
-__noinline inline mesh* create_box_mesh( const bbox& box, const char* name="box", bool use_quads=false, bool double_sided=false )
+__noinline inline mesh* create_box_mesh( bbox box=bbox{vec3(-1.0f),vec3(1.0f)}, const char* name="box", bool double_sided=false, bool quads=false )
 {
 	mesh* m = new mesh();
 
@@ -891,9 +891,9 @@ __noinline inline mesh* create_box_mesh( const bbox& box, const char* name="box"
 	for(uint k = 0; k < 8; k++) m->vertices.emplace_back(vertex{ box.corner(k), vec3(0.0f), vec2(0.0f) });
 
 	// index definitions (CCW: counterclockwise by default)
-	if(use_quads)	m->indices = { 0, 3, 2, 1, /*bottom*/ 4, 5, 6, 7, /*top*/ 0, 1, 5, 4, /*left*/ 2, 3, 7, 6, /*right*/ 1, 2, 6, 5, /*front*/ 3, 0, 4, 7 /*back*/ };
-	else			m->indices = { 0, 2, 1, 0, 3, 2, /*bottom*/ 4, 5, 6, 4, 6, 7, /*top*/ 0, 1, 5, 0, 5, 4, /*left*/ 2, 3, 6, 3, 7, 6, /*right*/ 1, 2, 6, 1, 6, 5, /*front*/ 0, 4, 3, 3, 4, 7 /*back*/ };
-	if(double_sided){ auto& i=m->indices; for(size_t k=0, f=use_quads?4:3, kn=i.size()/f; k<kn; k++) for(size_t j=0; j<f; j++) i.emplace_back(i[(k+1)*f-j-1]); } // insert indices (for CW)
+	if(quads)	m->indices = { 0, 3, 2, 1, /*bottom*/ 4, 5, 6, 7, /*top*/ 0, 1, 5, 4, /*left*/ 2, 3, 7, 6, /*right*/ 1, 2, 6, 5, /*front*/ 3, 0, 4, 7 /*back*/ };
+	else		m->indices = { 0, 2, 1, 0, 3, 2, /*bottom*/ 4, 5, 6, 4, 6, 7, /*top*/ 0, 1, 5, 0, 5, 4, /*left*/ 2, 3, 6, 3, 7, 6, /*right*/ 1, 2, 6, 1, 6, 5, /*front*/ 0, 4, 3, 3, 4, 7 /*back*/ };
+	if(double_sided){ auto& i=m->indices; for(size_t k=0, f=quads?4:3, kn=i.size()/f; k<kn; k++) for(size_t j=0; j<f; j++) i.emplace_back(i[(k+1)*f-j-1]); } // insert indices (for CW)
 
 	// create object and geometry
 	auto* obj = m->create_object(name);
@@ -902,12 +902,7 @@ __noinline inline mesh* create_box_mesh( const bbox& box, const char* name="box"
 	return m;
 }
 
-inline mesh* create_box_mesh( const char* name="box", bool use_quads=false, bool double_sided=false, float half_size=1.0f )
-{
-	return create_box_mesh(bbox{ vec3(-half_size), vec3(half_size) }, name, use_quads, double_sided);
-}
-
-__noinline inline mesh* create_box_lines( const bbox& box, const char* name="box" )
+__noinline inline mesh* create_box_lines( bbox box=bbox{vec3(-1.0f),vec3(1.0f)}, const char* name="box" )
 {
 	mesh* m = new mesh();
 
@@ -923,11 +918,6 @@ __noinline inline mesh* create_box_lines( const bbox& box, const char* name="box
 	auto* geom = obj->create_geometry(0, uint(m->indices.size()), (bbox*)&box, size_t(-1));
 
 	return m;
-}
-
-inline mesh* create_box_lines( const char* name="box", float half_size=1.0f )
-{
-	return create_box_lines(bbox{ vec3(-half_size), vec3(half_size) }, name);
 }
 
 #endif // __GX_MESH_H__
