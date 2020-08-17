@@ -708,8 +708,8 @@ namespace gl {
 
 		// draw or compute
 		inline void draw_quads(){ if(!quad) return; if(quad->index_buffer) quad->draw_elements(0,4,GL_TRIANGLE_STRIP); else quad->draw_arrays(0,4,GL_TRIANGLE_STRIP); }
-		inline void draw_points( GLsizei width, GLsizei height, bool no_attrib=false ){ if(no_attrib) return draw_points_no_attrib( width*height ); uint64_t key=uint64_t(width)|(uint64_t(height)<<32); auto it=pts.find(key); VertexArray* va=it!=pts.end()?it->second:pts[key]=gxCreatePointVertexArray(width,height); if(va) va->draw_arrays( 0, width*height, GL_POINTS ); }
-		inline void draw_points_no_attrib( GLsizei count ){ glBindVertexArray(0); glDrawArrays( GL_POINTS, 0, count ); } // attribute-less rendering without binding any vertex array: simply using gl_VertexID in vertex shaders
+		inline void draw_points( GLsizei width, GLsizei height, bool no_attrib=false ){ if(no_attrib) return draw_points_no_attrib( width*height ); uint64_t key=uint64_t(width)|(uint64_t(height)<<32); auto it=pts.find(key); VertexArray* va=it!=pts.end()?it->second:(pts[key]=gxCreatePointVertexArray(width,height)); if(va) va->draw_arrays(0,width*height,GL_POINTS); }
+		inline void draw_points_no_attrib( GLsizei count ){ GLuint v=0; if(context::is_core_profile()){ auto it=pts.find(0);VertexArray* va=it!=pts.end()?it->second:(pts[0]=gxCreatePointVertexArray(0,0)); if(va)v=va->ID; } glBindVertexArray(v); glDrawArrays( GL_POINTS, 0, count ); } // core profile should bind non-empty VAO; attribute-less rendering without binding any vertex array: simply using gl_VertexID in vertex shaders
 		inline void dispatch_compute( GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z=1 ){ glDispatchCompute( num_groups_x?num_groups_x:1, num_groups_y?num_groups_y:1, num_groups_z?num_groups_z:1 ); }
 		inline void dispatch_compute( GLuint num_threads_x, double local_size_x, GLuint num_threads_y, double local_size_y, GLuint num_threads_z=1, double local_size_z=1 )	{ GLuint num_groups_x = max(GLuint(ceil(num_threads_x/float(local_size_x))),1u), num_groups_y = max(GLuint(ceil(num_threads_y/float(local_size_y))),1u), num_groups_z = max(GLuint(ceil(num_threads_z/float(local_size_z))),1u); dispatch_compute(num_groups_x, num_groups_y, num_groups_z ); }
 		inline void dispatch_compute_indirect( GLintptr indirect ){ glDispatchComputeIndirect( indirect ); }
@@ -956,10 +956,9 @@ inline gl::Buffer* gxCreateBuffer( const char* name, GLenum target, GLsizeiptr s
 
 inline gl::VertexArray* gxCreateVertexArray( const char* name, const vertex* p_vertices, size_t vertex_count, const uint* p_indices=nullptr, size_t index_count=0, GLenum usage=GL_STATIC_DRAW )
 {
-	if(vertex_count==0){ printf( "%s(%s): vertex_count==0\n", __func__, name ); return nullptr; }
-
 	GLuint ID=gxCreateVertexArray(); if(ID==0) return nullptr;
-	gl::VertexArray* va = new gl::VertexArray( ID, name );
+	gl::VertexArray* va = new gl::VertexArray( ID, name ); if(!va){ printf( "%s(): failed to create a vertex array", __func__ ); return nullptr; }
+	if(p_vertices==nullptr||vertex_count==0){ va->bind(); va->bind(false); return va; } // create empty VAO for no-attrib rendering
 
 	va->vertex_buffer = gxCreateBuffer( "vertexBuffer", GL_ARRAY_BUFFER, sizeof(vertex)*vertex_count, usage, p_vertices, 0 ); if(va->vertex_buffer==nullptr){ printf( "%s(): unable to create vertex_buffer\n", __func__ ); delete va; return nullptr; }
 	if(p_indices&&index_count){ va->index_buffer = gxCreateBuffer( "indexBuffer", GL_ELEMENT_ARRAY_BUFFER, sizeof(uint)*index_count, usage, p_indices ); if(va->index_buffer==nullptr){ printf( "%s(): unable to create index_buffer\n", __func__ ); delete va; return nullptr; } }
@@ -1000,8 +999,14 @@ inline gl::VertexArray* gxCreateQuadVertexArray()
 
 inline gl::VertexArray* gxCreatePointVertexArray( GLsizei width, GLsizei height )
 {
-	std::vector<vertex> pts(width*height); for(int y=0,k=0;y<height;y++)for(int x=0;x<width;x++,k++) pts[k]={vec3(float(x),float(y),0.0f),vec3(0.0f,0.0f,1.0f),vec2(x/float(width-1),y/float(height-1))};
-	gl::VertexArray* va = gxCreateVertexArray( "PTS", &pts[0], pts.size() ); if(!va) printf( "%s(): Unable to create PTS(%dx%d)\n", __func__, width, height );
+	gl::VertexArray* va = nullptr;
+	if(width==0||height==0) va = gxCreateVertexArray( "PTS", (vertex*)nullptr,0 );
+	else
+	{
+		std::vector<vertex> pts(width*height); for(int y=0,k=0;y<height;y++)for(int x=0;x<width;x++,k++) pts[k]={vec3(float(x),float(y),0.0f),vec3(0.0f,0.0f,1.0f),vec2(x/float(width-1),y/float(height-1))};
+		va = gxCreateVertexArray( "PTS", &pts[0], pts.size() );
+	}
+	if(!va) printf( "%s(): Unable to create PTS(%dx%d)\n", __func__, width, height );
 	return va;
 }
 
@@ -1116,21 +1121,36 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 {
 	std::string sname = format("%s%s%s",prefix?prefix:"",prefix?".":"",name); const char* pname=sname.c_str();
 
-	// 1. combine macro with shader sources, and add layout qualifier
+	// 0. preprocess macros
 	std::string macro = p_macro&&p_macro[0]?p_macro:""; if(!macro.empty()&&macro.back()!='\n') macro+='\n';
+	std::vector<std::string> macros; for(auto& j:explode_conservative(macro.c_str(),'\n')) macros.emplace_back(j);
+
+	// 1. combine macro with shader sources, and add layout qualifier
 	for( auto& it : shader_source_map )
 	{
 		auto v = gxExplodeShaderSource(it.second.c_str());
-		std::vector<std::string> directive_list;	for(auto& j:v){ const char* s=str_replace(trim(j.second.c_str()),"\t"," "); if(strstr(s,"#version")||strstr(s,"#extension")){ directive_list.emplace_back(j.second); j.second.clear();} }
-		std::vector<std::string> macro_list;		for(auto& j:explode_conservative(macro.c_str(),'\n')) macro_list.emplace_back(j);
-		std::vector<std::string> layout_list;		if(it.first==GL_FRAGMENT_SHADER) layout_list.emplace_back("layout(pixel_center_integer) in vec4 gl_FragCoord;");
+
+		// layout
+		std::vector<std::string> layouts;
+		if(it.first==GL_FRAGMENT_SHADER) layouts.emplace_back("layout(pixel_center_integer) in vec4 gl_FragCoord;");
+
+		// preprocess directives
+		std::vector<std::string> directives;
+		for(auto& j:v)
+		{
+			const char* s=str_replace(trim(j.second.c_str()),"\t"," "); if(s[0]!='#') continue;
+			static const char e[]="#extension", p[]="#pragma", v[]="#version";
+			constexpr size_t le=sizeof(e)-1, lp=sizeof(p)-1, lv=sizeof(v)-1; // exclude trailing zeros
+			if(strncmp(s,v,lv)==0&&gl::context::is_core_profile()&&!strstr(s,"core")) j.second+=" core"; // add "core" to core profile version
+			if(strncmp(s,v,lv)==0||strncmp(s,e,le)==0||strncmp(s,p,lp)==0){ directives.emplace_back(j.second); j.second.clear(); } // should be cleared to avoid repetition
+		}
 
 		// merge all together
 		std::string& s = const_cast<std::string&>(it.second); s.clear();
-		for( auto& j: directive_list ) s+=j+'\n';
-		for( auto& j: layout_list ) s+=j+'\n';
-		for( auto& j: macro_list ) s+=j+'\n';
-		for( auto& j: v ) s+=j.second+'\n';
+		for( auto& j: directives )	s+=j+'\n';
+		for( auto& j: layouts )		s+=j+'\n';
+		for( auto& j: macros )		s+=j+'\n';
+		for( auto& j: v )			s+=j.second+'\n';
 	}
 
 	// 2. trivial return for the default program
