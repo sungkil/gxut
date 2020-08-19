@@ -255,8 +255,9 @@ struct path
 	inline bool is_rsync() const { auto* p=wcsstr(data,L":\\"); if(!p) p=wcsstr(data,L":/"); return p!=nullptr&&p>data+1; }
 	inline bool is_subdir( const path& parent ) const { path p=parent.canonical(); return _wcsnicmp(canonical(),p,p.size())==0; } // do not check existence
 	inline path absolute( const wchar_t* base=L"" ) const { if(!data[0]) return *this; return _wfullpath(__wcsbuf(),(!*base||is_absolute())?data:wcscat(wcscpy(__wcsbuf(),path(base).add_backslash()),data),capacity); }	// do not directly return for non-canonicalized path
-	inline path relative( bool first_dot=false, const wchar_t* from=L"" ) const;
-	inline path relative_slash( bool first_dot=false, const wchar_t* from=L"" ) const { return relative(first_dot,from).to_slash(); }
+	inline path relative( bool first_dot, const wchar_t* from ) const;
+	inline path relative( bool first_dot ) const { return relative(first_dot,L""); }
+	inline path relative( const wchar_t* from=L"" ) const { return relative(false,from); }
 	inline path canonical() const { path p=*this; p.canonicalize(); return p; } // not necessarily absolute: return relative path as well
 
 	// create process
@@ -339,6 +340,11 @@ template<> __noinline inline sized_ptr_t<void> path::read_file<void>() const
 	return p;
 }
 
+template<> __noinline inline sized_ptr_t<const void> path::read_file<const void>() const
+{
+	auto p=read_file<void>(); return {(const void*)p.ptr,p.size};
+}
+
 template<> __noinline inline sized_ptr_t<wchar_t> path::read_file<wchar_t>() const
 {
 	sized_ptr_t<wchar_t> p={nullptr,0};
@@ -354,6 +360,11 @@ template<> __noinline inline sized_ptr_t<wchar_t> path::read_file<wchar_t>() con
 	return p;
 }
 
+template<> __noinline inline sized_ptr_t<const wchar_t> path::read_file<const wchar_t>() const
+{
+	auto p=read_file<wchar_t>(); return {(const wchar_t*)p.ptr,p.size};
+}
+
 template<> __noinline inline sized_ptr_t<char> path::read_file<char>() const
 {
 	sized_ptr_t<char> p={nullptr,0};
@@ -367,6 +378,11 @@ template<> __noinline inline sized_ptr_t<char> path::read_file<char>() const
 	p.ptr = (char*)memcpy(malloc((p.size+1)*sizeof(char)),buffer.c_str(),p.size*sizeof(char));
 	p.ptr[p.size]=0;
 	return p;
+}
+
+template<> __noinline inline sized_ptr_t<const char> path::read_file<const char>() const
+{
+	auto p=read_file<char>(); return {(const char*)p.ptr,p.size};
 }
 
 __noinline inline bool path::write_file( const void* ptr, size_t size ) const
@@ -386,7 +402,7 @@ __noinline inline bool path::write_file( const char* s ) const
 __noinline inline bool path::write_file( const wchar_t* s ) const
 {
 	FILE* fp=_wfopen(data,L"w,ccs=UTF-8"); if(!fp) return false;
-	fseek(fp,0,SEEK_SET); // rewind to remove BOM
+	if(ext()!=L".sln") fseek(fp,0,SEEK_SET); // rewind to remove BOM for non-solution files; caution: vcxproj do not use BOM
 	int ret = s?fputws(s,fp):0; fclose(fp);
 	return ret>=0;
 }
