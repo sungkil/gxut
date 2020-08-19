@@ -32,13 +32,10 @@
 using std::min;
 using std::max;
 
-struct mem_t
+struct mem_t : sized_ptr_t<void>
 {
-	void*	ptr=nullptr;
-	size_t	size=0;
-
 	__forceinline mem_t(){ ptr=nullptr; size=0; }
-	__forceinline mem_t( size_t _size, const void* _ptr=nullptr ){ ptr=(void*)_ptr; size=_size; }
+	__forceinline mem_t( size_t Size, const void* Ptr=nullptr ){ ptr=(void*)Ptr; size=Size; }
 	virtual ~mem_t(){}
 	__forceinline void* alloc( size_t _size, ptrdiff_t elems=1 ){ return ptr=malloc(size=_size*elems); }
 	__forceinline void free(){ if(ptr) ::free(ptr); size=0; }
@@ -317,8 +314,11 @@ inline bool has_sse42(){ static bool b=false,h=true; if(b) return h; b=true; int
 inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ static unsigned int(*pcrc32c)(const void*,size_t,unsigned int)=has_sse42()?crc32c_hw:tcrc32<0x82f63b78UL>; return pcrc32c(buff,size,crc0); }
 #endif
 
-// crc32 wrappers
-inline unsigned int crc32( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0xedb88320UL>(buff,size,crc0); } // regular crc32
+// regular crc32 wrappers
+inline unsigned int crc32( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0xedb88320UL>(buff,size,crc0); }
+inline unsigned int crc32( sized_ptr_t<void> p, unsigned int crc0=0 ){ return crc32((const void*)p.ptr,p.size); }
+// crc32c wrappers
+inline unsigned int crc32c( sized_ptr_t<void> p, unsigned int crc0=0 ){ return crc32c((const void*)p.ptr,p.size,crc0); }
 inline unsigned int crc32c( const char* s ){ return crc32c(s,strlen(s)); }
 inline unsigned int crc32c( const wchar_t* s ){ return crc32c(s,wcslen(s)*sizeof(wchar_t)); }
 
@@ -331,6 +331,7 @@ struct md5
 	explicit md5(std::string str):md5(str.c_str(),str.size()){}
 	explicit md5(std::wstring wstr):md5(wstr.c_str(),wstr.size()*sizeof(wchar_t)){}
 	md5(const void* ptr, size_t size){ if(ptr&&size) update(ptr,size); }
+	md5(sized_ptr_t<void> p):md5(p.ptr,p.size){}
 	const char* c_str() const { static char buff[64]; unsigned char* u=(unsigned char*)&digest; char* c=buff; for(int k=0;k<16;k++,u++,c+=2)sprintf(c,"%02x",*u); buff[32]=0; return buff; }
 	operator uint4() const { return digest; }
 
@@ -400,8 +401,20 @@ __noinline inline void md5::update( const void* data, size_t size )
 //***********************************************
 // augmentation of filesystem
 #ifdef __GX_FILESYSTEM_H__
-__noinline inline uint4 path::md5() const { size_t size; void* ptr=read_file(&size); if(!ptr) return ::md5(nullptr,0); ::md5 m(ptr,size); free(ptr); return m.digest; }
-__noinline inline uint path::crc32c() const { size_t size; void* ptr=read_file(&size); if(!ptr) return 0; uint c=::crc32c(ptr,size); free(ptr); return c; }
+__noinline inline uint4 path::md5() const
+{
+	auto p = read_file<void>();
+	if(!p.ptr) return ::md5(nullptr,0);
+	::md5 m(p); safe_free(p.ptr);
+	return m.digest;
+}
+__noinline inline uint path::crc32c() const
+{
+	auto p=read_file<void>();
+	if(!p.ptr) return 0; uint c=::crc32c(p);
+	safe_free(p.ptr);
+	return c;
+}
 #endif // __GX_FILESYSTEM_H__
 
 //***********************************************
