@@ -115,8 +115,13 @@
 		#pragma clang diagnostic ignored "-Wclang-cl-pch"					// clang bugs show still warnings
 	#endif
 #endif
-// pointer type with size
-template <class T=void> struct sized_ptr_t { T* ptr; size_t size; }; // waiting a C++ standard for proposal P0901R3 (std::sized_ptr_t)
+// pointer type with size: waiting for a C++ standard for proposal P0901R3 (std::sized_ptr_t)
+template <class T=void> struct sized_ptr_t
+{
+	T* ptr; size_t size;
+	operator T* (){ return ptr; }	operator const T* () const { return ptr; }
+	T* operator->(){ return ptr; }	const T* operator->() const { return ptr; }
+}; 
 // utility functions
 template <class T> T*& safe_free( T*& p ){if(p) free(p); return p=nullptr; }
 template <class T> T*& safe_delete( T*& p ){if(p) delete p; return p=nullptr; }
