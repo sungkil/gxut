@@ -108,6 +108,7 @@ struct path
 	// concatenations
 	path& operator+=( const path& p ){ wcscat(data,p.data+((p.data[0]==L'.'&&p.data[1]==L'\\'&&p.data[2])?2:0)); canonicalize(); return *this; }
 	path& operator+=( const wchar_t* s ){ wcscat(data,s+((s[0]==L'.'&&s[1]==L'\\'&&s[2])?2:0)); canonicalize(); return *this; }
+	path& operator+=( wchar_t c ){ size_t l=size(); data[l]=c; data[l+1]=0; return *this; }
 	path& operator+=( const char* s ){ return operator+=(path(s)); }
 	path& operator+=( const std::wstring& s ){ return operator+=(s.c_str()); }
 	path& operator+=( const std::string& s ){ return operator+=(s.c_str()); }
@@ -120,6 +121,7 @@ struct path
 
 	path operator+( const path& p ) const { return clone().operator+=(p); }
 	path operator+( const wchar_t* s ) const { return clone().operator+=(s); }
+	path operator+( wchar_t c ){ return clone().operator+=(c); }
 	path operator+( const char* s ) const { return clone().operator+=(s); }
 	path operator+( const std::wstring& s ) const { return clone().operator+=(s.c_str()); }
 	path operator+( const std::string& s ) const { return clone().operator+=(s.c_str()); }
@@ -201,8 +203,8 @@ struct path
 	path parent() const { return dir().remove_backslash().dir(); }
 	path remove_first_dot()	const { return (wcslen(data)>2&&data[0]==L'.'&&data[1]==L'\\') ? path(data+2) : *this; }
 	path remove_ext() const { split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
-	std::vector<path> explode( const wchar_t* delim=L"/") const	{ std::vector<path> L; if(!delim||!*delim) return L; path s=wcscmp(delim,L"/")==0?to_slash():*this; L.reserve(16); wchar_t* ctx; for(wchar_t* t=wcstok_s(s.data,delim,&ctx);t;t=wcstok_s(0,delim,&ctx)){ if(*t) L.emplace_back(t); } return L; }
-	std::vector<path> relative_ancestors() const { std::vector<path> a, e=dir().relative(true).explode(); if(e.empty()) return a; a.reserve(8); path t=e.front().absolute()+L"\\"; a.emplace_back(t); for(size_t k=1,kn=e.size();k<kn;k++)a.emplace_back(t+=e[k]+L"\\"); return a; }
+	std::vector<path> explode( const wchar_t* delim=L"/") const	{ std::vector<path> L; if(!delim||!*delim) return L; path s=delim[0]==L'/'&&delim[1]==0?to_slash():*this; L.reserve(16); wchar_t* ctx; for(wchar_t* t=wcstok_s(s.data,delim,&ctx);t;t=wcstok_s(0,delim,&ctx)){ if(*t) L.emplace_back(t); } return L; }
+	std::vector<path> relative_ancestors() const { std::vector<path> e=std::move(dir().relative(true).explode()); if(e.empty()) return e; std::vector<path> a; a.reserve(8); path t=e.front().absolute()+L'\\'; a.emplace_back(t); for(size_t k=1,kn=e.size();k<kn;k++) a.emplace_back(t+=e[k]+L'\\'); return a; }
 
 	// attribute by stats
 	inline stat_t	stat() const { stat_t s={0}; if(exists()) _wstat(data,&s); return s; }
@@ -231,7 +233,7 @@ struct path
 
 	// chdir/make/copy/delete file/dir operations
 	void chdir() const { if(is_dir()) _wchdir(data); }
-	bool mkdir() const { if(exists()) return false; path p=to_backslash().remove_backslash(), d; wchar_t* ctx;for( wchar_t* t=wcstok_s(p,L"\\",&ctx); t; t=wcstok_s(nullptr,L"\\", &ctx) ){ d+=t;d+=L"\\"; if(!d.exists()&&_wmkdir(d.data)!=0) return false; } return true; } // make all super directories
+	bool mkdir() const { if(exists()) return false; path p=to_backslash().remove_backslash(), d; wchar_t* ctx;for( wchar_t* t=wcstok_s(p,L"\\",&ctx); t; t=wcstok_s(nullptr,L"\\", &ctx) ){ d+=t;d+=L'\\'; if(!d.exists()&&_wmkdir(d.data)!=0) return false; } return true; } // make all super directories
 	bool create_directory() const { return mkdir(); }
 	bool copy_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()||dst.empty()) return false; if(dst.is_dir()||dst.back()==L'\\') dst=dst.add_backslash()+name(); dst.dir().mkdir(); if(dst.exists()&&overwrite){ if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } return bool(CopyFileW( data, dst, overwrite?FALSE:TRUE )); }
 	bool move_file( path dst ) const { return is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(data,dst.c_str())!=0 : !copy_file(dst,true) ? false: rmfile(); }
@@ -547,7 +549,7 @@ __noinline inline path path::relative( bool first_dot, const wchar_t* from ) con
 	size_t s=0,d=0,ss=src_list.size(),ds=dst_list.size();
 	for(; s<ss&&d<ds; s++, d++ ) if(_wcsicmp(src_list[s],dst_list[d])!=0) break;
 	for(; s<ss; s++ ) result += L"..\\";
-	for(; d<ds; d++ ) result += dst_list[d]+L"\\";
+	for(; d<ds; d++ ) result += dst_list[d]+L'\\';
 	result.canonicalize();
 
 	// 3. if empty dir, then attach ./
