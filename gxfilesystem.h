@@ -203,8 +203,8 @@ struct path
 	path parent() const { return dir().remove_backslash().dir(); }
 	path remove_first_dot()	const { return (wcslen(data)>2&&data[0]==L'.'&&data[1]==L'\\') ? path(data+2) : *this; }
 	path remove_ext() const { split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
-	std::vector<path> explode( const wchar_t* delim=L"/") const	{ std::vector<path> L; if(!delim||!*delim) return L; path s=delim[0]==L'/'&&delim[1]==0?to_slash():*this; L.reserve(16); wchar_t* ctx; for(wchar_t* t=wcstok_s(s.data,delim,&ctx);t;t=wcstok_s(0,delim,&ctx)){ if(*t) L.emplace_back(t); } return L; }
-	std::vector<path> relative_ancestors() const { std::vector<path> e=std::move(dir().relative(true).explode()); if(e.empty()) return e; std::vector<path> a; a.reserve(8); path t=e.front().absolute()+L'\\'; a.emplace_back(t); for(size_t k=1,kn=e.size();k<kn;k++) a.emplace_back(t+=e[k]+L'\\'); return a; }
+	std::vector<path> explode( const wchar_t* delim=L"\\") const { std::vector<path> L; if(!delim||!*delim) return L; path s=delim[0]==L'/'&&delim[1]==0?to_slash():*this; L.reserve(16); wchar_t* ctx; for(wchar_t* t=wcstok_s(s.data,delim,&ctx);t;t=wcstok_s(0,delim,&ctx)) L.emplace_back(t); return L; }
+	std::vector<path> ancestors( path root=L"" ) const { if(root.data[0]==0) root=module_dir(); int rl=int(root.size()); path d=dir();int l=int(d.size());bool r=_wcsnicmp(d.data,root.data,rl)==0;std::vector<path> a;a.reserve(4);for(int k=l-1,e=r?rl-1:0;k>=e;k--){if(d.data[k]==L'\\'||d.data[k]==L'/'){d.data[k+1]=0;a.emplace_back(d);}}return a;}
 
 	// attribute by stats
 	inline stat_t	stat() const { stat_t s={0}; if(exists()) _wstat(data,&s); return s; }
@@ -255,7 +255,7 @@ struct path
 	inline bool is_relative() const { return !is_absolute(); }
 	inline bool is_unc() const { return (data[0]==L'\\'&&data[1]==L'\\')||(data[0]==L'/'&&data[1]==L'/'); }
 	inline bool is_rsync() const { auto* p=wcsstr(data,L":\\"); if(!p) p=wcsstr(data,L":/"); return p!=nullptr&&p>data+1; }
-	inline bool is_subdir( const path& parent ) const { path p=parent.canonical(); return _wcsnicmp(canonical(),p,p.size())==0; } // do not check existence
+	inline bool is_subdir( const path& ancestor ) const { return _wcsnicmp(data,ancestor.data,ancestor.size())==0; } // do not check existence
 	inline path absolute( const wchar_t* base=L"" ) const { if(!data[0]) return *this; return _wfullpath(__wcsbuf(),(!*base||is_absolute())?data:wcscat(wcscpy(__wcsbuf(),path(base).add_backslash()),data),capacity); }	// do not directly return for non-canonicalized path
 	inline path relative( bool first_dot, const wchar_t* from ) const;
 	inline path relative( bool first_dot ) const { return relative(first_dot,L""); }
