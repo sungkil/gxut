@@ -202,7 +202,7 @@ struct bbox : public bbox_t
 	inline bool intersect( ray r, isect& h );
 };
 
-inline bbox operator*(const mat4& m, const bbox& b){ bbox b1=b; return b1.expand(m); }
+inline bbox operator*(const mat4& m, const bbox& b){ return bbox(b).expand(m); }
 #endif
 
 //*************************************
@@ -730,13 +730,14 @@ __noinline inline void mesh::update_proxy()
 //*************************************
 // intersection implementations
 
+// primary ray
 __noinline inline ray gen_primary_ray( camera* cam, float x, float y )	// (x,y) in [0,1]
 {
-	const vec3& eye = cam->eye.xyz, center = cam->center.xyz, up = cam->up.xyz;
-	float fh = tan(cam->fovy*0.5f)*2.0f, fw = fh * cam->aspect;		// frustum height/width in NDC
-	vec3 epos = vec3(fw*(x - 0.5f), fh*(y - 0.5f), -1.0f);			// pixel position on the image plane: make sure to have negative depth
-	mat4 I = mat4::look_at_inverse(eye, center, up);					// inverse view matrix
-	ray r; r.o = eye; r.d = (I*epos - eye).normalize(); r.t = 0.0f; r.tfar = FLT_MAX; return r;
+	const vec3& eye=cam->eye.xyz, center=cam->center.xyz, up=cam->up.xyz;
+	float fh=tan(cam->fovy*0.5f)*2.0f, fw=fh*cam->aspect;		// frustum height/width in NDC
+	vec3 dst=vec3(fw*(x-0.5f),fh*(y-0.5f),-1.0f).normalize();	// target pixel position on the image plane: make sure to have negative depth
+	mat4 I = mat4::look_at_inverse(eye,center,up);				// inverse view matrix
+	ray r; r.t=0.0f; r.tfar=FLT_MAX; r.o=eye; r.d=mat3(I)*dst;  return r;
 }
 
 // triangle intersection: isect=(pos,t), bc=(s,t)
@@ -765,62 +766,33 @@ __noinline inline bool intersect( ray r, vec3 v0, vec3 v1, vec3 v2, isect& h )
 __noinline inline bool bbox::intersect( ray r )
 {
 	float t0=r.t, t1=r.tfar;
-	for(int k=0; k<3; k++)
+	for( int k=0; k<3; k++ )
 	{
 		float i = 1.0f/r.d[k];
-		if(i<0){t0=max(t0,(M[k]-r.o[k])*i);t1=min(t1,(m[k]-r.o[k])*i); }
-		else {	t0=max(t0,(m[k]-r.o[k])*i);t1=min(t1,(M[k]-r.o[k])*i); }
-		if(t0>t1) return false;
+		if(i<0){t0=max(t0,(M[k]-r.o[k])*i);t1=min(t1,(m[k]-r.o[k])*i*1.00000024f); } // epsilon by 4 ulps
+		else{	t0=max(t0,(m[k]-r.o[k])*i);t1=min(t1,(M[k]-r.o[k])*i*1.00000024f); } // epsilon by 4 ulps
 	}
-	return true;
-}
-
-// box intersection
-__noinline inline bool intersect( bbox_t b, ray r )
-{
-	float t0=r.t, t1=r.tfar;
-	for(int k=0; k<3; k++)
-	{
-		float i = 1.0f/r.d[k];
-		if(i<0){t0=max(t0,(b.M[k]-r.o[k])*i);t1=min(t1,(b.m[k]-r.o[k])*i); }
-		else {	t0=max(t0,(b.m[k]-r.o[k])*i);t1=min(t1,(b.M[k]-r.o[k])*i); }
-		if(t0>t1) return false;
-	}
-
-	return true;
+	return (t0<=t1&&t1>0);
 }
 
 __noinline inline bool bbox::intersect( ray r, isect& h )
 {
 	float t0=r.t, t1=r.tfar;
-	for(int k=0; k<3; k++)
+	for( int k=0; k<3; k++ )
 	{
 		float i = 1.0f/r.d[k];
-		if(i<0){t0=max(t0,(M[k]-r.o[k])*i);t1=min(t1,(m[k]-r.o[k])*i); }
-		else {	t0=max(t0,(m[k]-r.o[k])*i);t1=min(t1,(M[k]-r.o[k])*i); }
-		if(t0>t1) return false;
+		if(i<0){t0=max(t0,(M[k]-r.o[k])*i);t1=min(t1,(m[k]-r.o[k])*i*1.00000024f); } // epsilon by 4 ulps
+		else{	t0=max(t0,(m[k]-r.o[k])*i);t1=min(t1,(M[k]-r.o[k])*i*1.00000024f); } // epsilon by 4 ulps
 	}
 
+	if(t0>t1||t1<=0) return false;
 	h.t=t0;
 	h.tfar=t1;
 	return true;
 }
 
-__noinline inline bool intersect( bbox_t b, ray r, isect& h )
-{
-	float t0=r.t, t1=r.tfar;
-	for(int k=0; k<3; k++)
-	{
-		float i = 1.0f/r.d[k];
-		if(i<0){t0=max(t0,(b.M[k]-r.o[k])*i);t1=min(t1,(b.m[k]-r.o[k])*i); }
-		else {	t0=max(t0,(b.m[k]-r.o[k])*i);t1=min(t1,(b.M[k]-r.o[k])*i); }
-		if(t0>t1) return false;
-	}
-
-	h.t=t0;
-	h.tfar=t1;
-	return true;
-}
+__noinline inline bool intersect( bbox_t b, ray r ){ return reinterpret_cast<bbox&>(b).intersect(r); }
+__noinline inline bool intersect( bbox_t b, ray r, isect& h ){ return reinterpret_cast<bbox&>(b).intersect(r,h); }
 
 // sphere intersection
 __noinline inline bool sphere::intersect( ray r, isect& h )

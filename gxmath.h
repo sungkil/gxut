@@ -330,11 +330,11 @@ struct mat2
 	__forceinline const mat2& operator+() const { return *this; }
 	__forceinline mat2 operator-() const { return mat2(-_11,-_12,-_21,-_22); }
 
-	// column/row/diagonal vectors
-	__forceinline vec2 cvec2( int col ) const { return vec2(a[col],a[2+col]); }
+	// diagonal/column/row vectors
 	__forceinline vec2 diag() const { return vec2(_11,_22); }
-	__forceinline const vec2& rvec2( int row ) const { return reinterpret_cast<const vec2&>(a[row*2]); }
+	__forceinline vec2 cvec2( int col ) const { return vec2(a[col],a[2+col]); }
 	__forceinline vec2& rvec2( int row ){ return reinterpret_cast<vec2&>(a[row*2]); }
+	__forceinline const vec2& rvec2( int row ) const { return reinterpret_cast<const vec2&>(a[row*2]); }
 
 	// addition/subtraction operators
 	__forceinline mat2& operator+=( const mat2& m ){ for( int k=0; k < std::extent<decltype(a)>::value; k++ ) a[k]+=m[k]; return *this; }
@@ -405,11 +405,11 @@ struct mat3
 	__forceinline const mat3& operator+() const { return *this; }
 	__forceinline mat3 operator-() const { return mat3(-_11,-_12,-_13,-_21,-_22,-_23,-_31,-_32,-_33); }
 
-	// column/row/diagonal vectors
-	__forceinline vec3 cvec3( int col ) const { return vec3(a[col],a[3+col],a[6+col]); }
+	// diagonal/column/row vectors
 	__forceinline vec3 diag() const { return vec3(_11,_22,_33); }
-	__forceinline const vec3& rvec3( int row ) const { return reinterpret_cast<const vec3&>(a[row*3]); }
+	__forceinline vec3 cvec3( int col ) const { return vec3(a[col],a[3+col],a[6+col]); }
 	__forceinline vec3& rvec3( int row ){ return reinterpret_cast<vec3&>(a[row*3]); }
+	__forceinline const vec3& rvec3( int row ) const { return reinterpret_cast<const vec3&>(a[row*3]); }
 
 	// addition/subtraction operators
 	__forceinline mat3& operator+=( const mat3& m ){ for( size_t k=0; k < std::extent<decltype(a)>::value; k++ ) a[k]+=m[k]; return *this; }
@@ -487,14 +487,14 @@ struct mat4
 	__forceinline const mat4& operator+() const { return *this; }
 	__forceinline mat4 operator-() const { return mat4(-_11,-_12,-_13,-_14,-_21,-_22,-_23,-_24,-_31,-_32,-_33,-_34,-_41,-_42,-_43,-_44); }
 
-	// column/row/diagonal vectors
+	// diagonal/column/row vectors
+	__forceinline vec4 diag() const { return vec4(_11,_22,_33,_44); }
 	__forceinline vec4 cvec4( int col ) const { return vec4(a[col],a[4+col],a[8+col],a[12+col]); }
 	__forceinline vec3 cvec3( int col ) const { return vec3(a[col],a[4+col],a[8+col]); }
-	__forceinline vec4 diag() const { return vec4(_11,_22,_33,_44); }
-	__forceinline const vec4& rvec4( int row ) const { return reinterpret_cast<const vec4&>(a[row*4]); }
 	__forceinline vec4& rvec4( int row ){ return reinterpret_cast<vec4&>(a[row*4]); }
-	__forceinline const vec3& rvec3( int row ) const { return reinterpret_cast<const vec3&>(a[row*4]); }
+	__forceinline const vec4& rvec4( int row ) const { return reinterpret_cast<const vec4&>(a[row*4]); }
 	__forceinline vec3& rvec3( int row ){ return reinterpret_cast<vec3&>(a[row*4]); }
+	__forceinline const vec3& rvec3( int row ) const { return reinterpret_cast<const vec3&>(a[row*4]); }
 
 	// addition/subtraction operators
 	__forceinline mat4& operator+=( const mat4& m ){ for( size_t k=0; k < std::extent<decltype(a)>::value; k++ ) a[k]+=m[k]; return *this; }
@@ -567,8 +567,8 @@ struct mat4
 
 	// viewport, lookat, projection
 	__forceinline mat4& set_viewport( int width, int height ){ set_identity(); _11=width*0.5f; _22=-height*0.5f; _14=width*0.5f; _24=height*0.5f; return *this; }
-	__forceinline mat4& set_look_at( const vec3& eye, const vec3& center, const vec3& up ){ set_identity(); rvec3(2) = (eye-center).normalize(); rvec3(0) = (up.cross(rvec3(2))).normalize(); rvec3(1) = rvec3(2).cross(rvec3(0)); return *this = (*this)*(mat4::translate(-eye)); }
-	__forceinline mat4& set_look_at_inverse( const vec3& eye, const vec3& center, const vec3& up ){ set_identity(); rvec3(2) = (eye-center).normalize(); rvec3(0) = (up.cross(rvec3(2))).normalize(); rvec3(1) = rvec3(2).cross(rvec3(0)); return *this = mat4::translate(eye)*transpose(); }
+	__forceinline mat4& set_look_at( const vec3& eye, const vec3& center, const vec3& up ){ vec3 n=(eye-center).normalize(), u=(up.cross(n)).normalize(), v=n.cross(u); return *this = mat4{u.x,u.y,u.z,-u.dot(eye),v.x,v.y,v.z,-v.dot(eye),n.x,n.y,n.z,-n.dot(eye),0,0,0,1.0f}; }
+	__forceinline mat4& set_look_at_inverse( const vec3& eye, const vec3& center, const vec3& up ){ vec3 n=(eye-center).normalize(), u=(up.cross(n)).normalize(), v=n.cross(u); return *this = mat4{u.x,v.x,n.x,0,u.y,v.y,n.y,0,u.z,v.z,n.z,0,u.dot(eye),v.dot(eye),n.dot(eye),1.0f}; }
 	__forceinline vec3  look_at_eye() const { const vec3 &u=rvec3(0),&v=rvec3(1),&n=rvec3(2),uv=u.cross(v),vn=v.cross(n),nu=n.cross(u); return (vn*_14+nu*_24+uv*_34)/(-u.dot(vn)); }
 	__forceinline mat4  look_at_inverse() const { vec3 eye=look_at_eye(); return mat4(_11,_21,_31,eye.x,_12,_22,_32,eye.y,_13,_23,_33,eye.z,0,0,0,1); }
 
