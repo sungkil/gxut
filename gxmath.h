@@ -568,9 +568,9 @@ struct mat4
 	// viewport, lookat, projection
 	__forceinline mat4& set_viewport( int width, int height ){ set_identity(); _11=width*0.5f; _22=-height*0.5f; _14=width*0.5f; _24=height*0.5f; return *this; }
 	__forceinline mat4& set_look_at( const vec3& eye, const vec3& center, const vec3& up ){ vec3 n=(eye-center).normalize(), u=(up.cross(n)).normalize(), v=n.cross(u); return *this = mat4{u.x,u.y,u.z,-u.dot(eye),v.x,v.y,v.z,-v.dot(eye),n.x,n.y,n.z,-n.dot(eye),0,0,0,1.0f}; }
-	__forceinline mat4& set_look_at_inverse( const vec3& eye, const vec3& center, const vec3& up ){ vec3 n=(eye-center).normalize(), u=(up.cross(n)).normalize(), v=n.cross(u); return *this = mat4{u.x,v.x,n.x,0,u.y,v.y,n.y,0,u.z,v.z,n.z,0,u.dot(eye),v.dot(eye),n.dot(eye),1.0f}; }
+	__forceinline mat4& set_look_at_inverse( const vec3& eye, const vec3& center, const vec3& up ){ vec3 n=(eye-center).normalize(), u=(up.cross(n)).normalize(), v=n.cross(u); return *this = mat4{u.x,v.x,n.x,eye.x,u.y,v.y,n.y,eye.y,u.z,v.z,n.z,eye.z,0,0,0,1.0f}; }
 	__forceinline vec3  look_at_eye() const { const vec3 &u=rvec3(0),&v=rvec3(1),&n=rvec3(2),uv=u.cross(v),vn=v.cross(n),nu=n.cross(u); return (vn*_14+nu*_24+uv*_34)/(-u.dot(vn)); }
-	__forceinline mat4  look_at_inverse() const { vec3 eye=look_at_eye(); return mat4(_11,_21,_31,eye.x,_12,_22,_32,eye.y,_13,_23,_33,eye.z,0,0,0,1); }
+	__forceinline mat4  look_at_inverse() const { vec3 eye=look_at_eye(); return mat4{_11,_21,_31,eye.x,_12,_22,_32,eye.y,_13,_23,_33,eye.z,0,0,0,1}; }
 
 	// Canonical view volume in OpenGL: [-1,1]^3
 	__forceinline mat4& set_perspective( float fovy, float aspect, float dn, float df ){ if(fovy>PI<float>) fovy*=PI<float>/180.0f; /* autofix for fov in degrees */ set_identity(); _22=1.0f/tanf(fovy*0.5f); _11=_22/aspect; _33=(dn+df)/(dn-df); _34=2.0f*dn*df/(dn-df); _43=-1.0f;  _44=0.0f; return *this; }
