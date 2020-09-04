@@ -735,7 +735,7 @@ __noinline inline ray gen_primary_ray( camera* cam, float x, float y )	// (x,y) 
 {
 	const vec3& eye=cam->eye.xyz, center=cam->center.xyz, up=cam->up.xyz;
 	float fh=tan(cam->fovy*0.5f)*2.0f, fw=fh*cam->aspect;		// frustum height/width in NDC
-	vec3 dst=vec3(fw*(x-0.5f),fh*(y-0.5f),-1.0f).normalize();	// target pixel position on the image plane: make sure to have negative depth
+	vec3 dst=normalize(vec3(fw*(x-0.5f),fh*(y-0.5f),-1.0f));	// target pixel position on the image plane: make sure to have negative depth
 	mat4 I = mat4::look_at_inverse(eye,center,up);				// inverse view matrix
 	ray r; r.t=0.0f; r.tfar=FLT_MAX; r.o=eye; r.d=mat3(I)*dst;  return r;
 }
