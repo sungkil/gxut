@@ -771,8 +771,9 @@ __noinline inline bool bbox::intersect( ray r )
 		float i = 1.0f/r.d[k];
 		if(i<0){t0=max(t0,(M[k]-r.o[k])*i);t1=min(t1,(m[k]-r.o[k])*i*1.00000024f); } // epsilon by 4 ulps
 		else{	t0=max(t0,(m[k]-r.o[k])*i);t1=min(t1,(M[k]-r.o[k])*i*1.00000024f); } // epsilon by 4 ulps
+		if(t0>t1) return false;
 	}
-	return (t0<=t1&&t1>0);
+	return t1>0;
 }
 
 __noinline inline bool bbox::intersect( ray r, isect& h )
@@ -783,12 +784,11 @@ __noinline inline bool bbox::intersect( ray r, isect& h )
 		float i = 1.0f/r.d[k];
 		if(i<0){t0=max(t0,(M[k]-r.o[k])*i);t1=min(t1,(m[k]-r.o[k])*i*1.00000024f); } // epsilon by 4 ulps
 		else{	t0=max(t0,(m[k]-r.o[k])*i);t1=min(t1,(M[k]-r.o[k])*i*1.00000024f); } // epsilon by 4 ulps
+		if(t0>t1) return false;
 	}
 
-	if(t0>t1||t1<=0) return false;
-	h.t=t0;
-	h.tfar=t1;
-	return true;
+	h.t=t0; h.tfar=t1;
+	return t1>0;
 }
 
 __noinline inline bool intersect( bbox_t b, ray r ){ return reinterpret_cast<bbox&>(b).intersect(r); }
