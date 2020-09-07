@@ -130,13 +130,9 @@ inline const char* utoa( const uchar4& v ){ uint4 u={v[0],v[1],v[2],v[3]};return
 inline const char* ftoa( const float2& v ){static const char* fmt="%g %g";size_t size=size_t(_scprintf(fmt,v[0],v[1]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v[0],v[1]);return buff;}
 inline const char* ftoa( const float3& v ){static const char* fmt="%g %g %g";size_t size=size_t(_scprintf(fmt,v[0],v[1],v[2]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v[0],v[1],v[2]);return buff;}
 inline const char* ftoa( const float4& v ){static const char* fmt="%g %g %g %g";size_t size=size_t(_scprintf(fmt,v[0],v[1],v[2],v[3]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v[0],v[1],v[2],v[3]);return buff;}
-inline const char* ftoa( const float9& m ){static const char* fmt="%g %g %g %g %g %g %g %g %g";size_t size=size_t(_scprintf(fmt,m[0],m[1],m[2],m[3],m[4],m[5],m[6],m[7],m[8]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,m[0],m[1],m[2],m[3],m[4],m[5],m[6],m[7],m[8]);return buff;}
-inline const char* ftoa( const float16& m ){static const char* fmt="%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g";size_t size=size_t(_scprintf(fmt,m[0],m[1],m[2],m[3],m[4],m[5],m[6],m[7],m[8],m[9],m[10],m[11],m[12],m[13],m[14],m[15]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,m[0],m[1],m[2],m[3],m[4],m[5],m[6],m[7],m[8],m[9],m[10],m[11],m[12],m[13],m[14],m[15]);return buff;}
 inline const char* dtoa( const double2& v ){static const char* fmt="%g %g";size_t size=size_t(_scprintf(fmt,v[0],v[1]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v[0],v[1]);return buff;}
 inline const char* dtoa( const double3& v ){static const char* fmt="%g %g %g";size_t size=size_t(_scprintf(fmt,v[0],v[1],v[2]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v[0],v[1],v[2]);return buff;}
 inline const char* dtoa( const double4& v ){static const char* fmt="%g %g %g %g";size_t size=size_t(_scprintf(fmt,v[0],v[1],v[2],v[3]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v[0],v[1],v[2],v[3]);return buff;}
-inline const char* dtoa( const double9& v ){static const char* fmt="%g %g %g %g %g %g %g %g %g";size_t size=size_t(_scprintf(fmt,v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],v[8]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],v[8]);return buff;}
-inline const char* dtoa( const double16& v ){static const char* fmt="%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g";size_t size=size_t(_scprintf(fmt,v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],v[8],v[9],v[10],v[11],v[12],v[13],v[14],v[15]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],v[8],v[9],v[10],v[11],v[12],v[13],v[14],v[15]);return buff;}
 
 //***********************************************
 // 6.2 Special-purpose functions
@@ -189,13 +185,9 @@ inline const wchar_t* utow( const uchar4& v ){	return atow(utoa(v)); }
 inline const wchar_t* ftow( const float2& v ){	return atow(ftoa(v)); }
 inline const wchar_t* ftow( const float3& v ){	return atow(ftoa(v)); }
 inline const wchar_t* ftow( const float4& v ){	return atow(ftoa(v)); }
-inline const wchar_t* ftow( const float9& m ){	return atow(ftoa(m)); }
-inline const wchar_t* ftow( const float16& m ){	return atow(ftoa(m)); }
 inline const wchar_t* dtow( const double2& v ){	return atow(dtoa(v)); }
 inline const wchar_t* dtow( const double3& v ){	return atow(dtoa(v)); }
 inline const wchar_t* dtow( const double4& v ){	return atow(dtoa(v)); }
-inline const wchar_t* dtow( const double9& m ){	return atow(dtoa(m)); }
-inline const wchar_t* dtow( const double16& m ){return atow(dtoa(m)); }
 
 //***********************************************
 // 8. fast manual conversion from string to int/float (3x--4x faster than CRT atoi/atof)
@@ -240,45 +232,15 @@ inline uint4 atou4( const char* a ){	uint4 v;char* e=nullptr;for(int k=0;k<4;k++
 inline float2 atof2( const char* a ){	float2 v;char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=strtof(a,&e); return v; }
 inline float3 atof3( const char* a ){	float3 v;char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=strtof(a,&e); return v; }
 inline float4 atof4( const char* a ){	float4 v;char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=strtof(a,&e); return v; }
-inline float9 atof9( const char* a ){	float9 v;char* e=nullptr;for(int k=0;k<9;k++,a=e) v[k]=strtof(a,&e); return v; }
-inline float16 atof16( const char* a ){	float16 v;char* e=nullptr;for(int k=0;k<16;k++,a=e) v[k]=strtof(a,&e); return v; }
 inline double2 atod2( const char* a ){	double2 v;char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=strtod(a,&e); return v; }
 inline double3 atod3( const char* a ){	double3 v;char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=strtod(a,&e); return v; }
 inline double4 atod4( const char* a ){	double4 v;char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=strtod(a,&e); return v; }
-inline double9 atod9( const char* a ){	double9 v;char* e=nullptr;for(int k=0;k<9;k++,a=e) v[k]=strtod(a,&e); return v; }
-inline double16 atod16( const char* a ){double16 v;char* e=nullptr;for(int k=0;k<16;k++,a=e) v[k]=strtod(a,&e); return v; }
-
-inline bool atob( const std::string& s ){		return atob(s.c_str()); }
-inline int atoi( const std::string& s ){		return int(fast::atoi(s.c_str())); }
-inline float atof( const std::string& s ){		return float(fast::atof(s.c_str())); }
-inline uint atou( const std::string& s ){		return atou(s.c_str()); }
-inline uint64_t atoull( const std::string& s ){	return atoull(s.c_str()); }
-inline int2 atoi2( const std::string& s ){		return atoi2(s.c_str()); }
-inline int3 atoi3( const std::string& s ){		return atoi3(s.c_str()); }
-inline int4 atoi4( const std::string& s ){		return atoi4(s.c_str()); }
-inline uint2 atou2( const std::string& s ){		return atou2(s.c_str()); }
-inline uint3 atou3( const std::string& s ){		return atou3(s.c_str()); }
-inline uint4 atou4( const std::string& s ){		return atou4(s.c_str()); }
-inline float2 atof2( const std::string& s ){	return atof2(s.c_str()); }
-inline float3 atof3( const std::string& s ){	return atof3(s.c_str()); }
-inline float4 atof4( const std::string& s ){	return atof4(s.c_str()); }
-inline float9 atof9( const std::string& s ){	return atof9(s.c_str()); }
-inline float16 atof16( const std::string& s ){	return atof16(s.c_str()); }
-inline double2 atod2( const std::string& s ){	return atod2(s.c_str()); }
-inline double3 atod3( const std::string& s ){	return atod3(s.c_str()); }
-inline double4 atod4( const std::string& s ){	return atod4(s.c_str()); }
-inline double9 atod9( const std::string& s ){	return atod9(s.c_str()); }
-inline double16 atod16( const std::string& s ){	return atod16(s.c_str()); }
 
 //***********************************************
 // 10. conversion from wstring to user types
 inline int atoi( const wchar_t* w ){		return fast::atoi(wtoa(w)); }
 inline double atof( const wchar_t* w ){		return fast::atof(wtoa(w)); }
-inline int wtoi( const std::wstring& w ){	return fast::atoi(wtoa(w.c_str())); }
-inline double wtof( const std::wstring& w ){return fast::atof(wtoa(w.c_str())); }
-inline int atoi( const std::wstring& w ){	return fast::atoi(wtoa(w.c_str())); }
-inline double atof( const std::wstring& w ){return fast::atof(wtoa(w.c_str())); }
-inline bool wtob( const wchar_t* w ){		return w&&w[0]&&(_wcsicmp(w,L"true")==0||wtoi(w)!=0); }
+inline bool wtob( const wchar_t* w ){		return w&&w[0]&&(_wcsicmp(w,L"true")==0||_wtoi(w)!=0); }
 inline uint wtou( const wchar_t* w ){		return atou(wtoa(w)); }
 inline uint64_t wtoull( const wchar_t* w ){	return atoull(wtoa(w)); }
 
@@ -291,33 +253,9 @@ inline uint4 wtou4( const wchar_t* w ){		return atou4(wtoa(w)); }
 inline float2 wtof2( const wchar_t* w ){	return atof2(wtoa(w)); }
 inline float3 wtof3( const wchar_t* w ){	return atof3(wtoa(w)); }
 inline float4 wtof4( const wchar_t* w ){	return atof4(wtoa(w)); }
-inline float9 wtof9( const wchar_t* w ){	return atof9(wtoa(w)); }
-inline float16 wtof16( const wchar_t* w ){	return atof16(wtoa(w)); }
 inline double2 wtod2( const wchar_t* w ){	return atod2(wtoa(w)); }
 inline double3 wtod3( const wchar_t* w ){	return atod3(wtoa(w)); }
 inline double4 wtod4( const wchar_t* w ){	return atod4(wtoa(w)); }
-inline double9 wtod9( const wchar_t* w ){	return atod9(wtoa(w)); }
-inline double16 wtod16( const wchar_t* w ){	return atod16(wtoa(w)); }
-
-inline bool wtob( const std::wstring& w ){		return wtob(w.c_str()); }
-inline uint wtou( const std::wstring& w ){		return wtou(w.c_str()); }
-inline uint64_t wtoull( const std::wstring& w ){return wtoull(w.c_str()); }
-inline int2 wtoi2( const std::wstring& w ){		return wtoi2(w.c_str()); }
-inline int3 wtoi3( const std::wstring& w ){		return wtoi3(w.c_str()); }
-inline int4 wtoi4( const std::wstring& w ){		return wtoi4(w.c_str()); }
-inline uint2 wtou2( const std::wstring& w ){	return wtou2(w.c_str()); }
-inline uint3 wtou3( const std::wstring& w ){	return wtou3(w.c_str()); }
-inline uint4 wtou4( const std::wstring& w ){	return wtou4(w.c_str()); }
-inline float2 wtof2( const std::wstring& w ){	return wtof2(w.c_str()); }
-inline float3 wtof3( const std::wstring& w ){	return wtof3(w.c_str()); }
-inline float4 wtof4( const std::wstring& w ){	return wtof4(w.c_str()); }
-inline float9 wtof9( const std::wstring& w ){	return wtof9(w.c_str()); }
-inline float16 wtof16( const std::wstring& w ){	return wtof16(w.c_str()); }
-inline double2 wtod2( const std::wstring& w ){	return wtod2(w.c_str()); }
-inline double3 wtod3( const std::wstring& w ){	return wtod3(w.c_str()); }
-inline double4 wtod4( const std::wstring& w ){	return wtod4(w.c_str()); }
-inline double9 wtod9( const std::wstring& w ){	return wtod9(w.c_str()); }
-inline double16 wtod16( const std::wstring& w ){return wtod16(w.c_str()); }
 
 // hexadecimanal conversion
 inline const char* tohex( void* ptr, size_t size ){ unsigned char* u=(unsigned char*)ptr; char *buff=_strbuf(size*2), *b=buff; for(size_t k=0;k<size;k++,u++,b+=2) sprintf(b,"%02x",*u); buff[size*2]=0; return buff; }

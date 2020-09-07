@@ -227,7 +227,7 @@ struct frustum_t : public std::array<vec4, 6> // left, right, top, bottom, near,
 	__forceinline frustum_t& operator=( frustum_t&& ) = default;
 	__forceinline frustum_t& operator=( const frustum_t& ) = default;
 
-	__forceinline frustum_t& update( const mat4& view_projection_matrix ){ auto* planes = data(); for(int k=0;k<6;k++){planes[k]=view_projection_matrix.rvec4(k>>1)*float(1-(k&1)*2)+view_projection_matrix.rvec4(3);planes[k]/=planes[k].xyz.length();} return *this; }
+	__forceinline frustum_t& update( const mat4& view_projection_matrix ){ auto* planes = data(); for(int k=0;k<6;k++){planes[k]=view_projection_matrix[k>>1]*float(1-(k&1)*2)+view_projection_matrix[3];planes[k]/=planes[k].xyz.length();} return *this; }
 	__forceinline frustum_t& update( camera_t& c );
 	__forceinline frustum_t& update( vpl_t& c ){ return update(c.projection_matrix*c.view_matrix); }
 	__forceinline bool cull( const bbox_t&  b) const { vec4 pv; pv.w=1.0f; for(int k=0;k<6;k++){ const vec4& plane=operator[](k); for(int j=0;j<3;j++)pv[j]=plane[j]>0?b.M[j]:b.m[j]; if(pv.dot(plane)<0)return true;} return false; }
