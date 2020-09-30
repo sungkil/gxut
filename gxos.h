@@ -33,9 +33,16 @@
 	#include <chrono>	// microtimer
 #endif
 
-//***********************************************
+//*************************************
 namespace os {
-//***********************************************
+//*************************************
+
+inline const char* get_last_error(){ static char buff[4096]={0};DWORD e=GetLastError();char *s;FormatMessageA( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,e,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPSTR)&s,0,nullptr);sprintf(buff,"%s (code=%x)",s,uint(e));LocalFree(s);return buff; }
+inline void exit( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fprintf( stdout, "[%s] %s", path::module_path().name(false).wtoa(), &buff[0] ); ::exit(EXIT_FAILURE); }
+inline void exit( const wchar_t* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<wchar_t> buff(_vscwprintf(fmt,a)+1); vswprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fwprintf( stdout, L"[%s] %s", path::module_path().name(false).c_str(), &buff[0] ); ::exit(EXIT_FAILURE); }
+#if !defined(__GNUC__)&&((__cplusplus>199711L)||(_MSC_VER>=1600/*VS2010*/))
+inline void usleep( int us ){ std::this_thread::sleep_for(std::chrono::microseconds(us)); }
+#endif
 
 // timer
 #ifndef __GX_OS_TIMER__
@@ -72,7 +79,6 @@ inline mutex_t::mutex_t( const wchar_t* name )
 	if(e==ERROR_ALREADY_EXISTS) close();
 }
 
-//***********************************************
 // general dynamic linking wrapper with DLL
 struct dll_t
 {
@@ -87,8 +93,19 @@ struct dll_t
 	operator bool() const { return hdll!=nullptr; }
 };
 
+inline std::vector<HWND> enum_windows( const wchar_t* filter=nullptr )
+{
+	auto __enum_windows_proc = []( HWND hwnd , LPARAM pProcessList ) -> BOOL { ((std::vector<HWND>*)pProcessList)->emplace_back(hwnd); return TRUE; };
+	std::vector<HWND> v; EnumWindows(__enum_windows_proc,(LPARAM)(&v));
+	return v;
+}
+
+//*************************************
 #ifdef _PSAPI_H_
+//*************************************
+
 inline DWORD current_process(){ static DWORD curr_pid = GetCurrentProcessId(); return curr_pid; }
+
 inline const std::vector<DWORD>& enum_process()
 {
 	static std::vector<DWORD> pids(4096);
@@ -120,24 +137,20 @@ inline std::vector<DWORD> find_process( const wchar_t* process_name )
 	}
 	return v;
 }
-#endif
 
-inline std::vector<HWND> enum_windows( const wchar_t* filter=nullptr )
+namespace console 
 {
-	auto __enum_windows_proc = []( HWND hwnd , LPARAM pProcessList ) -> BOOL { ((std::vector<HWND>*)pProcessList)->emplace_back(hwnd); return TRUE; };
-	std::vector<HWND> v; EnumWindows(__enum_windows_proc,(LPARAM)(&v));
-	return v;
+inline const wchar_t* title(){ static wchar_t buff[MAX_PATH+1]; GetConsoleTitleW(buff,MAX_PATH); return buff; }
+inline DWORD process(){ DWORD console; GetWindowThreadProcessId(GetConsoleWindow(),& console); return console; }
+inline bool has_parent(){ return GetCurrentProcessId()!=process(); }
 }
 
-inline const char* get_last_error(){ static char buff[4096]={0};DWORD e=GetLastError();char *s;FormatMessageA( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,e,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPSTR)&s,0,nullptr);sprintf(buff,"%s (code=%x)",s,uint(e));LocalFree(s);return buff; }
-inline void exit( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fprintf( stdout, "[%s] %s", path::module_path().name(false).wtoa(), &buff[0] ); ::exit(EXIT_FAILURE); }
-inline void exit( const wchar_t* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<wchar_t> buff(_vscwprintf(fmt,a)+1); vswprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fwprintf( stdout, L"[%s] %s", path::module_path().name(false).c_str(), &buff[0] ); ::exit(EXIT_FAILURE); }
-#if !defined(__GNUC__)&&((__cplusplus>199711L)||(_MSC_VER>=1600/*VS2010*/))
-inline void usleep( int us ){ std::this_thread::sleep_for(std::chrono::microseconds(us)); }
-#endif
+//*************************************
+#endif // _PSAPI_H_
+//*************************************
 
-//***********************************************
+//*************************************
 } // namespace os
 
-//***********************************************
+//*************************************
 #endif // __GX_OS_H__
