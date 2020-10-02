@@ -125,7 +125,7 @@ template <class T=void> struct sized_ptr_t
 // utility functions
 template <class T> T*& safe_free( T*& p ){if(p) free(p); return p=nullptr; }
 template <class T> T*& safe_delete( T*& p ){if(p) delete p; return p=nullptr; }
-template <class T> T*& safe_release( T*& p ){if(p) p->Release(); return p; }
+template <class T> T*& safe_release( T*& p ){if(p) p->Release(); return p=nullptr; }
 // nocase base template
 namespace nocase { template <class T> struct less {}; template <class T> struct equal_to {}; template <class T> struct hash {}; };
 // user types
