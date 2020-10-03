@@ -73,7 +73,7 @@ struct path
 		wchar_t				name[capacity+1]={0};
 		unsigned long		serial_number=0;
 		unsigned long		maximum_component_length=0;
-		size_t				_disk_size=0;
+		uint64_t			_disk_size=0;
 		struct { unsigned long flags=0; wchar_t name[capacity+1]={0}; } filesystem;
 
 		// constructor
@@ -86,14 +86,14 @@ struct path
 			root[0]=drive[0]; root[1]=L':'; root[2]=L'\\'; root[3]=0;
 			if(!GetVolumeInformationW(root,name,capacity,&serial_number,&maximum_component_length,&filesystem.flags,filesystem.name,capacity)){ root[0]=0; return; }
 			ULARGE_INTEGER a,t,f; GetDiskFreeSpaceExW( root, &a, &t, &f);
-			_disk_size = size_t(t.QuadPart);
+			_disk_size = uint64_t(t.QuadPart);
 		}
 
 		// query
 		bool exists() const { return root[0]!=0&&serial_number!=0&&filesystem.name[0]!=0; }
-		size_t size() const { return exists()?_disk_size:0; }
-		size_t free_space() const { ULARGE_INTEGER a,t,f; GetDiskFreeSpaceExW( root, &a, &t, &f); return size_t(a.QuadPart); }
-		bool has_free_space( float thresh=0.1f ) const { return exists()&&free_space()>size_t(size()*thresh); }
+		uint64_t size() const { return exists()?_disk_size:0; }
+		uint64_t free_space() const { ULARGE_INTEGER a,t,f; GetDiskFreeSpaceExW( root, &a, &t, &f); return uint64_t(a.QuadPart); }
+		bool has_free_space( uint64_t inverse_thresh=10 ) const { return exists()&&free_space()>(size()/inverse_thresh); }
 		bool is_exfat() const { return _wcsicmp(filesystem.name,L"exFAT")==0; }
 		bool is_ntfs() const { return _wcsicmp(filesystem.name,L"NTFS")==0; }
 		bool is_fat32() const { return _wcsicmp(filesystem.name,L"FAT32")==0; }
