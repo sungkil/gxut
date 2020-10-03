@@ -69,14 +69,31 @@ struct path
 	struct volume_t
 	{
 		static const int	capacity = GX_MAX_PATH; // MAX_PATH == 260
-		const wchar_t		root[3]={0};
+		wchar_t				root[4]={0}; // trailing backslash required
 		wchar_t				name[capacity+1]={0};
 		unsigned long		serial_number=0;
 		unsigned long		maximum_component_length=0;
+		size_t				_disk_size=0;
 		struct { unsigned long flags=0; wchar_t name[capacity+1]={0}; } filesystem;
 
+		// constructor
+		volume_t() = default;
+		volume_t( const volume_t& other ) = default;
+		volume_t& operator=( const volume_t& other ) = default;
+		volume_t( const wchar_t* drive )
+		{
+			if(!drive||!drive[0]||!isalpha(drive[0])) return;
+			root[0]=drive[0]; root[1]=L':'; root[2]=L'\\'; root[3]=0;
+			if(!GetVolumeInformationW(root,name,capacity,&serial_number,&maximum_component_length,&filesystem.flags,filesystem.name,capacity)){ root[0]=0; return; }
+			ULARGE_INTEGER a,t,f; GetDiskFreeSpaceExW( root, &a, &t, &f);
+			_disk_size = size_t(t.QuadPart);
+		}
+
 		// query
-		bool exists() const { return serial_number!=0&&filesystem.name[0]!=0; }
+		bool exists() const { return root[0]!=0&&serial_number!=0&&filesystem.name[0]!=0; }
+		size_t size() const { return exists()?_disk_size:0; }
+		size_t free_space() const { ULARGE_INTEGER a,t,f; GetDiskFreeSpaceExW( root, &a, &t, &f); return size_t(a.QuadPart); }
+		bool has_free_space( float thresh=0.1f ) const { return exists()&&free_space()>size_t(size()*thresh); }
 		bool is_exfat() const { return _wcsicmp(filesystem.name,L"exFAT")==0; }
 		bool is_ntfs() const { return _wcsicmp(filesystem.name,L"NTFS")==0; }
 		bool is_fat32() const { return _wcsicmp(filesystem.name,L"FAT32")==0; }
@@ -198,7 +215,7 @@ struct path
 	__forceinline split_t split( wchar_t* drive=nullptr, wchar_t* dir=nullptr, wchar_t* fname=nullptr, wchar_t* ext=nullptr ) const { _wsplitpath_s(data,drive,drive?_MAX_DRIVE:0,dir,dir?_MAX_DIR:0,fname,fname?_MAX_FNAME:0,ext,ext?_MAX_EXT:0); if(drive&&drive[0]) drive[0]=wchar_t(::toupper(drive[0])); return split_t{drive,dir,fname,ext}; }
 
 	// path info/operations
-	volume_t volume() const { volume_t v; if(is_unc()||is_rsync()) return v; path d=drive(); if(d.empty()||!isalpha(d[0])) return v; wcscpy(d.data+1,L":"); if(!d.exists()) return v; if(GetVolumeInformationW( d.c_str(), v.name, volume_t::capacity, &v.serial_number, &v.maximum_component_length, &v.filesystem.flags, v.filesystem.name, volume_t::capacity )) return v; return volume_t(); }
+	volume_t volume() const { return (is_unc()||is_rsync()||!drive().exists())?volume_t():volume_t(drive().c_str()); }
 	path drive() const { path p; _wsplitpath_s(data,p.data,_MAX_DRIVE,0,0,0,0,0,0); if(*p.data) *p.data=wchar_t(::toupper(*p.data)); return p; }
 	path dir() const { path p; wchar_t* d=__wcsbuf(); _wsplitpath_s(data,p.data,_MAX_DRIVE,d,_MAX_DIR,0,0,0,0); size_t pl=wcslen(p.data), dl=wcslen(d); if(0==(pl+dl)) return L".\\"; if(dl){ memcpy(p.data+pl,d,dl*sizeof(wchar_t)); p.data[pl+dl]=0; } return p; }
 	path name( bool with_ext=true ) const { path p; wchar_t* ext=with_ext?__wcsbuf():nullptr; _wsplitpath_s(data,0,0,0,0,p.data,_MAX_FNAME,ext,ext?_MAX_EXT:0); if(!ext) return p; size_t pl=wcslen(p.data), el=wcslen(ext); if(el){ memcpy(p.data+pl,ext,el*sizeof(wchar_t)); p.data[pl+el]=0; } return p; }
@@ -520,7 +537,18 @@ __noinline inline path path::serial( path dir, const wchar_t* prefix, const wcha
 //***********************************************
 // temp directories
 
-inline path path::system::temp(){ static path t; if(!t.empty()) return t; GetTempPathW(path::capacity,t);t=t.absolute().add_backslash();t[0]=::toupper(t[0]); return t; }
+inline path path::system::temp()
+{
+	static path t; if(!t.empty()) return t;
+	GetTempPathW(path::capacity,t); t=t.absolute().add_backslash(); t[0]=::toupper(t[0]);
+	if(t.volume().has_free_space()) return t;
+	wprintf(L"temp(): not enough space in %s\n", t.data );
+	t=path::module_dir()+L"temp\\"; if(!t.exists()) t.mkdir(); wprintf(L"temp(): %s is used instead", t.data );
+	if(!t.volume().has_free_space()) wprintf(L", but still not enough space." );
+	wprintf(L"\n");
+	return t;
+}
+
 inline path path::global::temp( const char* subdir )
 {
 #ifdef REX_FACTORY_IMPL
