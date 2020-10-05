@@ -227,6 +227,10 @@ struct path
 	std::vector<path> explode( const wchar_t* delim=L"\\") const { std::vector<path> L; if(!delim||!*delim) return L; path s=delim[0]==L'/'&&delim[1]==0?to_slash():*this; L.reserve(16); wchar_t* ctx; for(wchar_t* t=wcstok_s(s.data,delim,&ctx);t;t=wcstok_s(0,delim,&ctx)) L.emplace_back(t); return L; }
 	std::vector<path> ancestors( path root=L"" ) const { if(root.data[0]==0) root=module_dir(); int rl=int(root.size()); path d=dir();int l=int(d.size());bool r=_wcsnicmp(d.data,root.data,rl)==0;std::vector<path> a;a.reserve(4);for(int k=l-1,e=r?rl-1:0;k>=e;k--){if(d.data[k]==L'\\'||d.data[k]==L'/'){d.data[k+1]=0;a.emplace_back(d);}}return a;}
 
+	// content manipulations
+	path replace_ext( const wchar_t* ext ) const { if(!ext||!ext[0])return *this;split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf(),__wcsbuf());path p;swprintf_s(p.data,capacity,L"%s%s%s%s%s",si.drive,si.dir,si.fname,ext[0]==L'.'?L"":L".",ext );return p; }
+	path replace_ext( const char* ext ) const { if(!ext||!ext[0])return *this; return replace_ext(__mb2wc(ext,__wcsbuf())); }
+
 	// multi-byte path info
 	const char* aname( bool with_ext=true ) const { return name(with_ext).wtoa(); }
 	const wchar_t* wname( bool with_ext=true ) const { return name(with_ext).c_str(); }
