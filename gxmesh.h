@@ -358,7 +358,6 @@ struct acc_t
 	virtual ~acc_t(){}			// should be virtual to enforce to call inherited destructors
 	virtual void release()=0;
 	virtual bool intersect( ray r, isect& h ) const = 0;
-	uint	node_count( uint geometry_index=-1 ) const;		// return the geometry BVH for -1, otherwise for primitive BVH
 };
 
 //*************************************
@@ -373,6 +372,7 @@ struct bvh_t : public acc_t // two-level hierarchy: mesh or geometry
 		__forceinline bool is_leaf() const { return axis==3; }
 	};
 	std::vector<node> nodes;
+	uint geometry_node_count() const;
 	virtual bool intersect( ray r, isect& h ) const;
 	virtual bool has_prims() const;
 };
@@ -569,6 +569,14 @@ struct volume
 	float*	data;			// voxel data array: cast by format
 	vec4	table[256];		// transfer function: usually 256 size
 };
+
+//*************************************
+// late implementations for BVH
+inline uint bvh_t::geometry_node_count() const
+{
+	if(!p_mesh) return 0; auto& g=p_mesh->geometries; if(g.empty()) return 0;
+	return has_prims()? g[0].acc_first_index : uint(nodes.size());
+}
 
 //*************************************
 // late implementations for geometry
@@ -836,18 +844,6 @@ __noinline inline bool mesh::intersect( ray r, isect& h, bool use_acc ) const
 		h=i; h.g=g.ID;
 	}
 	return h.g!=0xffffffff;
-}
-
-inline uint acc_t::node_count( uint geometry_index ) const
-{
-	if(!p_mesh) return 0; auto& g=p_mesh->geometries; if(g.empty()) return 0;
-	if(geometry_index>=0&&geometry_index<g.size()) return g[geometry_index].acc_count;
-	if(geometry_index==-1) // counter of the geometry-level acceleration structures
-	{
-		if(model==BVH)			return uint(((bvh_t*)this)->nodes.size());
-		else if(model==KDTREE)	return uint(((kdtree_t*)this)->nodes.size());
-	}
-	return 0; // other exception
 }
 
 //*************************************
