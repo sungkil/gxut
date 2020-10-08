@@ -71,11 +71,10 @@ inline const char* format( const char* fmt,... ){ va_list a; va_start(a,fmt); si
 inline const wchar_t* format( const wchar_t* fmt,... ){ va_list a; va_start(a,fmt); size_t len=size_t(_vscwprintf(fmt,a)); wchar_t* bufferW=_wcsbuf(len); vswprintf_s(bufferW,len+1,fmt,a); va_end(a); return bufferW; }
 
 //***********************************************
-// 3. case conversion
-template <class T> inline const T* tolower( const T* src ){ return _strlwr(__tstrdup(src)); }
-template <class T> inline const T* toupper( const T* src ){ return _strupr(__tstrdup(src)); }
-inline const char* tovarname( const char* src ){ if(!src||!*src) return ""; char *s=(char*)src,*dst=_strbuf(strlen(src)+2), *d=dst; if(!isalpha(*s)&&(*s)!='_') *(d++)='_'; for(;*s;s++,d++) *d=isalnum(*s)?(*s):'_'; *d='\0'; return dst; }
-inline const wchar_t* tovarname( const wchar_t* src ){ if(!src||!*src) return L""; wchar_t *s=(wchar_t*)src,*dst=_wcsbuf(wcslen(src)+2), *d=dst; if(!isalpha(*s)&&(*s)!=L'_') *(d++)=L'_'; for(;*s;s++,d++) *d=isalnum(*s)?(*s):L'_'; *d=L'\0'; return dst; }
+// 3. conversion between const wchar_t* and const char*
+template <class T,class I> const T* _strcvt( const I* s ){size_t len=strlen(s);T* buff=__tstrbuf<T>(len);for(uint k=0;k<len;k++)buff[k]=T(s[k]);return buff;}
+inline const wchar_t* atow( const char* a ){int wlen=MultiByteToWideChar(0,0,a,-1,0,0);wchar_t* wbuff=_wcsbuf(wlen);MultiByteToWideChar(0,0,a,-1,wbuff,wlen);return wbuff;}
+inline const char* wtoa( const wchar_t* w ){int mblen=WideCharToMultiByte(0,0,w,-1,0,0,0,0);char* buff=_strbuf(mblen);WideCharToMultiByte(0,0,w,-1,buff,mblen,0,0);return buff;}
 
 //***********************************************
 // 4. case-insensitive comparison for std::map/set, std::unordered_map/set
@@ -95,10 +94,11 @@ namespace nocase
 }
 
 //***********************************************
-// 5. conversion between const wchar_t* and const char*
-template <class T,class I> const T* _strcvt( const I* s ){size_t len=strlen(s);T* buff=__tstrbuf<T>(len);for(uint k=0;k<len;k++)buff[k]=T(s[k]);return buff;}
-inline const wchar_t* atow( const char* a ){int wlen=MultiByteToWideChar(0,0,a,-1,0,0);wchar_t* wbuff=_wcsbuf(wlen);MultiByteToWideChar(0,0,a,-1,wbuff,wlen);return wbuff;}
-inline const char* wtoa( const wchar_t* w ){int mblen=WideCharToMultiByte(0,0,w,-1,0,0,0,0);char* buff=_strbuf(mblen);WideCharToMultiByte(0,0,w,-1,buff,mblen,0,0);return buff;}
+// 5. case conversion
+template <class T> inline const T* tolower( const T* src ){ return _strlwr(__tstrdup(src)); }
+template <class T> inline const T* toupper( const T* src ){ return _strupr(__tstrdup(src)); }
+inline const char* tovarname( const char* src, bool to_upper=false ){ if(!src||!*src) return ""; char *s=(char*)src,*dst=_strbuf(strlen(src)+2),*d=dst; if(!isalpha(*s)&&(*s)!='_') *(d++)='_'; for(;*s;s++,d++) *d=isalnum(*s)?(to_upper?toupper(*s):(*s)):'_'; *d='\0'; return dst; }
+inline const char* tovarname( const wchar_t* src, bool to_upper=false ){ return tovarname(wtoa(src),to_upper); }
 
 //***********************************************
 // 6. conversion to string types
