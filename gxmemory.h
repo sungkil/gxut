@@ -228,7 +228,7 @@ namespace zlib {
 //*************************************
 inline size_t capacity( size_t size ){ return size+(((size+16383)>>16)*5)+6; }
 
-__noinline inline std::vector<uchar> compress( void* ptr, size_t size, bool b_gzip )
+__noinline std::vector<uchar> compress( void* ptr, size_t size, bool b_gzip )
 {
 	z_stream s; memset(&s,0,sizeof(decltype(s)));
 	int ret = b_gzip?deflateInit2_(&s,-1,8,MAX_WBITS+16,8,0,ZLIB_VERSION,sizeof(s)):deflateInit_(&s,-1,ZLIB_VERSION,sizeof(s));
@@ -253,7 +253,7 @@ __noinline inline std::vector<uchar> compress( void* ptr, size_t size, bool b_gz
 	return buff;
 }
 
-__noinline inline std::vector<uchar> decompress( void* ptr, size_t size )
+__noinline std::vector<uchar> decompress( void* ptr, size_t size )
 {
 	z_stream s; memset(&s,0,sizeof(s));
 	std::vector<uchar> buff; if(size<3) return buff;
@@ -294,7 +294,7 @@ __noinline inline std::vector<uchar> decompress( void* ptr, size_t size )
 #if !defined(_MSC_VER)||defined(__clang__)
 inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0x82f63b78UL>(buff,size,crc0); }
 #else
-__noinline inline unsigned int crc32c_hw( const void* buff, size_t size, unsigned int crc0 )
+__noinline unsigned int crc32c_hw( const void* buff, size_t size, unsigned int crc0 )
 {
 	if(!buff||!size) return crc0; const unsigned char* b = (const unsigned char*) buff;
 #if defined(_M_X64)
@@ -341,7 +341,7 @@ private:
 	inline void update( const void* data, size_t size );
 };
 
-__noinline inline const void* md5::body( const unsigned char* data, size_t size )
+__noinline const void* md5::body( const unsigned char* data, size_t size )
 {
 	#define MD5_F(x,y,z)				((z)^((x)&((y)^(z))))
 	#define MD5_G(x,y,z)				((y)^((z)&((x)^(y))))
@@ -371,7 +371,7 @@ __noinline inline const void* md5::body( const unsigned char* data, size_t size 
 	return data;
 }
 
-__noinline inline void md5::update( const void* data, size_t size )
+__noinline void md5::update( const void* data, size_t size )
 {
 	static unsigned char buffer[64];
 	uint32_t lo=0, hi=0, lo0=lo, available, used;
@@ -401,14 +401,14 @@ __noinline inline void md5::update( const void* data, size_t size )
 //***********************************************
 // augmentation of filesystem
 #ifdef __GX_FILESYSTEM_H__
-__noinline inline uint4 path::md5() const
+__noinline uint4 path::md5() const
 {
 	auto p = read_file<void>();
 	if(!p.ptr) return ::md5(nullptr,0);
 	::md5 m(p); safe_free(p.ptr);
 	return m.digest;
 }
-__noinline inline uint path::crc32c() const
+__noinline uint path::crc32c() const
 {
 	auto p=read_file<void>();
 	if(!p.ptr) return 0; uint c=::crc32c(p);
@@ -465,7 +465,7 @@ struct binary_cache
 };
 
 #if defined(_zip_H) && defined(_unzip_H)
-__noinline inline bool binary_cache::compress( bool rm_src )
+__noinline bool binary_cache::compress( bool rm_src )
 {
 	if(!cache_path().exists()) return false;
 	HZIP hZip = CreateZip( zip_path(), nullptr );
@@ -473,7 +473,7 @@ __noinline inline bool binary_cache::compress( bool rm_src )
 	else { wprintf( L"Unable to compress %s\n", cache_path().name().c_str() ); CloseZip( hZip ); return false; }
 }
 
-__noinline inline bool binary_cache::decompress()
+__noinline bool binary_cache::decompress()
 {
 	if(!zip_path().exists()) return false;
 	zip_t zip_file(zip_path()); return zip_file.load()&&!zip_file.entries.empty()&&zip_file.extract_to_files(zip_path().dir());

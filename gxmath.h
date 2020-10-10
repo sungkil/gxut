@@ -472,7 +472,7 @@ template <class T> struct tmat4
 };
 
 template <class T>
-__noinline inline tmat4<T>& tmat4<T>::set_rotate_vec_to_vec( const tvec3<T>& from, const tvec3<T>& to )
+__noinline tmat4<T>& tmat4<T>::set_rotate_vec_to_vec( const tvec3<T>& from, const tvec3<T>& to )
 {
 	T fdt=from.dot(to); if(abs(fdt)>T(0.999999)) return fdt>0?set_identity():set_scale(T(-1.0),T(-1.0),T(-1.0)); // degenerate case:s exactly the same vectors or flipped
 	V3 n=from.cross(to); T l=n.length();
@@ -480,7 +480,7 @@ __noinline inline tmat4<T>& tmat4<T>::set_rotate_vec_to_vec( const tvec3<T>& fro
 }
 
 template <class T>
-__noinline inline tmat4<T>& tmat4<T>::set_rotate( const tvec3<T>& axis, T angle )
+__noinline tmat4<T>& tmat4<T>::set_rotate( const tvec3<T>& axis, T angle )
 {
 	T c=T(cos(angle)), s=T(sin(angle)), x=axis.x, y=axis.y, z=axis.z;
 	_11 = x*x*(1-c)+c;		_12 = x*y*(1-c)-z*s;	_13 = x*z*(1-c)+y*s;	_14 = 0;
@@ -491,7 +491,7 @@ __noinline inline tmat4<T>& tmat4<T>::set_rotate( const tvec3<T>& axis, T angle 
 }
 
 template <class T>
-__noinline inline tvec4<T> tmat4<T>::_xdet() const
+__noinline tvec4<T> tmat4<T>::_xdet() const
 {
 	return V((_41*_32-_31*_42)*_23+(_21*_42-_41*_22)*_33+(_31*_22-_21*_32)*_43,
 			 (_31*_42-_41*_32)*_13+(_41*_12-_11*_42)*_33+(_11*_32-_31*_12)*_43,
@@ -500,7 +500,7 @@ __noinline inline tvec4<T> tmat4<T>::_xdet() const
 }
 
 template <class T>
-__noinline inline tmat4<T> tmat4<T>::inverse() const
+__noinline tmat4<T> tmat4<T>::inverse() const
 {
 	auto xd=_xdet();
 	// http://www.cg.info.hiroshima-cu.ac.jp/~miyazaki/knowledge/teche23.html
@@ -752,7 +752,7 @@ __forceinline vec4 prand4(){ return vec4(prand(),prand(),prand(),prand()); }
 //*************************************
 // CRC32 with 4-batch parallel construction (from zlib)
 template <unsigned int poly=0x82f63b78UL> // defaulted to crc32c
-__noinline inline unsigned int tcrc32( const void* buff, size_t size, unsigned int crc0=0 )
+__noinline unsigned int tcrc32( const void* buff, size_t size, unsigned int crc0=0 )
 {
 	if(!buff||!size) return crc0; unsigned c = ~crc0;
 	static unsigned* t[4] = {nullptr}; if(!t[0]){ for(int k=0;k<4;k++) t[k]=(unsigned*) malloc(sizeof(unsigned)*256); for(int k=0;k<256;k++){ unsigned c=k; for( unsigned j=0;j<8;j++) c=c&1?poly^(c>>1):c>>1; t[0][k]=c; } for(int k=0;k<256;k++){ unsigned c=t[0][k]; for(int j=1;j<4;j++) t[j][k]=c=t[0][c&0xff]^(c>>8); } }

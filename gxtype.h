@@ -92,7 +92,7 @@
 	#pragma strict_gs_check( off )
 	#pragma float_control(except,off)
 	#ifndef __noinline
-		#define __noinline __declspec(noinline)
+		#define __noinline __declspec(noinline) inline
 	#endif
 	#pragma warning( disable: 4201 ) // nameless struct/union
 	#pragma warning( disable: 4100 ) // unreferenced formal parameter
@@ -101,7 +101,7 @@
 	#pragma warning( disable: 4458 ) // hiding class member
 #else // GCC or Clang
 	#ifndef __noinline
-		#define __noinline __attribute__((noinline))
+		#define __noinline __attribute__((noinline)) inline
 	#endif
 	#ifdef __GNUC__
 		#ifndef __forceinline

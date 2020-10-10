@@ -138,7 +138,7 @@ inline const char* dtoa( const double4& v ){static const char* fmt="%g %g %g %g"
 // 6.2 Special-purpose functions
 
 // conversion int to string with commas
-__noinline inline const char* itoasep( int n )
+__noinline const char* itoasep( int n )
 {
 	if(n<1000&&n>-1000) return itoa(n);
 	const char* s=itoa(n>0?n:-n); size_t len=strlen(s);
@@ -147,7 +147,7 @@ __noinline inline const char* itoasep( int n )
 	return format("%s%s",n>0?"":"-",&v[0]);
 }
 
-__noinline inline const char* illtoasep( int64_t n )
+__noinline const char* illtoasep( int64_t n )
 {
 	if(n<1000&&n>-1000) return illtoa(n);
 	const char* s=illtoa(n>0?n:-n); size_t len=strlen(s);
@@ -342,7 +342,7 @@ inline const T* trim_comment( const T* src, const char* marker="#" )
 // 12. explode/join
 
 template <class T>
-__noinline inline const T* join( std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T>>> v, const T* delim=_strcvt<T>(" ") )
+__noinline const T* join( std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T>>> v, const T* delim=_strcvt<T>(" ") )
 {
 	std::basic_string<T,std::char_traits<T>,std::allocator<T>> s;
 	for( size_t k=0, kn=v.size(); k<kn; k++ ){ if(k>0) s+=decltype(s)(delim); s+=v[k]; }
@@ -350,7 +350,7 @@ __noinline inline const T* join( std::vector<std::basic_string<T,std::char_trait
 }
 
 template <class T>
-__noinline inline std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T> > >
+__noinline std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T> > >
 explode( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T> > > vs; vs.reserve(32);
@@ -360,7 +360,7 @@ explode( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 }
 
 template <class T>
-__noinline inline std::set<std::basic_string<T,std::char_traits<T>,std::allocator<T> > >
+__noinline std::set<std::basic_string<T,std::char_traits<T>,std::allocator<T> > >
 explode_set( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::set<std::basic_string<T,std::char_traits<T>,std::allocator<T> > > vs;
@@ -370,7 +370,7 @@ explode_set( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 }
 
 template <class T>
-__noinline inline std::vector<int> explodei( const T* src, const T* seps=_strcvt<T>(" \t\n") )
+__noinline std::vector<int> explodei( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<int> vs; vs.reserve(32);
 	T *ctx, *token = strtok_s(__tstrdup(src), seps, &ctx);
@@ -379,7 +379,7 @@ __noinline inline std::vector<int> explodei( const T* src, const T* seps=_strcvt
 }
 
 template <class T>
-__noinline inline std::vector<unsigned int> explodeu( const T* src, const T* seps=_strcvt<T>(" \t\n") )
+__noinline std::vector<unsigned int> explodeu( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<unsigned int> vs; vs.reserve(32);
 	T *ctx, *token = strtok_s(__tstrdup(src), seps, &ctx);
@@ -388,7 +388,7 @@ __noinline inline std::vector<unsigned int> explodeu( const T* src, const T* sep
 }
 
 template <class T>
-__noinline inline std::vector<float> explodef( const T* src, const T* seps=_strcvt<T>(" \t\n") )
+__noinline std::vector<float> explodef( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<float>  vs; vs.reserve(32);
 	T *ctx, *token = strtok_s(__tstrdup(src), seps, &ctx);
@@ -397,7 +397,7 @@ __noinline inline std::vector<float> explodef( const T* src, const T* seps=_strc
 }
 
 template <class T>
-__noinline inline std::vector<double> exploded( const T* src, const T* seps=_strcvt<T>(" \t\n") )
+__noinline std::vector<double> exploded( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<double>  vs; vs.reserve(32);
 	T *ctx, *token = strtok_s(__tstrdup(src), seps, &ctx);
@@ -406,7 +406,7 @@ __noinline inline std::vector<double> exploded( const T* src, const T* seps=_str
 }
 
 template <class T>
-__noinline inline std::vector<const T*> explode_conservative( const T* _Src, T _Delim )
+__noinline std::vector<const T*> explode_conservative( const T* _Src, T _Delim )
 {
 	std::vector<const T*> vs; vs.reserve(16); if(_Src==nullptr) return vs;
 	for(T *s=__tstrdup(_Src),*e=s;*s&&*e;s=e+1){for(e=s;*e!=_Delim&&*e;e++){}; vs.emplace_back(__tstrdup(s,size_t(e-s))); }
@@ -416,7 +416,7 @@ __noinline inline std::vector<const T*> explode_conservative( const T* _Src, T _
 //***********************************************
 // 13. replace
 template <class T>
-__noinline inline const T* str_replace( const T* _Src, const T* _Find, const T* _Replace )
+__noinline const T* str_replace( const T* _Src, const T* _Find, const T* _Replace )
 {
 	if(_Find==nullptr||_Find[0]==0) return __tstrdup(_Src);	// no change
 	int sl=int(strlen(_Src)), fl=int(strlen(_Find)); if(sl<fl) return __tstrdup(_Src);
@@ -428,7 +428,7 @@ __noinline inline const T* str_replace( const T* _Src, const T* _Find, const T* 
 }
 
 template <class T>
-__noinline inline const T* str_ireplace( const T* _Src, const T* _Find, const T* _Replace )
+__noinline const T* str_ireplace( const T* _Src, const T* _Find, const T* _Replace )
 {
 	if(_Find==nullptr||_Find[0]==0) return __tstrdup(_Src);	// no change
 	int sl=int(strlen(_Src)), fl=int(strlen(_Find)); if(sl<fl) return __tstrdup(_Src); int rl=int(strlen(_Replace));
@@ -439,7 +439,7 @@ __noinline inline const T* str_ireplace( const T* _Src, const T* _Find, const T*
 }
 
 template <class T>
-__noinline inline const T* str_replace( const T* _Src, T _Find, T _Replace )
+__noinline const T* str_replace( const T* _Src, T _Find, T _Replace )
 {
 	T *s=__tstrdup(_Src), *p=s;
 	for(int k=0,l=int(strlen(s));k<l;k++,p++) if(*p==_Find) *p=_Replace;
@@ -452,7 +452,7 @@ __noinline inline const T* str_replace( const T* _Src, T _Find, T _Replace )
 // - posix-style **/* (subdirectory matching) is not implemented yet
 
 template <class T>
-__noinline inline bool glob( const T* str, const T* pattern )
+__noinline bool glob( const T* str, const T* pattern )
 {
 	static const T q=T('?'), a=T('*');
 	int n=int(strlen(str)), m=int(strlen(pattern)); if(m==0) return n==0;

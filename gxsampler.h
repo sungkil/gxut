@@ -114,7 +114,7 @@ inline void tsampler_t<max_samples>::reshape( surface_t dst )
 }
 
 template <size_t max_samples>
-__noinline inline void tsampler_t<max_samples>::generate( vec4* v, uint n )
+__noinline void tsampler_t<max_samples>::generate( vec4* v, uint n )
 {
 	if(model==sampler_t::HAMMERSLEY){	uint hammersley_square(vec4*,uint); hammersley_square(v,n); }
 	else if(model==sampler_t::HALTON){	uint halton_cube(vec4*,uint);		halton_cube(v,n); }
@@ -122,7 +122,7 @@ __noinline inline void tsampler_t<max_samples>::generate( vec4* v, uint n )
 }
 
 template <size_t max_samples>
-__noinline inline uint tsampler_t<max_samples>::resample()
+__noinline uint tsampler_t<max_samples>::resample()
 {
 	if(surface==surface_t::CYLINDER&&model!=sampler_t::HALTON){ printf("[Sampler] cylinder sampling is supported only in Halton sampling\n" ); return 0; }
 	
@@ -140,9 +140,9 @@ __noinline inline uint tsampler_t<max_samples>::resample()
 
 //*************************************
 // simple implementations
-__noinline inline uint simple_square( vec4* v, uint n ){ for(uint k=0;k<n;k++,v++) v->xyz=vec3{prand2()*2.0f-1.0f,0.0f}; return n; }
-__noinline inline uint hammersley_square( vec4* v, uint n ){ const float nf=1.0f/float(n); for(uint k=0;k<n;k++,v++) v->xy=vec2(k*nf,float(bitswap(k)>>8)/float(1<<24))*2.0f-1.0f; return n; } // with radical inverse
-__noinline inline uint halton_cube( vec4* v, uint n )
+__noinline uint simple_square( vec4* v, uint n ){ for(uint k=0;k<n;k++,v++) v->xyz=vec3{prand2()*2.0f-1.0f,0.0f}; return n; }
+__noinline uint hammersley_square( vec4* v, uint n ){ const float nf=1.0f/float(n); for(uint k=0;k<n;k++,v++) v->xy=vec2(k*nf,float(bitswap(k)>>8)/float(1<<24))*2.0f-1.0f; return n; } // with radical inverse
+__noinline uint halton_cube( vec4* v, uint n )
 {
 	static const int	p1=2, p2=7, p3=11;
 	static const float	ip1=1/float(p1), ip2=1/float(p2), ip3=1/float(p3);

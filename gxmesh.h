@@ -612,7 +612,7 @@ inline geometry& object::operator[]( size_t i ){ return root->geometries[i]; }
 //*************************************
 // late implementations for mesh
 
-__noinline inline mesh& mesh::operator=( mesh&& other ) // move assignment operator
+__noinline mesh& mesh::operator=( mesh&& other ) // move assignment operator
 {
 	size_t offset = 0;
 	vertices = std::move(other.vertices);		offset += sizeof(decltype(vertices));
@@ -628,7 +628,7 @@ __noinline inline mesh& mesh::operator=( mesh&& other ) // move assignment opera
 	return *this;
 }
 
-__noinline inline void mesh::update_bound( bool b_recalc_tris )
+__noinline void mesh::update_bound( bool b_recalc_tris )
 {
 	// update geometry first
 	size_t kn=geometries.size(), gn=kn/instance_count;
@@ -651,7 +651,7 @@ __noinline inline void mesh::update_bound( bool b_recalc_tris )
 		box.expand(obj.update_bound());
 }
 
-__noinline inline std::vector<uint> get_box_indices( bool double_sided, bool quads )
+__noinline std::vector<uint> get_box_indices( bool double_sided, bool quads )
 {
 	std::vector<uint> v; // index definitions (CCW: counterclockwise by default)
 	if(quads)	v = { 0, 3, 2, 1, /*bottom*/ 4, 5, 6, 7, /*top*/ 0, 1, 5, 4, /*left*/ 2, 3, 7, 6, /*right*/ 1, 2, 6, 5, /*front*/ 3, 0, 4, 7 /*back*/ };
@@ -660,7 +660,7 @@ __noinline inline std::vector<uint> get_box_indices( bool double_sided, bool qua
 	return v;
 }
 
-__noinline inline std::vector<uint> get_box_line_indices()
+__noinline std::vector<uint> get_box_line_indices()
 {
 	return std::vector<uint>{
 		0, 3, 3, 2, 2, 1, 1, 0, /*bottom*/ 4, 5, 5, 6, 6, 7, 7, 4, /*top*/   0, 1, 1, 5, 5, 4, 4, 0, /*left*/
@@ -669,7 +669,7 @@ __noinline inline std::vector<uint> get_box_line_indices()
 
 //*************************************
 // mesh utilities
-__noinline inline mesh* create_box_mesh( bbox box=bbox{vec3(-1.0f),vec3(1.0f)}, const char* name="box", bool double_sided=false, bool quads=false )
+__noinline mesh* create_box_mesh( bbox box=bbox{vec3(-1.0f),vec3(1.0f)}, const char* name="box", bool double_sided=false, bool quads=false )
 {
 	mesh* m = new mesh();
 	
@@ -689,7 +689,7 @@ __noinline inline mesh* create_box_mesh( bbox box=bbox{vec3(-1.0f),vec3(1.0f)}, 
 	return m;
 }
 
-__noinline inline mesh* mesh::create_proxy( bool double_sided, bool quads )
+__noinline mesh* mesh::create_proxy( bool double_sided, bool quads )
 {
 	proxy = new mesh();
 
@@ -719,7 +719,7 @@ __noinline inline mesh* mesh::create_proxy( bool double_sided, bool quads )
 	return proxy;
 }
 
-__noinline inline void mesh::update_proxy()
+__noinline void mesh::update_proxy()
 {
 	if(!proxy) return;
 	if(proxy->instance_count!=instance_count){ printf("%s(): proxy->instance_count!=instance_count\n",__func__); return; }
@@ -739,7 +739,7 @@ __noinline inline void mesh::update_proxy()
 // intersection implementations
 
 // primary ray
-__noinline inline ray gen_primary_ray( camera* cam, float x, float y )	// (x,y) in [0,1]
+__noinline ray gen_primary_ray( camera* cam, float x, float y )	// (x,y) in [0,1]
 {
 	const vec3& eye=cam->eye.xyz, center=cam->center.xyz, up=cam->up.xyz;
 	float fh=tan(cam->fovy*0.5f)*2.0f, fw=fh*cam->aspect;		// frustum height/width in NDC
@@ -749,7 +749,7 @@ __noinline inline ray gen_primary_ray( camera* cam, float x, float y )	// (x,y) 
 }
 
 // triangle intersection: isect=(pos,t), bc=(s,t)
-__noinline inline bool intersect( ray r, vec3 v0, vec3 v1, vec3 v2, isect& h )
+__noinline bool intersect( ray r, vec3 v0, vec3 v1, vec3 v2, isect& h )
 {
 	// http://geomalgorithms.com/a06-_intersect-2.html#intersect3D_RayTriangle
 	vec3 u=v1-v0, v=v2-v0, n=u.cross(v); if(n.length2()<0.000001f) return false;	// degenerate case: non-triangle
@@ -771,7 +771,7 @@ __noinline inline bool intersect( ray r, vec3 v0, vec3 v1, vec3 v2, isect& h )
 }
 
 // box intersection
-__noinline inline bool bbox::intersect( ray r )
+__noinline bool bbox::intersect( ray r )
 {
 	float t0=r.t, t1=r.tfar;
 	for( int k=0; k<3; k++ )
@@ -784,7 +784,7 @@ __noinline inline bool bbox::intersect( ray r )
 	return t1>0;
 }
 
-__noinline inline bool bbox::intersect( ray r, isect& h )
+__noinline bool bbox::intersect( ray r, isect& h )
 {
 	float t0=r.t, t1=r.tfar;
 	for( int k=0; k<3; k++ )
@@ -799,11 +799,11 @@ __noinline inline bool bbox::intersect( ray r, isect& h )
 	return t1>0;
 }
 
-__noinline inline bool intersect( bbox_t b, ray r ){ return reinterpret_cast<bbox&>(b).intersect(r); }
-__noinline inline bool intersect( bbox_t b, ray r, isect& h ){ return reinterpret_cast<bbox&>(b).intersect(r,h); }
+__noinline bool intersect( bbox_t b, ray r ){ return reinterpret_cast<bbox&>(b).intersect(r); }
+__noinline bool intersect( bbox_t b, ray r, isect& h ){ return reinterpret_cast<bbox&>(b).intersect(r,h); }
 
 // sphere intersection
-__noinline inline bool sphere::intersect( ray r, isect& h )
+__noinline bool sphere::intersect( ray r, isect& h )
 {
 	vec3 pc = r.pos - pos;
 	float B = dot(pc, r.dir);
@@ -818,7 +818,7 @@ __noinline inline bool sphere::intersect( ray r, isect& h )
 	return true;
 }
 
-__noinline inline bool geometry::intersect( ray r, isect& h ) const
+__noinline bool geometry::intersect( ray r, isect& h ) const
 {
 	const vertex* V = &root->vertices[0];
 	const uint* I = &root->indices[first_index];
@@ -831,7 +831,7 @@ __noinline inline bool geometry::intersect( ray r, isect& h ) const
 	return h.g!=0xffffffff;
 }
 
-__noinline inline bool mesh::intersect( ray r, isect& h, bool use_acc ) const
+__noinline bool mesh::intersect( ray r, isect& h, bool use_acc ) const
 {
 	if(acc&&use_acc) return acc->intersect(r,h);
 
@@ -863,7 +863,7 @@ inline void mesh::dump_binary( const wchar_t* _dir )
 
 //*************************************
 // line clipping by Liang Barsky algorithm
-__noinline inline bool clip_line( vec2 p, vec2 q, vec2 lb, vec2 rt, vec2* p1=nullptr, vec2* q1=nullptr )
+__noinline bool clip_line( vec2 p, vec2 q, vec2 lb, vec2 rt, vec2* p1=nullptr, vec2* q1=nullptr )
 {
 	vec2 d = q - p, t = vec2(0, 1);
 	vec2 vs[4] = { {-d.x,p.x-lb.x}, {d.x,rt.x-p.x}, {-d.y,p.y-lb.y}, {d.y,rt.y-p.y} };

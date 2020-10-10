@@ -360,7 +360,7 @@ protected:
 //***********************************************
 // definitions of long inline member functions
 
-template<> __noinline inline sized_ptr_t<void> path::read_file<void>() const
+template<> __noinline sized_ptr_t<void> path::read_file<void>() const
 {
 	sized_ptr_t<void> p={nullptr,0};
 	FILE* fp=_wfopen(data,L"rb"); if(!fp) return {nullptr,0};
@@ -370,12 +370,12 @@ template<> __noinline inline sized_ptr_t<void> path::read_file<void>() const
 	return p;
 }
 
-template<> __noinline inline sized_ptr_t<const void> path::read_file<const void>() const
+template<> __noinline sized_ptr_t<const void> path::read_file<const void>() const
 {
 	auto p=read_file<void>(); return {(const void*)p.ptr,p.size};
 }
 
-template<> __noinline inline sized_ptr_t<wchar_t> path::read_file<wchar_t>() const
+template<> __noinline sized_ptr_t<wchar_t> path::read_file<wchar_t>() const
 {
 	sized_ptr_t<wchar_t> p={nullptr,0};
 	FILE* fp=_wfopen(data,L"r,ccs=UTF-8"); if(!fp) return {nullptr,0};
@@ -390,12 +390,12 @@ template<> __noinline inline sized_ptr_t<wchar_t> path::read_file<wchar_t>() con
 	return p;
 }
 
-template<> __noinline inline sized_ptr_t<const wchar_t> path::read_file<const wchar_t>() const
+template<> __noinline sized_ptr_t<const wchar_t> path::read_file<const wchar_t>() const
 {
 	auto p=read_file<wchar_t>(); return {(const wchar_t*)p.ptr,p.size};
 }
 
-template<> __noinline inline sized_ptr_t<char> path::read_file<char>() const
+template<> __noinline sized_ptr_t<char> path::read_file<char>() const
 {
 	sized_ptr_t<char> p={nullptr,0};
 	FILE* fp=_wfopen(data,L"r"); if(!fp) return {nullptr,0};
@@ -410,26 +410,26 @@ template<> __noinline inline sized_ptr_t<char> path::read_file<char>() const
 	return p;
 }
 
-template<> __noinline inline sized_ptr_t<const char> path::read_file<const char>() const
+template<> __noinline sized_ptr_t<const char> path::read_file<const char>() const
 {
 	auto p=read_file<char>(); return {(const char*)p.ptr,p.size};
 }
 
-__noinline inline bool path::write_file( const void* ptr, size_t size ) const
+__noinline bool path::write_file( const void* ptr, size_t size ) const
 {
 	FILE* fp=_wfopen(data,L"wb"); if(!fp) return false;
 	size_t size_written = ptr&&size?fwrite(ptr,1,size,fp):0; fclose(fp);
 	return size_written==size;
 }
 
-__noinline inline bool path::write_file( const char* s ) const
+__noinline bool path::write_file( const char* s ) const
 {
 	FILE* fp=_wfopen(data,L"w"); if(!fp) return false;
 	int ret = s?fputs(s,fp):0; fclose(fp);
 	return ret>=0;
 }
 
-__noinline inline bool path::write_file( const wchar_t* s ) const
+__noinline bool path::write_file( const wchar_t* s ) const
 {
 	FILE* fp=_wfopen(data,L"w,ccs=UTF-8"); if(!fp) return false;
 	if(ext()!=L".sln") fseek(fp,0,SEEK_SET); // rewind to remove BOM for non-solution files; caution: vcxproj do not use BOM
@@ -437,7 +437,7 @@ __noinline inline bool path::write_file( const wchar_t* s ) const
 	return ret>=0;
 }
 
-__noinline inline bool path::glob( const wchar_t* str, size_t slen, const wchar_t* pattern, size_t plen )
+__noinline bool path::glob( const wchar_t* str, size_t slen, const wchar_t* pattern, size_t plen )
 {
 	static const wchar_t q=L'?', a=L'*';
 	int n=int(slen?slen:wcslen(str)), m=int(plen?plen:wcslen(pattern)); if(m==0) return n==0;
@@ -452,7 +452,7 @@ __noinline inline bool path::glob( const wchar_t* str, size_t slen, const wchar_
 	return j==m;
 }
 
-__noinline inline bool path::iglob( const wchar_t* str, size_t slen, const wchar_t* pattern, size_t plen )
+__noinline bool path::iglob( const wchar_t* str, size_t slen, const wchar_t* pattern, size_t plen )
 {
 	static const wchar_t q=L'?', a=L'*';
 	int n=int(slen?slen:wcslen(str)), m=int(plen?plen:wcslen(pattern)); if(m==0) return n==0;
@@ -467,7 +467,7 @@ __noinline inline bool path::iglob( const wchar_t* str, size_t slen, const wchar
 	return j==m;
 }
 
-__noinline inline std::vector<path> path::scan( char recursive, const wchar_t* ext_filter, const wchar_t* pattern ) const
+__noinline std::vector<path> path::scan( char recursive, const wchar_t* ext_filter, const wchar_t* pattern ) const
 {
 	std::vector<std::wstring> exts; if(ext_filter&&ext_filter[0]){ wchar_t ef[4096]={0}, *ctx=nullptr; wcscpy(ef,ext_filter); for(wchar_t* e=wcstok_s(ef,L";",&ctx);e;e=wcstok_s(nullptr,L";",&ctx)) if(e[0]) exts.push_back(std::wstring(L".")+e); }
 	std::vector<sized_ptr_t<wchar_t>> eptr; for( auto& e:exts ) eptr.emplace_back(sized_ptr_t<wchar_t>{(wchar_t*)e.c_str(),e.size()});
@@ -476,7 +476,7 @@ __noinline inline std::vector<path> path::scan( char recursive, const wchar_t* e
 	si.result.reserve(1<<16);scan_recursive(src,si);si.result.shrink_to_fit();return si.result;
 }
 
-__noinline inline void path::scan_recursive( path dir, path::scan_t& si ) const
+__noinline void path::scan_recursive( path dir, path::scan_t& si ) const
 {
 	WIN32_FIND_DATAW fd; HANDLE h=FindFirstFileExW(dir+L"*.*",FindExInfoBasic/*minimal(faster)*/,&fd,FindExSearchNameMatch,0,FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
 	size_t dl=wcslen(dir.data); wchar_t *f=fd.cFileName, *p=dir.data+dl;
@@ -501,14 +501,14 @@ __noinline inline void path::scan_recursive( path dir, path::scan_t& si ) const
 	for(auto& c:sdir) scan_recursive(c,si);
 }
 
-__noinline inline std::vector<path> path::subdirs( char recursive, const wchar_t* pattern ) const
+__noinline std::vector<path> path::subdirs( char recursive, const wchar_t* pattern ) const
 {
 	scan_t si={{},recursive!=0,0,0,pattern,pattern?wcslen(pattern):0,pattern&&(wcschr(pattern,L'*')||wcschr(pattern,L'?'))};
 	if(!is_dir()) return si.result; path src=(is_relative()?absolute(L".\\"):*this).add_backslash();
 	si.result.reserve(1<<12);subdirs_recursive(src,si);si.result.shrink_to_fit();return si.result;
 }
 
-__noinline inline void path::subdirs_recursive( path dir, path::scan_t& si ) const
+__noinline void path::subdirs_recursive( path dir, path::scan_t& si ) const
 {
 	WIN32_FIND_DATAW fd; HANDLE h=FindFirstFileExW(dir+L"*.*",FindExInfoBasic/*minimal(faster)*/,&fd,FindExSearchNameMatch,0,FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
 	size_t dl=wcslen(dir.data); wchar_t *f=fd.cFileName, *p=dir.data+dl;
@@ -528,7 +528,7 @@ __noinline inline void path::subdirs_recursive( path dir, path::scan_t& si ) con
 	for(auto& c:sdir) subdirs_recursive(c,si);
 }
 
-__noinline inline path path::serial( path dir, const wchar_t* prefix, const wchar_t* postfix, int numzero )
+__noinline path path::serial( path dir, const wchar_t* prefix, const wchar_t* postfix, int numzero )
 {
 	dir=dir.add_backslash(); if(!dir.exists()) dir.mkdir();
 	int nMaxFiles=1; for(int k=0;k<numzero;k++) nMaxFiles*=10;
@@ -566,7 +566,7 @@ inline path path::global::temp( const char* subdir )
 }
 
 //***********************************************
-__noinline inline path path::temp( const wchar_t* subkey, const char* subdir )
+__noinline path path::temp( const wchar_t* subkey, const char* subdir )
 {
 	static path g=global::temp(subdir),mod=path(L"local\\")+module_dir().key().add_backslash();
 	path key = (subkey&&subkey[0])?path(subkey).key().add_backslash():mod;
@@ -574,7 +574,7 @@ __noinline inline path path::temp( const wchar_t* subkey, const char* subdir )
 	return t;
 }
 
-__noinline inline path path::relative( bool first_dot, const wchar_t* from ) const
+__noinline path path::relative( bool first_dot, const wchar_t* from ) const
 {
 	if(is_relative()) return *this;
 
@@ -598,7 +598,7 @@ __noinline inline path path::relative( bool first_dot, const wchar_t* from ) con
 	return this->is_dir()?result:result+name();
 }
 
-__noinline inline void path::create_process( const wchar_t* arguments, bool bShowWindow, bool bWaitFinish ) const
+__noinline void path::create_process( const wchar_t* arguments, bool bShowWindow, bool bWaitFinish ) const
 {
 	wchar_t cmd[4096]; swprintf_s( cmd, 4096, L"\"%s\" %s", data, arguments?arguments:L""  );
 	PROCESS_INFORMATION pi={0}; STARTUPINFOW si={0}; si.cb=sizeof(si); si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=bShowWindow?SW_SHOW:SW_HIDE;
@@ -608,7 +608,7 @@ __noinline inline void path::create_process( const wchar_t* arguments, bool bSho
 	CloseHandle( pi.hProcess );   // must release handle
 }
 
-__noinline inline void path::canonicalize()
+__noinline void path::canonicalize()
 {
 	size_t len=data[0]?wcslen(data):0; if(len==0) return;
 	for(uint k=0;k<len;k++) if(data[k]==L'/') data[k]=L'\\'; // slash to backslash
