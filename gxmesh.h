@@ -313,7 +313,7 @@ struct material_impl : public material
 {
 	const uint	ID;
 	uint64_t	CUB = 0;							// GPU handle to a cube/reflection map
-	char		name[_MAX_PATH]={0};
+	char		name[_MAX_PATH]={};
 	float		bump_scale = 1.0f;
 	union
 	{
@@ -447,7 +447,7 @@ struct object
 	uint				ID=-1;
 	float				level=0;				// real-number LOD
 	uint				instance=0;
-	char				name[_MAX_PATH]={0};
+	char				name[_MAX_PATH]={};
 	mesh*				root=nullptr;
 	bbox				box;
 	std::vector<uint>	children;				// indices to child geometries
@@ -513,7 +513,7 @@ struct mesh
 		struct { gl::VertexArray* vertex; gl::Buffer *geometry, *count; }; // vertex array, geometry/command buffer, count buffer for OpenGL
 		struct { ID3D10Buffer *vertex, *index; } d3d10; // vertex/index buffers for D3D
 		struct { ID3D11Buffer *vertex, *index; } d3d11; // vertex/index buffers for D3D
-	} buffer = {0};
+	} buffer = {};
 
 	// acceleration and dynamics
 	bbox		box;
@@ -527,8 +527,8 @@ struct mesh
 	mesh*		proxy=nullptr;		// created and released in GLMesh 
 
 	// auxiliary information
-	wchar_t		file_path[_MAX_PATH]={0};	// mesh file path
-	wchar_t		mtl_path[_MAX_PATH]={0};	// material file path (e.g., *.mtl)
+	wchar_t		file_path[_MAX_PATH]={};	// mesh file path
+	wchar_t		mtl_path[_MAX_PATH]={};	// material file path (e.g., *.mtl)
 
 	// constructor
 	mesh(){ vertices.reserve(1<<20); indices.reserve(1<<20); objects.reserve(1<<16); geometries.reserve(1<<16); materials.reserve(1<<16); }
@@ -561,7 +561,7 @@ struct mesh
 // Volume data format
 struct volume
 {
-	wchar_t	file_path[_MAX_PATH]={0};
+	wchar_t	file_path[_MAX_PATH]={};
 	uint	width, height, depth;
 	vec3	voxel_size;		// size of a unit voxel
 	uint	format;			// GL_R32F or GL_RGBA32F

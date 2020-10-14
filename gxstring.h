@@ -58,7 +58,7 @@ inline const wchar_t* _stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ re
 
 //***********************************************
 // 1. shared circular buffers
-template <class T> __forceinline T* __tstrbuf( size_t len ){ static T* C[SHARED_CIRCULAR_BUFFER_SIZE]={0}; static uint cid=0; cid=(++cid)%(sizeof(C)/sizeof(T*));C[cid]=(T*)realloc(C[cid],sizeof(T)*(len+1)); C[cid][len]=0; return C[cid]; }
+template <class T> __forceinline T* __tstrbuf( size_t len ){ static T* C[SHARED_CIRCULAR_BUFFER_SIZE]={}; static uint cid=0; cid=(++cid)%(sizeof(C)/sizeof(T*));C[cid]=(T*)realloc(C[cid],sizeof(T)*(len+1)); C[cid][len]=0; return C[cid]; }
 template <class T> __forceinline T* __tstrdup( const T* s,size_t len=-1 ){ if(len==-1){const T* t=s; while(*t)t++;len=t-s;} T* d=__tstrbuf<T>(len); return len?(T*)memcpy(d,s,sizeof(T)*len):d; }
 __forceinline char* _strbuf( size_t len ){ return __tstrbuf<char>(len); }
 __forceinline wchar_t* _wcsbuf( size_t len ){ return __tstrbuf<wchar_t>(len); }

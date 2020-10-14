@@ -472,7 +472,7 @@ inline mesh* load_mesh_cache( path file_path )
 		fgets(buff,8192,fp);
 
 		// get material attribute
-		char map_names[4096]={0}; // should be reset for optional reading
+		char map_names[4096]={}; // should be reset for optional reading
 		uint read_count = sscanf(buff,"material[%*d] %s %f %f %f %f %f %f %f %f %f %s\n",
 			m->name,
 			&m->color[0], &m->color[1], &m->color[2], &m->color[3],

@@ -1048,13 +1048,13 @@ inline GLuint gxLoadProgramBinary( const char* name, uint crc )
 
 inline void gxInfoLog( const char* name, const char* msg, std::map<size_t,std::string>* lines=nullptr )
 {
-	char L[53]={0}; for(int k=0;k<50;k++)L[k]='_'; L[50]=L[51]='\n';
+	char L[53]={}; for(int k=0;k<50;k++)L[k]='_'; L[50]=L[51]='\n';
 	printf("\n"); printf("%s",L);
 	std::vector<std::string> vm=explode(msg,"\n");
 	for( size_t k=0,kn=vm.size();k<kn;k++ )
 	{
 		const char* v = vm[k].c_str(); printf("%s: %s\n", name, v ); if(lines==nullptr) continue;
-		char s[16384]={0};const char *l=strchr(v,'('), *r=strchr(v,')'); if(!l||!r||l>=r) continue;
+		char s[16384]={};const char *l=strchr(v,'('), *r=strchr(v,')'); if(!l||!r||l>=r) continue;
 		memcpy(s,l+1,r-l-1); s[r-l-1]=0; int idx=atoi(s);
 		auto it=lines->find(size_t(idx-1));	if(it!=lines->end()) printf( "%d> %s\n", idx-1, trim(str_replace(it->second.c_str(),"%", "%%")) );	// % causes crash in gprintf
 		it=lines->find(size_t(idx+0));		if(it!=lines->end()) printf( "%d> %s\n", idx+0, trim(str_replace(it->second.c_str(),"%", "%%")) );
@@ -1092,7 +1092,7 @@ inline GLuint gxCompileShaderSource( GLenum shader_type, const char* name, const
 	glShaderSource( ID, 1, &source, nullptr );
 	glCompileShader( ID );
 
-	static const int MAX_LOG_LENGTH=8192; static char msg[MAX_LOG_LENGTH] = {0}; GLint L; bool bLogExists;
+	static const int MAX_LOG_LENGTH=8192; static char msg[MAX_LOG_LENGTH] = {}; GLint L; bool bLogExists;
 	glGetShaderInfoLog(ID,MAX_LOG_LENGTH,&L,msg); bLogExists=L>1&&L<=MAX_LOG_LENGTH;
 	if(bLogExists){ auto v=gxExplodeShaderSourceMap(source); gxInfoLog(name,msg,&v); }
 	if(gxGetShaderiv(ID,GL_COMPILE_STATUS)!=GL_TRUE){ glDeleteShader(ID); return 0; }
@@ -1103,7 +1103,7 @@ inline GLuint gxCompileShaderSource( GLenum shader_type, const char* name, const
 inline bool gxCheckProgramLink( const char* name, GLuint ID, bool bLog=true )
 {
 	if(ID==0) return false;
-	static const int MAX_LOG_LENGTH=4096; static char msg[MAX_LOG_LENGTH] = {0}; GLint L; bool bLogExists;
+	static const int MAX_LOG_LENGTH=4096; static char msg[MAX_LOG_LENGTH] = {}; GLint L; bool bLogExists;
 	glGetProgramInfoLog(ID,MAX_LOG_LENGTH,&L,msg); bLogExists=L>1&&L<=MAX_LOG_LENGTH; if(bLogExists&&bLog) gxInfoLog(name,msg); if(gxGetProgramiv(ID,GL_LINK_STATUS)!=GL_TRUE){ glDeleteProgram(ID); return false; }
 	return true;
 }
@@ -1111,7 +1111,7 @@ inline bool gxCheckProgramLink( const char* name, GLuint ID, bool bLog=true )
 inline bool gxValidateProgram( const char* name, GLuint ID, bool bLog=true ) // check if the program can run in the current state
 {
 	if(ID==0) return false;
-	static const int MAX_LOG_LENGTH=4096; static char msg[MAX_LOG_LENGTH] = {0}; GLint L; bool bLogExists;
+	static const int MAX_LOG_LENGTH=4096; static char msg[MAX_LOG_LENGTH] = {}; GLint L; bool bLogExists;
 	glValidateProgram(ID); glGetProgramInfoLog(ID,MAX_LOG_LENGTH,&L,msg); bLogExists=L>1&&L<=MAX_LOG_LENGTH; if(bLogExists&&bLog) gxInfoLog(name,msg); if(gxGetProgramiv(ID,GL_VALIDATE_STATUS)!=GL_TRUE){ glDeleteProgram(ID); return false; }
 	return true;
 }
@@ -1214,7 +1214,7 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 	}
 
 	// 9. query the active attributes
-	char aname[256] = {0};
+	char aname[256] = {};
 	GLint active_attribute_count = gxGetProgramiv( program->ID, GL_ACTIVE_ATTRIBUTES );
 	if(active_attribute_count!=3)
 	{

@@ -69,12 +69,12 @@ struct path
 	struct volume_t
 	{
 		static const int	capacity = GX_MAX_PATH; // MAX_PATH == 260
-		wchar_t				root[4]={0}; // trailing backslash required
-		wchar_t				name[capacity+1]={0};
+		wchar_t				root[4]={}; // trailing backslash required
+		wchar_t				name[capacity+1]={};
 		unsigned long		serial_number=0;
 		unsigned long		maximum_component_length=0;
 		uint64_t			_disk_size=0;
-		struct { unsigned long flags=0; wchar_t name[capacity+1]={0}; } filesystem;
+		struct { unsigned long flags=0; wchar_t name[capacity+1]={}; } filesystem;
 
 		// constructor
 		volume_t() = default;
@@ -236,7 +236,7 @@ struct path
 	const wchar_t* wname( bool with_ext=true ) const { return name(with_ext).c_str(); }
 
 	// attribute by stats
-	inline stat_t	stat() const { stat_t s={0}; if(exists()) _wstat(data,&s); return s; }
+	inline stat_t	stat() const { stat_t s={}; if(exists()) _wstat(data,&s); return s; }
 	inline DWORD&	attributes() const { if(!cache_exists()) update_cache(); return cache().dwFileAttributes; }
 	inline void		update_cache() const { auto& c=cache(); if(!GetFileAttributesExW(data,GetFileExInfoStandard,&c)||c.dwFileAttributes==INVALID_FILE_ATTRIBUTES){ memset(&c,0,sizeof(attrib_t)); c.dwFileAttributes=INVALID_FILE_ATTRIBUTES; return; } c.ftLastWriteTime = DiscardFileTimeMilliseconds(c.ftLastWriteTime); }
 	inline void		clear_cache() const { attrib_t* a=(attrib_t*)(data+capacity); memset(a,0,sizeof(attrib_t)); a->dwFileAttributes=INVALID_FILE_ATTRIBUTES; }
@@ -270,10 +270,10 @@ struct path
 	bool rmfile() const { return delete_file(); }
 	bool delete_file() const { if(!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); return DeleteFileW(data)==TRUE; }
 #else
-	bool rmdir() const { if(!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={0};fop.wFunc=FO_DELETE;fop.fFlags=FOF_ALLOWUNDO|FOF_SILENT|FOF_NOCONFIRMATION;fop.pFrom=data;data[wcslen(data)+1]=L'\0';return SHFileOperationW(&fop)==0;}
+	bool rmdir() const { if(!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=FOF_ALLOWUNDO|FOF_SILENT|FOF_NOCONFIRMATION;fop.pFrom=data;data[wcslen(data)+1]=L'\0';return SHFileOperationW(&fop)==0;}
 	bool rmfile( bool b_undo=false ) const { return delete_file(b_undo); }
-	bool delete_file( bool b_undo=false ) const { if(!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={0};fop.wFunc=FO_DELETE;fop.fFlags=(b_undo?FOF_ALLOWUNDO:0)|FOF_SILENT|FOF_NOCONFIRMATION|FOF_FILESONLY;fop.pFrom=data;data[wcslen(data)+1]=L'\0';return SHFileOperationW(&fop)==0;}
-	bool copy_dir( path dst, bool overwrite=true ) const { if(!is_dir()) return false;wchar_t* from=__wcsbuf();swprintf_s(from,capacity,L"%s\\*\0",data);dst[dst.size()+1]=L'\0'; SHFILEOPSTRUCTW fop={0};fop.wFunc=FO_COPY;fop.fFlags=FOF_ALLOWUNDO|FOF_SILENT|FOF_NOCONFIRMATION;fop.pFrom=from;fop.pTo=dst;return SHFileOperationW(&fop)==0; }
+	bool delete_file( bool b_undo=false ) const { if(!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=(b_undo?FOF_ALLOWUNDO:0)|FOF_SILENT|FOF_NOCONFIRMATION|FOF_FILESONLY;fop.pFrom=data;data[wcslen(data)+1]=L'\0';return SHFileOperationW(&fop)==0;}
+	bool copy_dir( path dst, bool overwrite=true ) const { if(!is_dir()) return false;wchar_t* from=__wcsbuf();swprintf_s(from,capacity,L"%s\\*\0",data);dst[dst.size()+1]=L'\0'; SHFILEOPSTRUCTW fop={};fop.wFunc=FO_COPY;fop.fFlags=FOF_ALLOWUNDO|FOF_SILENT|FOF_NOCONFIRMATION;fop.pFrom=from;fop.pTo=dst;return SHFileOperationW(&fop)==0; }
 	bool move_dir( path dst ) const { return !is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(data,dst.c_str())!=0 : !copy_dir(dst,true) ? false: rmdir(); }
 	void open( const wchar_t* args=nullptr, bool bShowWindow=true ) const {path cmd;swprintf(cmd,capacity,L"\"%s\"",data);ShellExecuteW(GetDesktopWindow(),L"Open",cmd,args,nullptr,bShowWindow?SW_SHOW:SW_HIDE);}
 #endif
@@ -469,7 +469,7 @@ __noinline bool path::iglob( const wchar_t* str, size_t slen, const wchar_t* pat
 
 __noinline std::vector<path> path::scan( char recursive, const wchar_t* ext_filter, const wchar_t* pattern ) const
 {
-	std::vector<std::wstring> exts; if(ext_filter&&ext_filter[0]){ wchar_t ef[4096]={0}, *ctx=nullptr; wcscpy(ef,ext_filter); for(wchar_t* e=wcstok_s(ef,L";",&ctx);e;e=wcstok_s(nullptr,L";",&ctx)) if(e[0]) exts.push_back(std::wstring(L".")+e); }
+	std::vector<std::wstring> exts; if(ext_filter&&ext_filter[0]){ wchar_t ef[4096]={}, *ctx=nullptr; wcscpy(ef,ext_filter); for(wchar_t* e=wcstok_s(ef,L";",&ctx);e;e=wcstok_s(nullptr,L";",&ctx)) if(e[0]) exts.push_back(std::wstring(L".")+e); }
 	std::vector<sized_ptr_t<wchar_t>> eptr; for( auto& e:exts ) eptr.emplace_back(sized_ptr_t<wchar_t>{(wchar_t*)e.c_str(),e.size()});
 	scan_t si={{},recursive!=0,eptr.size()>0?&eptr[0]:nullptr,eptr.size(),pattern,pattern?wcslen(pattern):0,pattern&&(wcschr(pattern,L'*')||wcschr(pattern,L'?')) };
 	if(!is_dir()) return si.result; path src=(is_relative()?absolute(L".\\"):*this).add_backslash();
@@ -601,7 +601,7 @@ __noinline path path::relative( bool first_dot, const wchar_t* from ) const
 __noinline void path::create_process( const wchar_t* arguments, bool bShowWindow, bool bWaitFinish ) const
 {
 	wchar_t cmd[4096]; swprintf_s( cmd, 4096, L"\"%s\" %s", data, arguments?arguments:L""  );
-	PROCESS_INFORMATION pi={0}; STARTUPINFOW si={0}; si.cb=sizeof(si); si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=bShowWindow?SW_SHOW:SW_HIDE;
+	PROCESS_INFORMATION pi={}; STARTUPINFOW si={}; si.cb=sizeof(si); si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=bShowWindow?SW_SHOW:SW_HIDE;
 	CreateProcessW( nullptr, (LPWSTR)cmd, nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi );
 	if(bWaitFinish) WaitForSingleObject(pi.hProcess,INFINITE);
 	CloseHandle( pi.hThread );    // must release handle
@@ -658,7 +658,7 @@ namespace gx { namespace compiler
 {
 	inline int mtoi( const char* month ){ if(!month||!month[0]||!month[1]||!month[2]) return 0; char a=tolower(month[0]), b=tolower(month[1]), c=tolower(month[2]); if(a=='j'){ if(b=='a') return 1; if(c=='n') return 6; return 7; } if(a=='f') return 2; if(a=='m'){ if(c=='r') return 3; return 5; } if(a=='a'){ if(b=='p') return 4; return 8; } if(a=='s') return 9; if(a=='o') return 10; if(a=='n') return 11; return 12; }
 	inline int year(){ static int y=0; if(y) return y; char buff[64]; sscanf(__DATE__,"%*s %*s %s", buff); return y=atoi(buff); }
-	inline int month(){ static int m=0; if(m) return m; char buff[64]={0}; sscanf(__DATE__,"%s", buff); return m=mtoi(buff); }
+	inline int month(){ static int m=0; if(m) return m; char buff[64]={}; sscanf(__DATE__,"%s", buff); return m=mtoi(buff); }
 	inline int day(){ static int d=0; if(d) return d; char buff[64]; sscanf(__DATE__,"%*s %s %*s", buff); return d=atoi(buff); }
 }}
 
