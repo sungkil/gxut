@@ -607,6 +607,7 @@ __forceinline float rsqrt( float x ){ float y=0.5f*x; int i=*(int*)&x; i=0x5F375
 __forceinline double rsqrt( double x ){ double y=0.5*x; int64_t i=*(int64_t*)&x; i=0x5FE6EB50C7B537A9-(i>>1); x=*(double*)&i; x=x*(1.5-y*x*x); x=x*(1.5-y*x*x); return x; }		// Quake3's Fast InvSqrt(): 1/sqrt(x): 64-bit magic number (0x5FE6EB50C7B537A9) used; 2 iteration has quite good accuracy
 __forceinline uint bitswap( uint n ){ n=((n&0x55555555)<<1)|((n&0xaaaaaaaa)>>1); n=((n&0x33333333)<<2)|((n&0xcccccccc)>>2); n=((n&0x0f0f0f0f)<<4)|((n&0xf0f0f0f0)>>4); n=((n&0x00ff00ff)<<8)|((n&0xff00ff00)>>8); return (n<<16)|(n>>16); }
 __forceinline float triangle_area( vec2 a, vec2 b, vec2 c ){ return abs(a.x*b.y+b.x*c.y+c.x*a.y-a.x*c.y-c.x*b.y-b.x*a.y)*0.5f; }
+__forceinline ivec4 local_viewport( ivec2 size, float local_aspect ){ float ra=size.x/float(size.y)/local_aspect; int w0=size.x, h0=size.y, w=ra>1.0f?int(round(float(w0)/ra)):w0, h=ra>1.0f?h0:int(round(float(h0)*ra)), x=ra>1.0f?(w0-w)/2:0, y=ra>1.0f?0:(h0-h)/2; return ivec4{x,y,w,h}; } // ra: relative aspect (larger window size/local; a>1=horz. longer)
 
 //*************************************
 // {GLSL|HLSL}-like shader intrinsic functions
