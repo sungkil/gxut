@@ -744,10 +744,10 @@ template <class T> T bezier( T v0, T v1, T v2, T v3, double t )
 __forceinline uint& pseed(){ static uint seed=0; return seed; }
 __forceinline void sprand( uint seed ){ pseed()=seed; }
 __forceinline uint urand(){ pseed() = pseed()*214013L+2531011L; return ((pseed()>>16)&0x7fff); }
-__forceinline float prand(){ return urand()/float(RAND_MAX); }
-__forceinline vec2 prand2(){ return vec2(prand(),prand()); }
-__forceinline vec3 prand3(){ return vec3(prand(),prand(),prand()); }
-__forceinline vec4 prand4(){ return vec4(prand(),prand(),prand(),prand()); }
+__forceinline float prand( float fmin=0, float fmax=1.0f ){ return fmin+(fmax-fmin)*(urand()/float(RAND_MAX)); }
+__forceinline vec2 prand2( float fmin=0, float fmax=1.0f ){ return vec2(prand(fmin,fmax),prand(fmin,fmax)); }
+__forceinline vec3 prand3( float fmin=0, float fmax=1.0f ){ return vec3(prand(fmin,fmax),prand(fmin,fmax),prand(fmin,fmax)); }
+__forceinline vec4 prand4( float fmin=0, float fmax=1.0f ){ return vec4(prand(fmin,fmax),prand(fmin,fmax),prand(fmin,fmax),prand(fmin,fmax)); }
 
 //*************************************
 // CRC32 with 4-batch parallel construction (from zlib)
