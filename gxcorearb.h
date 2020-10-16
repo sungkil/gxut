@@ -1468,7 +1468,7 @@ typedef void (APIENTRYP PFNGLGETQUERYINDEXEDIVPROC) (GLenum target, GLuint index
 #define GL_VIEWPORT_INDEX_PROVOKING_VERTEX 0x825F
 #define GL_UNDEFINED_VERTEX               0x8260
 typedef void (APIENTRYP PFNGLRELEASESHADERCOMPILERPROC) (void);
-typedef void (APIENTRYP PFNGLSHADERBINARYPROC) (GLsizei count, const GLuint *shaders, GLenum binaryformat, const void *binary, GLsizei length);
+typedef void (APIENTRYP PFNGLSHADERBINARYPROC) (GLsizei count, const GLuint *shaders, GLenum binaryFormat, const void *binary, GLsizei length);
 typedef void (APIENTRYP PFNGLGETSHADERPRECISIONFORMATPROC) (GLenum shadertype, GLenum precisiontype, GLint *range, GLint *precision);
 typedef void (APIENTRYP PFNGLDEPTHRANGEFPROC) (GLfloat n, GLfloat f);
 typedef void (APIENTRYP PFNGLCLEARDEPTHFPROC) (GLfloat d);
@@ -3040,12 +3040,22 @@ typedef void (APIENTRYP PFNGLDEPTHRANGEINDEXEDDNVPROC) (GLuint index, GLdouble n
 #define GL_KHR_texture_compression_astc_sliced_3d 1
 #endif /* GL_KHR_texture_compression_astc_sliced_3d */
 
+#ifndef GL_MESA_framebuffer_flip_x
+#define GL_MESA_framebuffer_flip_x 1
+#define GL_FRAMEBUFFER_FLIP_X_MESA        0x8BBC
+#endif /* GL_MESA_framebuffer_flip_x */
+
 #ifndef GL_MESA_framebuffer_flip_y
 #define GL_MESA_framebuffer_flip_y 1
 #define GL_FRAMEBUFFER_FLIP_Y_MESA        0x8BBB
 typedef void (APIENTRYP PFNGLFRAMEBUFFERPARAMETERIMESAPROC) (GLenum target, GLenum pname, GLint param);
 typedef void (APIENTRYP PFNGLGETFRAMEBUFFERPARAMETERIVMESAPROC) (GLenum target, GLenum pname, GLint *params);
 #endif /* GL_MESA_framebuffer_flip_y */
+
+#ifndef GL_MESA_framebuffer_swap_xy
+#define GL_MESA_framebuffer_swap_xy 1
+#define GL_FRAMEBUFFER_SWAP_XY_MESA       0x8BBD
+#endif /* GL_MESA_framebuffer_swap_xy */
 
 #ifndef GL_NV_conservative_raster
 #define GL_NV_conservative_raster 1
@@ -3234,7 +3244,9 @@ e(ARB_viewport_array)
 e(KHR_texture_compression_astc_hdr)
 e(KHR_texture_compression_astc_ldr)
 e(KHR_texture_compression_astc_sliced_3d)
+e(MESA_framebuffer_flip_x)
 e(MESA_framebuffer_flip_y)
+e(MESA_framebuffer_swap_xy)
 e(NV_conservative_raster)
 e(NV_conservative_raster_dilate)
 e(NV_conservative_raster_pre_snap)
@@ -4019,6 +4031,7 @@ bool gxcorearb_extension_exists( const char* extension );
 HMODULE __hOpenGL32 = nullptr;
 PROC (WINAPI* __wglGetProcAddress)(LPCSTR) = nullptr;
 void* (*__xglGetProcAddress)(LPCSTR) = nullptr;
+const char** (*__xglGetExtensions)(int*) = nullptr;
 static std::vector<std::string> unsupported_functions;
 static std::vector<std::string> unsupported_extensions;
 
@@ -4030,22 +4043,27 @@ __declspec(noinline) static void* get_gxcorearb_proc( const char* fname )
 	unsupported_functions.emplace_back(fname);							return p;
 }
 
-__declspec(noinline) std::unordered_set<std::string> get_gxcorearb_extensions()
+__declspec(noinline) std::unordered_set<std::string>& get_gxcorearb_extensions()
 {
-	std::unordered_set<std::string> extension_set;
+	static std::unordered_set<std::string> extension_set; if(!extension_set.empty()) return extension_set;
+	if(__xglGetExtensions)
+	{
+		int kn; const char** p_extensions = __xglGetExtensions(&kn);
+		if(kn){ for(int k=0;k<kn;k++) extension_set.emplace(p_extensions[k]); return extension_set; }
+	}
 #ifdef GL_ES_VERSION_2_0
 	char* e=(char*)glGetString(GL_EXTENSIONS); std::vector<char> ext(e,e+strlen(e)+2);
 	for(char* t=strtok(&ext[0]," \t\n" );t;t=strtok(nullptr," \t\n")) extension_set.emplace(t);
 #else
 	int kn; glGetIntegerv(GL_NUM_EXTENSIONS,&kn);
-	for( int k=0; k<kn; k++ ) extension_set.emplace((char*)glGetStringi(GL_EXTENSIONS,k));
+	for(int k=0;k<kn;k++) extension_set.emplace((char*)glGetStringi(GL_EXTENSIONS,k));
 #endif
 	return extension_set;
 }
 
 __declspec(noinline) bool gxcorearb_extension_exists( const char* extension )
 {
-	static std::unordered_set<std::string> extension_set = get_gxcorearb_extensions();
+	static const std::unordered_set<std::string>& extension_set = get_gxcorearb_extensions();
 	if(extension_set.find(extension)!=extension_set.end()) return true;
 	unsupported_extensions.emplace_back(extension); return false;
 }
@@ -4055,6 +4073,7 @@ __declspec(noinline) void gxcorearb( HMODULE hOpenGL32 )
 	__hOpenGL32 = hOpenGL32; if(__hOpenGL32==nullptr) __hOpenGL32=LoadLibraryW(L"OpenGL32.dll"); if(__hOpenGL32==nullptr){ printf( "gxcorearb(): unable to load OpenGL32.dll" ); return; }
 	__wglGetProcAddress = (decltype(__wglGetProcAddress)) GetProcAddress(__hOpenGL32,"wglGetProcAddress"); if(__wglGetProcAddress==nullptr){ printf( "gxcorearb(): __wglGetProcAddress==nullptr" ); return; }
 	__xglGetProcAddress = (decltype(__xglGetProcAddress)) GetProcAddress(GetModuleHandleW(nullptr),"xglGetProcAddress");
+	__xglGetExtensions = (decltype(__xglGetExtensions)) GetProcAddress(GetModuleHandleW(nullptr),"xglGetExtensions");
 
 // query if functions exist
 #define g(proc,func) gl##func = (PFNGL##proc##PROC) get_gxcorearb_proc( "gl" #func );
@@ -4962,7 +4981,9 @@ e(ARB_viewport_array)
 e(KHR_texture_compression_astc_hdr)
 e(KHR_texture_compression_astc_ldr)
 e(KHR_texture_compression_astc_sliced_3d)
+e(MESA_framebuffer_flip_x)
 e(MESA_framebuffer_flip_y)
+e(MESA_framebuffer_swap_xy)
 e(NV_conservative_raster)
 e(NV_conservative_raster_dilate)
 e(NV_conservative_raster_pre_snap)

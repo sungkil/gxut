@@ -108,7 +108,7 @@ inline path generate_normal_map( const path& bump_path, float bump_scale )
 	if(normal_path.exists()&&normal_path.mfiletime()>=bump_mtime) return normal_path;
 
 	//wprintf( L"generating a normal map for %s... ", bump_path.name() );timer->begin();
-	image* bump0 = gx::load_image(bump_path,false,false,false);	// do not force rgb to bump
+	image* bump0 = gx::load_image(bump_path,true,false,false);	// do not force rgb to bump
 	if(bump0==nullptr){ printf("failed to load the bump map %s\n", wtoa(bump_path) ); return L""; }
 
 	// test whether the bump map is actually a normal map
