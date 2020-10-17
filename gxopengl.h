@@ -677,12 +677,12 @@ namespace gl {
 		~Effect() override { active_program=nullptr; if(quad){ delete quad; quad=nullptr; } if(!pts.empty()){ for(auto it:pts) safe_delete(it.second); pts.clear(); } for(auto& it:uniform_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} uniform_buffer_map.clear(); for(auto* p:programs) delete p; programs.clear(); }
 		static void unbind(){ glUseProgram(0); }
 
-		Program* bind( const char* programName ){ active_program=get_program(programName); if(active_program) active_program->bind(); else{ active_program=nullptr; glUseProgram(0); } return active_program; }
+		Program* bind( const char* program_name, ... ){ char buff[1024]; va_list a;va_start(a,program_name);vsprintf_s(buff,1024,program_name,a);va_end(a); active_program=get_program(buff); if(active_program) active_program->bind(); else{ active_program=nullptr; glUseProgram(0); } return active_program; }
 		Program* bind( uint index ){ active_program=get_program(index); if(active_program) active_program->bind(); else { active_program=nullptr; glUseProgram(0); } return active_program; }
 
 		bool empty() const { return programs.empty(); }
 		size_t size() const { return programs.size(); }
-		Program* get_program( const char* programName ) const { for(uint k=0;k<programs.size();k++)if(_stricmp(programs[k]->name,programName)==0) return programs[k]; printf("Unable to find program \"%s\" in effect \"%s\"\n", programName, name ); return nullptr; }
+		Program* get_program( const char* program_name ) const { for(uint k=0;k<programs.size();k++)if(_stricmp(programs[k]->name,program_name)==0) return programs[k]; printf("Unable to find program \"%s\" in effect \"%s\"\n", program_name, name ); return nullptr; }
 		Program* get_program( uint index ) const { if(index<programs.size()) return programs[index]; else { printf("[%s] Out-of-bound program index\n", name ); return nullptr; } }
 		bool create_program( const char* prefix, const char* name, const std::map<GLuint,std::string>& shaderSourceMap, const char* p_macro=nullptr, std::vector<const char*>* tfVaryings=nullptr ){ Program* program=gxCreateProgram(prefix,name,shaderSourceMap,p_macro,tfVaryings); if(!program) return false; programs.emplace_back(program); auto& m=program->uniform_block_map;for(auto& it:m){gl::Program::UniformBlock& ub=it.second;ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size);} return true; }
 		bool attach( const char* name, const char* effect_source, const char* p_macro=nullptr );
