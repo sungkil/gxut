@@ -978,9 +978,14 @@ inline gl::VertexArray* gxCreateVertexArray( const char* name, const vertex* p_v
 	return va;
 }
 
+inline gl::VertexArray* gxCreateVertexArray( const char* name, const std::vector<vertex>& vertices, GLenum usage=GL_STATIC_DRAW )
+{
+	return vertices.empty()?nullptr:gxCreateVertexArray(name,&vertices[0],vertices.size(),nullptr,0,usage);
+}
+
 inline gl::VertexArray* gxCreateVertexArray( const char* name, const std::vector<vertex>& vertices, const std::vector<uint>& indices, GLenum usage=GL_STATIC_DRAW )
 {
-	return vertices.empty()?nullptr:gxCreateVertexArray(name,&vertices[0],vertices.size(),&indices[0],indices.size(),usage);
+	return vertices.empty()?nullptr:gxCreateVertexArray(name,vertices.data(),vertices.size(),indices.empty()?nullptr:indices.data(),indices.size(),usage);
 }
 
 #ifdef __GX_MESH_H__
