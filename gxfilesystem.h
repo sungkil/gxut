@@ -555,14 +555,13 @@ inline path path::system::temp()
 
 inline path path::global::temp( const char* subdir )
 {
+	if(subdir) return path::system::temp()+path(subdir).add_backslash();
 #ifdef REX_FACTORY_IMPL
-	if(!subdir) subdir = ".rex\\";
+	return path::system::temp()+L".rex\\";
 #else
-	if(!subdir) subdir = ".gxut\\";
+	static bool b_rex=module_path().name(false)==L"rex";
+	return path::system::temp()+(b_rex?L".rex\\":L".gxut\\");
 #endif
-	path t = path::system::temp();
-	if(subdir&&subdir[0]) t+=path(subdir).add_backslash();
-	return t;
 }
 
 //***********************************************
