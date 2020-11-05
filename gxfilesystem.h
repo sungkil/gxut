@@ -222,6 +222,7 @@ struct path
 	path dir_name() const { if(!wcschr(data,L'\\')) return L""; return dir().remove_backslash().name(); }
 	path ext() const { wchar_t e[_MAX_EXT+1]; _wsplitpath_s(data,0,0,0,0,0,0,e,_MAX_EXT); path p; if(*e!=0) wcscpy(p.data,e+1); return p; }
 	path parent() const { return dir().remove_backslash().dir(); }
+	path junction() const { path t; if(empty()) return t; auto& a=attributes(); if(a==INVALID_FILE_ATTRIBUTES||(a&FILE_ATTRIBUTE_DIRECTORY)==0||(a&FILE_ATTRIBUTE_REPARSE_POINT)==0) return t; HANDLE h=CreateFileW(data,GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,0); if(h==INVALID_HANDLE_VALUE) return t; GetFinalPathNameByHandleW(h,t.data,t.capacity,FILE_NAME_NORMALIZED); CloseHandle(h); if(wcsncmp(t.data,L"\\\\?\\",4)==0) t=path(t.data+4).add_backslash(); return t; }
 	path remove_first_dot()	const { return (wcslen(data)>2&&data[0]==L'.'&&data[1]==L'\\') ? path(data+2) : *this; }
 	path remove_ext() const { split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
 	std::vector<path> explode( const wchar_t* delim=L"\\") const { std::vector<path> L; if(!delim||!*delim) return L; path s=delim[0]==L'/'&&delim[1]==0?to_slash():*this; L.reserve(16); wchar_t* ctx; for(wchar_t* t=wcstok_s(s.data,delim,&ctx);t;t=wcstok_s(0,delim,&ctx)) L.emplace_back(t); return L; }
@@ -544,7 +545,8 @@ __noinline path path::serial( path dir, const wchar_t* prefix, const wchar_t* po
 inline path path::system::temp()
 {
 	static path t; if(!t.empty()) return t;
-	GetTempPathW(path::capacity,t); t=t.absolute().add_backslash(); t[0]=::toupper(t[0]);
+	GetTempPathW(path::capacity,t); t=t.absolute().add_backslash();
+	path tmp=t.drive()+L"\\temp\\"; if(t==tmp.junction()) t=tmp; t[0]=::toupper(t[0]);
 	if(t.volume().has_free_space()) return t;
 	wprintf(L"temp(): not enough space in %s\n", t.data );
 	t=path::module_dir()+L"temp\\"; if(!t.exists()) t.mkdir(); wprintf(L"temp(): %s is used instead", t.data );
