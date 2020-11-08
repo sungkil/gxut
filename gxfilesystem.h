@@ -160,11 +160,17 @@ struct path
 	bool operator==( const wchar_t* s )	const { return _wcsicmp(data,s)==0; }
 	bool operator!=( const path& p )	const { return _wcsicmp(data,p.data)!=0; }
 	bool operator!=( const wchar_t* s )	const { return _wcsicmp(data,s)!=0; }
+#ifndef _INC_SHLWAPI
 	bool operator<( const path& p )		const { return _wcsicmp(data,p.data)<0; }
 	bool operator>( const path& p )		const { return _wcsicmp(data,p.data)>0; }
 	bool operator<=( const path& p )	const { return _wcsicmp(data,p.data)<=0; }
 	bool operator>=( const path& p )	const { return _wcsicmp(data,p.data)>=0; }
-
+#else
+	bool operator<( const path& p )		const { return StrCmpLogicalW(data,p.data)<0; }
+	bool operator>( const path& p )		const { return StrCmpLogicalW(data,p.data)>0; }
+	bool operator<=( const path& p )	const { return StrCmpLogicalW(data,p.data)<=0; }
+	bool operator>=( const path& p )	const { return StrCmpLogicalW(data,p.data)>=0; }
+#endif
 	// operator overloading: array operator
 	inline wchar_t& operator[]( ptrdiff_t i ){ return data[i]; }
 	inline const wchar_t& operator[]( ptrdiff_t i ) const { return data[i]; }
