@@ -14,27 +14,12 @@ namespace ini {
 // case-insensitive keys ("SECTIONNAME:KEYNAME") and values (wchar_t)
 // important features: can handle multiple values for a single key
 
-inline wchar_t* trim_inplace( wchar_t* src, const wchar_t* delims=L" \t\n" )
-{
-	if(!src||!*src) return src;
-	size_t L=wcslen(src),C=wcslen(delims),k=0,j=0;
-	for(k=0;k<L;k++){ for(j=0;j<C;j++)if(src[L-1-k]==delims[j])break;if(j==C)break; }
-	src[L-k]=0;
-	src+=wcsspn(src,delims);
-	return src;
-}
-
 struct entry_t
 {
-	size_t idx; std::string section, key; std::wstring value;
-	entry_t( size_t index, const char* Sec, const char* Key ):idx(index),section(Sec),key(Key){};
-	static bool compare_by_index( entry_t* e0, entry_t* e1 ){ return e0->idx < e1->idx; }
+	size_t index; std::string section, key; std::wstring value;
+	entry_t( size_t idx, const char* Sec, const char* Key ):index(idx),section(Sec),key(Key){};
+	static bool compare_by_index( entry_t* e0, entry_t* e1 ){ return e0->index < e1->index; }
 };
-
-struct file_time_t
-{
-	int s,m,h,d,M,y;
-};	// sec, min, hour, day, month, year: aligned by the struct tm
 
 struct auto_lock_t
 {
@@ -43,6 +28,7 @@ struct auto_lock_t
 	~auto_lock_t(){ LeaveCriticalSection(&cs_r); }
 };
 
+struct file_time_t { int s,m,h,d,M,y; };	// sec, min, hour, day, month, year: aligned by the struct tm
 using dictionary_t = nocase::map<std::string,entry_t*>;
 
 struct parser_t
@@ -63,7 +49,7 @@ protected:
 public:
 	~parser_t(){ DeleteCriticalSection(&cs); }
 	parser_t(){ InitializeCriticalSectionAndSpinCount(&cs,2000); }
-	parser_t( path file_path ):parser_t(){ load(file_path); }
+	parser_t( path file_path ):parser_t(){ this->file_path = file_path.absolute(); }
 
 	// query and retrieval
 	const path& get_path() const { return file_path; }
@@ -103,30 +89,29 @@ public:
 
 __noinline bool parser_t::load( const path& file_path )
 {
-	struct _stat s; if(file_path.empty()||_wstat(file_path,&s)!=0) return false;
+	if(file_path.empty()) return false;
+	struct _stat s; if(_wstat(file_path,&s)!=0) return false;
 
 	// bypass non-modified file
 	file_time_t mt={}; memcpy(&mt,_gmtime64(&s.st_mtime),sizeof(file_time_t));mt.y+=1900;mt.M+=1;
-	if(memcmp(&mtime,&mt,sizeof(file_time_t))==0) return false; mtime = mt;
+	if(memcmp(&mtime,&mt,sizeof(file_time_t))==0) return true; mtime = mt;
 
 	// open now
 	auto_lock_t lock(cs);
 	FILE* fp=_wfopen(file_path,L"r,ccs=UTF-8");if(fp==nullptr){ printf("Unable to open %s",file_path.wtoa()); return false; }
 
 	// clear dictionary
-	for(auto& it:dic)if(it.second!=nullptr){delete it.second;} dic.clear();
-	wchar_t sec[1025],sk[1025];
+	for(auto& it:dic){if(it.second!=nullptr){delete it.second;}} dic.clear();
+	
+	wchar_t sec[257],sk[257];
 	while(fgetws(buffer,buffer_capacity,fp))
 	{
-		wchar_t* t=trim_inplace(buffer);
+		wchar_t* t=buffer; itrim(t);
 		int len=int(wcslen(t));
-		if(len<3||t[0]==';'||t[0]=='#') continue;	// skip comment, remove comment # and trim
-		if(t[0]=='['&&t[len-1]==']'){t[len-1]=0;t++;trim_inplace(t);if(t[0])wcscpy(sec,t);} // make the first char upper and set as current section
-		else
-		{
-			wchar_t* v=nullptr;for(int k=0;k<len;k++)if(t[k]==L'='){t[k]=0;v=t+k+1;break;}trim_inplace(t);trim_inplace(v);if(!t||!t[0]||!v) continue;
-			swprintf_s(sk,L"%s:%s",sec,t);get_or_create_entry(wtoa(sk))->value=v;
-		}
+		if(len<3||t[0]==';'||t[0]=='#') continue; // skip comment, remove comment # and trim
+		else if(t[0]=='['&&t[len-1]==']'){t[len-1]=0;t++;itrim(t);if(t[0])wcscpy(sec,t); continue; } // get section
+		wchar_t* v=nullptr;for(int k=0;k<len;k++)if(t[k]==L'='){t[k]=0;v=t+k+1;break;}itrim(t);itrim(v); if(!t||!t[0]||!v) continue;
+		swprintf_s(sk,L"%s:%s",sec,t);get_or_create_entry(wtoa(sk))->value=v;
 	}
 	
 	fclose(fp);
@@ -137,7 +122,7 @@ __noinline bool parser_t::load( const path& file_path )
 
 __noinline bool parser_t::save( const path& file_path )
 {
-	if(b_batch) return true;
+	if(b_batch) return false;
 	if(file_path.empty()){ printf( "%s(): file_path is empty\n", __func__ ); return false; }
 
 	auto_lock_t lock(cs);
@@ -177,6 +162,9 @@ template<> __noinline float parser_t::get<float>( const char* key ){		auto* v=ge
 template<> __noinline int2 parser_t::get<int2>( const char* key ){			auto* v=get(key); return *v==0?int2{}:wtoi2(v); }
 template<> __noinline int3 parser_t::get<int3>( const char* key ){			auto* v=get(key); return *v==0?int3{}:wtoi3(v); }
 template<> __noinline int4 parser_t::get<int4>( const char* key ){			auto* v=get(key); return *v==0?int4{}:wtoi4(v); }
+template<> __noinline float2 parser_t::get<float2>( const char* key ){		auto* v=get(key); return *v==0?float2{}:wtof2(v); }
+template<> __noinline float3 parser_t::get<float3>( const char* key ){		auto* v=get(key); return *v==0?float3{}:wtof3(v); }
+template<> __noinline float4 parser_t::get<float4>( const char* key ){		auto* v=get(key); return *v==0?float4{}:wtof4(v); }
 
 // template specializations for set()
 template<> __noinline void parser_t::set<const wchar_t*>( const char* key, const wchar_t* value ){ bool b=key_exists(key); entry_t* e=get_or_create_entry(key); if(b&&e->value==value) return; e->value=value; save(); }
@@ -194,9 +182,15 @@ template<> __noinline void parser_t::set<double>( const char* key, double value 
 template<> __noinline void parser_t::set<int2>( const char* key, int2 value ){			swprintf_s(buffer,buffer_capacity,L"%d %d",value.x,value.y); set(key,buffer); }
 template<> __noinline void parser_t::set<int3>( const char* key, int3 value ){			swprintf_s(buffer,buffer_capacity,L"%d %d %d",value.x,value.y,value.z); set(key,buffer); }
 template<> __noinline void parser_t::set<int4>( const char* key, int4 value ){			swprintf_s(buffer,buffer_capacity,L"%d %d %d %d",value.x,value.y,value.z,value.w); set(key,buffer); }
-template<> __noinline void parser_t::set<ivec2>( const char* key, ivec2 value ){		swprintf_s(buffer,buffer_capacity,L"%d %d",value.x,value.y); set(key,buffer); }
-template<> __noinline void parser_t::set<ivec3>( const char* key, ivec3 value ){		swprintf_s(buffer,buffer_capacity,L"%d %d %d",value.x,value.y,value.z); set(key,buffer); }
-template<> __noinline void parser_t::set<ivec4>( const char* key, ivec4 value ){		swprintf_s(buffer,buffer_capacity,L"%d %d %d %d",value.x,value.y,value.z,value.w); set(key,buffer); }
+template<> __noinline void parser_t::set<ivec2>( const char* key, ivec2 value ){		set<int2>(key,value); }
+template<> __noinline void parser_t::set<ivec3>( const char* key, ivec3 value ){		set<int3>(key,value); }
+template<> __noinline void parser_t::set<ivec4>( const char* key, ivec4 value ){		set<int4>(key,value); }
+template<> __noinline void parser_t::set<float2>( const char* key, float2 value ){		swprintf_s(buffer,buffer_capacity,L"%g %g",value.x,value.y); set(key,buffer); }
+template<> __noinline void parser_t::set<float3>( const char* key, float3 value ){		swprintf_s(buffer,buffer_capacity,L"%g %g %g",value.x,value.y,value.z); set(key,buffer); }
+template<> __noinline void parser_t::set<float4>( const char* key, float4 value ){		swprintf_s(buffer,buffer_capacity,L"%g %g %g %g",value.x,value.y,value.z,value.w); set(key,buffer); }
+template<> __noinline void parser_t::set<vec2>( const char* key, vec2 value ){			set<float2>(key,value); }
+template<> __noinline void parser_t::set<vec3>( const char* key, vec3 value ){			set<float3>(key,value); }
+template<> __noinline void parser_t::set<vec4>( const char* key, vec4 value ){			set<float4>(key,value); }
 
 //*************************************
 } // namespace ini

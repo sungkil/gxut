@@ -316,6 +316,15 @@ inline const T* trim( const T* src, T delim )
 	return __tstrdup(src,d-src+1);
 }
 
+// in-place trim
+template <class T>
+inline void itrim( T*& src, const T* delims=_strcvt<T>(" \t\n") )
+{
+	if(!src&&!src[0]) return;
+	src += strspn(src,delims);
+	src[strlen(src)-_strrspn(src,delims)]=0;
+}
+
 template <class T>
 inline const T* trim_comment( const T* src, const char* marker="#" )
 {
