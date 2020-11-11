@@ -49,9 +49,10 @@ protected:
 public:
 	~parser_t(){ DeleteCriticalSection(&cs); }
 	parser_t(){ InitializeCriticalSectionAndSpinCount(&cs,2000); }
-	parser_t( path file_path ):parser_t(){ this->file_path = file_path.absolute(); }
+	parser_t( path file_path ):parser_t(){ set_path(file_path); }
 
 	// query and retrieval
+	void set_path( const path& file_path ){ this->file_path = file_path; }
 	const path& get_path() const { return file_path; }
 	bool key_exists( const char* key ) const { if(key==nullptr||key[0]=='\0') return false; return dic.find(key)!=dic.end(); }
 	bool key_exists( const char* sec, const char* key ) const { if(sec==nullptr||sec[0]=='\0'||key==nullptr||key[0]=='\0') return false; char sk[4096]; sprintf_s(sk,4096,"%s:%s",sec,key); return dic.find(sk)!=dic.end(); }
@@ -152,19 +153,20 @@ __noinline bool parser_t::save( const path& file_path )
 }
 
 // template specializations for get()
-template<> __noinline path parser_t::get<path>( const char* key ){			auto* v=get(key); return *v==0?path():path(get(key)); }
-template<> __noinline bool parser_t::get<bool>( const char* key ){			auto* v=get(key); return *v==0?false:_wcsicmp(v,L"true")==0?true:(_wtoi(v)!=0); }
-template<> __noinline int parser_t::get<int>( const char* key ){			auto* v=get(key); return *v==0?0:_wtoi(v); }
-template<> __noinline uint parser_t::get<uint>( const char* key ){			return uint(get<int>(key)); }
-template<> __noinline int64_t parser_t::get<int64_t>( const char* key ){	auto* v=get(key); return *v==0?0:_wtoi64(v); }
-template<> __noinline uint64_t parser_t::get<uint64_t>( const char* key ){	return uint64_t(get<int64_t>(key)); }
-template<> __noinline float parser_t::get<float>( const char* key ){		auto* v=get(key); return *v==0?0:float(_wtof(v)); }
-template<> __noinline int2 parser_t::get<int2>( const char* key ){			auto* v=get(key); return *v==0?int2{}:wtoi2(v); }
-template<> __noinline int3 parser_t::get<int3>( const char* key ){			auto* v=get(key); return *v==0?int3{}:wtoi3(v); }
-template<> __noinline int4 parser_t::get<int4>( const char* key ){			auto* v=get(key); return *v==0?int4{}:wtoi4(v); }
-template<> __noinline float2 parser_t::get<float2>( const char* key ){		auto* v=get(key); return *v==0?float2{}:wtof2(v); }
-template<> __noinline float3 parser_t::get<float3>( const char* key ){		auto* v=get(key); return *v==0?float3{}:wtof3(v); }
-template<> __noinline float4 parser_t::get<float4>( const char* key ){		auto* v=get(key); return *v==0?float4{}:wtof4(v); }
+template<> __noinline std::string parser_t::get<std::string>(const char* key){	auto* v=get(key); return *v==0?"":std::string(wtoa(v)); }
+template<> __noinline path parser_t::get<path>( const char* key ){				auto* v=get(key); return *v==0?path():path(v); }
+template<> __noinline bool parser_t::get<bool>( const char* key ){				auto* v=get(key); return *v==0?false:_wcsicmp(v,L"true")==0?true:(_wtoi(v)!=0); }
+template<> __noinline int parser_t::get<int>( const char* key ){				auto* v=get(key); return *v==0?0:_wtoi(v); }
+template<> __noinline uint parser_t::get<uint>( const char* key ){				return uint(get<int>(key)); }
+template<> __noinline int64_t parser_t::get<int64_t>( const char* key ){		auto* v=get(key); return *v==0?0:_wtoi64(v); }
+template<> __noinline uint64_t parser_t::get<uint64_t>( const char* key ){		return uint64_t(get<int64_t>(key)); }
+template<> __noinline float parser_t::get<float>( const char* key ){			auto* v=get(key); return *v==0?0:float(_wtof(v)); }
+template<> __noinline int2 parser_t::get<int2>( const char* key ){				auto* v=get(key); return *v==0?int2{}:wtoi2(v); }
+template<> __noinline int3 parser_t::get<int3>( const char* key ){				auto* v=get(key); return *v==0?int3{}:wtoi3(v); }
+template<> __noinline int4 parser_t::get<int4>( const char* key ){				auto* v=get(key); return *v==0?int4{}:wtoi4(v); }
+template<> __noinline float2 parser_t::get<float2>( const char* key ){			auto* v=get(key); return *v==0?float2{}:wtof2(v); }
+template<> __noinline float3 parser_t::get<float3>( const char* key ){			auto* v=get(key); return *v==0?float3{}:wtof3(v); }
+template<> __noinline float4 parser_t::get<float4>( const char* key ){			auto* v=get(key); return *v==0?float4{}:wtof4(v); }
 
 // template specializations for set()
 template<> __noinline void parser_t::set<const wchar_t*>( const char* key, const wchar_t* value ){ bool b=key_exists(key); entry_t* e=get_or_create_entry(key); if(b&&e->value==value) return; e->value=value; save(); }
