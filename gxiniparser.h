@@ -55,7 +55,7 @@ public:
 	void set_path( const path& file_path ){ this->file_path = file_path; }
 	const path& get_path() const { return file_path; }
 	bool key_exists( const char* key ) const { if(key==nullptr||key[0]=='\0') return false; return dic.find(key)!=dic.end(); }
-	bool key_exists( const char* sec, const char* key ) const { if(sec==nullptr||sec[0]=='\0'||key==nullptr||key[0]=='\0') return false; char sk[4096]; sprintf_s(sk,4096,"%s:%s",sec,key); return dic.find(sk)!=dic.end(); }
+	bool key_exists( const char* sec, const char* key ) const { if(!key||!*key) return false; if(!sec||!*sec) return key_exists(key); char sk[4096]; sprintf_s(sk,4096,"%s:%s",sec,key); return dic.find(sk)!=dic.end(); }
 	bool section_exists( const char* sec ) const { if(sec==nullptr||sec[0]=='\0') return false; for(auto& it:dic) if(_stricmp(it.second->section.c_str(),sec)==0) return true; return false; }
 	std::set<std::string> section_set() const { std::set<std::string> ss;for(auto& it:dic)ss.emplace(it.second->section);return ss;}
 	std::vector<std::string> sections(){ std::vector<std::string> sl; std::set<std::string> ss; for(auto& it:entries()){ if(ss.find(it->section.c_str())!=ss.end()) continue; sl.emplace_back(it->section); ss.emplace(it->section); } return sl; }

@@ -72,6 +72,7 @@
 #include <vector>
 // C++11
 #if (__cplusplus>199711L) || (_MSC_VER>=1600/*VS2010*/)
+	#include <random>
 	#include <type_traits>
 	#include <unordered_map>
 	#include <unordered_set>
