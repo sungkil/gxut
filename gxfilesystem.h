@@ -105,23 +105,23 @@ struct path
 	path() noexcept { alloc(); clear_cache(); }
 	path( const path& p ) noexcept { wcscpy(alloc(),p); cache()=p.cache(); } // do not canonicalize for copy constructor
 	path( path&& p ) noexcept { data=p.data; p.data=nullptr; } // cache moves as well
-	path( const wchar_t* s ) noexcept : path() { wcscpy(data,s); canonicalize(); }
-	path( const char* s ) noexcept : path() { __mb2wc(s,data); canonicalize(); }
-	explicit path( const std::wstring& s ) noexcept : path() { wcscpy(data,s.c_str()); canonicalize(); }
-	explicit path( const std::string& s ) noexcept : path() { __mb2wc(s.c_str(),data); canonicalize(); }
+	path( const wchar_t* s ) noexcept : path() { wcscpy(data,s); }
+	path( const char* s ) noexcept : path() { __mb2wc(s,data); }
+	explicit path( const std::wstring& s ) noexcept : path() { wcscpy(data,s.c_str()); }
+	explicit path( const std::string& s ) noexcept : path() { __mb2wc(s.c_str(),data); }
 
 	// operator overloading: assignment
 	path& operator=( const path& p ) noexcept { wcscpy(data,p.data); cache()=p.cache(); return *this; }
 	path& operator=( path&& p ) noexcept { if(data) free(data); data=p.data; p.data=nullptr; return *this; }
-	path& operator=( const wchar_t* s ) noexcept { wcscpy(data,s); canonicalize(); return *this; }
-	path& operator=( const char* s ) noexcept { __mb2wc(s,data); canonicalize(); return *this; }
-	path& operator=( const std::wstring& s ) noexcept { wcscpy(data,s.c_str()); canonicalize(); return *this; }
-	path& operator=( const std::string& s ) noexcept { __mb2wc(s.c_str(),data); canonicalize(); return *this; }
+	path& operator=( const wchar_t* s ) noexcept { wcscpy(data,s); return *this; }
+	path& operator=( const char* s ) noexcept { __mb2wc(s,data); return *this; }
+	path& operator=( const std::wstring& s ) noexcept { wcscpy(data,s.c_str()); return *this; }
+	path& operator=( const std::string& s ) noexcept { __mb2wc(s.c_str(),data); return *this; }
 
 	// concatenations
-	path& operator+=( const path& p ){ wcscat(data,p.data+((p.data[0]==L'.'&&p.data[1]==L'\\'&&p.data[2])?2:0)); canonicalize(); return *this; }
-	path& operator+=( const wchar_t* s ){ if(s[0]==L'.'&&s[1]==L'\\'&&s[2]) s+=2; size_t l=wcslen(data); wcscpy(data+l,s); canonicalize(); return *this; }
-	path& operator+=( const char* s ){ size_t l=wcslen(data); __mb2wc(s,data+l); canonicalize(); return *this; }
+	path& operator+=( const path& p ){ wcscat(data,p.data+((p.data[0]==L'.'&&p.data[1]==L'\\'&&p.data[2])?2:0)); return *this; }
+	path& operator+=( const wchar_t* s ){ if(s[0]==L'.'&&s[1]==L'\\'&&s[2]) s+=2; size_t l=wcslen(data); wcscpy(data+l,s); return *this; }
+	path& operator+=( const char* s ){ size_t l=wcslen(data); __mb2wc(s,data+l); return *this; }
 	path& operator+=( wchar_t c ){ size_t l=wcslen(data); data[l]=c; data[l+1]=0; return *this; }
 	path& operator+=( char c ){ size_t l=wcslen(data); data[l]=wchar_t(c); data[l+1]=0; return *this; }
 	path& operator+=( const std::wstring& s ){ return operator+=(s.c_str()); }
