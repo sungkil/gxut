@@ -24,6 +24,7 @@
 #include <io.h>			// low-level io functions
 #include <time.h>
 #include <deque>
+#include <shlobj.h>		// for SHGetKnownFolderPath
 
 //***********************************************
 // Win32-like filetime utilities
@@ -332,7 +333,7 @@ struct path
 	bool write_file( const wchar_t* s ) const;
 
 	// system/global path attributes
-	struct system { static inline path temp(); static inline path system_dir(){static path s;if(!s.empty())return s;GetSystemDirectoryW(s,path::capacity);return s=s.add_backslash();} };
+	struct system { static path temp(); static path local_appdata(); static path system_dir(); };
 	struct global { static inline path temp( const char* subdir=nullptr ); };
 
 	// utilities
@@ -559,6 +560,21 @@ inline path path::system::temp()
 	if(!t.volume().has_free_space()) wprintf(L", but still not enough space." );
 	wprintf(L"\n");
 	return t;
+}
+
+#ifdef _SHLOBJ_H_
+inline path path::system::local_appdata()
+{
+	path t; SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, t.data);
+	return t.add_backslash();
+}
+#endif
+
+inline path path::system::system_dir()
+{
+	static path s;if(!s.empty())return s;
+	GetSystemDirectoryW(s,path::capacity);
+	return s=s.add_backslash();
 }
 
 inline path path::global::temp( const char* subdir )

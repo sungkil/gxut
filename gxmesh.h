@@ -339,13 +339,14 @@ struct material_impl : public material
 // cull data definition
 struct cull_t
 {
-	enum model { NONE=0, USER=1<<0, REF=1<<1, VFC=1<<2, CHCPP=1<<3, WOC=1<<4, RESERVED5=1<<5, RESERVED6=1<<6, RESERVED7=1<<7 };
+	enum model { NONE=0, USER=1<<0, REF=1<<1, VFC=1<<2, CHCPP=1<<3, WOC=1<<4, ROC=1<<5, HROC=1<<6, DROC=1<<7 };
+	static const char* name( model m ){ return m==NONE?"NONE":m==USER?"USER":m==VFC?"VFC":m==CHCPP?"CHCPP":m==WOC?"WOC":m==ROC?"ROC":m==HROC?"HROC":m==DROC?"DROC":"UNKNOWN"; }
 	uchar data = 0; // bits of the corresponding culling types are set (bitwise OR-ed)
 
 	inline operator bool() const { return data != 0; }
 	inline bool operator()(uint m) const { return (data&m) != 0; }
-	inline cull_t& reset(uchar m = 0xff){ data = (m == 0xff) ? 0 : (data&~m); return *this; }
-	inline cull_t& set(uchar m){ data |= m; return *this; }
+	inline cull_t& reset(uchar m=0xff){ data = (m==0xff)?0:(data&~m); return *this; }
+	inline cull_t& set(uchar m, bool v=true){ if(v) data|=m; else data=data&~m; return *this; }
 };
 
 //*************************************
