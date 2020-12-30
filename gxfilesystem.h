@@ -24,7 +24,6 @@
 #include <io.h>			// low-level io functions
 #include <time.h>
 #include <deque>
-#include <shlobj.h>		// for SHGetKnownFolderPath
 
 //***********************************************
 // Win32-like filetime utilities
@@ -332,12 +331,10 @@ struct path
 	bool write_file( const char* s ) const;
 	bool write_file( const wchar_t* s ) const;
 
-	// system/global path attributes
-	struct system { static path temp(); static path local_appdata(); static path system_dir(); };
-	struct global { static inline path temp( const char* subdir=nullptr ); };
+	// temporary directories
+	static path temp( bool local=true, path local_dir=L"" ); // local_dir is used only when local is true
 
 	// utilities
-	static path temp( const wchar_t* subkey=nullptr, const char* subdir=nullptr );
 	static path serial( path dir, const wchar_t* prefix, const wchar_t* postfix, int numzero=4 );
 	inline path key() const { if(!*data)return path();path d;size_t n=0;for(size_t k=0,kn=length();k<kn;k++){wchar_t c=data[k];if(c!=L':'&&c!=L' ') d[n++]=(c==L'\\'||c==L'/')?L'.':(::tolower(c));}if(d[n-1]==L'.')n--;d[n]=0;return d; }
 	inline path tolower() const { path d;size_t l=length();for(size_t k=0;k<l;k++)d[k]=::tolower(data[k]);d[l]=L'\0'; return d; }
@@ -546,54 +543,12 @@ __noinline path path::serial( path dir, const wchar_t* prefix, const wchar_t* po
 	return p;
 }
 
-//***********************************************
-// temp directories
-
-inline path path::system::temp()
+namespace os { path temp(); } // forward declarations (defined in gxos.h)
+__noinline path path::temp( bool local, path local_dir )
 {
-	static path t; if(!t.empty()) return t;
-	GetTempPathW(path::capacity,t); t=t.absolute().add_backslash();
-	path tmp=t.drive()+L"\\temp\\"; if(t==tmp.junction()) t=tmp; t[0]=::toupper(t[0]);
-	if(t.volume().has_free_space()) return t;
-	wprintf(L"temp(): not enough space in %s\n", t.data );
-	t=path::module_dir()+L"temp\\"; if(!t.exists()) t.mkdir(); wprintf(L"temp(): %s is used instead", t.data );
-	if(!t.volume().has_free_space()) wprintf(L", but still not enough space." );
-	wprintf(L"\n");
-	return t;
-}
-
-#ifdef _SHLOBJ_H_
-inline path path::system::local_appdata()
-{
-	path t; SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, t.data);
-	return t.add_backslash();
-}
-#endif
-
-inline path path::system::system_dir()
-{
-	static path s;if(!s.empty())return s;
-	GetSystemDirectoryW(s,path::capacity);
-	return s=s.add_backslash();
-}
-
-inline path path::global::temp( const char* subdir )
-{
-	if(subdir) return path::system::temp()+path(subdir).add_backslash();
-#ifdef REX_FACTORY_IMPL
-	return path::system::temp()+L".rex\\";
-#else
-	static bool b_rex=module_path().name(false)==L"rex";
-	return path::system::temp()+(b_rex?L".rex\\":L".gxut\\");
-#endif
-}
-
-//***********************************************
-__noinline path path::temp( const wchar_t* subkey, const char* subdir )
-{
-	static path g=global::temp(subdir),mod=path(L"local\\")+module_dir().key().add_backslash();
-	path key = (subkey&&subkey[0])?path(subkey).key().add_backslash():mod;
-	path t = key.empty()?g:g+key; if(!t.exists()) t.mkdir();
+	static path r=os::temp()+L"."+module_path().name(false).key()+L"\\";
+	path t=r; if(local){ if(local_dir.empty()) local_dir=module_dir(); t+=path(L"local\\")+local_dir.key().add_backslash(); }
+	if(!t.exists()) t.mkdir();
 	return t;
 }
 
@@ -684,42 +639,6 @@ namespace gx { namespace compiler
 	inline int month(){ static int m=0; if(m) return m; char buff[64]={}; sscanf(__DATE__,"%s", buff); return m=mtoi(buff); }
 	inline int day(){ static int d=0; if(d) return d; char buff[64]; sscanf(__DATE__,"%*s %s %*s", buff); return d=atoi(buff); }
 }}
-
-//***********************************************
-// os implementations, having dependency to path
-//***********************************************
-namespace os { namespace env {
-//***********************************************
-
-inline const wchar_t* var( const wchar_t* key )
-{
-	static std::vector<wchar_t> buff(4096);
-	size_t size_required = GetEnvironmentVariableW( key, &buff[0], DWORD(buff.size()) );
-	if(size_required>buff.size()){ buff.resize(size_required); GetEnvironmentVariableW( key, &buff[0], DWORD(buff.size()) ); }
-	return &buff[0];
-}
-
-inline const std::vector<path>& paths()
-{
-	static std::vector<path> v; v.reserve(64); if(!v.empty()) return v;
-	wchar_t* buff = (wchar_t*) var( L"PATH" ); if(!buff||!*buff) return v;
-	for(wchar_t *ctx,*token=wcstok_s(buff,L";",&ctx);token;token=wcstok_s(nullptr,L";",&ctx))
-	{
-		if(!*token) continue;
-		path t=path(token).canonical().add_backslash();
-		if(t.is_absolute()&&t.exists()) v.emplace_back(t);
-	}
-	return v;
-}
-
-inline path search( path file_name )
-{
-	for( const auto& e : paths() ) if((e+file_name).exists()) return e+file_name;
-	return path();
-}
-//***********************************************
-}} // namespace os::env
-//***********************************************
 
 //***********************************************
 #endif // __GX_FILESYSTEM__

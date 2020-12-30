@@ -19,12 +19,16 @@
 #define __GX_OS_H__
 
 #include "gxtype.h"
+#include <time.h>
 
 #if defined(__has_include) && __has_include("gxfilesystem.h") && !defined(__GX_FILESYSTEM_H__)
 	#include "gxfilesystem.h"
 #endif
 
-#include <time.h>
+#if defined(_WIN32)||defined(_WIN64) // Windows
+	#include <shlobj.h>		// for SHGetKnownFolderPath
+#endif
+
 #if defined(__has_include) && __has_include(<psapi.h>)
 	#include <psapi.h>	// EnumProcesses
 #endif
@@ -36,6 +40,73 @@
 //*************************************
 namespace os {
 //*************************************
+
+//***********************************************
+namespace env {
+//***********************************************
+inline const wchar_t* var( const wchar_t* key )
+{
+	static std::vector<wchar_t> buff(4096);
+	size_t size_required = GetEnvironmentVariableW( key, &buff[0], DWORD(buff.size()) );
+	if(size_required>buff.size()){ buff.resize(size_required); GetEnvironmentVariableW( key, &buff[0], DWORD(buff.size()) ); }
+	return &buff[0];
+}
+
+inline const std::vector<path>& paths()
+{
+	static std::vector<path> v; v.reserve(64); if(!v.empty()) return v;
+	wchar_t* buff = (wchar_t*) var( L"PATH" ); if(!buff||!*buff) return v;
+	for(wchar_t *ctx,*token=wcstok_s(buff,L";",&ctx);token;token=wcstok_s(nullptr,L";",&ctx))
+	{
+		if(!*token) continue;
+		path t=path(token).canonical().add_backslash();
+		if(t.is_absolute()&&t.exists()) v.emplace_back(t);
+	}
+	return v;
+}
+
+inline path search( path file_name )
+{
+	for( const auto& e : paths() ) if((e+file_name).exists()) return e+file_name;
+	return path();
+}
+
+//***********************************************
+} // namespace env
+//***********************************************
+
+//***********************************************
+// system paths
+inline path temp()
+{
+	static path t; if(!t.empty()) return t;
+	GetTempPathW(path::capacity,t); t=t.absolute().add_backslash();
+	path tmp=t.drive()+L"\\temp\\"; if(t==tmp.junction()) t=tmp; t[0]=::toupper(t[0]);
+	if(t.volume().has_free_space()) return t;
+	wprintf(L"temp(): not enough space in %s\n", t.c_str() );
+	t=path::module_dir()+L"temp\\"; if(!t.exists()) t.mkdir(); wprintf(L"temp(): %s is used instead", t.c_str() );
+	if(!t.volume().has_free_space()) wprintf(L", but still not enough space." );
+	wprintf(L"\n");
+	return t;
+}
+
+#ifdef _SHLOBJ_H_
+inline path local_appdata()
+{
+	path e=env::var(L"LOCALAPPDATA"); if(!e.empty()&&e.exists()) return e.add_backslash();
+	SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, (wchar_t*)e );
+	return e.add_backslash();
+}
+#endif
+
+inline path system_dir()
+{
+	static path s;if(!s.empty())return s;
+	GetSystemDirectoryW(s,path::capacity);
+	return s=s.add_backslash();
+}
+
+//***********************************************
 
 inline const char* get_last_error(){ static char buff[4096]={};DWORD e=GetLastError();char *s;FormatMessageA( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,e,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPSTR)&s,0,nullptr);sprintf(buff,"%s (code=%x)",s,uint(e));LocalFree(s);return buff; }
 inline void exit( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fprintf( stdout, "[%s] %s", path::module_path().name(false).wtoa(), &buff[0] ); ::exit(EXIT_FAILURE); }

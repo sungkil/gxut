@@ -319,11 +319,7 @@ inline bool load_mtl( path filePath, std::vector<material_impl>& mats )
 
 inline path& get_mesh_cache_dir()
 {
-#ifdef REX_FACTORY_IMPL
-	static path mesh_cache_dir = path::global::temp().add_backslash()+L"global\\mesh\\";
-#else
-	static path mesh_cache_dir = path::temp().add_backslash()+L"global\\mesh\\";
-#endif
+	static path mesh_cache_dir = path::temp(false)+L"global\\mesh\\";
 	if(!mesh_cache_dir.exists()&&!mesh_cache_dir.mkdir()) wprintf(L"Unable to create %s\n",mesh_cache_dir.c_str());
 	return mesh_cache_dir;
 }
