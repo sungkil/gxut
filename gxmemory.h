@@ -68,7 +68,7 @@ template <class T> class mmap // memory-mapped file (similarly to virtual memory
 	T* map_chunk( size_t index ){ return map(index*_chunk,chunk_size(index)); }
 };
 
-#if !defined(_unzip_H)&&!defined(_zip_H)
+#ifndef _unzip_H
 typedef struct
 { int index;                 // index of this file within the zip
   TCHAR name[MAX_PATH];      // filename within the zip
@@ -436,7 +436,16 @@ struct binary_cache
 	void readf( const char* fmt, ... ){ if(!fp) return; va_list a; va_start(a,fmt); vfscanf(fp,fmt,a); va_end(a); }
 	void write( void* ptr, size_t size ){ if(fp) fwrite( ptr, size, 1, fp ); }
 	void read( void* ptr, size_t size ){ if(fp) fread(ptr,size,1,fp); }
-	void close(){ if(fp){ fclose(fp); fp=nullptr; } if(b_read&&zip_path().exists()) cache_path().rmfile(); else if(!b_read) compress(); }
+	void close()
+	{
+		if(fp){ fclose(fp); fp=nullptr; }
+#ifdef _unzip_H
+		if(b_read){ if(zip_path().exists()) cache_path().rmfile(); }
+#endif
+#ifdef _zip_H
+		if(!b_read) compress();
+#endif
+	}
 	__noinline bool open( bool read=true )
 	{
 		b_read = read;
@@ -444,10 +453,13 @@ struct binary_cache
 		path cpath=cache_path(), zpath=zip_path();
 		if(b_read)
 		{
+#ifdef _unzip_H
 			if(zpath.exists()&&!decompress()) return false;
-			fp = _wfopen( cpath, L"rb" ); if(!fp){ cpath.rmfile(); return false; }
-			uint64_t s; fscanf( fp, "%*s = %llu\n", &s );
-			if(sig!=s){ fclose(fp); cpath.rmfile(); return false; }
+#endif
+			if(!cpath.exists()) return false;
+			fp = _wfopen( cpath, L"rb" );
+			uint64_t s=0; if(fp) fscanf( fp, "%*s = %llu\n", &s );
+			if(!fp||sig!=s){ fclose(fp); if(zpath.exists()) cpath.rmfile(); return false; }
 		}
 		else
 		{
@@ -465,7 +477,7 @@ struct binary_cache
 	bool decompress();
 };
 
-#if defined(_zip_H) && defined(_unzip_H)
+#ifdef _zip_H
 __noinline bool binary_cache::compress( bool rm_src )
 {
 	if(!cache_path().exists()) return false;
@@ -473,7 +485,9 @@ __noinline bool binary_cache::compress( bool rm_src )
 	if(ZR_OK==ZipAdd( hZip, cache_path().name(), cache_path() )){ CloseZip(hZip); if(rm_src) cache_path().rmfile(); return true; }
 	else { wprintf( L"Unable to compress %s\n", cache_path().name().c_str() ); CloseZip( hZip ); return false; }
 }
+#endif
 
+#ifdef _unzip_H
 __noinline bool binary_cache::decompress()
 {
 	if(!zip_path().exists()) return false;
