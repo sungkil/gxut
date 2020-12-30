@@ -346,7 +346,7 @@ struct cull_t
 	inline operator bool() const { return data != 0; }
 	inline bool operator()(uint m) const { return (data&m) != 0; }
 	inline cull_t& reset(uchar m=0xff){ data = (m==0xff)?0:(data&~m); return *this; }
-	inline cull_t& set(uchar m, bool v=true){ if(v) data|=m; else data=data&~m; return *this; }
+	inline cull_t& set(uchar m){ data|=m; return *this; }
 };
 
 //*************************************

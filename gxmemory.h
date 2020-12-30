@@ -441,12 +441,13 @@ struct binary_cache
 	{
 		b_read = read;
 		uint64_t sig = uint64_t(std::hash<std::string>{}(std::string(__TIMESTAMP__)+signature()));
-		path cpath = cache_path(), zpath = zip_path();
+		path cpath=cache_path(), zpath=zip_path();
 		if(b_read)
 		{
 			if(zpath.exists()&&!decompress()) return false;
-			fp = _wfopen( cpath, L"rb" ); if(!fp){ if(zpath.exists()) cpath.rmfile(); return false; }
-			uint64_t s; fscanf( fp, "%*s = %llu\n", &s ); if(sig!=s){ fclose(fp); return false; }
+			fp = _wfopen( cpath, L"rb" ); if(!fp){ cpath.rmfile(); return false; }
+			uint64_t s; fscanf( fp, "%*s = %llu\n", &s );
+			if(sig!=s){ fclose(fp); cpath.rmfile(); return false; }
 		}
 		else
 		{

@@ -598,6 +598,7 @@ template <class T> __forceinline tvec3<enable_float_t<T>> cross( const tvec3<T>&
 template <class T> __forceinline enable_float_t<T> radians( T f ){ return f*PI<T>/T(180.0); }
 template <class T> __forceinline enable_float_t<T> degrees( T f ){ return f*T(180.0)/PI<T>; }
 template <class T> __forceinline tvec2<enable_float_t<T>> minmax( const tvec2<T>& a, const tvec2<T>& b ){ return tvec2<T>(a.x<b.x?a.x:b.x,a.y>b.y?a.y:b.y); }
+template <class T> __forceinline enable_float_t<T> round( T f, int digits ){ T m=T(pow(10.0,digits)); return round(f*m)/m; }
 __forceinline bool ispot( uint i ){ return (i&(i-1))==0; }		// http://en.wikipedia.org/wiki/Power_of_two
 __forceinline uint nextpot( uint n ){ int m=int(n)-1; for( uint k=1; k<uint(sizeof(int))*8; k<<=1 ) m=m|m>>k; return m+1; }	// closest (equal or larger) power-of-two
 __forceinline uint nextsqrt( uint n ){ return uint(ceil(sqrt(double(n)))+0.001); } // root of closest (equal or larger) square
