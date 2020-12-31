@@ -642,6 +642,9 @@ __noinline void mesh::update_bound( bool b_recalc_tris )
 			vertex* V=&vertices[0]; uint* I=&indices[g.first_index];
 			for( uint j=0, jn=g.count; j<jn; j+=3, I+=3)
 				g.box.expand( V[I[0]].pos, V[I[1]].pos, V[I[2]].pos );
+
+			// scale a tiny bit for the box not to be occluded by geometry
+			g.box.scale(1.005f);
 		}
 	}
 
