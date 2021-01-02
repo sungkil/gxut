@@ -343,8 +343,8 @@ struct cull_t
 	static const char* name( model m ){ return m==NONE?"NONE":m==USER?"USER":m==VFC?"VFC":m==CHCPP?"CHCPP":m==WOC?"WOC":m==ROC?"ROC":m==HROC?"HROC":m==DROC?"DROC":"UNKNOWN"; }
 	uchar data = 0; // bits of the corresponding culling types are set (bitwise OR-ed)
 
-	inline operator bool() const { return data != 0; }
-	inline bool operator()(uint m) const { return (data&m) != 0; }
+	inline operator uchar() const { return data; }
+	inline bool operator()(uchar m) const { return (data&m)!=0; }
 	inline cull_t& reset(uchar m=0xff){ data = (m==0xff)?0:(data&~m); return *this; }
 	inline cull_t& set(uchar m){ data|=m; return *this; }
 };
@@ -642,9 +642,6 @@ __noinline void mesh::update_bound( bool b_recalc_tris )
 			vertex* V=&vertices[0]; uint* I=&indices[g.first_index];
 			for( uint j=0, jn=g.count; j<jn; j+=3, I+=3)
 				g.box.expand( V[I[0]].pos, V[I[1]].pos, V[I[2]].pos );
-
-			// scale a tiny bit for the box not to be occluded by geometry
-			g.box.scale(1.005f);
 		}
 	}
 
