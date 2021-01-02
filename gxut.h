@@ -23,14 +23,14 @@
 	#if __has_include("gxmath.h")
 		#include "gxmath.h"
 	#endif
+	#if __has_include("gxstring.h")
+		#include "gxstring.h"
+	#endif
 	#if __has_include("gxfilesystem.h")
 		#include "gxfilesystem.h"
 	#endif
 	#if __has_include("gxos.h")
 		#include "gxos.h"
-	#endif
-	#if __has_include("gxstring.h")
-		#include "gxstring.h"
 	#endif
 	#if __has_include("gxmemory.h")
 		#include "gxmemory.h"
