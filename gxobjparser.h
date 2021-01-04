@@ -9,9 +9,9 @@
 static const bool USE_MODEL_CACHE = true;
 static const float SPECULAR_BETA_SCALE = 100.0f;
 
-#if defined(_unzip_H) && defined(__7Z_H) && defined(__7Z_MEMINSTREAM_H)
+#if (defined(_unzip_H)||defined(__GXZIP_H__)) && defined(__7Z_H) && defined(__7Z_MEMINSTREAM_H)
 	static nocase::set<std::wstring> archive_ext_map = { L"zip", L"7z" };
-#elif defined(_unzip_H)
+#elif (defined(_unzip_H)||defined(__GXZIP_H__))
 	static nocase::set<std::wstring> archive_ext_map = { L"zip" };
 #elif defined(__7Z_H) && defined(__7Z_MEMINSTREAM_H)
 	static nocase::set<std::wstring> archive_ext_map = { L"7z" };
@@ -563,12 +563,12 @@ __forceinline uint get_or_create_vertex( char* str )
 path obj::decompress( const path& file_path )
 {
 	path dst_path;
-#ifdef _unzip_H
+#if defined(__GXZIP_H__)||defined(_unzip_H)
 	if(_wcsicmp(file_path.ext(),L"zip")==0)
 	{
 		zip_t z(file_path);
-		if(!z.load()||z.entries.empty()){ wprintf(L"loadOBJ(): unabled to load %s",file_path.c_str()); return dst_path; }
-		if(z.entries.size()!=1){ wprintf(L"loadOBJ(): have only a single file for mesh in %s\n", file_path.c_str() ); return dst_path; }
+		if(!z.load()||z.entries.empty()){ printf("%s(): unabled to load %s",__func__,file_path.wtoa()); return dst_path; }
+		if(z.entries.size()!=1){ printf("%s(): have only a single file for mesh in %s\n",__func__,file_path.wtoa() ); return dst_path; }
 		dst_path = get_mesh_cache_dir()+z.entries.front().name;
 		if(dst_path.exists()) dst_path.delete_file();
 		if(!z.extract_to_files(dst_path.dir())) return path();
@@ -578,8 +578,8 @@ path obj::decompress( const path& file_path )
 	if(_wcsicmp(file_path.ext(),L"7z")==0)
 	{
 		szip_t s(file_path);
-		if(!s.load()||s.entries.empty()){ wprintf(L"loadOBJ(): unabled to load %s",file_path.c_str()); return dst_path; }
-		if(s.entries.size()!=1){ wprintf(L"loadOBJ(): have only a single file for mesh in %s\n", file_path.c_str() ); return dst_path; }
+		if(!s.load()||s.entries.empty()){ printf("%s(): unabled to load %s",__func__,file_path.wtoa()); return dst_path; }
+		if(s.entries.size()!=1){ printf("%s(): have only a single file for mesh in %s\n",__func__,file_path.wtoa() ); return dst_path; }
 		dst_path = get_mesh_cache_dir()+s.entries.front().name;
 		if(dst_path.exists()) dst_path.delete_file();
 		if(!s.extract_to_files(dst_path.dir())) return path();

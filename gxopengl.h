@@ -937,15 +937,16 @@ namespace glfx {
 
 inline gl::Query* gxCreateQuery( const char* name, GLenum target=GL_TIME_ELAPSED )
 {
-	GLuint ID; if(glCreateQueries) glCreateQueries( target, 1, &ID ); else glGenQueries(1,&ID); if(ID==0){ printf( "Unable to create query[%s]", name ); return nullptr; }
+	GLuint ID; if(glCreateQueries) glCreateQueries( target, 1, &ID ); else glGenQueries(1,&ID); if(ID==0){ printf( "%s(): unable to create query %s\n", __func__, name ); return nullptr; }
 	return new gl::Query(ID,name,target);
 }
 
 inline gl::Buffer* gxCreateBuffer( const char* name, GLenum target, GLsizeiptr size, GLenum usage, const void* data=nullptr, GLbitfield storage_flags=GL_DYNAMIC_STORAGE_BIT|GL_MAP_READ_BIT|GL_MAP_WRITE_BIT )
 {
-	GLuint ID; if(glCreateBuffers) glCreateBuffers(1,&ID); else glGenBuffers(1,&ID); if(ID==0){ printf( "Unable to create buffer[%s]", name ); return nullptr; }	// glCreateBuffers() also initializes objects, while glGenBuffers() do not initialze until bind() is called
+	// glCreateBuffers() also initializes objects, while glGenBuffers() do not initialze until bind() is called
+	GLuint ID; if(glCreateBuffers) glCreateBuffers(1,&ID); else glGenBuffers(1,&ID); if(ID==0){ printf( "%s(): unable to create buffer %s\n", __func__, name ); return nullptr; }
+	
 	gl::Buffer* buffer = new gl::Buffer(ID,name,target);
-
 	if(glNamedBufferStorage) glNamedBufferStorage(ID,size,data,storage_flags);
 	else if(glBufferStorage){ GLuint b0=buffer->bind(); glBufferStorage(target,size,data,storage_flags); glBindBuffer(target,b0); }
 	else if(glNamedBufferData) glNamedBufferData(ID,size,data,usage);
@@ -956,24 +957,26 @@ inline gl::Buffer* gxCreateBuffer( const char* name, GLenum target, GLsizeiptr s
 
 inline gl::VertexArray* gxCreateVertexArray( const char* name, const vertex* p_vertices, size_t vertex_count, const uint* p_indices=nullptr, size_t index_count=0, GLenum usage=GL_STATIC_DRAW )
 {
-	GLuint ID=gxCreateVertexArray(); if(ID==0) return nullptr;
-	gl::VertexArray* va = new gl::VertexArray( ID, name ); if(!va){ printf( "%s(): failed to create a vertex array", __func__ ); return nullptr; }
-	if(p_vertices==nullptr||vertex_count==0){ va->bind(); va->bind(false); return va; } // create empty VAO for no-attrib rendering
+	GLuint ID=gxCreateVertexArray(); if(ID==0) return nullptr; if(ID==0){ printf( "%s(): unable to create vertex array %s\n", __func__, name ); return nullptr; }
+	gl::VertexArray* va = new gl::VertexArray( ID, name );
+	if(!p_vertices||!vertex_count){ va->bind(); va->bind(false); return va; } // create empty VAO for no-attrib rendering
 
-	va->vertex_buffer = gxCreateBuffer( "vertexBuffer", GL_ARRAY_BUFFER, sizeof(vertex)*vertex_count, usage, p_vertices, 0 ); if(va->vertex_buffer==nullptr){ printf( "%s(): unable to create vertex_buffer\n", __func__ ); delete va; return nullptr; }
-	if(p_indices&&index_count){ va->index_buffer = gxCreateBuffer( "indexBuffer", GL_ELEMENT_ARRAY_BUFFER, sizeof(uint)*index_count, usage, p_indices ); if(va->index_buffer==nullptr){ printf( "%s(): unable to create index_buffer\n", __func__ ); delete va; return nullptr; } }
+	gl::Buffer* vbo = gxCreateBuffer( format("%s.VTX",name), GL_ARRAY_BUFFER, sizeof(vertex)*vertex_count, usage, p_vertices, 0 ); if(!vbo){ printf( "%s(): unable to create vertex_buffer %s.VTX\n", __func__, name ); return nullptr; }
+	gl::Buffer* ibo = p_indices&&index_count ? gxCreateBuffer( format("%s.IDX",name), GL_ELEMENT_ARRAY_BUFFER, sizeof(uint)*index_count, usage, p_indices ) : nullptr; if(p_indices&&index_count&&!ibo){ printf( "%s(): unable to create index buffer %s.IDX\n", __func__, name ); return nullptr; }
+	
+	va->vertex_buffer = vbo;
+	va->index_buffer = ibo;
+	va->vertex_count = vertex_count;
+	va->index_count = va->index_buffer ? index_count : 0;
 
 	// use fixed binding (without direct state access)
 	va->bind();
 	static const GLuint offset[] = { offsetof(vertex,pos), offsetof(vertex,norm), offsetof(vertex,tex) };
-	static const GLint  size[]	 = { sizeof(vertex::pos)/sizeof(GLfloat), sizeof(vertex::norm)/sizeof(GLfloat), sizeof(vertex::tex)/sizeof(GLfloat) };
-	for( GLuint k=0; k<3; k++ ){ glEnableVertexAttribArray( k ); glVertexAttribBinding( k, 0 ); glVertexAttribFormat( k, size[k], GL_FLOAT, GL_FALSE, offset[k] ); }
+	static const GLint  size[] = { sizeof(vertex::pos)/sizeof(GLfloat), sizeof(vertex::norm)/sizeof(GLfloat), sizeof(vertex::tex)/sizeof(GLfloat) };
+	for( GLuint k=0; k<3; k++ ){ glEnableVertexAttribArray(k); glVertexAttribBinding(k,0); glVertexAttribFormat(k,size[k],GL_FLOAT,GL_FALSE,offset[k]); }
 	glBindVertexBuffer( 0, va->vertex_buffer->ID, 0, sizeof(vertex) );
 	if(va->index_buffer) glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, va->index_buffer->ID );
 	va->bind(false);
-
-	va->vertex_count = vertex_count;
-	va->index_count = va->index_buffer ? index_count : 0;
 
 	return va;
 }
@@ -1008,10 +1011,9 @@ inline gl::VertexArray* gxCreatePointVertexArray( GLsizei width, GLsizei height 
 	if(width==0||height==0) va = gxCreateVertexArray( "PTS", (vertex*)nullptr,0 );
 	else
 	{
-		std::vector<vertex> pts(width*height); for(int y=0,k=0;y<height;y++)for(int x=0;x<width;x++,k++) pts[k]={vec3(float(x),float(y),0.0f),vec3(0.0f,0.0f,1.0f),vec2(x/float(width-1),y/float(height-1))};
+		std::vector<vertex> pts(size_t(width*height)); for(int y=0,k=0;y<height;y++)for(int x=0;x<width;x++,k++) pts[k]={vec3(float(x),float(y),0.0f),vec3(0.0f,0.0f,1.0f),vec2(x/float(width-1),y/float(height-1))};
 		va = gxCreateVertexArray( "PTS", &pts[0], pts.size() );
 	}
-	if(!va) printf( "%s(): Unable to create PTS(%dx%d)\n", __func__, width, height );
 	return va;
 }
 
@@ -1187,7 +1189,7 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 	// 6. compile and attach shaders
 	__int64 freq;	QueryPerformanceFrequency((LARGE_INTEGER*)&freq);
 	__int64 tbegin;	QueryPerformanceCounter((LARGE_INTEGER*)&tbegin);
-	printf( "Compiling %s ... ", pname );
+	printf( "compiling %s ... ", pname );
 
 	std::vector<GLuint> attached_shaders;
 	for( auto& it : program->shader_source_map )
@@ -1316,14 +1318,14 @@ inline gl::Effect* gxCreateEffect( const char* name, const char* effect_source, 
 	std::string src; if(p_macro&&p_macro[0]) src=p_macro; if(!src.empty()&&src.back()!='\n') src+='\n'; src+=effect_source;
 
 	// load shaders from effect
-	glfx::IParser* parser = glfxCreateParser(); if(parser==nullptr){ printf( "%s(): unable to create parser()\n", __func__ ); return nullptr; }
+	glfx::IParser* parser = glfxCreateParser(); if(parser==nullptr){ printf( "%s(): unable to create parser\n", __func__ ); return nullptr; }
 	if(!parser->parse(src.c_str())){ printf( "%s(%s)\n%s\n", __func__, name, parser->parse_log() ); return nullptr; }
 
 	gl::Effect* e = p_effect_to_append ? p_effect_to_append : new gl::Effect(0, name);
 	for( int k=0, kn=parser->program_count(); k<kn; k++ )
 	{
 		std::map<uint,std::string> shader_map; for( int j=0; j<parser->shader_count(k); j++ ) shader_map[parser->shader_type(k,j)]=parser->shader_source(k,j);
-		if(!e->create_program( name, parser->program_name(k), shader_map, nullptr )){ printf( "Unable to create %s.%s\n", name, parser->program_name(k) ); glfxDeleteParser(&parser); if(e!=p_effect_to_append) delete e; return nullptr; }
+		if(!e->create_program( name, parser->program_name(k), shader_map, nullptr )){ printf( "%s(): unable to create %s.%s\n", __func__, name, parser->program_name(k) ); glfxDeleteParser(&parser); if(e!=p_effect_to_append) delete e; return nullptr; }
 	}
 	glfxDeleteParser(&parser);
 
@@ -1338,14 +1340,14 @@ inline bool gl::Effect::attach( const char* name, const char* effect_source, con
 inline gl::Framebuffer* gxCreateFramebuffer( const char* name=nullptr )
 {
 	if(!name){ printf( "%s(): name==nullptr\n", __func__ ); return nullptr; }
-	GLuint ID=0; if(glCreateFramebuffers) glCreateFramebuffers( 1, &ID ); else glGenFramebuffers(1,&ID); if(ID==0){ printf( "Unable to create buffer[%s]", name ); return nullptr; }
+	GLuint ID=0; if(glCreateFramebuffers) glCreateFramebuffers( 1, &ID ); else glGenFramebuffers(1,&ID); if(ID==0){ printf( "%s(): unable to create buffer[%s]", __func__, name ); return nullptr; }
 	return new gl::Framebuffer(ID,name&&name[0]?name:"");	// if name is nullptr, return default FBO
 }
 
 inline gl::TransformFeedback* gxCreateTransformFeedback( const char* name )
 {
-	GLuint ID=0; if(glCreateTransformFeedbacks) glCreateTransformFeedbacks( 1, &ID ); else if(glGenTransformFeedbacks) glGenTransformFeedbacks(1,&ID);
-	return (ID!=0||glIsTransformFeedback(ID)) ? new gl::TransformFeedback( ID, name ) : nullptr;
+	GLuint ID=0; if(glCreateTransformFeedbacks) glCreateTransformFeedbacks( 1, &ID ); else if(glGenTransformFeedbacks) glGenTransformFeedbacks(1,&ID); if(ID==0||!glIsTransformFeedback(ID)){ printf( "%s(): unable to create transform feedback[%s]", __func__, name ); return nullptr; }
+	return new gl::TransformFeedback( ID, name );
 }
 
 inline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsizei width, GLsizei layers=1, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr, bool force_array=false )
@@ -1388,7 +1390,7 @@ inline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsizei w
 
 inline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsizei width, GLsizei height, GLsizei layers=1, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr, bool force_array=false, bool multisample=false, GLsizei multisamples=4 )
 {
-	if(layers>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "%s: layer (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", __func__, layers, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
+	if(layers>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "%s(): layer (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", __func__, layers, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
 	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
 
 	GLenum target = layers>1||force_array?(multisample?GL_TEXTURE_2D_MULTISAMPLE_ARRAY:GL_TEXTURE_2D_ARRAY):(multisample?GL_TEXTURE_2D_MULTISAMPLE:GL_TEXTURE_2D);
@@ -1594,12 +1596,12 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLu
 	uint key = gl::Texture::crc(min_level,levels,min_layer,layers,force_array,target);
 	for(gl::Texture* t=src; t; t=t->next ) if(t->key==key) return t;
 
-	if(src->target==GL_TEXTURE_BUFFER){ printf( "%s->view should not be a texture buffer\n", src->name ); return nullptr; }
-	if(levels==0){ printf( "%s->view should have more than one levels\n", src->name ); return nullptr; }
-	if(layers==0){ printf( "%s->view should have more than one layers\n", src->name ); return nullptr; }
-	if((min_level+levels)>GLuint(src->mip_levels())){ printf( "%s->view should have less than %d levels\n", src->name, src->mip_levels() ); return nullptr; }
-	if((min_layer+layers)>GLuint(src->layers())){ printf( "%s->view should have less than %d layers\n", src->name, src->layers() ); return nullptr; }
-	if(!src->is_immutable()){ printf("!%s->is_immutable()\n", src->name ); return nullptr; }
+	if(src->target==GL_TEXTURE_BUFFER){ printf( "%s(): %s->view should not be a texture buffer\n", __func__, src->name ); return nullptr; }
+	if(levels==0){ printf( "%s(): %s->view should have more than one levels\n", __func__, src->name ); return nullptr; }
+	if(layers==0){ printf( "%s(): %s->view should have more than one layers\n", __func__, src->name ); return nullptr; }
+	if((min_level+levels)>GLuint(src->mip_levels())){ printf( "%s(): %s->view should have less than %d levels\n", __func__, src->name, src->mip_levels() ); return nullptr; }
+	if((min_layer+layers)>GLuint(src->layers())){ printf( "%s(): %s->view should have less than %d layers\n", __func__, src->name, src->layers() ); return nullptr; }
+	if(!src->is_immutable()){ printf("%s(): !%s->is_immutable()\n", __func__, src->name ); return nullptr; }
 
 	// correct the new target
 	if(target==0)
