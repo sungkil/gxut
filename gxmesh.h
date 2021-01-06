@@ -152,7 +152,7 @@ struct bbox : public bbox_t
 	inline void clear(){ M=-(m=FLT_MAX); }
 
 	// assignment
-	bbox& operator=( bbox&& b ){ m=b.m; M=b.M; return *this; }
+	bbox& operator=( bbox&& b ) noexcept { m=b.m; M=b.M; return *this; }
 	bbox& operator=( const bbox& b ){ m=b.m; M=b.M; return *this; }
 	bbox& operator=( bbox_t&& b ){ m=b.m; M=b.M; return *this; }
 	bbox& operator=( const bbox_t& b ){ m=b.m; M=b.M; return *this; }
@@ -355,11 +355,12 @@ struct acc_t
 {
 	enum model_t { NONE, BVH, KDTREE } model = NONE;
 	enum method_t { SAH, MIDDLE, EQUAL_COUNTS };
-	mesh*	p_mesh = nullptr;	// should be set to mesh
+	mesh* p_mesh = nullptr;	// should be set to source mesh
+	mesh* proxy = nullptr;	// mesh of transform-baked bounding boxes; release only where this is created
 
 	virtual ~acc_t(){}			// should be virtual to enforce to call inherited destructors
 	virtual void release()=0;
-	virtual bool intersect( ray r, isect& h ) const = 0;
+	virtual bool intersect( ray r, isect& h ) const=0;
 };
 
 //*************************************
@@ -374,9 +375,13 @@ struct bvh_t : public acc_t // two-level hierarchy: mesh or geometry
 		__forceinline bool is_leaf() const { return axis==3; }
 	};
 	std::vector<node> nodes;
-	uint geometry_node_count() const;
+	virtual void release()=0;
 	virtual bool intersect( ray r, isect& h ) const;
 	virtual bool has_prims() const;
+
+	uint geometry_node_count() const;
+	mesh* create_proxy( bool double_sided=false, bool quads=false ); // create meshes of bounding boxes of all the nodes; may include primitives or not
+	void update_proxy();
 };
 
 //*************************************
@@ -402,7 +407,7 @@ struct kdtree_t : public acc_t // single-level hierarchy
 struct geometry // std430 layout for OpenGL shader storage buffers
 {
 	uint	count, instance_count, first_index, base_vertex, base_instance; // DrawElementsIndirectCommand
-	uint	material_index, acc_count, acc_first_index, pad[4]; // material index, acceleration node count/offset and other hidden C++ members
+	uint	material_index, acc_index, acc_prim_count, acc_prim_index, pad[3]; // geometry-bvh node index, primitive-bvh count/first_index
 	bbox	box;
 	mat4	mtx;
 };
@@ -415,19 +420,21 @@ struct geometry
 	uint	base_vertex=0;		// default: 0
 	uint	ID=-1;				// shared with base_instance (typically 0)
 	uint	material_index=-1;
-	uint	acc_count=0;		// count of bvh node for a BVH built on geometry primitives
-	uint	acc_first_index=0;	// index of first bvh node for a BVH built on geometry primitives; a single BVH is defined in mesh
-	mesh*	root=nullptr;		// pointer to mesh; should be aligned at 8-byte boundary
-	uint	object_index=-1;
+	uint	acc_index=0;		// geometry-bvh node index
+	uint	acc_prim_count=0;	// primitive-bvh: node count
+	uint	acc_prim_index=0;	// primitive-bvh: first node index
 	ushort	instance=0;			// host-side instance ID (up to 2^16: 65536)
 	cull_t	cull;				// 8-bit cull mask
 	bool	bg=false;			// is this a background object?
-	bbox	box;				// transform-unbaked bounding box
+	mesh*	root=nullptr;		// pointer to mesh; should be aligned at 8-byte boundary
+	union{bbox box;struct{uint _[7],object_index;};}; // transform-unbaked bounding box, object index in box.M.a (dummy padding)
 	mat4	mtx;				// transformation matrix (the same for all object geometries)
 
 	geometry() = delete; // no default ctor to enforce to assign root
+	geometry( const geometry& other ){ memcpy(this,&other,sizeof(geometry)); }
 	geometry(mesh* p_mesh): root(p_mesh){}
-	geometry(mesh* p_mesh, uint id, uint obj_index, uint start_index, uint index_count, bbox* box, uint mat_index): count(index_count), first_index(start_index), ID(id), material_index(mat_index), object_index(obj_index), root(p_mesh){ if(box) this->box=*box; }
+	geometry(mesh* p_mesh, uint id, uint obj_index, uint start_index, uint index_count, const bbox* box, uint mat_index): count(index_count), first_index(start_index), ID(id), material_index(mat_index), object_index(obj_index), root(p_mesh){ if(box) this->box=*box; }
+	geometry& operator=( const geometry& other ){ memcpy(this,&other,sizeof(geometry)); return *this; }
 
 	inline object*		parent() const;
 	inline const char*	name() const;
@@ -435,7 +442,7 @@ struct geometry
 	inline uint			face_count() const { return count/3; }
 	inline float		surface_area() const;
 	inline bool			intersect( ray r, isect& h ) const; // linear intersection
-	inline bool			acc_empty() const { return acc_count==0; }
+	inline bool			acc_empty() const { return acc_prim_count==0; }
 };
 
 static_assert(sizeof(geometry)%16==0,	"sizeof(geometry) should be multiple of 16-byte");
@@ -466,7 +473,7 @@ struct object
 	inline bbox update_bound(){ box.clear(); for( auto& g : *this ) box.expand(g.mtx*g.box); return box; }
 
 	// create helpers
-	inline geometry* create_geometry( size_t first_index, size_t index_count=0, bbox* box=nullptr, size_t mat_index=-1 );
+	inline geometry* create_geometry( size_t first_index, size_t index_count=0, const bbox* box=nullptr, size_t mat_index=-1 );
 	inline geometry* create_geometry( const geometry& other );
 
 	// iterator types
@@ -519,7 +526,7 @@ struct mesh
 
 	// acceleration and dynamics
 	bbox		box;
-	acc_t*		acc=nullptr;		// BVH or KD-tree
+	union { acc_t* acc=nullptr; bvh_t* bvh; kdtree_t* kdtree; }; // BVH or KD-tree
 
 	// LOD and instancing
 	uint		levels=1;			// LOD levels
@@ -573,14 +580,6 @@ struct volume
 };
 
 //*************************************
-// late implementations for BVH
-inline uint bvh_t::geometry_node_count() const
-{
-	if(!p_mesh) return 0; auto& g=p_mesh->geometries; if(g.empty()) return 0;
-	return has_prims()? g[0].acc_first_index : uint(nodes.size());
-}
-
-//*************************************
 // late implementations for geometry
 
 inline object* geometry::parent() const { return root && object_index < root->objects.size() ? &root->objects[object_index] : nullptr; }
@@ -590,7 +589,7 @@ inline float geometry::surface_area() const { if(count==0) return 0.0f; if(root-
 //*************************************
 // late implementations for object
 
-inline geometry* object::create_geometry( size_t first_index, size_t index_count, bbox* box, size_t mat_index )
+inline geometry* object::create_geometry( size_t first_index, size_t index_count, const bbox* box, size_t mat_index )
 {
 	auto& v = root->geometries; uint gid=uint(v.size());
 	v.emplace_back(geometry(root, gid, this->ID, uint(first_index), uint(index_count), box, uint(mat_index)));
@@ -734,6 +733,59 @@ __noinline void mesh::update_proxy()
 		proxy->geometries[g.ID].mtx = g.mtx;
 		mat4 m = mat4::translate(g.box.center())*mat4::scale(g.box.size()*0.5f);
 		for( uint k=0; k<8; k++ ){ auto& v = proxy->vertices[g.ID*8+k]; v.pos = (m*vec4(v.norm,1.0f)).xyz; }
+	}
+}
+
+//*************************************
+// late implementations for BVH
+inline uint bvh_t::geometry_node_count() const
+{
+	if(!p_mesh) return 0; auto& g=p_mesh->geometries; if(g.empty()) return 0;
+	return has_prims()? g[0].acc_prim_index : uint(nodes.size());
+}
+
+__noinline mesh* bvh_t::create_proxy( bool double_sided, bool quads )
+{
+	safe_delete(proxy) = new mesh();
+
+	// direct copy
+	proxy->materials.clear(); // proxy not use materials
+	proxy->instance_count = 1; // proxy instantiates all
+	proxy->box = p_mesh->box;
+	proxy->acc = this; // set this bvh
+	auto* obj = proxy->create_object("proxy"); // create a single object for the entire BVH
+
+	// default corner/vertex definition
+	auto corners = bbox(-1.0f, 1.0f).corners();
+	vertex v = { vec3(0.0f), vec3(0.0f), vec2(0.0f) };
+	std::vector<uint> i0 = get_box_indices(double_sided,quads);
+
+	// create vertices/geometries
+	auto& i = proxy->indices;
+	for( uint k=0, kn=uint(nodes.size()); k<kn; k++ )
+	{
+		auto& n = nodes[k];
+		auto* g = obj->create_geometry(i.size(),i0.size(),&n.box());
+		for(auto& j : i0) i.emplace_back(j + uint(proxy->vertices.size()));
+		mat4 m = mat4::translate(n.box().center())*mat4::scale(n.box().size()*0.5f);
+		for(uint k=0; k<8; k++){ v.norm=corners[k]; /*actually not used*/ v.pos=(m*corners[k]).xyz; proxy->vertices.emplace_back(v); }
+	}
+
+	return proxy;
+}
+
+__noinline void bvh_t::update_proxy()
+{
+	if(!proxy) return;
+
+	proxy->box = p_mesh->box;
+	proxy->acc = this; // set this bvh
+
+	for( auto& g : proxy->geometries )
+	{
+		auto& n = nodes[g.ID];
+		mat4 m = mat4::translate(n.box().center())*mat4::scale(n.box().size()*0.5f);
+		for(uint k=0; k<8; k++){ auto& v = proxy->vertices[g.ID*8+k]; v.pos = (m*vec4(v.norm,1.0f)).xyz; }
 	}
 }
 
