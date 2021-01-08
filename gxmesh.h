@@ -197,6 +197,9 @@ struct bbox : public bbox_t
 	inline const bbox& scale( const vec3& v ){ vec3 c=center(); m=c+(m-c)*v; M=c+(M-c)*v; return *this; }
 	inline const bbox& scale( float sx, float sy, float sz ){ vec3 c=center(); m=c+(m-c)*vec3(sx,sy,sz); M=c+(M-c)*vec3(sx,sy,sz); return *this; }
 
+	// matrics
+	inline mat4 model_matrix() const { return mat4::translate(center())*mat4::scale(size()*0.5f); }
+
 	// intersection
 	inline bool intersect( ray r );
 	inline bool intersect( ray r, isect& h );
@@ -694,27 +697,32 @@ __noinline mesh* mesh::create_proxy( bool double_sided, bool quads )
 {
 	proxy = new mesh();
 
-	// direct copy
-	proxy->objects = objects; for(auto& o : proxy->objects) o.root = proxy; // correction of mesh pointers
+	// direct copy from parent mesh
 	proxy->materials.clear();	// proxy not use materials
 	proxy->instance_count = instance_count;
-	wcscpy(proxy->file_path, file_path);
 	proxy->box = box;
 	proxy->acc = acc;	// use the same acceleration structures
+	wcscpy(proxy->file_path, file_path);
 
-	// default corner/vertex definition
-	auto corners = bbox(-1.0f, 1.0f).corners();
-	vertex v = { vec3(0.0f), vec3(0.0f), vec2(0.0f) };
-	std::vector<uint> i0 = get_box_indices(double_sided,quads);
+	// copy objects and correct mesh pointers to proxy
+	for(auto& o:proxy->objects=objects) o.root = proxy;
 
-	// create vertices/geometries
-	auto& i = proxy->indices; for(auto& g : geometries)
+	// vertex/index definitions of a default box
+	const auto corners = bbox(-1.0f,1.0f).corners();
+	const auto tri_indices = get_box_indices(double_sided,quads);
+		
+	// create vertices/indices for triangles
+	auto& i = proxy->indices;
+	auto& v = proxy->vertices;
+	uint vof=0;
+	for(auto& g : geometries)
 	{
-		auto* pg=proxy->objects[g.object_index].create_geometry(i.size(), i0.size(), &g.box);
-		pg->mtx = g.mtx;
-		for(auto& j : i0) i.emplace_back(j + uint(proxy->vertices.size()));
-		mat4 m = mat4::translate(g.box.center())*mat4::scale(g.box.size()*0.5f);
-		for(uint k=0; k<8; k++){ v.norm=corners[k]; /*actually not used*/ v.pos=(m*vec4(corners[k],1.0f)).xyz; proxy->vertices.emplace_back(v); }
+		auto& b = g.box;
+		proxy->objects[g.object_index].create_geometry(i.size(),tri_indices.size(),&b)->mtx=g.mtx;
+		for(auto j:tri_indices) i.emplace_back(j+vof);
+		mat4 m=mat4::translate(b.center())*mat4::scale(b.size()*0.5f);
+		for(auto& c:corners) v.emplace_back(vertex{(m*c).xyz,c,vec2(0)}); // world pos, local pos
+		vof+=uint(corners.size()); // increment by the corner count
 	}
 
 	return proxy;
@@ -746,29 +754,34 @@ inline uint bvh_t::geometry_node_count() const
 
 __noinline mesh* bvh_t::create_proxy( bool double_sided, bool quads )
 {
-	safe_delete(proxy) = new mesh();
+	proxy = new mesh();
 
-	// direct copy
-	proxy->materials.clear(); // proxy not use materials
-	proxy->instance_count = 1; // proxy instantiates all
+	// direct copy from source mesh
+	proxy->materials.clear();	// proxy not use materials
+	proxy->instance_count = 1;	// proxy instantiates all simultaneously
 	proxy->box = p_mesh->box;
-	proxy->acc = this; // set this bvh
-	auto* obj = proxy->create_object("proxy"); // create a single object for the entire BVH
+	proxy->acc = this;			// set this bvh
 
-	// default corner/vertex definition
-	auto corners = bbox(-1.0f, 1.0f).corners();
-	vertex v = { vec3(0.0f), vec3(0.0f), vec2(0.0f) };
-	std::vector<uint> i0 = get_box_indices(double_sided,quads);
+	// create objects for triangles and lines
+	auto* tris = proxy->create_object("tris");
+	auto* lines = proxy->create_object("lines");
 
-	// create vertices/geometries
+	// vertex/index definitions of a default box
+	const auto corners = bbox(-1.0f, 1.0f).corners();
+	const auto tri_indices = get_box_indices(double_sided,quads);
+		
+	// create vertices/indices for triangles
 	auto& i = proxy->indices;
-	for( uint k=0, kn=uint(nodes.size()); k<kn; k++ )
+	auto& v = proxy->vertices;
+	uint vof=0;
+	for(auto& n : nodes)
 	{
-		auto& n = nodes[k];
-		auto* g = obj->create_geometry(i.size(),i0.size(),&n.box());
-		for(auto& j : i0) i.emplace_back(j + uint(proxy->vertices.size()));
-		mat4 m = mat4::translate(n.box().center())*mat4::scale(n.box().size()*0.5f);
-		for(uint k=0; k<8; k++){ v.norm=corners[k]; /*actually not used*/ v.pos=(m*corners[k]).xyz; proxy->vertices.emplace_back(v); }
+		auto& b = n.box();
+		tris->create_geometry(i.size(),tri_indices.size(),&b);
+		for(auto j:tri_indices) i.emplace_back(j+vof);
+		mat4 m=mat4::translate(b.center())*mat4::scale(b.size()*0.5f);
+		for(auto& c:corners) v.emplace_back(vertex{(m*c).xyz,c,vec2(0)}); // world pos, local pos
+		vof+=uint(corners.size()); // increment by the corner count
 	}
 
 	return proxy;
