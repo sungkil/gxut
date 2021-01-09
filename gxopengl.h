@@ -433,7 +433,13 @@ namespace gl {
 	{
 		struct Uniform
 		{
-			GLint ID=-1; GLchar name[256]; GLint array_size=1; GLenum type; GLint textureID=-1; Texture* texture=nullptr;
+			GLint		ID=-1;
+			GLchar		name[256];
+			GLint		array_size=1;
+			GLenum		type;
+			GLint		textureID=-1;
+			Texture*	texture=nullptr;
+
 			template <class T> inline void set( GLuint prog, T* v, GLsizei count )
 			{
 				switch(type)
@@ -580,7 +586,8 @@ namespace gl {
 		// uniform/program block query
 		UniformBlock* get_uniform_block( const char* name ){ auto it=uniform_block_map.find(name); return it==uniform_block_map.end() ? nullptr : &it->second; }
 		GLuint get_uniform_block_binding( const char* name ){ auto* ub=get_uniform_block(name); return ub?ub->get_binding():-1; }
-		GLuint get_shader_storage_block_binding( const char* name ){ const GLenum prop = GL_BUFFER_BINDING; GLint binding;glGetProgramResourceiv(ID,GL_SHADER_STORAGE_BLOCK,glGetProgramResourceIndex(ID,GL_SHADER_STORAGE_BLOCK,name),1,&prop,1,nullptr,&binding); return binding; }
+		GLuint get_shader_storage_block_binding( const char* name ){ auto it=shader_storage_block_binding_map.find(name); if(it!=shader_storage_block_binding_map.end()) return it->second; const GLenum prop=GL_BUFFER_BINDING; GLint binding;glGetProgramResourceiv(ID,GL_SHADER_STORAGE_BLOCK,glGetProgramResourceIndex(ID,GL_SHADER_STORAGE_BLOCK,name),1,&prop,1,nullptr,&binding); return shader_storage_block_binding_map[name]=binding; }
+		GLuint get_atomic_counter_buffer_binding( const char* name ){ auto it=atomic_counter_buffer_binding_map.find(name); return it==atomic_counter_buffer_binding_map.end()?-1:it->second; }
 
 		// query source
 		const char* get_shader_source( GLuint shader_type ) const { auto it=shader_source_map.find(shader_type); return it==shader_source_map.end()?"":it->second.c_str(); }
@@ -589,7 +596,11 @@ namespace gl {
 		std::map<GLuint,std::string>		shader_source_map;
 		std::map<std::string,Uniform>		uniform_cache;
 		std::set<std::string>				invalid_uniform_cache;
+		std::map<std::string,GLint>			shader_storage_block_binding_map;
+		std::map<std::string,GLint>			atomic_counter_buffer_binding_map;
 		std::map<std::string,UniformBlock>	uniform_block_map;
+
+		// instances
 		static std::set<Program*>& get_instances(){ static std::set<Program*> i; return i; }
 	};
 
@@ -618,13 +629,15 @@ namespace gl {
 		std::vector<Uniform> v;
 		for(int k=0,kn=get_active_uniform_count();k<kn;k++)
 		{
-			static const GLenum pnames[]={GL_BLOCK_INDEX,GL_LOCATION,GL_NAME_LENGTH,GL_TYPE,GL_ARRAY_SIZE,GL_OFFSET,GL_ARRAY_STRIDE,GL_MATRIX_STRIDE,GL_IS_ROW_MAJOR}; //GL_REFERENCED_BY_VERTEX_SHADER,GL_REFERENCED_BY_GEOMETRY_SHADER,GL_REFERENCED_BY_FRAGMENT_SHADER,
+			static const GLenum pnames[]={GL_BLOCK_INDEX,GL_LOCATION,GL_NAME_LENGTH,GL_TYPE,GL_ARRAY_SIZE,GL_OFFSET,GL_ARRAY_STRIDE,GL_MATRIX_STRIDE,GL_IS_ROW_MAJOR,GL_ATOMIC_COUNTER_BUFFER_INDEX};
 			static std::array<GLint,std::extent<decltype(pnames)>::value> values;
-			glGetProgramResourceiv(ID,GL_UNIFORM,k,GLsizei(values.size()),pnames,GLsizei(values.size()),nullptr,&values[0]); if(values[0]>=0||values[1]<0) continue; // skip for inactive or block variables
+			glGetProgramResourceiv(ID,GL_UNIFORM,k,GLsizei(values.size()),pnames,GLsizei(values.size()),nullptr,&values[0]);
 			static std::map<GLenum,GLint> prop; for(int j=0,jn=int(values.size());j<jn;j++) prop[pnames[j]]=values[j];
-
 			Uniform u; u.type=prop[GL_TYPE]; u.array_size=prop[GL_ARRAY_SIZE]; u.ID=prop[GL_LOCATION];
-			glGetProgramResourceName(ID,GL_UNIFORM,k,prop[GL_NAME_LENGTH],nullptr,u.name); if(strstr(u.name,"gl_")) continue; // query name now, and skip for builtin gl variables
+			glGetProgramResourceName(ID,GL_UNIFORM,k,prop[GL_NAME_LENGTH],nullptr,u.name);
+			if(strstr(u.name,"gl_")) continue; // query name now, and skip for built-in gl variables
+			if(prop[GL_ATOMIC_COUNTER_BUFFER_INDEX]!=-1){ int b; glGetActiveAtomicCounterBufferiv(ID,prop[GL_ATOMIC_COUNTER_BUFFER_INDEX],GL_ATOMIC_COUNTER_BUFFER_BINDING,&b); atomic_counter_buffer_binding_map[u.name]=b; }
+			if(prop[GL_BLOCK_INDEX]>=0||prop[GL_LOCATION]<0) continue;
 			v.emplace_back(u);
 		}
 		if(program0>=0) glUseProgram(program0); // restore the original program
@@ -697,14 +710,16 @@ namespace gl {
 		void set_uniform( const std::string& name, Texture* t ){ if(active_program) active_program->set_uniform(name.c_str(),t); }
 
 		// uniform buffer/block
-		gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name); if(b&&b->size()!=size){ static std::set<std::string> warns; auto it=warns.find(name); if(it==warns.end()){ warns.insert(name); printf("uniform_buffer(%s).size(=%d)!=%d\n",name,int(b->size()),int(size));} } if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr,GL_DYNAMIC_STORAGE_BIT|GL_MAP_WRITE_BIT); if(b){ bind_uniform_buffer(name,b); return uniform_buffer_map[name]=b; } printf("[%s] unable to create uniform buffer [%s]\n", this->name, name); return nullptr; }
+		gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name); if(b&&b->size()!=size){ static std::set<std::string> warns; auto it=warns.find(name); if(it==warns.end()){ warns.insert(name); printf("[%s] %s(): uniform_buffer(%s).size(=%d)!=%d\n",this->name,__func__,name,int(b->size()),int(size));} } if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr,GL_DYNAMIC_STORAGE_BIT|GL_MAP_WRITE_BIT); if(b){ bind_uniform_buffer(name,b); return uniform_buffer_map[name]=b; } printf("[%s] unable to create uniform buffer [%s]\n", this->name, name); return nullptr; }
 		gl::Buffer* get_uniform_buffer( const char* name ){ auto it=uniform_buffer_map.find(name); return it==uniform_buffer_map.end()?nullptr:it->second; }
 		GLint get_uniform_block_binding( const char* name ){ GLint binding=active_program?active_program->get_uniform_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_uniform_block_binding(name); if(b!=-1) return b; } return -1; }
-		void bind_uniform_buffer( const char* name, gl::Buffer* ub=nullptr /* if nullptr, use default buffer */ ){ gl::Buffer* b=ub?ub:get_uniform_buffer(name); GLuint binding=get_uniform_block_binding(name); if(b&&binding!=-1) b->bind_base(binding); else if(!b) printf( "[%s] bind_uniform_buffer(): unable to find uniform buffer %s\n", this->name, name ); else printf( "[%s] bind_uniform_buffer(): unable to find uniform buffer binding %s\n", this->name, name ); }
+		void bind_uniform_buffer( const char* name, gl::Buffer* ub=nullptr /* if nullptr, use default buffer */ ){ gl::Buffer* b=ub?ub:get_uniform_buffer(name); GLuint binding=get_uniform_block_binding(name); if(b&&binding!=-1) b->bind_base(binding); else if(!b) printf( "[%s] %s(): unable to find uniform buffer %s\n", this->name, __func__, name ); else printf( "[%s] bind_uniform_buffer(): unable to find uniform buffer binding %s\n", this->name, name ); }
 
-		// blocks: uniform and shader_storage
-		GLint get_shader_storage_block_binding( const char* name ){ GLint binding=active_program?active_program->get_shader_storage_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_shader_storage_block_binding(name); if(b!=-1) return b; } printf( "[%s] bind_uniform_buffer(): unable to find shader storage block binding %s\n", this->name, name ); return -1; }
+		// blocks: uniform, shader storage, and atomic counter
+		GLint get_shader_storage_block_binding( const char* name ){ GLint binding=active_program?active_program->get_shader_storage_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_shader_storage_block_binding(name); if(b!=-1) return b; } printf( "[%s] %s(): unable to find shader storage block binding %s\n", this->name, __func__, name ); return -1; }
 		void bind_shader_storage_buffer( const char* name, Buffer* buffer ){ GLint binding=get_shader_storage_block_binding(name); if(binding<0) return; if(buffer->target==GL_SHADER_STORAGE_BUFFER) buffer->bind_base(binding); else buffer->bind_base_as(GL_SHADER_STORAGE_BUFFER,binding); }
+		GLint get_atomic_counter_buffer_binding( const char* name ){ GLint binding=active_program?active_program->get_atomic_counter_buffer_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_atomic_counter_buffer_binding(name); if(b!=-1) return b; } printf( "[%s] %s(): unable to find atomic counter buffer binding %s\n", this->name, __func__, name ); return -1; }
+		void bind_atomic_counter_buffer( const char* name, Buffer* buffer ){ GLint binding=get_atomic_counter_buffer_binding(name); if(binding<0) return; if(buffer->target==GL_ATOMIC_COUNTER_BUFFER) buffer->bind_base(binding); else buffer->bind_base_as(GL_ATOMIC_COUNTER_BUFFER,binding); }
 
 		// draw or compute
 		inline void draw_quads(){ if(!quad) return; if(quad->index_buffer) quad->draw_elements(0,4,GL_TRIANGLE_STRIP); else quad->draw_arrays(0,4,GL_TRIANGLE_STRIP); }
