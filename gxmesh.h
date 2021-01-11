@@ -567,6 +567,24 @@ struct mesh
 	inline bool is_dynamic() const { for(size_t k=0, kn=objects.size()/instance_count; k<kn; k++) if(objects[k].attrib.dynamic) return true; return false; }
 	void update_bound( bool b_recalc_tris=false );
 	bool intersect( ray r, isect& h, bool use_acc=true ) const;
+
+	// opengl draw functions (implemented in gxopengl.h)
+	static const int GL_TRIANGLES=0x0004;
+	typedef void GLvoid;
+	typedef unsigned int GLenum;
+	typedef int GLint;
+	typedef int GLsizei;
+	typedef unsigned int GLuint;
+	typedef signed long long int GLintptr;
+	void draw_arrays( GLint first, GLsizei count=0, GLenum mode=GL_TRIANGLES, bool b_bind=true );
+	void draw_arrays_instanced( GLint first, GLsizei instance_count, GLsizei count=0, GLenum mode=GL_TRIANGLES, bool b_bind=true );
+	void draw_elements( GLuint first, GLsizei count=0, GLenum mode=GL_TRIANGLES, bool b_bind=true );
+	void draw_elements_instanced( GLuint first, GLsizei instance_count, GLsizei count=0, GLenum mode=GL_TRIANGLES, bool b_bind=true );
+	void draw_elements_indirect( GLvoid* indirect=nullptr, GLenum mode=GL_TRIANGLES, bool b_bind=true );
+	void draw_range_elements( GLuint first, GLuint end, GLsizei count=0, GLenum mode=GL_TRIANGLES, bool b_bind=true );
+	void multi_draw_elements( GLuint* pfirst, const GLsizei* pcount, GLsizei draw_count, GLenum mode=GL_TRIANGLES, bool b_bind=true );
+	void multi_draw_elements_indirect( GLsizei draw_count, GLsizei stride=sizeof(geometry), GLvoid* indirect=nullptr, GLenum mode=GL_TRIANGLES, bool b_bind=true );
+	void multi_draw_elements_indirect_count( GLsizei max_draw_count, GLsizei stride=sizeof(geometry), const void* indirect=0 /* GL_DRAW_INDIRECT_BUFFER */, GLintptr draw_count=0 /* GL_PARAMETER_BUFFER_ARB */, GLenum mode=GL_TRIANGLES, bool b_bind=true );
 };
 
 //*************************************
