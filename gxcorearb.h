@@ -4994,24 +4994,26 @@ e(NV_conservative_raster_underestimation)
 	// release dll
 	if(__hOpenGL32&&!hOpenGL32) FreeLibrary(__hOpenGL32);
 
-	// get lowercase computer name for unique log
-	char cname[1024]={0}; DWORD cl=sizeof(cname)/sizeof(cname[0]);
-	GetComputerNameA( cname, &cl ); for( size_t k=0, kn=strlen(cname); k<kn; k++ ) cname[k] = tolower(cname[k]);
+	// get a lower-case computer name
+	wchar_t cname[1024]={0}; DWORD cl=sizeof(cname)/sizeof(cname[0]);
+	GetComputerNameW( cname, &cl ); for(size_t k=0,kn=wcslen(cname);k<kn;k++) cname[k]=tolower(cname[k]);
+
+	// find a log directory
+	wchar_t log_dir[_MAX_PATH] = {};
+	const wchar_t*(*rexGetTempDir)() = (const wchar_t*(*)()) GetProcAddress(GetModuleHandleW(nullptr),"rexGetTempDir");
+	if(rexGetTempDir){ swprintf(log_dir,_MAX_PATH,L"%slog\\",rexGetTempDir()); if(_waccess(log_dir,0)!=0)_wmkdir(log_dir); }
 
 	// check if unsupported exists
-	char log_path[_MAX_PATH]={0}; sprintf( log_path, "data\\log\\gxcorearb.%s.log", cname ); if(_access(log_path,0)==0) return;
+	wchar_t log_path[_MAX_PATH]={0}; swprintf( log_path, _MAX_PATH, L"%sgxcorearb.%s.log", log_dir, cname ); if(_waccess(log_path,0)==0) return;
 	if(unsupported_functions.empty()&&unsupported_extensions.empty()) return;
 
-	// create directory for logging
-	if(_access("data\\",0)!=0) _mkdir("data\\");
-	if(_access("data\\log\\",0)!=0) _mkdir("data\\log\\");
-
 	// leave a log for unsupported
-	printf( "[gxcorearb] see %s for unavailable OpenGL extensions\n", log_path );
-	FILE* fp = fopen( log_path, "w" ); if(!fp) return;
+	FILE* fp = _wfopen( log_path, L"w" ); if(!fp) return;
 	if(!unsupported_extensions.empty()){ fprintf( fp, "# Unavailable OpenGL extensions\n" ); for( auto& s : unsupported_extensions ) fprintf(fp,"%s\n", s.c_str() ); fprintf( fp, "\n" ); }
 	if(!unsupported_functions.empty()){ fprintf( fp, "# Unavailable OpenGL core-profile functions\n" ); for( auto& s : unsupported_functions ) fprintf(fp,"%s\n", s.c_str() ); }
 	fclose(fp);
+
+	wprintf( L"[gxcorearb] see %s for unavailable OpenGL extensions\n", log_path );
 }
 
 #endif /* GXCOREARB_IMPL */
