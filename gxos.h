@@ -76,7 +76,14 @@ inline path search( path file_name )
 //***********************************************
 
 //***********************************************
-// system paths
+// system variables/paths
+inline path computer_name( bool b_lowercase=true )
+{
+	wchar_t cname[1024]={0}; DWORD cl=sizeof(cname)/sizeof(cname[0]); GetComputerNameW( cname, &cl );
+	if(b_lowercase) for(size_t k=0,kn=wcslen(cname);k<kn;k++) cname[k]=tolower(cname[k]);
+	return path(cname);
+}
+
 inline path temp()
 {
 	static path t; if(!t.empty()) return t;
@@ -90,14 +97,40 @@ inline path temp()
 	return t;
 }
 
+inline path userprofile()
+{
+	path e=env::var(L"USERPROFILE");
 #ifdef _SHLOBJ_H_
+	if(e.empty()||!e.exists()) SHGetFolderPath(NULL, CSIDL_PROFILE, NULL, 0, (wchar_t*)e );
+#endif
+	return e.empty()||!e.exists()?path():e.add_backslash();
+}
+
+inline path home(){ return userprofile(); }
+
+inline const wchar_t* user()
+{
+	static std::wstring u=env::var(L"USERNAME");
+	return u.c_str();
+}
+
 inline path local_appdata()
 {
-	path e=env::var(L"LOCALAPPDATA"); if(!e.empty()&&e.exists()) return e.add_backslash();
-	SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, (wchar_t*)e );
-	return e.add_backslash();
-}
+	path e=env::var(L"LOCALAPPDATA");
+#ifdef _SHLOBJ_H_
+	if(e.empty()||!e.exists()) SHGetFolderPath(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, (wchar_t*)e );
 #endif
+	return e.empty()||!e.exists()?path():e.add_backslash();
+}
+
+inline path appdata()
+{
+	path e=env::var(L"APPDATA");
+#ifdef _SHLOBJ_H_
+	if(e.empty()||!e.exists()) SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, 0, (wchar_t*)e );
+#endif
+	return e.empty()||!e.exists()?path():e.add_backslash();
+}
 
 inline path system_dir()
 {
