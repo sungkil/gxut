@@ -325,6 +325,7 @@ struct path
 
 	// file content access: void (rb/wb), char (r/w), wchar_t (r/w,ccs=UTF-8)
 	template <class T=void> sized_ptr_t<T> read_file() const;
+	std::wstring read_file() const;
 	bool write_file( const void* ptr, size_t size ) const;
 	bool write_file( void* ptr, size_t size ) const { return ptr&&size?write_file(ptr,size):false; }
 	bool write_file( sized_ptr_t<void> p ) const { return p.ptr&&p.size?write_file(p.ptr,p.size):false; }
@@ -418,6 +419,12 @@ template<> __noinline sized_ptr_t<char> path::read_file<char>() const
 template<> __noinline sized_ptr_t<const char> path::read_file<const char>() const
 {
 	auto p=read_file<char>(); return {(const char*)p.ptr,p.size};
+}
+
+__noinline std::wstring path::read_file() const
+{
+	sized_ptr_t<wchar_t> p=read_file<wchar_t>(); if(!p) return L"";
+	std::wstring s=p.ptr; free(p.ptr); return s;
 }
 
 __noinline bool path::write_file( const void* ptr, size_t size ) const
