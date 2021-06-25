@@ -168,8 +168,10 @@ struct bbox : public bbox_t
 	inline float radius() const { return size().length()*0.5f; }
 	inline float surface_area() const { vec3 e=size(); return (e.x*e.z+e.y*e.x+e.z*e.y)*2.0f; }
 	inline float volume() const { vec3 e=size(); return e.x*e.y*e.z; }
-	inline int max_axis() const { vec3 e=size(); return e.x>e.y&&e.x>e.z?0:e.y>e.z?1:2; }
-	inline float max_extent() const { vec3 e=size(); return e.x>e.y&&e.x>e.z?e.x:e.y>e.z?e.y:e.z; }
+	inline int max_axis() const { vec3 e=size(); int a=0;if(e.y>e.x)a=1;if(e.z>e[a])a=2; return a; }
+	inline int min_axis() const { vec3 e=size(); int a=0;if(e.y<e.x)a=1;if(e.z<e[a])a=2; return a; }
+	inline float max_extent() const { vec3 e=size(); int a=0;if(e.y>e.x)a=1;if(e.z>e[a])a=2; return e[a]; }
+	inline float min_extent() const { vec3 e=size(); int a=0;if(e.y<e.x)a=1;if(e.z<e[a])a=2; return e[a]; }
 
 	// query on boxes or points
 	inline bool overlap( const bbox& b ) const { return (M.x>=b.m.x)&&(m.x<=b.M.x)&&(M.y>=b.m.y)&&(m.y<=b.M.y)&&(M.z>=b.m.z)&&(m.z<=b.M.z); }
@@ -566,6 +568,7 @@ struct mesh
 	// bound, dynamic, intersection
 	inline bool is_dynamic() const { for(size_t k=0, kn=objects.size()/instance_count; k<kn; k++) if(objects[k].attrib.dynamic) return true; return false; }
 	void update_bound( bool b_recalc_tris=false );
+	int find_up_vector() const;
 	bool intersect( ray r, isect& h, bool use_acc=true ) const;
 
 	// opengl draw functions (implemented in gxopengl.h)
@@ -671,6 +674,24 @@ __noinline void mesh::update_bound( bool b_recalc_tris )
 	box.clear();
 	for( auto& obj : objects )
 		box.expand(obj.update_bound());
+}
+
+__noinline int mesh::find_up_vector() const
+{
+	if(box.max_extent()>(box.min_extent()*4.0f)) return box.min_axis();
+
+	vec3 d=0;
+	for(auto f:{"floor","ground","ceil","terrain","plane"})
+		for(auto& o:objects)
+		{
+			if(!_stristr(o.name,f)||o.box.max_extent()<(o.box.min_extent()*4.0f)) continue;
+			d[o.box.min_axis()] += 1.0; break;
+		}
+	
+	int a=2;
+	if(d[0]>0&&d[0]>d[2]) a=0;
+	if(d[1]>0&&d[1]>d[a]) a=1;
+	return a;
 }
 
 __noinline std::vector<uint> get_box_indices( bool double_sided, bool quads )
