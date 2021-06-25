@@ -40,7 +40,7 @@ nrm_vector_t	nrm;
 vtx_vector_t*	vertices = nullptr;
 
 __forceinline char* rm_newline( char* str, int& len ){ if(str[len-1]=='\r')str[--len]='\0';else if(str[len-2]=='\r')str[len-=2]='\0';else if(str[len-1]=='\n')str[--len]='\0';return str; } // CR never follows NL
-__forceinline char* next_token( char* buff ){while(*buff!=' ')buff++; *(buff++)=0;while(*buff==' ')++buff;return buff; }
+__forceinline char* next_token( char* buff ){while(*buff!=' '&&*buff)buff++;*(buff++)=0;while(*buff==' ')++buff;return buff; }
 __forceinline char* tab_to_space( char* buff, int len ){ for(int j=0;j<len;j++,buff++)if(*buff=='\t')*buff=' '; return buff; }
 __forceinline char* rtrim( char* buff, int& len ){ int j;for(j=len-1;j>=0;j--)if(buff[j]!=' ')break;buff[len=j+1]='\0';return buff; }
 __forceinline char  tolower( char c ){ uchar d=static_cast<uchar>(c-'A');return d<26?'a'+d:c;}
@@ -541,8 +541,8 @@ __forceinline uint get_or_create_vertex( char* str )
 {
 	// parse the key for extracting indices
 	ivec3 idx;
-	idx.x=fast::atoi(str); while(*str!='/')str++;str++;
-	idx.y=fast::atoi(str); while(*str!='/')str++;str++;
+	idx.x=fast::atoi(str); while(*str!='/'&&*str) str++;str++;
+	idx.y=fast::atoi(str); while(*str!='/'&&*str) str++;str++;
 	idx.z=fast::atoi(str);
 
 	if(idx.x<0) idx.x += int(obj::pos.size());
@@ -636,9 +636,9 @@ inline mesh* load_obj( path file_path, float* pLoadingTime=nullptr, void(*flush_
 
 	//*****************************************************
 	// 5. temporary buffers/variables
-	auto& pos = obj::pos;						pos.reserve(target_count/2);	pos.resize(1);
-	auto& tex = obj::tex;						tex.reserve(target_count/8);	tex.resize(1);
-	auto& nrm = obj::nrm;						nrm.reserve(target_count/2);	nrm.resize(1);
+	auto& pos = obj::pos;						pos.reserve(target_count/2);	pos.resize(1); pos.front() = vec3(0.0f,0.0f,0.0f);
+	auto& tex = obj::tex;						tex.reserve(target_count/8);	tex.resize(1); tex.front() = vec2(0.0f,0.0f);
+	auto& nrm = obj::nrm;						nrm.reserve(target_count/2);	nrm.resize(1); nrm.front() = vec3(0.0f,0.0f,0.0f);
 	auto* vtx = obj::vtx=new obj::vtx_map_t();	// do not use vtx->reserve(target_count); from some point of VC update, this makes very slow loading
 	auto& vertices = p_mesh->vertices;			vertices.reserve(target_count);		obj::vertices=&p_mesh->vertices;
 	auto& indices = p_mesh->indices;			indices.reserve(target_count*3);	// index should be 3 times
@@ -704,11 +704,12 @@ inline mesh* load_obj( path file_path, float* pLoadingTime=nullptr, void(*flush_
 		//*****************************************************
 		// tokenize key and next buff
 		char key0=*key;
-		if(key0!='v'&&key0!='f') // only for rare attributes
+		if(key0!='v'&&key0!='f')
 		{
-			obj::tab_to_space(obj::rtrim(key,len),len); // tab2space and rtrim
+			obj::rtrim(key,len); // rtrim only for rare attributes
 			if(len==0) continue; // early exit
 		}
+		obj::tab_to_space(key,len);
 		buff=obj::next_token(key+1);
 
 		//*****************************************************
@@ -725,13 +726,22 @@ inline mesh* load_obj( path file_path, float* pLoadingTime=nullptr, void(*flush_
 		else if(key0=='f')
 		{
 			// counter-clockwise faces
-			indices.push_back(get_or_create_vertex(buff));
-			indices.push_back(get_or_create_vertex(buff=obj::next_token(buff)));
-			indices.push_back(get_or_create_vertex(obj::next_token(buff)));
+			uint i0 = get_or_create_vertex(buff);
+			uint i1 = get_or_create_vertex(buff=obj::next_token(buff));
+			uint i2 = get_or_create_vertex(buff=obj::next_token(buff));
+			indices.push_back(i0); indices.push_back(i1); indices.push_back(i2);
 
 			// create default object/geometry if no geometry is given now
 			if(g==nullptr) g = create_geometry();
 			g->count += 3;
+
+			buff=obj::next_token(buff);
+			if(*buff&&*buff!=' ')
+			{
+				uint i3 = get_or_create_vertex(buff);
+				indices.push_back(i0); indices.push_back(i2); indices.push_back(i3);
+				g->count += 3;
+			}
 		}
 		else if(strcmp(key,"g")==0||strcmp(key,"mg")==0||strcmp(key,"o")==0)	// mtllib, group, merging group, object name
 		{
@@ -810,6 +820,16 @@ inline mesh* load_obj( path file_path, float* pLoadingTime=nullptr, void(*flush_
 
 	// update bounding box
 	p_mesh->update_bound(true);
+
+	// scale vertices by 1000 times for meter-unit scenes
+	if(p_mesh->box.radius()<100.0f)
+	{
+		vec3 center = p_mesh->box.center();
+		for( auto& v : p_mesh->vertices ) v.pos = (v.pos-center)*1000.0f+center;
+		for( auto& g : p_mesh->geometries ){ g.box.m=(g.box.m-center)*1000.0f+center;g.box.M=(g.box.M-center)*1000.0f+center; }
+		p_mesh->update_bound(false);
+	}
+
 	if(flush_messages) flush_messages(nullptr);
 
 	// if no materials are present, then create default materials
