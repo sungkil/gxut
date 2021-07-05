@@ -127,12 +127,13 @@ using ray = tray<float>;
 // intersection
 struct isect
 {
-	vec3	pos;							// position at intersection
-	vec3	norm;							// normal at intersection
-	float	t=FLT_MAX;						// nearest intersection: t<0 indicates inverted intersection on spherical surfaces
-	union { float tfar=FLT_MAX, theta; };	// farthest intersection (gxut) or incident angle (oxut)
-	vec2	bc;								// barycentric coordinates at t
-	uint	g=0xffffffff;					// index of an intersected geometry
+	vec3	pos;						// position at intersection
+	vec3	norm;						// face normal at intersection
+	float	t=FLT_MAX;					// nearest intersection: t<0 indicates inverted intersection on spherical surfaces
+	union{float tfar=FLT_MAX,theta;};	// farthest intersection (gxut) or incident angle (oxut)
+	uint	g=0xffffffff;				// index of the geometry at the intersection
+	vec3	vnorm;						// vertex normal at intersection
+	vec2	tc;							// texture coordinate
 };
 
 //*************************************
@@ -870,7 +871,7 @@ __noinline bool intersect( ray r, vec3 v0, vec3 v1, vec3 v2, isect& h )
 
 	h.pos = ipos;
 	h.norm = normalize(n);
-	h.bc = vec2(bs, bt);
+	h.tc = vec2(bs, bt); // temporaily store texcoord
 	h.t = t;
 	h.tfar = t;
 	return true;
@@ -929,11 +930,24 @@ __noinline bool geometry::intersect( ray r, isect& h ) const
 	const vertex* V = &root->vertices[0];
 	const uint* I = &root->indices[first_index];
 	h.g = 0xffffffff;
+
 	for( uint k=0, kn=count/3; k<kn; k++, I+=3 )
 	{
-		isect i; if(!::intersect(r,mtx*V[I[0]].pos,mtx*V[I[1]].pos,mtx*V[I[2]].pos,i)||i.t>h.t) continue;
+		const vertex &v0=V[I[0]], &v1=V[I[1]], &v2=V[I[2]];
+		isect i; if(!::intersect(r,mtx*v0.pos,mtx*v1.pos,mtx*v2.pos,i)||i.t>h.t) continue;
 		h=i; h.g=ID;
+		reinterpret_cast<uvec3&>(h.vnorm) = uvec3{I[0],I[1],I[2]};
 	}
+
+	if(h.g!=0xffffffff)
+	{
+		uvec3 i = reinterpret_cast<uvec3&>(h.vnorm);
+		const vertex& v0=V[i.x], &v1=V[i.y], &v2=V[i.z];
+		vec3 bc=vec3(1-h.tc.x-h.tc.y,h.tc);
+		h.vnorm=v0.norm*bc.x+v1.norm*bc.y+v2.norm*bc.z;
+		h.tc=v0.tex*bc.x+v1.tex*bc.y+v2.tex*bc.z;
+	}
+
 	return h.g!=0xffffffff;
 }
 
