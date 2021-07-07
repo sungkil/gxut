@@ -1090,9 +1090,11 @@ inline void gxInfoLog( const char* name, const char* msg, std::map<size_t,std::s
 		const char* v = vm[k].c_str(); printf("%s: %s\n", name, v ); if(lines==nullptr) continue;
 		char s[16384]={};const char *l=strchr(v,'('), *r=strchr(v,')'); if(!l||!r||l>=r) continue;
 		memcpy(s,l+1,r-l-1); s[r-l-1]=0; int idx=atoi(s);
-		auto it=lines->find(size_t(idx-1));	if(it!=lines->end()) printf( "%d> %s\n", idx-1, trim(str_replace(it->second.c_str(),"%", "%%")) );	// % causes crash in gprintf
-		it=lines->find(size_t(idx+0));		if(it!=lines->end()) printf( "%d> %s\n", idx+0, trim(str_replace(it->second.c_str(),"%", "%%")) );
-		it=lines->find(size_t(idx+1));		if(it!=lines->end()) printf( "%d> %s\n", idx+1, trim(str_replace(it->second.c_str(),"%", "%%")) );
+		int j=idx; //for( j=idx-1,jn=j+3;j<jn;j++)
+		{
+			auto it=lines->find(size_t(j)); if(it==lines->end()) continue;
+			printf( "%d> %s\n", j, trim(str_replace(it->second.c_str(),"%", "%%")) ); // % causes crash in gprintf
+		}
 	}
 	printf("%s",L);
 }
