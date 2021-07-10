@@ -299,46 +299,48 @@ __forceinline frustum_t& frustum_t::update( camera_t& c ){ return update(c.proje
 //*************************************
 // material definition (std140 layout, aligned at 16-byte/vec4 boundaries)
 #ifndef __cplusplus
-struct material { vec4 color; float specular, beta, emissive, n; uvec2 TEX, NRM; };
+struct material { vec4 color; float metal, rough, emissive, beta, specular, n; uvec2 TEX, NRM, PBR; };
 #else
 struct material
 {
-	vec4		color;				// Blinn-Phong diffuse/specular color; color.a = opacity = 1-transmittance
-	float		specular=0.0f;		// specular intensity
-	float		beta=48.0f;			// specular power/shininess
-	float		emissive=0.0f;		// 1 only for light sources; if an object is named "light*", its material is forced to be emissive
-	float		n=1.0f;				// refractive index
-	uint64_t	TEX=0;				// GPU handle to a diffuse texture; TEX.a = alpha values
-	uint64_t	NRM=0;				// GPU handle to a normal map
+	vec4		color;			// albedo or Blinn-Phong diffuse; color.a=opacity=1-transmittance
+	float		metal=0.0f;		// metallic: mapped to specular intensity
+	float		rough=0.2f;		// roughness: mapped to specular power; zero means mirror-reflective (used for ray tracing)
+	float		emissive=0.0f;	// 1 only for light sources; if an object is named "light*", its material is forced to be emissive
+	float		beta=48.0f;		// specular power of Phong model
+	float		specular=1.0f;	// specular intensity
+	float		n=1.0f;			// refractive index
+	uint64_t	TEX=0;			// GPU handle to (albedo,alpha) texture; RGBA format indicates the presence of alpha/opacity channel
+	uint64_t	NRM=0;			// GPU handle to normal map
+	uint64_t	PBR=0;			// GPU handle to PBR texture: (0,roughness,metallic), which follows glTF spec
 };
-static_assert(sizeof(material) % 16 == 0, "size of struct material should be aligned at 16-byte boundary");
+static_assert(sizeof(material)%16==0, "struct material must be aligned at a 16-byte boundary");
+#endif
+
 inline float beta_to_roughness(float b){ return float(sqrtf(2.0f/(b+2.0f))); }  // Beckmann roughness in [0,1] (0:mirror, 1: Lambertian)
 inline float roughness_to_beta(float r){ return 2.0f/(r*r)-2.0f; }
-#endif
+
+union material_textures_t
+{
+	struct { gl::Texture				*albedo, *normal, *pbr; };
+	struct { ID3D10ShaderResourceView	*albedo, *normal, *pbr; } d3d10;
+	struct { ID3D11ShaderResourceView	*albedo, *normal, *pbr; } d3d11;
+};
+
+struct material_paths_t
+{
+	static const int L=_MAX_PATH;
+	wchar_t albedo[L], normal[L], alpha[L], rough[L], metal[L]; // PBR texture: (alpha, rough, metal)
+};
 
 struct material_impl : public material
 {
 	const uint	ID;
-	uint64_t	CUB = 0;							// GPU handle to a cube/reflection map
 	char		name[_MAX_PATH]={};
 	float		bump_scale = 1.0f;
-	union
-	{
-		struct { gl::Texture				*diffuse, *normal, *cube, *alpha; };
-		struct { ID3D10ShaderResourceView	*diffuse, *normal, *cube, *alpha; } d3d10;
-		struct { ID3D11ShaderResourceView	*diffuse, *normal, *cube, *alpha; } d3d11;
-	} texture = { 0 };
-	struct
-	{
-		wchar_t diffuse[_MAX_PATH];
-		wchar_t bump[_MAX_PATH];
-		wchar_t normal[_MAX_PATH];
-		wchar_t cube[_MAX_PATH];
-		wchar_t alpha[_MAX_PATH];
-	} path = { 0 };
-
-	material_impl( uint id ):ID(id){ color=vec4(0.7f, 0.7f, 0.7f, 1.0f); }
-	float roughness(){ return float(sqrtf(2.0f / (beta + 2.0f))); }  // Beckmann roughness in [0,1] (0:mirror, 1: Lambertian)
+	material_textures_t	texture={};
+	material_paths_t path={};
+	material_impl( uint id ):ID(id){}
 };
 
 //*************************************

@@ -7,7 +7,6 @@
 #include <future>
 
 static const bool USE_MODEL_CACHE = true;
-static const float SPECULAR_BETA_SCALE = 100.0f;
 
 #if (defined(_unzip_H)||defined(__GXZIP_H__)) && defined(__7Z_H) && defined(__7Z_MEMINSTREAM_H)
 	static nocase::set<std::wstring> archive_ext_map = { L"zip", L"7z" };
@@ -55,11 +54,11 @@ inline void clear_absent_textures( std::vector<material_impl>& mats, path mesh_d
 	for( uint k=0; k < mats.size(); k++ )
 	{
 		auto& m = mats[k];
-		if(m.path.diffuse[0]&&!(mesh_dir+m.path.diffuse).exists())	m.path.diffuse[0] = L'\0';
-		if(m.path.bump[0]&&!(mesh_dir+m.path.bump).exists())		m.path.bump[0] = L'\0';
-		if(m.path.normal[0]&&!(mesh_dir+m.path.normal).exists())	m.path.normal[0] = L'\0';
-		if(m.path.cube[0]&&!(mesh_dir+m.path.cube).exists())		m.path.cube[0] = L'\0';
+		if(m.path.albedo[0]&&!(mesh_dir+m.path.albedo).exists())	m.path.albedo[0] = L'\0';
 		if(m.path.alpha[0]&&!(mesh_dir+m.path.alpha).exists())		m.path.alpha[0] = L'\0';
+		if(m.path.normal[0]&&!(mesh_dir+m.path.normal).exists())	m.path.normal[0] = L'\0';
+		if(m.path.rough[0]&&!(mesh_dir+m.path.rough).exists())		m.path.rough[0] = L'\0';
+		if(m.path.metal[0]&&!(mesh_dir+m.path.metal).exists())		m.path.metal[0] = L'\0';
 	}
 }
 
@@ -69,11 +68,11 @@ inline void convert_unsupported_texture_to_jpeg( std::vector<material_impl>& mat
 	for( uint k=0; k < mats.size(); k++ )
 	{
 		auto& m = mats[k];
-		if(m.path.diffuse[0]&&(mesh_dir+m.path.diffuse).exists())	path_list.emplace_back(m.path.diffuse);
-		if(m.path.bump[0]&&(mesh_dir+m.path.bump).exists())			path_list.emplace_back(m.path.bump);
-		if(m.path.normal[0]&&(mesh_dir+m.path.normal).exists())		path_list.emplace_back(m.path.normal);
-		if(m.path.cube[0]&&(mesh_dir+m.path.cube).exists())			path_list.emplace_back(m.path.cube);
+		if(m.path.albedo[0]&&(mesh_dir+m.path.albedo).exists())		path_list.emplace_back(m.path.albedo);
 		if(m.path.alpha[0]&&(mesh_dir+m.path.alpha).exists())		path_list.emplace_back(m.path.alpha);
+		if(m.path.normal[0]&&(mesh_dir+m.path.normal).exists())		path_list.emplace_back(m.path.normal);
+		if(m.path.rough[0]&&(mesh_dir+m.path.rough).exists())		path_list.emplace_back(m.path.rough);
+		if(m.path.metal[0]&&(mesh_dir+m.path.metal).exists())		path_list.emplace_back(m.path.metal);
 	}
 
 	bool bFirst = true;
@@ -179,8 +178,10 @@ inline void generate_normal_maps( std::vector<material_impl>& mats, path mesh_di
 	std::map<path,path> done;
 	for( auto& m : mats )
 	{
-		path normal_path, bump_path=mesh_dir+m.path.bump;
-		if(m.path.bump[0]==L'\0'||!bump_path.exists()) continue;
+		path bump_path=mesh_dir+m.path.normal; // bump map stored in normal when being loaded
+		if(m.path.normal[0]==L'\0'||!bump_path.exists()) continue;
+		
+		path normal_path;
 		if(done.find(bump_path.c_str())==done.end())
 		{
 			normal_path = generate_normal_map( bump_path, m.bump_scale );
@@ -202,6 +203,7 @@ inline void create_default_material( std::vector<material_impl>& mats )
 {
 	mats.emplace_back(material_impl( uint(mats.size()) ));
 	auto* m = &mats.back();
+	m->color = vec4( 0.7f, 0.7f, 0.7f, 1.0f );
 	strcpy(m->name,"default");
 }
 
@@ -212,18 +214,19 @@ inline bool load_mtl( path filePath, std::vector<material_impl>& mats )
 	FILE* fp = _wfopen( filePath, L"r" );
 	if(!fp){ wprintf(L"unable to open %s\n", filePath.c_str()); return false; }
 
-	//*********************************
-	// default material for light source
-	// mat_index==0 or emissive>0 indicates a light source
+	// default material for light source; mat_index==0 or emissive>0 indicates a light source
+	mats.clear();
 	mats.emplace_back(material_impl(0));
-	material_impl* m = &mats.back();
-	strcpy(m->name,"light");
-	m->color = vec4(1,1,1,1);
-	m->specular = 0.0f;
-	m->emissive = 1.0f;
+	material_impl* m0 = &mats.back();
+	strcpy(m0->name,"light");
+	m0->color = vec4(1,1,1,1);
+	m0->metal = 0.0f;
+	m0->emissive = 1.0f;
 
 	//*****************************************************
-	// start parsing
+	// start parsing to temporary buffer
+	material_impl* m = &mats.back();
+
 	char buff[8192];
 	for( uint k=0; fgets(buff,8192,fp); k++ )
 	{
@@ -238,7 +241,7 @@ inline bool load_mtl( path filePath, std::vector<material_impl>& mats )
 
 		if(key=="newmtl")
 		{
-			mats.emplace_back(material_impl(uint(mats.size())));
+			mats.emplace_back(material_impl(uint(mats.size())+1)); // add default material
 			m = &mats.back();
 			strcpy(m->name,token.c_str());
 		}
@@ -252,26 +255,27 @@ inline bool load_mtl( path filePath, std::vector<material_impl>& mats )
 		}
 		else if(key=="ks") // specular
 		{
-			if(vs.size()<2){ wprintf(L"Ks size < 2\n"); return false; }
+			if(vs.size()<2){ wprintf(L"Ks size < 1\n"); return false; }
 			m->specular = float(fast::atof(vs[1].c_str()));
 		}
 		else if(key=="ke") // emissive
 		{
 			m->emissive = 1.0f;
 		}
-		else if(key=="ns")
+		else if(key=="ns") // specular power
 		{
-			m->beta = float(fast::atof(token.c_str()))*SPECULAR_BETA_SCALE; // 100x scaled
+			m->beta = float(fast::atof(token.c_str()));
+			m->rough = beta_to_roughness(m->beta); 
 		}
 		else if(key=="ni") m->n = (float)fast::atof(token.c_str()); 				// optical index
 		else if(key=="illum"){}	//	mat->bSpecular=(token=="2");			// illumination model: ignored
 		else if(key=="d") m->color.a = float(fast::atof(token.c_str()));
 		else if(key=="map_ka"){} // m->ambient_path=token;
-		else if(key=="map_kd"){ if(token!=".") wcscpy(m->path.diffuse,atow(token.c_str())); }
+		else if(key=="map_kd"){ if(token!=".") wcscpy(m->path.albedo,atow(token.c_str())); }
 		else if(key=="map_ks"){} // m->specularMap=token;
 		else if(key=="map_ke"){} // ignored
 		else if(key=="map_ns"){} // m->powerMap=token;
-		else if(key=="refl"){ if(token!=".") wcscpy(m->path.cube,atow(token.c_str())); }		// cubemap as a reflection map
+		else if(key=="refl"){} // if(token!=".") wcscpy(m->path.cube,atow(token.c_str())); } // ignore cubemap as a reflection map
 		else if(key=="map_d"||key=="map_opacity"){ if(token!=".") wcscpy(m->path.alpha,atow(token.c_str())); }
 		else if(key=="disp"){}	// displacement map: ignored
 		else if(key=="map_bump"||key=="bump")
@@ -281,7 +285,7 @@ inline bool load_mtl( path filePath, std::vector<material_impl>& mats )
 			{
 				for( uint j=1; j<vs.size(); j++ )
 				{
-					if(vs[j][0]!='-') wcscpy(m->path.bump,atow(vs[j].c_str()));	// when it's not an option
+					if(vs[j][0]!='-') wcscpy(m->path.normal,atow(vs[j].c_str()));	// when it's not an option
 					else if(_stricmp("-bm", vs[j].c_str())==0&&vs.size()>=(j+2)){ m->bump_scale = float(fast::atof(vs[j+1].c_str())); j++; }
 				}
 			}
@@ -293,17 +297,23 @@ inline bool load_mtl( path filePath, std::vector<material_impl>& mats )
 		else if(key=="Ia");		// ambient light
 		else if(key=="Ir");		// intensity from reflected direction
 		else if(key=="It");		// intensity from transmitted direction
-
-		else if(k>0){ printf("\nload_mtl(): '%s %s' is unrecognized mtl command\n",key.c_str(),token.c_str()); return false; }
+		else if(k>0){ printf("%s(): '%s %s' is unrecognized mtl command\n",__func__,key.c_str(),token.c_str()); return false; }
 	}
 	fclose(fp);
 
-	// absolute paths to relative paths
+	//*********************************
+	// postprocessing
+	//********************************* 
+
 	path mtl_dir = filePath.dir();
-	for( auto& m : mats)
+	for( auto& m : mats )
 	{
-		std::vector<wchar_t*> v = {m.path.alpha,m.path.bump,m.path.diffuse,m.path.cube,m.path.normal};
-		for( auto* p : v ) if(p[0]&&path(p).is_absolute()) wcscpy(p,path(p).relative(false,mtl_dir));
+		// convert from specular to metallic
+		m.metal = clamp(m.color.r/m.specular,0.0f,1.0f);
+
+		// absolute paths to relative paths
+		std::vector<wchar_t*> v = {m.path.albedo,m.path.alpha,m.path.normal,m.path.rough,m.path.metal};
+		for(auto* p:v) if(p[0]&&path(p).is_absolute()) wcscpy(p,path(p).relative(false,mtl_dir));
 	}
 
 	// postprocessing for materials
@@ -370,20 +380,20 @@ inline void save_mesh_cache( mesh* pMesh )
 
 		// make maps string
 		std::wstring maps = L"";
-		if(m.path.diffuse[0])	maps += format(L";path.diffuse:%s",m.path.diffuse);
-		if(m.path.bump[0])		maps += format(L";path.bump:%s",m.path.bump);
-		if(m.path.normal[0])	maps += format(L";path.normal:%s",m.path.normal);
-		if(m.path.cube[0])		maps += format(L";path.cube:%s",m.path.cube);
+		if(m.path.albedo[0])	maps += format(L";path.albedo:%s",m.path.albedo);
 		if(m.path.alpha[0])		maps += format(L";path.alpha:%s",m.path.alpha);
+		if(m.path.normal[0])	maps += format(L";path.normal:%s",m.path.normal);
+		if(m.path.rough[0])		maps += format(L";path.rough:%s",m.path.rough);
+		if(m.path.metal[0])		maps += format(L";path.metal:%s",m.path.metal);
 
 		// delete first ;
 		if(!maps.empty()) maps = maps.substr(1,maps.length());
 
 		// write
-		fprintf( fp, "material[%d] %s %g %g %g %g %g %g %g %g %g %s\n",
+		fprintf( fp, "material[%d] %s %g %g %g %g %g %g %g %g %g %g %g %s\n",
 						int(k), m.name,
 						m.color[0], m.color[1], m.color[2], m.color[3],
-						m.specular, m.beta, m.emissive, m.n,
+						m.metal, m.rough, m.emissive, m.beta, m.specular, m.n,
 						m.bump_scale,
 						wtoa(maps.c_str()) );
 	}
@@ -469,10 +479,10 @@ inline mesh* load_mesh_cache( path file_path )
 
 		// get material attribute
 		char map_names[4096]={}; // should be reset for optional reading
-		uint read_count = sscanf(buff,"material[%*d] %s %f %f %f %f %f %f %f %f %f %s\n",
+		uint read_count = sscanf(buff,"material[%*d] %s %f %f %f %f %f %f %f %f %f %f %f %s\n",
 			m->name,
 			&m->color[0], &m->color[1], &m->color[2], &m->color[3],
-			&m->specular, &m->beta, &m->emissive, &m->n,
+			&m->metal, &m->rough, &m->emissive, &m->beta, &m->specular, &m->n,
 			&m->bump_scale,
 			map_names );
 
@@ -486,11 +496,11 @@ inline mesh* load_mesh_cache( path file_path )
 			const std::string& key = vs2[0];
 			std::wstring value = atow(vs2[1].c_str());
 
-			if(key=="path.diffuse")			wcscpy(m->path.diffuse,value.c_str());
-			else if(key=="path.bump")		wcscpy(m->path.bump,value.c_str());
-			else if(key=="path.normal")		wcscpy(m->path.normal,value.c_str());
-			else if(key=="path.cube")		wcscpy(m->path.cube,value.c_str());
+			if(key=="path.albedo")			wcscpy(m->path.albedo,value.c_str());
 			else if(key=="path.alpha")		wcscpy(m->path.alpha,value.c_str());
+			else if(key=="path.normal")		wcscpy(m->path.normal,value.c_str());
+			else if(key=="path.rough")		wcscpy(m->path.rough,value.c_str());
+			else if(key=="path.metal")		wcscpy(m->path.metal,value.c_str());
 		}
 	}
 
