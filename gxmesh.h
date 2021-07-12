@@ -312,7 +312,7 @@ struct material
 	float		n=1.0f;			// refractive index
 	uint64_t	TEX=0;			// GPU handle to (albedo,alpha) texture; RGBA format indicates the presence of alpha/opacity channel
 	uint64_t	NRM=0;			// GPU handle to normal map
-	uint64_t	PBR=0;			// GPU handle to PBR texture: (0,roughness,metallic), which follows glTF spec
+	uint64_t	PBR=0;			// GPU handle to PBR texture: (ambient occlusion,roughness,metallic), where RM follows glTF spec
 };
 static_assert(sizeof(material)%16==0, "struct material must be aligned at a 16-byte boundary");
 #endif
@@ -327,19 +327,13 @@ union material_textures_t
 	struct { ID3D11ShaderResourceView	*albedo, *normal, *pbr; } d3d11;
 };
 
-struct material_paths_t
-{
-	static const int L=_MAX_PATH;
-	wchar_t albedo[L], normal[L], alpha[L], rough[L], metal[L]; // PBR texture: (alpha, rough, metal)
-};
-
 struct material_impl : public material
 {
 	const uint	ID;
 	char		name[_MAX_PATH]={};
-	float		bump_scale = 1.0f;
 	material_textures_t	texture={};
-	material_paths_t path={};
+	std::map<std::string,path> path;	// <key,path>: albedo, alpha, normal, ambient, rough, metal, emissive, ...
+
 	material_impl( uint id ):ID(id){}
 };
 

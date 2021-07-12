@@ -49,50 +49,32 @@ __forceinline path decompress( const path& file_path );
 } // namespace obj
 //*************************************
 
-inline void clear_absent_textures( std::vector<material_impl>& mats, path mesh_dir )
+inline void clear_absent_textures( std::vector<material_impl>& materials, path mesh_dir )
 {
-	for( uint k=0; k < mats.size(); k++ )
-	{
-		auto& m = mats[k];
-		if(m.path.albedo[0]&&!(mesh_dir+m.path.albedo).exists())	m.path.albedo[0] = L'\0';
-		if(m.path.alpha[0]&&!(mesh_dir+m.path.alpha).exists())		m.path.alpha[0] = L'\0';
-		if(m.path.normal[0]&&!(mesh_dir+m.path.normal).exists())	m.path.normal[0] = L'\0';
-		if(m.path.rough[0]&&!(mesh_dir+m.path.rough).exists())		m.path.rough[0] = L'\0';
-		if(m.path.metal[0]&&!(mesh_dir+m.path.metal).exists())		m.path.metal[0] = L'\0';
-	}
+	for( auto& m : materials )
+		for( auto& it : m.path )
+			if(!it.second.empty()&&!(mesh_dir+it.second).exists()) it.second.clear();
 }
 
-inline void convert_unsupported_texture_to_jpeg( std::vector<material_impl>& mats, path mesh_dir )
+inline void convert_unsupported_texture_to_jpeg( std::vector<material_impl>& materials, path mesh_dir )
 {
-	std::vector<wchar_t*> path_list;
-	for( uint k=0; k < mats.size(); k++ )
+	bool b_first = true;
+	for( auto& m : materials )
+	for( auto& it : m.path )
 	{
-		auto& m = mats[k];
-		if(m.path.albedo[0]&&(mesh_dir+m.path.albedo).exists())		path_list.emplace_back(m.path.albedo);
-		if(m.path.alpha[0]&&(mesh_dir+m.path.alpha).exists())		path_list.emplace_back(m.path.alpha);
-		if(m.path.normal[0]&&(mesh_dir+m.path.normal).exists())		path_list.emplace_back(m.path.normal);
-		if(m.path.rough[0]&&(mesh_dir+m.path.rough).exists())		path_list.emplace_back(m.path.rough);
-		if(m.path.metal[0]&&(mesh_dir+m.path.metal).exists())		path_list.emplace_back(m.path.metal);
-	}
-
-	bool bFirst = true;
-	for( uint k=0; k < path_list.size(); k++ )
-	{
-		wchar_t* src0 = path_list[k];
-		path src = mesh_dir+src0; if(!src.exists()) continue;
-
-		if(_wcsicmp(src.ext(),L"TGA")==0)
+		path src = mesh_dir+it.second; if(!src.exists()) continue;
+		if(src.ext()==L"tga")
 		{
 			image* img = gx::load_image(src);
 			path dst = src.dir()+src.name(false)+(img->channels==3?L".jpg":L".png");
 			if(!dst.exists())
 			{
 				gx::save_image( dst, img );
-				if(bFirst){ wprintf( L"\n"); bFirst=false; }
+				if(b_first){ wprintf( L"\n"); b_first=false; }
 				wprintf( L"converting %s to %s\n", src.name().c_str(), dst.name().c_str() );
 			}
 			gx::release_image(&img);
-			wcscpy(src0,dst.name());
+			it.second = dst.name();
 		}
 	}
 }
@@ -173,22 +155,24 @@ inline path generate_normal_map( const path& bump_path, float bump_scale )
 	return normal_path;
 }
 
-inline void generate_normal_maps( std::vector<material_impl>& mats, path mesh_dir )
+// generate normal maps
+inline void generate_normal_maps( std::vector<material_impl>& materials, path dir, std::map<uint,float>& bump_scale_map )
 {
-	std::map<path,path> done;
-	for( auto& m : mats )
+	std::map<path,path> btom; // bump_to_normal;
+	for( auto& m : materials )
 	{
-		path bump_path=mesh_dir+m.path.normal; // bump map stored in normal when being loaded
-		if(m.path.normal[0]==L'\0'||!bump_path.exists()) continue;
+		auto it=m.path.find("normal"); if(it==m.path.end()) continue;
+		path bump_path = dir + it->second; if(!bump_path.exists()) continue; // bump map stored in normal when being loaded
 		
-		path normal_path;
-		if(done.find(bump_path.c_str())==done.end())
+		auto n = btom.find(bump_path.c_str());
+		if(n!=btom.end()&&n->second.exists()) m.path["normal"]=n->second;
+		else if(n==btom.end())
 		{
-			normal_path = generate_normal_map( bump_path, m.bump_scale );
-			if(normal_path.exists()) done.emplace(bump_path,normal_path);
+			auto s = bump_scale_map.find(m.ID); float bump_scale = s==bump_scale_map.end()?1.0f:s->second;
+			path normal_path = generate_normal_map( bump_path, bump_scale );
+			if(normal_path.exists()) btom.emplace(bump_path,normal_path);
+			m.path["normal"] = normal_path.name();
 		}
-		normal_path = done[bump_path]; if(!normal_path.exists()) continue;
-		wcscpy( m.path.normal, normal_path.name() );
 	}
 }
 
@@ -207,96 +191,97 @@ inline void create_default_material( std::vector<material_impl>& mats )
 	strcpy(m->name,"default");
 }
 
-inline bool load_mtl( path filePath, std::vector<material_impl>& mats )
+inline bool load_mtl( path file_path, std::vector<material_impl>& mats )
 {
-	// open file
-	if(!filePath.exists()){ wprintf(L"%s not exists\n", filePath.c_str() ); return false; }
-	FILE* fp = _wfopen( filePath, L"r" );
-	if(!fp){ wprintf(L"unable to open %s\n", filePath.c_str()); return false; }
+	if(!file_path.exists()){ printf("%s(): %s not exists\n", __func__, file_path.wtoa() ); return false; }
+	FILE* fp = _wfopen( file_path, L"r" ); if(!fp){ printf("%s(): unable to open %s\n", __func__, file_path.wtoa()); return false; }
+	path mesh_dir=file_path.dir();
+
+	// additional temporary attributes
+	std::map<uint,float> bump_scale_map;
 
 	// default material for light source; mat_index==0 or emissive>0 indicates a light source
 	mats.clear();
 	mats.emplace_back(material_impl(0));
-	material_impl* m0 = &mats.back();
-	strcpy(m0->name,"light");
-	m0->color = vec4(1,1,1,1);
-	m0->metal = 0.0f;
-	m0->emissive = 1.0f;
-
-	//*****************************************************
-	// start parsing to temporary buffer
 	material_impl* m = &mats.back();
+	strcpy(m->name,"light");
+	m->color = vec4(1,1,1,1);
+	m->metal = 0.0f;
+	m->emissive = 1.0f;
 
-	char buff[8192];
-	for( uint k=0; fgets(buff,8192,fp); k++ )
+	// start parsing
+	char buff[8192]={};
+	for( uint k=0; fgets(buff,8192,fp)&&k<65536; k++ )
 	{
-		char c0 = buff[0];
-		if(c0==0||c0=='#'||strncmp(buff,"Wavefront",9)==0) continue;
-		char c1 = buff[1]; if(c1==0) continue;
+		char c0=buff[0]; if(!c0||c0=='#'||strncmp(buff,"Wavefront",9)==0) continue;
+		char c1=buff[1]; if(!c1) continue;
 
-		std::vector<std::string> vs = explode(_strlwr(buff));
-		if(vs.size()<2) continue;
-		std::string& key = vs[0];
-		std::string& token = vs[1];
+		std::vector<std::string> vs=explode(_strlwr(buff)); if(vs.size()<2) continue;
+		std::string& key	= vs[0];
+		std::string& token	= vs[1];
 
 		if(key=="newmtl")
 		{
-			mats.emplace_back(material_impl(uint(mats.size())+1)); // add default material
-			m = &mats.back();
+			mats.emplace_back(material_impl(uint(mats.size())+1)); m=&mats.back();
 			strcpy(m->name,token.c_str());
 		}
-		else if(key=="ka"){} // ignore ambient materials
+		else if(key=="ka");		// ambient materials
 		else if(key=="kd")
 		{
 			if(vs.size()<4){ wprintf(L"Kd size < 3\n"); return false; }
 			m->color[0] = float(fast::atof(vs[1].c_str()));
 			m->color[1] = float(fast::atof(vs[2].c_str()));
 			m->color[2] = float(fast::atof(vs[3].c_str()));
+			m->color[3] = 1.0f;
 		}
-		else if(key=="ks") // specular
-		{
-			if(vs.size()<2){ wprintf(L"Ks size < 1\n"); return false; }
-			m->specular = float(fast::atof(vs[1].c_str()));
-		}
-		else if(key=="ke") // emissive
-		{
-			m->emissive = 1.0f;
-		}
+		else if(key=="ks") m->specular = float(fast::atof(vs[1].c_str()));
 		else if(key=="ns") // specular power
 		{
 			m->beta = float(fast::atof(token.c_str()));
 			m->rough = beta_to_roughness(m->beta); 
 		}
-		else if(key=="ni") m->n = (float)fast::atof(token.c_str()); 				// optical index
-		else if(key=="illum"){}	//	mat->bSpecular=(token=="2");			// illumination model: ignored
-		else if(key=="d") m->color.a = float(fast::atof(token.c_str()));
-		else if(key=="map_ka"){} // m->ambient_path=token;
-		else if(key=="map_kd"){ if(token!=".") wcscpy(m->path.albedo,atow(token.c_str())); }
-		else if(key=="map_ks"){} // m->specularMap=token;
-		else if(key=="map_ke"){} // ignored
-		else if(key=="map_ns"){} // m->powerMap=token;
-		else if(key=="refl"){} // if(token!=".") wcscpy(m->path.cube,atow(token.c_str())); } // ignore cubemap as a reflection map
-		else if(key=="map_d"||key=="map_opacity"){ if(token!=".") wcscpy(m->path.alpha,atow(token.c_str())); }
-		else if(key=="disp"){}	// displacement map: ignored
+		else if(key=="ni")	m->n = (float)fast::atof(token.c_str()); // refractive index
+		else if(key=="d")	m->color.a = float(fast::atof(token.c_str()));
+		else if(key=="tr")	m->color.a = 1.0f-float(fast::atof(token.c_str())); // transparency
+		else if(key=="map_ka"){ m->path["ambient"] = atow(token.c_str()); }	// ambient occlusion
+		else if(key=="map_kd"){ m->path["albedo"] = atow(token.c_str()); }
+		else if(key=="map_d"||key=="map_opacity"){ m->path["alpha"] = atow(token.c_str()); }
 		else if(key=="map_bump"||key=="bump")
 		{
-			// process OBJ option for bump multiplier
-			if(token!=".")
+			for( uint j=1, jn=uint(vs.size()); j<jn; j++ )
 			{
-				for( uint j=1; j<vs.size(); j++ )
-				{
-					if(vs[j][0]!='-') wcscpy(m->path.normal,atow(vs[j].c_str()));	// when it's not an option
-					else if(_stricmp("-bm", vs[j].c_str())==0&&vs.size()>=(j+2)){ m->bump_scale = float(fast::atof(vs[j+1].c_str())); j++; }
-				}
+				if(vs[j][0]!='-') m->path["normal"] = atow(token.c_str()); // when it's not an option
+				else if(_stricmp("-bm", vs[j].c_str())==0&&vs.size()>=(j+2))
+				{ bump_scale_map[m->ID] = float(fast::atof(vs[j+1].c_str())); j++; }
 			}
 		}
-		else if(key=="tf");		// Transmission filter: ignored
-		else if(key=="tr");		// Transparent: ignored
+		else if(key=="illum");	// illumination model
+		else if(key=="map_ks");	// specular map
+		else if(key=="map_ns"); // specular power map
+		else if(key=="refl");	// reflection map
+		else if(key=="disp");	// displacement map
+		else if(key=="tf");		// Transmission filter
 		else if(key=="fr");		// Fresnel reflectance
 		else if(key=="ft");		// Fresnel transmittance
 		else if(key=="Ia");		// ambient light
 		else if(key=="Ir");		// intensity from reflected direction
 		else if(key=="It");		// intensity from transmitted direction
+		// PBR extensions: http://exocortex.com/blog/extending_wavefront_mtl_to_support_pbr
+		else if(key=="ke"){ m->emissive = 1.0f; }
+		else if(key=="Pr"){ m->rough = float(fast::atof(token.c_str())); }
+		else if(key=="map_ke"){ m->path["emissive"] = atow(token.c_str()); }
+		else if(key=="map_pr"){ m->path["rough"] = atow(token.c_str()); }
+		else if(key=="map_pm"){ m->path["metal"] = atow(token.c_str()); }
+		else if(key=="map_ps"){ m->path["sheen"] = atow(token.c_str()); }
+		else if(key=="norm"){ m->path["normal"] = atow(token.c_str()); }
+		else if(key=="pc"){ m->path["clearcoat"] = atow(token.c_str()); }
+		else if(key=="pcr"){ m->path["clearcoatroughness"] = atow(token.c_str()); }
+		else if(key=="aniso"){ m->path["anisotropy"] = atow(token.c_str()); }
+		else if(key=="anisor"){ m->path["anisotropyrotation"] = atow(token.c_str()); }
+		// DirectXMesh toolkit extension
+		else if(key=="map_RMA"){ m->path["rma"] = atow(token.c_str()); } // (roughness, metalness, ambient occlusion)
+		else if(key=="map_ORM"){ m->path["orm"] = atow(token.c_str()); } // (ambient occlusion, roughness, metalness)
+		// unrecognized
 		else if(k>0){ printf("%s(): '%s %s' is unrecognized mtl command\n",__func__,key.c_str(),token.c_str()); return false; }
 	}
 	fclose(fp);
@@ -305,21 +290,20 @@ inline bool load_mtl( path filePath, std::vector<material_impl>& mats )
 	// postprocessing
 	//********************************* 
 
-	path mtl_dir = filePath.dir();
+	path mtl_dir = file_path.dir();
 	for( auto& m : mats )
 	{
 		// convert from specular to metallic
 		m.metal = clamp(m.color.r/m.specular,0.0f,1.0f);
 
 		// absolute paths to relative paths
-		std::vector<wchar_t*> v = {m.path.albedo,m.path.alpha,m.path.normal,m.path.rough,m.path.metal};
-		for(auto* p:v) if(p[0]&&path(p).is_absolute()) wcscpy(p,path(p).relative(false,mtl_dir));
+		for( auto& it : m.path ) if(!it.second.empty()&&it.second.is_absolute()) it.second=it.second.relative(false,mtl_dir);
 	}
 
-	// postprocessing for materials
-	clear_absent_textures( mats, filePath.dir() );
-	convert_unsupported_texture_to_jpeg( mats, filePath.dir() );
-	generate_normal_maps( mats, filePath.dir() );
+	// postprocessing
+	clear_absent_textures( mats, mesh_dir );
+	convert_unsupported_texture_to_jpeg( mats, mesh_dir );
+	generate_normal_maps( mats, mesh_dir, bump_scale_map );
 
 	return true;
 }
@@ -345,89 +329,56 @@ inline uint64_t get_mesh_parser_id( const char* timestamp )
 	return uint64_t(std::hash<std::string>{}(std::string(__TIMESTAMP__)+std::string(__GX_MESH_H_TIMESTAMP__)+timestamp));
 }
 
-inline bool mesh_cache_exists( path file_path )
+inline void save_mesh_cache( mesh* p_mesh )
 {
-	path cache_path = get_mesh_cache_path(file_path); if(!cache_path.exists()) return false;
-	FILE* fp=_wfopen(cache_path,L"r"); if(fp==nullptr) false;
-	uint64_t pid; fscanf( fp, "%llu\n", &pid ); // get parser id
-	fclose(fp);
-
-	// compare parser id (timestamp)
-	return pid==get_mesh_parser_id(file_path.mtimestamp());
-}
-
-inline void save_mesh_cache( mesh* pMesh )
-{
-	path file_path = path(pMesh->file_path);
+	path file_path = path(p_mesh->file_path);
 	path cache_path = get_mesh_cache_path(file_path);
-	FILE* fp = _wfopen( cache_path, L"w" ); if(fp==nullptr){ wprintf(L"Unable to open %s\n",cache_path.c_str()); return; }
+	FILE* fp = _wfopen( cache_path, L"w" ); if(!fp){ wprintf(L"Unable to write %s\n",cache_path.c_str()); return; }
 
-	// 0. save the parser's id to reflect the revision of the parser and mesh's timestamp
-	fprintf( fp, "%llu\n", get_mesh_parser_id(file_path.mtimestamp()) );
+	// save the parser's id to reflect the revision of the parser and mesh's timestamp
+	fprintf( fp, "parserid = %llu\n", get_mesh_parser_id(file_path.mtimestamp()) );
 
-	// 1. save time stamp of the mesh file and material file
-	path mtl_path = file_path.dir()+pMesh->mtl_path;
-	fprintf( fp, "mtllib: %s\n", wcslen(pMesh->mtl_path)==0?"default":wtoa(pMesh->mtl_path) );
-	fprintf( fp, "%llu\n", get_mesh_parser_id(mtl_path.mtimestamp()) );
+	// save mtl path
+	path mtl_path = file_path.dir()+p_mesh->mtl_path;
+	fprintf( fp, "mtllib = %s\n", wcslen(p_mesh->mtl_path)==0?"default":wtoa(p_mesh->mtl_path) );
 
-	// 2. boundingbox and numface
-	fprintf( fp, "mesh_box: %f %f %f %f %f %f\n", pMesh->box.m[0], pMesh->box.m[1], pMesh->box.m[2], pMesh->box.M[0], pMesh->box.M[1], pMesh->box.M[2]);
-	// 4. save material list
-	fprintf( fp, "material_count: %Iu\n", pMesh->materials.size() );
-	for( size_t k=0, kn=pMesh->materials.size(); k<kn; k++ )
+	// save counters
+	fprintf( fp, "object_count = %u\n", uint(p_mesh->objects.size()) );
+	fprintf( fp, "geometry_count = %u\n", uint(p_mesh->geometries.size()) );
+	fprintf( fp, "vertex_count = %u\n", uint(p_mesh->vertices.size()) );
+	fprintf( fp, "index_count = %u\n", uint(p_mesh->indices.size()) );
+	
+	// save bound
+	fprintf( fp, "bound = %f %f %f %f %f %f\n", p_mesh->box.m[0], p_mesh->box.m[1], p_mesh->box.m[2], p_mesh->box.M[0], p_mesh->box.M[1], p_mesh->box.M[2]);
+
+	// save objects
+	for( uint k=0; k < p_mesh->objects.size(); k++ )
 	{
-		material_impl& m = pMesh->materials[k];
-
-		// make maps string
-		std::wstring maps = L"";
-		if(m.path.albedo[0])	maps += format(L";path.albedo:%s",m.path.albedo);
-		if(m.path.alpha[0])		maps += format(L";path.alpha:%s",m.path.alpha);
-		if(m.path.normal[0])	maps += format(L";path.normal:%s",m.path.normal);
-		if(m.path.rough[0])		maps += format(L";path.rough:%s",m.path.rough);
-		if(m.path.metal[0])		maps += format(L";path.metal:%s",m.path.metal);
-
-		// delete first ;
-		if(!maps.empty()) maps = maps.substr(1,maps.length());
-
-		// write
-		fprintf( fp, "material[%d] %s %g %g %g %g %g %g %g %g %g %g %g %s\n",
-						int(k), m.name,
-						m.color[0], m.color[1], m.color[2], m.color[3],
-						m.metal, m.rough, m.emissive, m.beta, m.specular, m.n,
-						m.bump_scale,
-						wtoa(maps.c_str()) );
-	}
-
-	// 5. save object list
-	fprintf( fp, "object_count: %zu\n", pMesh->objects.size() );
-	for( uint k=0; k < pMesh->objects.size(); k++ )
-	{
-		object& obj = pMesh->objects[k]; const bbox& b=obj.box;
-		fprintf( fp, "object[%d] %s ", k, obj.name );
+		object& obj = p_mesh->objects[k]; const bbox& b=obj.box;
+		fprintf( fp, "o[%d] %s ", k, obj.name );
 		fprintf( fp, "%f %f %f %f %f %f", b.m[0], b.m[1], b.m[2], b.M[0], b.M[1], b.M[2] );
 		fprintf( fp, "\n" );
 	}
 
-	// 6. save geometry list
-	fprintf( fp, "geometry_count: %zu\n", pMesh->geometries.size() );
-	for( uint k=0; k < pMesh->geometries.size(); k++ )
+	// save geometries
+	for( uint k=0; k < p_mesh->geometries.size(); k++ )
 	{
-		auto& g = pMesh->geometries[k]; const bbox& b=g.box;
-		fprintf( fp, "geometry[%d] %d %d %d %d ", k, g.object_index, g.material_index, g.first_index, g.count );
+		auto& g = p_mesh->geometries[k]; const bbox& b=g.box;
+		fprintf( fp, "g[%d] %d %d %d %d ", k, g.object_index, g.material_index, g.first_index, g.count );
 		fprintf( fp, "%f %f %f %f %f %f", b.m[0], b.m[1], b.m[2], b.M[0], b.M[1], b.M[2] );
 		fprintf( fp, "\n" );
 	}
 
-	// 7. save number of vertex and index list
-	fprintf( fp, "vertex_count: %Iu, index_count: %Iu\n", pMesh->vertices.size(), pMesh->indices.size() );
+	// meaningless empty line for sepration
+	fprintf( fp, "\n" );
 
 	// 7.1 close file and reopen as a binary mode: writing must be done in binary mode !!!!
 	fclose(fp); _flushall();
 	fp = _wfopen( cache_path, L"ab" );	// attach + binary mode
 
 	// 7.2 save vertex and index list
-	fwrite( &pMesh->vertices[0], sizeof(vertex), pMesh->vertices.size(), fp );
-	fwrite( &pMesh->indices[0], sizeof(uint), pMesh->indices.size(), fp );
+	fwrite( &p_mesh->vertices[0], sizeof(vertex), p_mesh->vertices.size(), fp );
+	fwrite( &p_mesh->indices[0], sizeof(uint), p_mesh->indices.size(), fp );
 
 	// 8. close file
 	fclose(fp);
@@ -435,113 +386,66 @@ inline void save_mesh_cache( mesh* pMesh )
 
 inline mesh* load_mesh_cache( path file_path )
 {
-	path cachePath = get_mesh_cache_path(file_path);
-	FILE* fp = _wfopen( cachePath, L"rb" );
-	if(fp==nullptr){ wprintf(L"Unable to open %s\n",cachePath.c_str()); return nullptr; }
+	path cache_path = get_mesh_cache_path(file_path); if(!cache_path.exists()) return nullptr;
+	FILE* fp = _wfopen( cache_path, L"rb" ); if(!fp) return nullptr;
 
-	char buff[8192], mtl_name[1024];
+	// get parser id
+	uint64_t parserid;
+	char buff[8192]; fgets(buff,8192,fp); sscanf( buff, "parserid = %llu\n", &parserid );
+	if(parserid!=get_mesh_parser_id(file_path.mtimestamp())){ fclose(fp); return nullptr; }
 
-	// 0. get parserid
-	fgets(buff,8192,fp); // get parser id
-
-	// 1.1 get the mtl name
-	fgets(buff,8192,fp); sscanf( buff, "mtllib: %s\n", mtl_name );
+	// get the mtl name
+	char mtl_name[1024]; fgets(buff,8192,fp); sscanf( buff, "mtllib = %s\n", mtl_name );
 	path mtl_path = path(file_path).dir()+atow(mtl_name);
-
-	// 1.2 get the mtl timestnamp and compare
-	fgets(buff,8192,fp);
-	const char* mtl_timestamp = mtl_path.exists()&&mtl_path!=L"default"?mtl_path.mtimestamp():"";
-	uint64_t mat_cache_id; sscanf(buff, "%llu\n", &mat_cache_id );
-	if(mtl_path.exists()&&get_mesh_parser_id(mtl_timestamp)!=mat_cache_id) return nullptr;	// there was a change on the existing mtl file
-
-	//*****************************************************
+	if(!mtl_path.exists()&&mtl_path!=L"default"){ fclose(fp); return nullptr; } // mtl not exists
+	
 	// now create mesh
 	mesh* p_mesh = new mesh();
 	wcscpy(p_mesh->file_path,file_path);
 	wcscpy(p_mesh->mtl_path,mtl_path.exists()?atow(mtl_name):L"default");
+	if(mtl_path.exists()&&!load_mtl(mtl_path, p_mesh->materials)){ delete p_mesh; return nullptr; }
+		
+	// load counters
+	uint object_count=0;	fgets(buff,8192,fp); sscanf(buff,"object_count = %u\n", &object_count );
+	uint geometry_count=0;	fgets(buff,8192,fp); sscanf(buff,"geometry_count = %u\n", &geometry_count );
+	uint vertex_count=0;	fgets(buff,8192,fp); sscanf(buff,"vertex_count = %u\n", &vertex_count);
+	uint index_count=0;		fgets(buff,8192,fp); sscanf(buff,"index_count = %u\n", &index_count);
+	
+	// exception handling on the counters
+	if(object_count>(1<<30)||geometry_count>(1<<30)){ fclose(fp); delete(p_mesh); return nullptr; }
 
-	// 2. bounding box and numface
-	fgets(buff,8192,fp); sscanf(buff,"mesh_box: %f %f %f %f %f %f\n",
-		&p_mesh->box.m[0], &p_mesh->box.m[1], &p_mesh->box.m[2], &p_mesh->box.M[0], &p_mesh->box.M[1], &p_mesh->box.M[2] );
+	// bounding box
+	vec3 &m=p_mesh->box.m, &M=p_mesh->box.M;
+	fgets(buff,8192,fp); sscanf(buff,"bound = %f %f %f %f %f %f\n", &m[0],&m[1],&m[2],&M[0],&M[1],&M[2] );
 
-	// 4. read material list
-	uint material_count=0;	// NEVER USE size_t
-	fgets(buff,8192,fp); sscanf(buff,"material_count: %u\n", &material_count );
-	if(material_count>65536){ if(fp) fclose(fp); return nullptr; }
-	p_mesh->materials.reserve(material_count);
-
-	for( size_t k=0; k < material_count; k++ )
-	{
-		p_mesh->materials.emplace_back(material_impl(uint(p_mesh->materials.size())));
-		material_impl* m = &p_mesh->materials.back();
-
-		fgets(buff,8192,fp);
-
-		// get material attribute
-		char map_names[4096]={}; // should be reset for optional reading
-		uint read_count = sscanf(buff,"material[%*d] %s %f %f %f %f %f %f %f %f %f %f %f %s\n",
-			m->name,
-			&m->color[0], &m->color[1], &m->color[2], &m->color[3],
-			&m->metal, &m->rough, &m->emissive, &m->beta, &m->specular, &m->n,
-			&m->bump_scale,
-			map_names );
-
-		// read maps
-		std::vector<std::string> vs = explode(map_names,";");
-		for( size_t j=0; j < vs.size(); j++ )
-		{
-			if(vs[j].empty()) continue;
-			std::vector<std::string> vs2 = explode(vs[j].c_str(),":");
-			if(vs2.size()<2) continue;
-			const std::string& key = vs2[0];
-			std::wstring value = atow(vs2[1].c_str());
-
-			if(key=="path.albedo")			wcscpy(m->path.albedo,value.c_str());
-			else if(key=="path.alpha")		wcscpy(m->path.alpha,value.c_str());
-			else if(key=="path.normal")		wcscpy(m->path.normal,value.c_str());
-			else if(key=="path.rough")		wcscpy(m->path.rough,value.c_str());
-			else if(key=="path.metal")		wcscpy(m->path.metal,value.c_str());
-		}
-	}
-
-	// 5. convert unsupported format to jpeg
-	convert_unsupported_texture_to_jpeg( p_mesh->materials, file_path );
-
-	// 6. get object list
-	uint object_count=0; // never use size_t here for sscanf
-	fgets(buff,8192,fp); sscanf(buff,"object_count: %u\n", &object_count );
-	if(object_count>(1<<30)){ if(fp) fclose(fp); return nullptr; }
-
+	// load objects
 	p_mesh->objects.reserve(object_count);
 	for( uint k=0; k < object_count; k++ )
 	{
 		object* obj = p_mesh->create_object("");
-		fgets(buff,8192,fp);
-		sscanf(buff,"object[%d] %s %f %f %f %f %f %f\n", &obj->ID, obj->name,
-			&obj->box.m[0], &obj->box.m[1], &obj->box.m[2], &obj->box.M[0], &obj->box.M[1], &obj->box.M[2] ); // do not separate sscanf
+		vec3 &m=obj->box.m, &M=obj->box.M;
+		fgets(buff,8192,fp);sscanf(buff,"o[%d] %s %f %f %f %f %f %f\n", &obj->ID,obj->name,&m[0],&m[1],&m[2],&M[0],&M[1],&M[2]);
 	}
 
-	// 7. get geometry list
-	uint geometry_count=0;
-	fgets(buff,8192,fp); sscanf(buff,"geometry_count: %u\n", &geometry_count );
-	if(geometry_count>(1<<30)){ if(fp) fclose(fp); return nullptr; }
-
+	// load geometries
 	p_mesh->geometries.reserve(geometry_count);
 	for( uint k=0; k < geometry_count; k++ )
 	{
 		geometry g(p_mesh,uint(p_mesh->geometries.size()),-1,0,0,nullptr,-1);
-		fgets(buff,8192,fp); sscanf(buff,"geometry[%d] %d %d %d %d %f %f %f %f %f %f\n", &g.ID, &g.object_index, &g.material_index, &g.first_index, &g.count, &g.box.m[0], &g.box.m[1], &g.box.m[2], &g.box.M[0], &g.box.M[1], &g.box.M[2] );
+		vec3 &m=g.box.m, &M=g.box.M;
+		fgets(buff,8192,fp); sscanf(buff,"g[%d] %d %d %d %d %f %f %f %f %f %f\n", &g.ID, &g.object_index, &g.material_index, &g.first_index, &g.count, &m[0],&m[1],&m[2],&M[0],&M[1],&M[2] );
 		p_mesh->geometries.emplace_back(g);
 		p_mesh->objects[g.object_index].children.push_back(g.ID);
 	}
 
-	// 8. load vertex and index list
-	uint vertex_count=0, index_count=0;
-	fgets(buff,8192,fp); sscanf(buff,"vertex_count: %u, index_count: %u\n", &vertex_count, &index_count );
+	// meaningless empty line for sepration
+	fgets(buff,8192,fp);
+
+	// load vertices and indices
 	p_mesh->vertices.resize(vertex_count);	fread( &p_mesh->vertices[0], sizeof(vertex), vertex_count, fp );
 	p_mesh->indices.resize(index_count);	fread( &p_mesh->indices[0], sizeof(uint), index_count, fp );
 
-	// 9. close file
+	// close file
 	fclose(fp);
 	return p_mesh;
 }
@@ -608,7 +512,11 @@ inline mesh* load_obj( path file_path, float* pLoadingTime=nullptr, void(*flush_
 
 	//*****************************************************
 	// 1. if there is a cache, load from cache
-	if(USE_MODEL_CACHE&&mesh_cache_exists(file_path)&&(p_mesh=load_mesh_cache(file_path))){ if(pLoadingTime) *pLoadingTime += (float)t.end(); return p_mesh; }
+	if(USE_MODEL_CACHE&&(p_mesh=load_mesh_cache(file_path)))
+	{
+		if(pLoadingTime) *pLoadingTime += float(t.end());
+		return p_mesh;
+	}
 
 	//*****************************************************
 	// 1.1 decompress zip file and remove it later after saving the cache
@@ -753,7 +661,7 @@ inline mesh* load_obj( path file_path, float* pLoadingTime=nullptr, void(*flush_
 				g->count += 3;
 			}
 		}
-		else if(strcmp(key,"g")==0||strcmp(key,"mg")==0||strcmp(key,"o")==0)	// mtllib, group, merging group, object name
+		else if(strcmp(key,"g")==0||strcmp(key,"mg")==0||strcmp(key,"o")==0)	// group, merging group, object name
 		{
 			o = p_mesh->create_object(trim(buff));
 			g = create_geometry(); // always create a new geometry; do not reuse previous emptry geometry for safety
