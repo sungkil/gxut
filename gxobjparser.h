@@ -310,144 +310,132 @@ inline bool load_mtl( path file_path, std::vector<material_impl>& mats )
 
 //*************************************
 // Cache Implementation
-
-inline path& get_mesh_cache_dir()
+namespace obj::cache
 {
-	static path mesh_cache_dir = path::temp(false)+L"global\\mesh\\";
-	if(!mesh_cache_dir.exists()&&!mesh_cache_dir.mkdir()) wprintf(L"Unable to create %s\n",mesh_cache_dir.c_str());
-	return mesh_cache_dir;
-}
+	inline path& get_dir(){ static path d = path::temp(false)+L"global\\mesh\\"; if(!d.exists()&&!d.mkdir()) wprintf(L"Unable to create %s\n",d.c_str()); return d; }
+	inline path get_path( path file_path ){ return get_dir()+file_path.name()+L".rxb"; }
+	inline uint64_t get_parser_id( const char* timestamp ){ return uint64_t(std::hash<std::string>{}(std::string(__TIMESTAMP__)+std::string(__GX_MESH_H_TIMESTAMP__)+timestamp)); }
 
-inline path get_mesh_cache_path( path file_path )
-{
-	return get_mesh_cache_dir()+file_path.name()+L".rxb";
-}
-
-// parser's id: to differetiate the parser implementations
-inline uint64_t get_mesh_parser_id( const char* timestamp )
-{
-	return uint64_t(std::hash<std::string>{}(std::string(__TIMESTAMP__)+std::string(__GX_MESH_H_TIMESTAMP__)+timestamp));
-}
-
-inline void save_mesh_cache( mesh* p_mesh )
-{
-	path file_path = path(p_mesh->file_path);
-	path cache_path = get_mesh_cache_path(file_path);
-	FILE* fp = _wfopen( cache_path, L"w" ); if(!fp){ wprintf(L"Unable to write %s\n",cache_path.c_str()); return; }
-
-	// save the parser's id to reflect the revision of the parser and mesh's timestamp
-	fprintf( fp, "parserid = %llu\n", get_mesh_parser_id(file_path.mtimestamp()) );
-
-	// save mtl path
-	path mtl_path = file_path.dir()+p_mesh->mtl_path;
-	fprintf( fp, "mtllib = %s\n", wcslen(p_mesh->mtl_path)==0?"default":wtoa(p_mesh->mtl_path) );
-
-	// save counters
-	fprintf( fp, "object_count = %u\n", uint(p_mesh->objects.size()) );
-	fprintf( fp, "geometry_count = %u\n", uint(p_mesh->geometries.size()) );
-	fprintf( fp, "vertex_count = %u\n", uint(p_mesh->vertices.size()) );
-	fprintf( fp, "index_count = %u\n", uint(p_mesh->indices.size()) );
-	
-	// save bound
-	fprintf( fp, "bound = %f %f %f %f %f %f\n", p_mesh->box.m[0], p_mesh->box.m[1], p_mesh->box.m[2], p_mesh->box.M[0], p_mesh->box.M[1], p_mesh->box.M[2]);
-
-	// save objects
-	for( uint k=0; k < p_mesh->objects.size(); k++ )
+	inline void save_mesh( mesh* p_mesh )
 	{
-		object& obj = p_mesh->objects[k]; const bbox& b=obj.box;
-		fprintf( fp, "o[%d] %s ", k, obj.name );
-		fprintf( fp, "%f %f %f %f %f %f", b.m[0], b.m[1], b.m[2], b.M[0], b.M[1], b.M[2] );
+		path file_path = path(p_mesh->file_path);
+		path cache_path = get_path(file_path);
+		FILE* fp = _wfopen( cache_path, L"w" ); if(!fp){ wprintf(L"Unable to write %s\n",cache_path.c_str()); return; }
+
+		// save the parser's id to reflect the revision of the parser and mesh's timestamp
+		fprintf( fp, "parserid = %llu\n", get_parser_id(file_path.mtimestamp()) );
+
+		// save mtl path
+		path mtl_path = file_path.dir()+p_mesh->mtl_path;
+		fprintf( fp, "mtllib = %s\n", wcslen(p_mesh->mtl_path)==0?"default":wtoa(p_mesh->mtl_path) );
+
+		// save counters
+		fprintf( fp, "object_count = %u\n", uint(p_mesh->objects.size()) );
+		fprintf( fp, "geometry_count = %u\n", uint(p_mesh->geometries.size()) );
+		fprintf( fp, "vertex_count = %u\n", uint(p_mesh->vertices.size()) );
+		fprintf( fp, "index_count = %u\n", uint(p_mesh->indices.size()) );
+	
+		// save bound
+		fprintf( fp, "bound = %f %f %f %f %f %f\n", p_mesh->box.m[0], p_mesh->box.m[1], p_mesh->box.m[2], p_mesh->box.M[0], p_mesh->box.M[1], p_mesh->box.M[2]);
+
+		// save objects
+		for( uint k=0; k < p_mesh->objects.size(); k++ )
+		{
+			object& obj = p_mesh->objects[k]; const bbox& b=obj.box;
+			fprintf( fp, "o[%d] %s ", k, obj.name );
+			fprintf( fp, "%f %f %f %f %f %f", b.m[0], b.m[1], b.m[2], b.M[0], b.M[1], b.M[2] );
+			fprintf( fp, "\n" );
+		}
+
+		// save geometries
+		for( uint k=0; k < p_mesh->geometries.size(); k++ )
+		{
+			auto& g = p_mesh->geometries[k]; const bbox& b=g.box;
+			fprintf( fp, "g[%d] %d %d %d %d ", k, g.object_index, g.material_index, g.first_index, g.count );
+			fprintf( fp, "%f %f %f %f %f %f", b.m[0], b.m[1], b.m[2], b.M[0], b.M[1], b.M[2] );
+			fprintf( fp, "\n" );
+		}
+
+		// meaningless empty line for sepration
 		fprintf( fp, "\n" );
+
+		// 7.1 close file and reopen as a binary mode: writing must be done in binary mode !!!!
+		fclose(fp); _flushall();
+		fp = _wfopen( cache_path, L"ab" );	// attach + binary mode
+
+		// 7.2 save vertex and index list
+		fwrite( &p_mesh->vertices[0], sizeof(vertex), p_mesh->vertices.size(), fp );
+		fwrite( &p_mesh->indices[0], sizeof(uint), p_mesh->indices.size(), fp );
+
+		// 8. close file
+		fclose(fp);
 	}
 
-	// save geometries
-	for( uint k=0; k < p_mesh->geometries.size(); k++ )
+	inline mesh* load_mesh( path file_path )
 	{
-		auto& g = p_mesh->geometries[k]; const bbox& b=g.box;
-		fprintf( fp, "g[%d] %d %d %d %d ", k, g.object_index, g.material_index, g.first_index, g.count );
-		fprintf( fp, "%f %f %f %f %f %f", b.m[0], b.m[1], b.m[2], b.M[0], b.M[1], b.M[2] );
-		fprintf( fp, "\n" );
-	}
+		path cache_path = get_path(file_path); if(!cache_path.exists()) return nullptr;
+		FILE* fp = _wfopen( cache_path, L"rb" ); if(!fp) return nullptr;
 
-	// meaningless empty line for sepration
-	fprintf( fp, "\n" );
+		// get parser id
+		uint64_t parserid;
+		char buff[8192]; fgets(buff,8192,fp); sscanf( buff, "parserid = %llu\n", &parserid );
+		if(parserid!=get_parser_id(file_path.mtimestamp())){ fclose(fp); return nullptr; }
 
-	// 7.1 close file and reopen as a binary mode: writing must be done in binary mode !!!!
-	fclose(fp); _flushall();
-	fp = _wfopen( cache_path, L"ab" );	// attach + binary mode
-
-	// 7.2 save vertex and index list
-	fwrite( &p_mesh->vertices[0], sizeof(vertex), p_mesh->vertices.size(), fp );
-	fwrite( &p_mesh->indices[0], sizeof(uint), p_mesh->indices.size(), fp );
-
-	// 8. close file
-	fclose(fp);
-}
-
-inline mesh* load_mesh_cache( path file_path )
-{
-	path cache_path = get_mesh_cache_path(file_path); if(!cache_path.exists()) return nullptr;
-	FILE* fp = _wfopen( cache_path, L"rb" ); if(!fp) return nullptr;
-
-	// get parser id
-	uint64_t parserid;
-	char buff[8192]; fgets(buff,8192,fp); sscanf( buff, "parserid = %llu\n", &parserid );
-	if(parserid!=get_mesh_parser_id(file_path.mtimestamp())){ fclose(fp); return nullptr; }
-
-	// get the mtl name
-	char mtl_name[1024]; fgets(buff,8192,fp); sscanf( buff, "mtllib = %s\n", mtl_name );
-	path mtl_path = path(file_path).dir()+atow(mtl_name);
-	if(!mtl_path.exists()&&mtl_path!=L"default"){ fclose(fp); return nullptr; } // mtl not exists
+		// get the mtl name
+		char mtl_name[1024]; fgets(buff,8192,fp); sscanf( buff, "mtllib = %s\n", mtl_name );
+		path mtl_path = path(file_path).dir()+atow(mtl_name);
+		if(!mtl_path.exists()&&mtl_path!=L"default"){ fclose(fp); return nullptr; } // mtl not exists
 	
-	// now create mesh
-	mesh* p_mesh = new mesh();
-	wcscpy(p_mesh->file_path,file_path);
-	wcscpy(p_mesh->mtl_path,mtl_path.exists()?atow(mtl_name):L"default");
-	if(mtl_path.exists()&&!load_mtl(mtl_path, p_mesh->materials)){ delete p_mesh; return nullptr; }
+		// now create mesh
+		mesh* p_mesh = new mesh();
+		wcscpy(p_mesh->file_path,file_path);
+		wcscpy(p_mesh->mtl_path,mtl_path.exists()?atow(mtl_name):L"default");
+		if(mtl_path.exists()&&!load_mtl(mtl_path, p_mesh->materials)){ delete p_mesh; return nullptr; }
 		
-	// load counters
-	uint object_count=0;	fgets(buff,8192,fp); sscanf(buff,"object_count = %u\n", &object_count );
-	uint geometry_count=0;	fgets(buff,8192,fp); sscanf(buff,"geometry_count = %u\n", &geometry_count );
-	uint vertex_count=0;	fgets(buff,8192,fp); sscanf(buff,"vertex_count = %u\n", &vertex_count);
-	uint index_count=0;		fgets(buff,8192,fp); sscanf(buff,"index_count = %u\n", &index_count);
+		// load counters
+		uint object_count=0;	fgets(buff,8192,fp); sscanf(buff,"object_count = %u\n", &object_count );
+		uint geometry_count=0;	fgets(buff,8192,fp); sscanf(buff,"geometry_count = %u\n", &geometry_count );
+		uint vertex_count=0;	fgets(buff,8192,fp); sscanf(buff,"vertex_count = %u\n", &vertex_count);
+		uint index_count=0;		fgets(buff,8192,fp); sscanf(buff,"index_count = %u\n", &index_count);
 	
-	// exception handling on the counters
-	if(object_count>(1<<30)||geometry_count>(1<<30)){ fclose(fp); delete(p_mesh); return nullptr; }
+		// exception handling on the counters
+		if(object_count>(1<<30)||geometry_count>(1<<30)){ fclose(fp); delete(p_mesh); return nullptr; }
 
-	// bounding box
-	vec3 &m=p_mesh->box.m, &M=p_mesh->box.M;
-	fgets(buff,8192,fp); sscanf(buff,"bound = %f %f %f %f %f %f\n", &m[0],&m[1],&m[2],&M[0],&M[1],&M[2] );
+		// bounding box
+		vec3 &m=p_mesh->box.m, &M=p_mesh->box.M;
+		fgets(buff,8192,fp); sscanf(buff,"bound = %f %f %f %f %f %f\n", &m[0],&m[1],&m[2],&M[0],&M[1],&M[2] );
 
-	// load objects
-	p_mesh->objects.reserve(object_count);
-	for( uint k=0; k < object_count; k++ )
-	{
-		object* obj = p_mesh->create_object("");
-		vec3 &m=obj->box.m, &M=obj->box.M;
-		fgets(buff,8192,fp);sscanf(buff,"o[%d] %s %f %f %f %f %f %f\n", &obj->ID,obj->name,&m[0],&m[1],&m[2],&M[0],&M[1],&M[2]);
+		// load objects
+		p_mesh->objects.reserve(object_count);
+		for( uint k=0; k < object_count; k++ )
+		{
+			object* obj = p_mesh->create_object("");
+			vec3 &m=obj->box.m, &M=obj->box.M;
+			fgets(buff,8192,fp);sscanf(buff,"o[%d] %s %f %f %f %f %f %f\n", &obj->ID,obj->name,&m[0],&m[1],&m[2],&M[0],&M[1],&M[2]);
+		}
+
+		// load geometries
+		p_mesh->geometries.reserve(geometry_count);
+		for( uint k=0; k < geometry_count; k++ )
+		{
+			geometry g(p_mesh,uint(p_mesh->geometries.size()),-1,0,0,nullptr,-1);
+			vec3 &m=g.box.m, &M=g.box.M;
+			fgets(buff,8192,fp); sscanf(buff,"g[%d] %d %d %d %d %f %f %f %f %f %f\n", &g.ID, &g.object_index, &g.material_index, &g.first_index, &g.count, &m[0],&m[1],&m[2],&M[0],&M[1],&M[2] );
+			p_mesh->geometries.emplace_back(g);
+			p_mesh->objects[g.object_index].children.push_back(g.ID);
+		}
+
+		// meaningless empty line for sepration
+		fgets(buff,8192,fp);
+
+		// load vertices and indices
+		p_mesh->vertices.resize(vertex_count);	fread( &p_mesh->vertices[0], sizeof(vertex), vertex_count, fp );
+		p_mesh->indices.resize(index_count);	fread( &p_mesh->indices[0], sizeof(uint), index_count, fp );
+
+		// close file
+		fclose(fp);
+		return p_mesh;
 	}
-
-	// load geometries
-	p_mesh->geometries.reserve(geometry_count);
-	for( uint k=0; k < geometry_count; k++ )
-	{
-		geometry g(p_mesh,uint(p_mesh->geometries.size()),-1,0,0,nullptr,-1);
-		vec3 &m=g.box.m, &M=g.box.M;
-		fgets(buff,8192,fp); sscanf(buff,"g[%d] %d %d %d %d %f %f %f %f %f %f\n", &g.ID, &g.object_index, &g.material_index, &g.first_index, &g.count, &m[0],&m[1],&m[2],&M[0],&M[1],&M[2] );
-		p_mesh->geometries.emplace_back(g);
-		p_mesh->objects[g.object_index].children.push_back(g.ID);
-	}
-
-	// meaningless empty line for sepration
-	fgets(buff,8192,fp);
-
-	// load vertices and indices
-	p_mesh->vertices.resize(vertex_count);	fread( &p_mesh->vertices[0], sizeof(vertex), vertex_count, fp );
-	p_mesh->indices.resize(index_count);	fread( &p_mesh->indices[0], sizeof(uint), index_count, fp );
-
-	// close file
-	fclose(fp);
-	return p_mesh;
 }
 
 //*************************************
@@ -483,7 +471,7 @@ path obj::decompress( const path& file_path )
 		zip_t z(file_path);
 		if(!z.load()||z.entries.empty()){ printf("%s(): unabled to load %s",__func__,file_path.wtoa()); return dst_path; }
 		if(z.entries.size()!=1){ printf("%s(): have only a single file for mesh in %s\n",__func__,file_path.wtoa() ); return dst_path; }
-		dst_path = get_mesh_cache_dir()+z.entries.front().name;
+		dst_path = cache::get_dir()+z.entries.front().name;
 		if(dst_path.exists()) dst_path.delete_file();
 		if(!z.extract_to_files(dst_path.dir())) return path();
 	}
@@ -494,7 +482,7 @@ path obj::decompress( const path& file_path )
 		szip_t s(file_path);
 		if(!s.load()||s.entries.empty()){ printf("%s(): unabled to load %s",__func__,file_path.wtoa()); return dst_path; }
 		if(s.entries.size()!=1){ printf("%s(): have only a single file for mesh in %s\n",__func__,file_path.wtoa() ); return dst_path; }
-		dst_path = get_mesh_cache_dir()+s.entries.front().name;
+		dst_path = cache::get_dir()+s.entries.front().name;
 		if(dst_path.exists()) dst_path.delete_file();
 		if(!s.extract_to_files(dst_path.dir())) return path();
 	}
@@ -512,7 +500,7 @@ inline mesh* load_obj( path file_path, float* pLoadingTime=nullptr, void(*flush_
 
 	//*****************************************************
 	// 1. if there is a cache, load from cache
-	if(USE_MODEL_CACHE&&(p_mesh=load_mesh_cache(file_path)))
+	if(USE_MODEL_CACHE&&(p_mesh=obj::cache::load_mesh(file_path)))
 	{
 		if(pLoadingTime) *pLoadingTime += float(t.end());
 		return p_mesh;
@@ -763,7 +751,7 @@ inline mesh* load_obj( path file_path, float* pLoadingTime=nullptr, void(*flush_
 
 	// save content to cache for faster loading at next time
 	if(flush_messages) flush_messages(nullptr);
-	save_mesh_cache( p_mesh );
+	obj::cache::save_mesh( p_mesh );
 
 	// remove decompressed file
 	if(b_use_archive&&dec_path.exists()) dec_path.delete_file();
