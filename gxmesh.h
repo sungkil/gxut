@@ -550,7 +550,7 @@ struct mesh
 	mesh* shrink_to_fit(){ vertices.shrink_to_fit(); indices.shrink_to_fit(); geometries.shrink_to_fit(); objects.shrink_to_fit(); materials.shrink_to_fit(); return this; }
 
 	// face/object/geometry/proxy/material helpers
-	uint face_count() const { uint kn=uint(geometries.size()); auto* g=&geometries[kn]; uint f=0; for(uint k=0; k<kn; k++, g++) f+=g->count; return f/3; }
+	uint face_count() const { uint f=0; for(const auto& g:geometries) f+=g.count; return f/3; }
 	uint vertex_count() const { return uint(vertices.size())*instance_count; }
 	object* create_object( const char* name ){ objects.emplace_back(object(this, uint(objects.size()), name)); return &objects.back(); }
 	object*	find_object( const char* name ){ for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) return &objects[k]; return nullptr; }
