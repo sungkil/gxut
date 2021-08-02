@@ -103,24 +103,21 @@ __noinline bool parser_t::load( const path& file_path )
 
 	// clear dictionary
 	for(auto& it:dic){if(it.second!=nullptr){delete it.second;}} dic.clear();
-	
+
 	wchar_t sec[257],sk[257];
+	memset(buffer,0,sizeof(buffer));
 	while(fgetws(buffer,buffer_capacity,fp))
 	{
-		wchar_t* t = buffer; itrim(t); if(*t==L'#'||*t==L';') continue; // skip comment only in the first character
-		int len=int(wcslen(t)); if(len<3) continue;
-		if(t[0]==L'[') // section
+		wchar_t* b=itrim(buffer); if(!*b||*b==L'#'||*b==L';') continue; // skip comment only in the first character
+		// split by left bracket or semicolon (for single-line multistatements)
+		std::vector<wchar_t*> v; while(*b){wchar_t* e=b+1;while(*e&&*e!=L']'&&*e!=L';')e++;*e=0;b=itrim(b);v.push_back(b);b=itrim(e+1);}
+		for( auto* t : v )
 		{
-			wchar_t *s=t+1, *e=s; while(*e!=L']'&&*e) e++; if(*e!=L']') continue; // no valid section name
-			*e=0; itrim(s); if(*s) wcscpy(sec,s); // assign section
-			// process additional trailing inline entry
-			e++; if(!*e) continue; // no inline entry
-			itrim(e); if(*e==L'#'||*e==L';') continue; // skip comment
-			len=int(wcslen(e)); if(len<3) continue;
-			t = e; // feed for entry processing below
+			int len=int(wcslen(t)); if(len<3) continue;
+			if(t[0]==L'['){ wcscpy(sec,itrim(t+1)); continue; } // assign section
+			wchar_t* v=nullptr;for(int k=0;k<len;k++)if(t[k]==L'='){t[k]=0;v=t+k+1;break;}t=itrim(t);v=itrim(v); if(!t||!t[0]||!v) continue;
+			swprintf_s(sk,L"%s:%s",sec,t);get_or_create_entry(wtoa(sk))->value=v;
 		}
-		wchar_t* v=nullptr;for(int k=0;k<len;k++)if(t[k]==L'='){t[k]=0;v=t+k+1;break;}itrim(t);itrim(v); if(!t||!t[0]||!v) continue;
-		swprintf_s(sk,L"%s:%s",sec,t);get_or_create_entry(wtoa(sk))->value=v;
 	}
 	
 	fclose(fp);
