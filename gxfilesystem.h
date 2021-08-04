@@ -205,13 +205,13 @@ struct path
 	inline uint4 md5() const;	// implemented in gxmemory.h
 
 	// system-related: slash, backslash, unix, quote
-	path to_backslash()		const {	path p(*this); std::replace(p.begin(),p.end(),L'/',L'\\'); return p; }
-	path to_slash()			const {	path p(*this); std::replace(p.begin(),p.end(),L'\\',L'/'); return p; }
-	path to_dot()			const {	path p(*this); std::replace(p.begin(),p.end(),L'\\',L'/'); std::replace(p.begin(),p.end(),L'/',L'.'); return p; }
-	path add_backslash()	const { path p(*this); size_t l=wcslen(p.data); if(l&&p.data[l-1]!='\\'){p.data[l]='\\';p.data[l+1]=L'\0';} return p; }
+	path to_backslash()		const {	path p(*this); wchar_t* t=p.data; for(size_t k=0,l=wcslen(t);k<l;k++,t++) if(*t==L'/') *t=L'\\'; return p; }
+	path to_slash()			const {	path p(*this); wchar_t* t=p.data; for(size_t k=0,l=wcslen(t);k<l;k++,t++) if(*t==L'\\') *t=L'/'; return p; }
+	path to_dot()			const {	path p(*this); wchar_t* t=p.data; for(size_t k=0,l=wcslen(t);k<l;k++,t++) if(*t==L'\\'||*t==L'/') *t=L'.'; return p; }
+	path add_backslash()	const { path p(*this); size_t l=wcslen(p.data); if(l&&p.data[l-1]=='/') p.data[l-1]='\\'; else if(l&&p.data[l-1]!='\\'){p.data[l]='\\';p.data[l+1]=L'\0';} return p; }
 	path add_slash()		const { path p(*this); size_t l=wcslen(p.data); if(l&&p.data[l-1]=='\\') p.data[l-1]='/'; else if(l&&p.data[l-1]!='/'){p.data[l]='/';p.data[l+1]=L'\0';} return p; }
-	path remove_backslash()	const { path p(*this); size_t l=wcslen(p.data); if(l&&p.data[l-1]=='\\'){p.data[l-1]=L'\0';} return p; }
-	path remove_slash()		const { path p(*this); size_t l=wcslen(p.data); if(l&&p.data[l-1]=='/'){p.data[l-1]=L'\0';} return p; }
+	path remove_backslash()	const { path p(*this); size_t l=wcslen(p.data); if(l&&p.data[l-1]=='\\') p.data[l-1]=L'\0'; return p; }
+	path remove_slash()		const { path p(*this); size_t l=wcslen(p.data); if(l&&p.data[l-1]=='/') p.data[l-1]=L'\0'; return p; }
 	path auto_quote()		const { if(!data[0]||!wcschr(data,L' ')||(data[0]==L'\"'&&data[wcslen(data)-1]==L'\"')) return *this; path p; p[0]=L'\"'; size_t l=wcslen(data); memcpy(p.data+1,data,l*sizeof(wchar_t)); p[l+1]=L'\"'; p[l+2]=0; return p; }
 	path unix()				const {	path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; p.data[1]=wchar_t(::tolower(p.data[0])); p.data[0]=L'/'; return p; }
 	path cygwin()			const { path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; path p2; swprintf_s( p2, capacity, L"/cygdrive/%c%s", ::tolower(p[0]), p.data+2 ); return p2; }
