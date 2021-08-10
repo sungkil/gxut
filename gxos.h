@@ -199,9 +199,27 @@ struct dll_t
 
 inline std::vector<HWND> enum_windows( const wchar_t* filter=nullptr )
 {
-	auto __enum_windows_proc = []( HWND hwnd , LPARAM pProcessList ) -> BOOL { ((std::vector<HWND>*)pProcessList)->emplace_back(hwnd); return TRUE; };
-	std::vector<HWND> v; EnumWindows(__enum_windows_proc,(LPARAM)(&v));
-	return v;
+	struct params { std::vector<HWND> v; const wchar_t* filter; };
+	auto __enum_windows_proc = []( HWND hwnd , LPARAM pParams )->BOOL
+	{
+		params* p = ((params*)pParams);
+		if(p->filter){ wchar_t buff[4096]; GetWindowTextW(hwnd,buff,4096); if(!wcsstr(buff,p->filter)) return TRUE; }
+		p->v.emplace_back(hwnd); return TRUE;
+	};
+	params p; p.filter=filter;
+	EnumWindows(__enum_windows_proc,(LPARAM)(&p));
+	return p.v;
+}
+
+inline HWND find_window( const wchar_t* filter )
+{
+	HWND h = GetTopWindow(GetDesktopWindow());
+	for(; h!=nullptr; h=GetWindow(h, GW_HWNDNEXT))
+	{
+		wchar_t buff[4096]; GetWindowTextW(h,buff,4096);
+		if(wcsstr(buff,filter)) return h;
+	}
+	return nullptr;
 }
 
 //*************************************

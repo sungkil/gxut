@@ -90,16 +90,13 @@ protected:
 
 struct parser_t
 {
-	std::vector<argument_t>	arguments;
-	std::vector<option_t>	options;
-	bool					b_help_exists = false;
-
 	// attributes
 	inline const char* name() const { static const std::string n=path::module_path().name(false).wtoa(); return n.c_str(); }
 	inline const wchar_t* wname() const { static const path n=path::module_path().name(false); return n.c_str(); }
-	inline void header( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); sheader=trim(&buff[0]); va_end(a); }
-	inline void footer( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); sfooter=trim(&buff[0]); va_end(a); }
+	inline void header( const char* fmt, ... ){ va_list a; va_start(a,fmt); int l=_vscprintf(fmt,a); std::vector<char> buff(l+1); vsprintf_s(&buff[0],l+1,fmt,a); sheader=trim(&buff[0]); va_end(a); }
+	inline void footer( const char* fmt, ... ){ va_list a; va_start(a,fmt); int l=_vscprintf(fmt,a); std::vector<char> buff(l+1); vsprintf_s(&buff[0],l+1,fmt,a); sfooter=trim(&buff[0]); va_end(a); }
 	inline void copyright( const char* author, int since_year ){ this->author=author; this->since_year=since_year; }
+	inline bool option_exists() const;
 	inline bool exists( const std::string& name ) const;
 	inline bool help_exists() const { return b_help_exists; }
 
@@ -131,7 +128,17 @@ protected:
 
 	std::string sheader, author, sfooter;
 	int			since_year=0;
+
+	std::vector<argument_t>	arguments;
+	std::vector<option_t>	options;
+	bool					b_help_exists = false;
 };
+
+inline bool parser_t::option_exists() const
+{
+	for( auto& o : options ) if(o.instance>0) return true;
+	return false;
+}
 
 inline bool parser_t::exists( const std::string& name ) const
 {
