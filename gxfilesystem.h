@@ -225,7 +225,7 @@ struct path
 	path drive() const { path p; _wsplitpath_s(data,p.data,_MAX_DRIVE,0,0,0,0,0,0); if(*p.data) *p.data=wchar_t(::toupper(*p.data)); return p; }
 	path dir() const { path p; wchar_t* d=__wcsbuf(); _wsplitpath_s(data,p.data,_MAX_DRIVE,d,_MAX_DIR,0,0,0,0); size_t pl=wcslen(p.data), dl=wcslen(d); if(0==(pl+dl)) return L".\\"; if(dl){ memcpy(p.data+pl,d,dl*sizeof(wchar_t)); p.data[pl+dl]=0; } return p; }
 	path name( bool with_ext=true ) const { path p; wchar_t* ext=with_ext?__wcsbuf():nullptr; _wsplitpath_s(data,0,0,0,0,p.data,_MAX_FNAME,ext,ext?_MAX_EXT:0); if(!ext) return p; size_t pl=wcslen(p.data), el=wcslen(ext); if(el){ memcpy(p.data+pl,ext,el*sizeof(wchar_t)); p.data[pl+el]=0; } return p; }
-	path dir_name() const { if(!wcschr(data,L'\\')) return L""; return dir().remove_backslash().name(); }
+	path dir_name() const { if(wcschr(data,L'\\')) return dir().remove_backslash().name(); else if(wcschr(data,L'/')) return dir().remove_slash().name(); else return L""; }
 	path ext() const { wchar_t e[_MAX_EXT+1]; _wsplitpath_s(data,0,0,0,0,0,0,e,_MAX_EXT); path p; if(*e!=0) wcscpy(p.data,e+1); return p; }
 	path parent() const { return dir().remove_backslash().dir(); }
 	path junction() const { path t; if(empty()) return t; auto& a=attributes(); if(a==INVALID_FILE_ATTRIBUTES||(a&FILE_ATTRIBUTE_DIRECTORY)==0||(a&FILE_ATTRIBUTE_REPARSE_POINT)==0) return t; HANDLE h=CreateFileW(data,GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,0); if(h==INVALID_HANDLE_VALUE) return t; GetFinalPathNameByHandleW(h,t.data,t.capacity,FILE_NAME_NORMALIZED); CloseHandle(h); if(wcsncmp(t.data,L"\\\\?\\",4)==0) t=path(t.data+4).add_backslash(); return t; }
