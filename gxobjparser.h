@@ -49,11 +49,11 @@ __forceinline path decompress( const path& file_path );
 } // namespace obj
 //*************************************
 
-inline void clear_absent_textures( std::vector<material_impl>& materials, path mesh_dir )
+inline void clear_absent_textures( std::vector<material_impl>& materials, path dir )
 {
 	for( auto& m : materials )
-		for( auto& it : m.path )
-			if(!it.second.empty()&&!(mesh_dir+it.second).exists()) it.second.clear();
+		for( auto& [key,f] : m.path )
+			if(!f.empty()&&!(dir+f).exists()) f.clear();
 }
 
 inline void convert_unsupported_texture_to_jpeg( std::vector<material_impl>& materials, path mesh_dir )
@@ -176,36 +176,36 @@ inline void generate_normal_maps( std::vector<material_impl>& materials, path di
 	}
 }
 
-inline uint find_mesh_material( mesh* pMesh, const char* name )
+inline uint find_mesh_material( mesh* p_mesh, const char* name )
 {
-	for(uint k=0;k<pMesh->materials.size();k++)
-		if(_stricmp(name,pMesh->materials[k].name)==0) return k;
+	for(uint k=0,kn=uint(p_mesh->materials.size());k<kn;k++)
+		if(_stricmp(name,p_mesh->materials[k].name)==0) return k;
 	return -1;
 }
 
-inline void create_default_material( std::vector<material_impl>& mats )
+inline void create_default_material( std::vector<material_impl>& materials )
 {
-	mats.emplace_back(material_impl( uint(mats.size()) ));
-	auto* m = &mats.back();
-	m->color = vec4( 0.7f, 0.7f, 0.7f, 1.0f );
-	strcpy(m->name,"default");
+	materials.emplace_back(material_impl(uint(materials.size())));
+	auto& m = materials.back();
+	m.color = vec4(0.7f,0.7f,0.7f,1.0f);
+	strcpy(m.name,"default");
 }
 
-inline bool load_mtl( path file_path, std::vector<material_impl>& mats )
+inline bool load_mtl( path file_path, std::vector<material_impl>& materials )
 {
 	if(!file_path.exists()){ printf("%s(): %s not exists\n", __func__, file_path.wtoa() ); return false; }
-	FILE* fp = _wfopen( file_path, L"r" ); if(!fp){ printf("%s(): unable to open %s\n", __func__, file_path.wtoa()); return false; }
-	path mesh_dir=file_path.dir();
+	FILE* fp = _wfopen(file_path,L"r"); if(!fp){ printf("%s(): unable to open %s\n", __func__, file_path.wtoa()); return false; }
+	path mesh_dir = file_path.dir();
 
 	// additional temporary attributes
 	std::map<uint,float> bump_scale_map;
 
-	// default material for light source; mat_index==0 or emissive>0 indicates a light source
-	mats.clear();
-	mats.emplace_back(material_impl(0));
-	material_impl* m = &mats.back();
+	// default material for light source (mat_index==0 or emissive>0)
+	materials.clear();
+	materials.emplace_back(material_impl(0));
+	material_impl* m = &materials.back();
 	strcpy(m->name,"light");
-	m->color = vec4(1,1,1,1);
+	m->color = vec4(1.0f,1.0f,1.0f,1.0f);
 	m->metal = 0.0f;
 	m->emissive = 1.0f;
 
@@ -216,49 +216,60 @@ inline bool load_mtl( path file_path, std::vector<material_impl>& mats )
 		char c0=buff[0]; if(!c0||c0=='#'||strncmp(buff,"Wavefront",9)==0) continue;
 		char c1=buff[1]; if(!c1) continue;
 
-		std::vector<std::string> vs=explode(_strlwr(buff)); if(vs.size()<2) continue;
-		std::string& key	= vs[0];
-		std::string& token	= vs[1];
+		std::vector<std::string> vs = explode(_strlwr(buff)); if(vs.size()<2) continue;
+		std::string& key		= vs[0];
+		const char* token		= vs[1].c_str();
+		std::wstring vs1w		= atow(token);
+		const wchar_t* wtoken	= vs1w.c_str();
+		float f					= float(fast::atof(token));
 
 		if(key=="newmtl")
 		{
-			mats.emplace_back(material_impl(uint(mats.size())+1)); m=&mats.back();
-			strcpy(m->name,token.c_str());
+			materials.emplace_back(material_impl(uint(materials.size())+1));
+			m = &materials.back();
+			strcpy( m->name, token );
 		}
 		else if(key=="ka");		// ambient materials
 		else if(key=="kd")
 		{
 			if(vs.size()<4){ wprintf(L"Kd size < 3\n"); return false; }
-			m->color[0] = float(fast::atof(vs[1].c_str()));
+			m->color[0] = f;
 			m->color[1] = float(fast::atof(vs[2].c_str()));
 			m->color[2] = float(fast::atof(vs[3].c_str()));
 			m->color[3] = 1.0f;
 		}
-		else if(key=="ks") m->specular = float(fast::atof(vs[1].c_str()));
+		else if(key=="ks")
+		{
+			m->specular = f;
+		}
 		else if(key=="ns") // specular power
 		{
-			m->beta = float(fast::atof(token.c_str()));
-			m->rough = beta_to_roughness(m->beta); 
+			m->beta = f;
+			if(m->rough>0) m->rough = beta_to_roughness(m->beta); // only for non-reflection
 		}
-		else if(key=="ni")	m->n = (float)fast::atof(token.c_str()); // refractive index
-		else if(key=="d")	m->color.a = float(fast::atof(token.c_str()));
-		else if(key=="tr")	m->color.a = 1.0f-float(fast::atof(token.c_str())); // transparency
-		else if(key=="map_ka"){ m->path["ambient"] = atow(token.c_str()); }	// ambient occlusion
-		else if(key=="map_kd"){ m->path["albedo"] = atow(token.c_str()); }
-		else if(key=="map_d"||key=="map_opacity"){ m->path["alpha"] = atow(token.c_str()); }
+		else if(key=="ni")	m->n = f; // refractive index
+		else if(key=="d")	m->color.a = f;
+		else if(key=="tr")	m->color.a = 1.0f-f; // transparency
+		else if(key=="map_ka"){ m->path["ambient"] = wtoken; }	// ambient occlusion
+		else if(key=="map_kd"){ m->path["albedo"] = wtoken; }
+		else if(key=="map_d"||key=="map_opacity"){ m->path["alpha"] = wtoken; }
 		else if(key=="map_bump"||key=="bump")
 		{
 			for( uint j=1, jn=uint(vs.size()); j<jn; j++ )
 			{
-				if(vs[j][0]!='-') m->path["normal"] = atow(token.c_str()); // when it's not an option
+				if(vs[j][0]!='-') m->path["normal"] = wtoken; // when it's not an option
 				else if(_stricmp("-bm", vs[j].c_str())==0&&vs.size()>=(j+2))
-				{ bump_scale_map[m->ID] = float(fast::atof(vs[j+1].c_str())); j++; }
+					bump_scale_map[m->ID] = float(fast::atof(vs[(j++)+1].c_str()));
 			}
+		}
+		else if(key=="refl")	// reflection map
+		{
+			// ignore the reflection map and use the global env map
+			if( !vs[1].empty()) m->rough = 0.0f;
 		}
 		else if(key=="illum");	// illumination model
 		else if(key=="map_ks");	// specular map
 		else if(key=="map_ns"); // specular power map
-		else if(key=="refl");	// reflection map
 		else if(key=="disp");	// displacement map
 		else if(key=="tf");		// Transmission filter
 		else if(key=="fr");		// Fresnel reflectance
@@ -268,21 +279,21 @@ inline bool load_mtl( path file_path, std::vector<material_impl>& mats )
 		else if(key=="It");		// intensity from transmitted direction
 		// PBR extensions: http://exocortex.com/blog/extending_wavefront_mtl_to_support_pbr
 		else if(key=="ke"){ m->emissive = 1.0f; }
-		else if(key=="Pr"){ m->rough = float(fast::atof(token.c_str())); }
-		else if(key=="map_ke"){ m->path["emissive"] = atow(token.c_str()); }
-		else if(key=="map_pr"){ m->path["rough"] = atow(token.c_str()); }
-		else if(key=="map_pm"){ m->path["metal"] = atow(token.c_str()); }
-		else if(key=="map_ps"){ m->path["sheen"] = atow(token.c_str()); }
-		else if(key=="norm"){ m->path["normal"] = atow(token.c_str()); }
-		else if(key=="pc"){ m->path["clearcoat"] = atow(token.c_str()); }
-		else if(key=="pcr"){ m->path["clearcoatroughness"] = atow(token.c_str()); }
-		else if(key=="aniso"){ m->path["anisotropy"] = atow(token.c_str()); }
-		else if(key=="anisor"){ m->path["anisotropyrotation"] = atow(token.c_str()); }
+		else if(key=="Pr"){ if(m->rough>0) m->rough = f; } // only for non-reflection
+		else if(key=="map_ke"){ m->path["emissive"] = wtoken; }
+		else if(key=="map_pr"){ m->path["rough"] = wtoken; }
+		else if(key=="map_pm"){ m->path["metal"] = wtoken; }
+		else if(key=="map_ps"){ m->path["sheen"] = wtoken; }
+		else if(key=="norm"){ m->path["normal"] = wtoken; }
+		else if(key=="pc"){ m->path["clearcoat"] = wtoken; }
+		else if(key=="pcr"){ m->path["clearcoatroughness"] = wtoken; }
+		else if(key=="aniso"){ m->path["anisotropy"] = wtoken; }
+		else if(key=="anisor"){ m->path["anisotropyrotation"] = wtoken; }
 		// DirectXMesh toolkit extension
-		else if(key=="map_RMA"){ m->path["rma"] = atow(token.c_str()); } // (roughness, metalness, ambient occlusion)
-		else if(key=="map_ORM"){ m->path["orm"] = atow(token.c_str()); } // (ambient occlusion, roughness, metalness)
+		else if(key=="map_RMA"){ m->path["rma"] = wtoken; } // (roughness, metalness, ambient occlusion)
+		else if(key=="map_ORM"){ m->path["orm"] = wtoken; } // (ambient occlusion, roughness, metalness)
 		// unrecognized
-		else if(k>0){ printf("%s(): '%s %s' is unrecognized mtl command\n",__func__,key.c_str(),token.c_str()); return false; }
+		else if(k>0){ printf("%s(): unrecognized command - %s %s\n",__func__,key.c_str(),token); return false; }
 	}
 	fclose(fp);
 
@@ -291,19 +302,21 @@ inline bool load_mtl( path file_path, std::vector<material_impl>& mats )
 	//********************************* 
 
 	path mtl_dir = file_path.dir();
-	for( auto& m : mats )
+	for( auto& m : materials )
 	{
 		// convert from specular to metallic
 		m.metal = clamp(m.color.r/m.specular,0.0f,1.0f);
 
 		// absolute paths to relative paths
-		for( auto& it : m.path ) if(!it.second.empty()&&it.second.is_absolute()) it.second=it.second.relative(false,mtl_dir);
+		for( auto& it : m.path )
+			if(!it.second.empty()&&it.second.is_absolute())
+				it.second=it.second.relative(false,mtl_dir);
 	}
 
 	// postprocessing
-	clear_absent_textures( mats, mesh_dir );
-	convert_unsupported_texture_to_jpeg( mats, mesh_dir );
-	generate_normal_maps( mats, mesh_dir, bump_scale_map );
+	clear_absent_textures( materials, mesh_dir );
+	convert_unsupported_texture_to_jpeg( materials, mesh_dir );
+	generate_normal_maps( materials, mesh_dir, bump_scale_map );
 
 	return true;
 }
