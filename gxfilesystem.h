@@ -1,5 +1,5 @@
 //*******************************************************************
-// Copyright 2011-2020 Sungkil Lee
+// Copyright 2011-2022 Sungkil Lee
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -550,10 +550,12 @@ __noinline path path::serial( path dir, const wchar_t* prefix, const wchar_t* po
 	return p;
 }
 
-namespace os { path temp(); } // forward declarations (defined in gxos.h)
+// forward declarations (defined in gxos.h)
+namespace os { path temp(); path local_appdata(); } 
+
 __noinline path path::temp( bool local, path local_dir )
 {
-	static path r=os::temp()+L"."+module_path().name(false).key()+L"\\";
+	static path r=os::local_appdata()+module_path().name(false).key()+L"\\";
 	path t=r; if(local){ if(local_dir.empty()) local_dir=module_dir(); t+=path(L"local\\")+local_dir.key().add_backslash(); }
 	if(!t.exists()) t.mkdir();
 	return t;

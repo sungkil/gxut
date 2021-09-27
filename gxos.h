@@ -1,5 +1,5 @@
 //*******************************************************************
-// Copyright 2011-2020 Sungkil Lee
+// Copyright 2011-2022 Sungkil Lee
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,11 @@
 #if defined(__has_include) && __has_include(<psapi.h>)
 	#include <psapi.h>	// EnumProcesses
 #endif
+
+#if defined(__has_include) && __has_include(<tlhelp32.h>)
+	#include <tlhelp32.h> // process info helper
+#endif
+
 #ifndef __GNUC__		// MinGW has a problem with threads
 	#include <thread>	// usleep
 	#include <chrono>	// microtimer
@@ -228,7 +233,7 @@ inline HWND find_window( const wchar_t* filter )
 
 inline DWORD current_process(){ static DWORD curr_pid = GetCurrentProcessId(); return curr_pid; }
 
-inline const std::vector<DWORD>& enum_process()
+inline const std::vector<DWORD>& enum_process_indices()
 {
 	static std::vector<DWORD> pids(4096);
 	DWORD cb_needed, npids;
@@ -243,24 +248,55 @@ inline const std::vector<DWORD>& enum_process()
 	return pids;
 }
 
-inline std::vector<DWORD> find_process( const wchar_t* process_name )
+inline std::vector<DWORD> find_process( const wchar_t* name_or_path )
 {
 	std::vector<DWORD> v;
 	static wchar_t buff[4096];
 	static DWORD curr_pid = GetCurrentProcessId();
-	for( auto pid : enum_process() )
+	for( auto pid : enum_process_indices() )
 	{
 		HMODULE hMod; DWORD cbNeeded;
 		HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ,FALSE,pid); if(!hProcess) continue;
 		if(!EnumProcessModules(hProcess,&hMod,sizeof(hMod),&cbNeeded)) continue;
 		GetModuleBaseNameW(hProcess,hMod,buff,sizeof(buff)/sizeof(wchar_t) );
+		if(_wcsicmp(buff,name_or_path)==0&&pid!=curr_pid) v.push_back(pid);
+		GetModuleFileNameExW(hProcess,hMod,buff,sizeof(buff)/sizeof(wchar_t) );
+		if(_wcsicmp(buff,name_or_path)==0&&pid!=curr_pid) v.push_back(pid);
 		CloseHandle(hProcess);
-		if(_wcsicmp(buff,process_name)==0&&pid!=curr_pid) v.push_back(pid);
 	}
 	return v;
 }
 
-namespace console 
+inline bool process_exists( uint pid )
+{
+#ifdef _INC_TOOLHELP32
+	PROCESSENTRY32W entry; entry.dwSize =sizeof(decltype(entry));
+	HANDLE hSnapShot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0); if(hSnapShot==INVALID_HANDLE_VALUE) return false;
+	BOOL hRes=Process32First( hSnapShot,&entry ); for(; hRes; hRes=Process32NextW(hSnapShot,&entry) ) if(entry.th32ProcessID==pid) break;
+	CloseHandle(hSnapShot);
+	return hRes==TRUE;
+#else
+	for( auto p : enum_process_indices() )
+		if(p==pid) return true;
+	return false;
+#endif
+}
+
+inline bool process_exists( path file_path )
+{
+#ifdef _INC_TOOLHELP32
+	MODULEENTRY32W entry; entry.dwSize =sizeof(decltype(entry));
+	HANDLE hSnapShot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0); if(hSnapShot==INVALID_HANDLE_VALUE) return false;
+	BOOL hRes=Module32FirstW( hSnapShot,&entry ); for(; hRes; hRes=Module32NextW(hSnapShot,&entry) ) if(file_path==path(entry.szExePath)) break;
+	CloseHandle(hSnapShot);
+	return hRes==TRUE;
+#else
+	auto v = std::move(find_process( file_path ));
+	return !v.empty();
+#endif
+}
+
+namespace console
 {
 inline const wchar_t* title(){ static wchar_t buff[MAX_PATH+1]; GetConsoleTitleW(buff,MAX_PATH); return buff; }
 inline DWORD process(){ DWORD console; GetWindowThreadProcessId(GetConsoleWindow(),& console); return console; }
