@@ -526,28 +526,29 @@ struct mesh
 	} buffer = {};
 
 	// acceleration and dynamics
-	bbox		box;
+	bbox	box;
 	union { acc_t* acc=nullptr; bvh_t* bvh; kdtree_t* kdtree; }; // BVH or KD-tree
 
 	// instancing
-	uint		instance_count=1;	// instances are physically added into objects
+	uint	instance_count=1;	// instances are physically added into objects
 
 	// proxy mesh
-	mesh*		proxy=nullptr;		// created and released in GLMesh 
+	mesh*	proxy=nullptr;		// created and released in GLMesh 
 
 	// auxiliary information
-	wchar_t		file_path[_MAX_PATH]={};	// mesh file path
-	wchar_t		mtl_path[_MAX_PATH]={};	// material file path (e.g., *.mtl)
+	wchar_t	file_path[_MAX_PATH]={};	// mesh file path (e.g., *.obj, *.obj.7z)
+	wchar_t	mtl_path[_MAX_PATH]={};		// material file path (e.g., *.mtl)
+
+	// crc hash to trigger on_dirty_mesh() callbacks
+	uint	crc = 0;
 
 	// constructor
-	mesh(){ vertices.reserve(1<<20); indices.reserve(1<<20); objects.reserve(1<<16); geometries.reserve(1<<16); materials.reserve(1<<16); }
-	mesh(mesh&& other){ operator=(std::move(other)); } // move constructor
-	mesh& operator=(mesh&& other); // move assignment operator
+	mesh(){ vertices.reserve(1<<20); indices.reserve(1<<20); objects.reserve(1<<16); geometries.reserve(1<<16); }
 	virtual ~mesh(){ release(); }
 
 	// release/memory
 	void release(){ vertices.clear(); indices.clear(); geometries.clear(); objects.clear(); materials.clear(); shrink_to_fit(); }
-	mesh* shrink_to_fit(){ vertices.shrink_to_fit(); indices.shrink_to_fit(); geometries.shrink_to_fit(); objects.shrink_to_fit(); materials.shrink_to_fit(); return this; }
+	mesh* shrink_to_fit(){ vertices.shrink_to_fit(); indices.shrink_to_fit(); geometries.shrink_to_fit(); objects.shrink_to_fit(); if(materials.capacity()>materials.size()){ auto t=materials; materials.swap(t); } return this; }
 
 	// face/object/geometry/proxy/material helpers
 	uint face_count() const { uint f=0; for(const auto& g:geometries) f+=g.count; return f/3; }
@@ -631,22 +632,6 @@ inline geometry& object::operator[]( size_t i ){ return root->geometries[i]; }
 
 //*************************************
 // late implementations for mesh
-
-__noinline mesh& mesh::operator=( mesh&& other ) // move assignment operator
-{
-	size_t offset = 0;
-	vertices = std::move(other.vertices);		offset += sizeof(decltype(vertices));
-	indices = std::move(other.indices);			offset += sizeof(decltype(indices));
-	objects = std::move(other.objects);			offset += sizeof(decltype(objects));
-	geometries = std::move(other.geometries);	offset += sizeof(decltype(geometries));
-	materials = std::move(other.materials);		offset += sizeof(decltype(materials));
-	memcpy(((char*)this)+offset, ((char*)&other)+offset, sizeof(mesh)-offset);
-	if(acc) acc->p_mesh = this;
-	for(auto& o:objects) o.root=this;
-	for(auto& g:geometries) g.root=this;
-
-	return *this;
-}
 
 __noinline void mesh::update_bound( bool b_recalc_tris )
 {
