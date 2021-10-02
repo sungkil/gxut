@@ -32,6 +32,9 @@ static const char* __GX_MESH_H_TIMESTAMP__ = _strdup(__TIMESTAMP__);
 
 //*************************************
 // OpenGL forward declarations
+#ifndef GL_TRIANGLES
+	#define GL_TRIANGLES 0x0004
+#endif
 namespace gl
 {
 	struct Buffer;
@@ -568,7 +571,6 @@ struct mesh
 	bool intersect( ray r, isect& h, bool use_acc=true ) const;
 
 	// opengl draw functions (implemented in gxopengl.h)
-	static const int GL_TRIANGLES=0x0004;
 	typedef void GLvoid;
 	typedef unsigned int GLenum;
 	typedef int GLint;
