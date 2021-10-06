@@ -1,5 +1,8 @@
-#include <gxut/gxobjparser.h>
+#include <gxut/gxos.h>
+#include <gxut/gxstring.h>
+#include <gxut/gxmath.h>
 #include <gxut/ext/gxzip.h>
+#include <gxut/gxobjparser.h>
 #include <gximage/gximage.h>
 #include <future> // std::async
 #if defined(__has_include) && __has_include(<fgets_sse2/fgets_sse2_slee.h>)
@@ -8,23 +11,25 @@
 
 static const bool USE_MODEL_CACHE = true;
 
-#if (defined(_unzip_H)||defined(__GXZIP_H__)) && defined(__7Z_H) && defined(__7Z_MEMINSTREAM_H)
-	static nocase::set<std::wstring> archive_ext_map = { L"zip", L"7z" };
-#elif (defined(_unzip_H)||defined(__GXZIP_H__))
-	static nocase::set<std::wstring> archive_ext_map = { L"zip" };
-#elif defined(__7Z_H) && defined(__7Z_MEMINSTREAM_H)
-	static nocase::set<std::wstring> archive_ext_map = { L"7z" };
-#else
-	static nocase::set<std::wstring> archive_ext_map;
-#endif
-
 //*************************************
 // support data and routines for fast string conversion
 namespace obj {
 //*************************************
 
+static const std::set<std::wstring>& get_archive_extensions()
+{
+	static std::set<std::wstring> m; if(!m.empty()) return m;
+#if defined(__7Z_H) && defined(__7Z_MEMINSTREAM_H)
+	m.insert(L"7z");
+#endif
+#if defined(_unzip_H)||defined(__GXZIP_H__)
+	m.insert(L"zip");
+#endif
+	return m;
+}
+
 // vertex hash key using position ID; significantly faster than bitwise hash
-struct vertex_hash {size_t operator()(const ivec3& v)const{return v.x;}};
+struct vertex_hash {size_t operator()(const ivec3& v)const{ return reinterpret_cast<const size_t&>(v.x); }};
 using vtx_map_t		= std::unordered_map<ivec3,uint,vertex_hash>;
 using pos_vector_t	= std::vector<vec3>;
 using nrm_vector_t	= std::vector<vec3>;
@@ -47,7 +52,7 @@ __forceinline path decompress( const path& file_path );
 __forceinline bool is_extension_supported( path file_path )
 {
 	if(_wcsicmp(file_path.ext(),L"obj")==0) return true;
-	if(archive_ext_map.find(file_path.ext().c_str())!=archive_ext_map.end()) return true;
+	auto am = get_archive_extensions(); if(am.find(file_path.ext().c_str())!=am.end()) return true;
 	return false;
 }
 
@@ -101,20 +106,24 @@ inline path generate_normal_map( path bump_path, path normal_path, float bump_sc
 	FILETIME bump_mtime = bump_path.mfiletime();
 	if(normal_path.exists()&&normal_path.mfiletime()>=bump_mtime) return normal_path;
 
-	//wprintf( L"generating a normal map for %s... ", bump_path.name() );timer->begin();
+	os::timer_t t;
+
 	image* bump0 = gx::load_image(bump_path,true,false,false);	// do not force rgb to bump
 	if(bump0==nullptr){ printf("failed to load the bump map %s\n", wtoa(bump_path) ); return L""; }
 
 	// test whether the bump map is actually a normal map
-	if(bump0->channels==3)
+	if(bump0->channels==3&&bump0->width>16&&bump0->height>16)
 	{
-		uchar* ptr = bump0->ptr<uchar>();
-		if((ptr[0]!=ptr[1]||ptr[0]!=ptr[2])&&(ptr[2]-127)>64)
+		bool gray = true;
+		for( auto s : {ivec2(15,15),ivec2(2,15),ivec2(15,2)} )
 		{
-			gx::release_image(&bump0);
-			return bump_path;
+			uchar3 c = *bump0->ptr<uchar3>(s.x,s.y);
+			if(c.b>c.r&&c.b>c.g){ gray=false; break; }
 		}
+		if(!gray){ gx::release_image(&bump0); return bump_path; }
 	}
+
+	wprintf( L"Generating %s ... ", normal_path.name().c_str() );
 
 	// convert uchar bumpmap to 1-channel float image
 	image* bump = gx::create_image( bump0->width, bump0->height, 32, 1 );
@@ -159,21 +168,28 @@ inline path generate_normal_map( path bump_path, path normal_path, float bump_sc
 	// first write to the temporary image
 	gx::save_image( normal_path, normal );
 	if(normal_path.exists()) normal_path.set_filetime(nullptr,nullptr,&bump_mtime);
-	wprintf( L" (and generating normal %s)", normal_path.name(true).c_str() );
 
 	gx::release_image(&bump0);
 	gx::release_image(&bump);
 	gx::release_image(&normal);
 
+	wprintf( L"completed in %.f ms\n", t.end() );
+
 	return normal_path;
 }
 
-inline path find_normal_path( path bump_path )
+inline path get_normal_path( const material_impl& m, const path& bump_path )
 {
-	path base = bump_path.remove_ext();
-	path ext = path(L".")+bump_path.ext();
-	path dst = base; if(dst.back()==L'b') dst.back()=0;
-	return dst+L"n"+ext;
+	path name0=bump_path.name(false); if(name0.back()==L'b') name0.back()=0;
+	path name = name0+L"n";
+	for( int k=0; k<4; k++, name+=L"n" )
+	{
+		path dst = name+path(L".")+bump_path.ext();
+		bool name_exists = false;
+		for( auto& [n,f] : m.path )if(f.name()==name){ name_exists=true; break;}
+		if(!name_exists) return bump_path.dir()+dst;
+	}
+	return L"";
 }
 
 inline void generate_normal_maps( std::vector<material_impl>& materials, path dir, std::map<uint,float>& bump_scale_map )
@@ -181,31 +197,26 @@ inline void generate_normal_maps( std::vector<material_impl>& materials, path di
 	std::map<path,path> btom; // bump_to_normal;
 	for( auto& m : materials )
 	{
-		auto it=m.path.find("bump"); if(it==m.path.end()) continue;
-		
-		// get normal path
-		path bump_path = dir + it->second;
-		path normal_path = find_normal_path( bump_path );
-
-		if(normal_path.exists()){ m.path["normal"]=normal_path.name(); continue; }
-		else if(!bump_path.exists()) continue;
+		auto it=m.path.find("bump"); if(it==m.path.end()||it->second.empty()) continue;
+		path bump_path = dir + it->second; if(!bump_path.exists()) continue;
 
 		auto n = btom.find(bump_path.c_str());
 		if(n!=btom.end()&&n->second.exists()) m.path["normal"]=n->second;
 		else if(n==btom.end())
 		{
-			auto s = bump_scale_map.find(m.ID); float bump_scale = s==bump_scale_map.end()?1.0f:s->second;
-			normal_path = generate_normal_map( bump_path, normal_path, bump_scale );
-			if(normal_path.exists()) btom.emplace(bump_path,normal_path);
+			float bump_scale=1.0f; if(auto s=bump_scale_map.find(m.ID);s!=bump_scale_map.end()) bump_scale=s->second;
+			path normal_path = get_normal_path( m, bump_path ); if(normal_path.empty()){ printf("%s(): unable to find normal_path for %s\n",__func__,bump_path.to_slash().wtoa()); continue; }
+			if(!normal_path.exists()) normal_path = generate_normal_map( bump_path, normal_path, bump_scale ); if(!normal_path.exists()) continue;
+			btom[ bump_path ] = normal_path;
 			m.path["normal"] = normal_path.name();
 		}
 	}
 }
 
-inline uint find_mesh_material( mesh* p_mesh, const char* name )
+inline uint find_material( std::vector<material_impl>& materials, const char* name )
 {
-	for(uint k=0,kn=uint(p_mesh->materials.size());k<kn;k++)
-		if(_stricmp(name,p_mesh->materials[k].name)==0) return k;
+	for(uint k=0,kn=uint(materials.size());k<kn;k++)
+		if(_stricmp(name,materials[k].name)==0) return k;
 	return -1;
 }
 
@@ -281,17 +292,15 @@ inline bool load_mtl( path file_path, std::vector<material_impl>& materials )
 		else if(key=="map_d"||key=="map_opacity"){ m->path["alpha"] = wtoken; }
 		else if(key=="map_bump"||key=="bump")
 		{
-			for( uint j=1, jn=uint(vs.size()); j<jn; j++ )
-			{
-				if(vs[j][0]!='-') m->path["bump"] = wtoken; // when it's not an option
-				else if(_stricmp("-bm", vs[j].c_str())==0&&vs.size()>=(j+2))
-					bump_scale_map[m->ID] = float(fast::atof(vs[(j++)+1].c_str()));
-			}
+			if(_stricmp("-bm", vs[1].c_str())!=0){ m->path["bump"] = wtoken; continue; }
+			if(vs.size()<4){ printf("obj::%s(): %s - not enough arguments for bump\n",__func__,m->name); return false; }
+			bump_scale_map[m->ID] = float(fast::atof(vs[2].c_str()));
+			m->path["bump"] = atow(vs[3].c_str());
 		}
 		else if(key=="refl")	// reflection map
 		{
-			// ignore the reflection map and use the global env map
-			if( !vs[1].empty()) m->rough = 0.0f;
+			if(_wcsistr(wtoken,L"metal")) m->path["metal"] = wtoken; // some mtl uses refl for map_pm for legacy compatibility
+			else if( !vs[1].empty()) m->rough = 0.0f; 	// ignore the reflection map and use the global env map
 		}
 		else if(key=="illum");	// illumination model
 		else if(key=="map_ks");	// specular map
@@ -319,7 +328,7 @@ inline bool load_mtl( path file_path, std::vector<material_impl>& materials )
 		else if(key=="map_RMA"){ m->path["rma"] = wtoken; } // (roughness, metalness, ambient occlusion)
 		else if(key=="map_ORM"){ m->path["orm"] = wtoken; } // (ambient occlusion, roughness, metalness)
 		// unrecognized
-		else if(k>0){ printf("%s(): unrecognized command - %s %s\n",__func__,key.c_str(),token); return false; }
+		else if(k>0){ printf("obj::%s(): unrecognized command - %s %s\n",__func__,key.c_str(),token); return false; }
 	}
 	fclose(fp);
 
@@ -477,30 +486,6 @@ namespace obj::cache
 	}
 }
 
-//*************************************
-__forceinline uint get_or_create_vertex( char* str )
-{
-	// parse the key for extracting indices
-	ivec3 idx;
-	idx.x=fast::atoi(str); while(*str!='/'&&*str) str++;str++;
-	idx.y=fast::atoi(str); while(*str!='/'&&*str) str++;str++;
-	idx.z=fast::atoi(str);
-
-	if(idx.x<0) idx.x += int(obj::pos.size());
-	if(idx.y<0) idx.y += int(obj::tex.size());
-	if(idx.z<0) idx.z += int(obj::nrm.size());
-
-	// check whether the vertex exists
-	auto it=obj::vtx->find(idx); if(it!=obj::vtx->end()) return it->second;
-
-	// add to index cache and vertex list
-	uint vtx_size = uint(obj::vtx->size());
-	obj::vtx->emplace( idx, vtx_size );
-	obj::vertices->emplace_back( vertex{obj::pos[idx.x],obj::nrm[idx.z],obj::tex[idx.y]} );
-
-	return vtx_size;
-}
-
 path obj::decompress( const path& file_path )
 {
 	path dst_path;
@@ -530,6 +515,28 @@ path obj::decompress( const path& file_path )
 }
 
 //*************************************
+__forceinline uint get_or_create_vertex( char* str )
+{
+	ivec3 key;
+	key.x=fast::atoi(str); while(*str!='/'&&*str) str++;str++;
+	key.y=fast::atoi(str); while(*str!='/'&&*str) str++;str++;
+	key.z=fast::atoi(str);
+
+	if(key.x<0) key.x += int(obj::pos.size());
+	if(key.y<0) key.y += int(obj::tex.size());
+	if(key.z<0) key.z += int(obj::nrm.size());
+
+	auto it=obj::vtx->find(key); if(it!=obj::vtx->end()) return it->second;
+	uint vertex_index = uint(obj::vtx->size());
+	obj::vtx->emplace( key, vertex_index );
+
+	// fill vertex attributes
+	obj::vertices->emplace_back( obj::pos[key.x], obj::nrm[key.z], obj::tex[key.y] );
+
+	return vertex_index;
+}
+
+//*************************************
 namespace obj {
 //*************************************
 mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const char*) )
@@ -540,7 +547,9 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	if(!is_extension_supported(file_path)){ printf("obj::%s(): unsupported format: %s\n",__func__, file_path.ext().wtoa()); return nullptr; }
 	if(!file_path.exists()){ printf("obj::%s(): %s not exists",__func__,file_path.wtoa()); return nullptr; }
 
-	//*****************************************************
+	if(flush_messages) flush_messages( "" );
+
+	//*********************************
 	// 1. if there is a cache, load from cache
 	if(USE_MODEL_CACHE&&(p_mesh=obj::cache::load_mesh(file_path)))
 	{
@@ -548,12 +557,14 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 		return p_mesh;
 	}
 
-	//*****************************************************
+	//*********************************
 	// 1.1 decompress zip file and remove it later after saving the cache
 	path dec_path;
-	bool b_use_archive = archive_ext_map.find(file_path.ext().c_str())!=archive_ext_map.end();
+	auto archive_extensions = get_archive_extensions();
+	bool b_use_archive = archive_extensions.find(file_path.ext().c_str())!=archive_extensions.end();
 	if(b_use_archive)
 	{
+		if(flush_messages) flush_messages( format( "Decompressing %s ...", file_path.name().wtoa() ) );
 		wprintf( L"Decompressing %s ...", file_path.name().c_str() );
 		auto dt = std::async(obj::decompress,file_path);
 		while(std::future_status::ready!=dt.wait_for(std::chrono::milliseconds(10))) if(flush_messages) flush_messages(nullptr);
@@ -562,27 +573,29 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 		else{ wprintf( L" failed in %.0f ms\n", t.end() ); return nullptr; }
 	}
 
-	wprintf( L"Loading %s ", file_path.name().c_str() );
 	t.begin();
+	bool b_log_begin = true;
+	auto log_begin = [&](){ if(!b_log_begin) return; b_log_begin=false; wprintf( L"Loading %s ", file_path.name().c_str() ); };
 
-	//*****************************************************
+	//*********************************
 	// 2. open file
 	path target_file_path = dec_path.exists()?dec_path:file_path;
 	size_t target_count = max(1ull<<16,size_t(target_file_path.file_size()*0.095)); // estimate vertex/face count
-	size_t flush_count = target_count/15;
+	size_t flush_count = target_count/1000, dot_count = target_count/15;
+
 	FILE* fp = _wfopen( target_file_path, L"rb" ); if(fp==nullptr){ wprintf(L"Unable to open %s", file_path.c_str()); return nullptr; }
 	setvbuf( fp, nullptr, _IOFBF, 1<<26 ); // set the buffer size of iobuf to 64M
 
 	p_mesh = new mesh();
 	wcscpy(p_mesh->file_path,file_path);
 
-	//*****************************************************
+	//*********************************
 	// 4. current data setup
 	object*		o=nullptr;		// current object
 	geometry*	g=nullptr;		// current geometry
 	uint		mat_index=-1;	// current material
 
-	//*****************************************************
+	//*********************************
 	// 5. temporary buffers/variables
 	auto& pos = obj::pos;						pos.reserve(target_count/2);	pos.emplace_back(vec3(0.0f,0.0f,0.0f));
 	auto& tex = obj::tex;						tex.reserve(target_count/8);	tex.emplace_back(vec2(0.0f,0.0f));
@@ -595,20 +608,20 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	p_mesh->materials.reserve(1<<8);
 	p_mesh->objects.reserve(1<<12);
 
-	//*****************************************************
-	auto create_geometry = [&]()->geometry*
+	//*********************************
+	auto get_or_create_geometry = [&]()->geometry*
 	{
 		if(!o) o=p_mesh->create_object("default_object");
-		geometry g1(p_mesh,uint(geometries.size()),o->ID,uint(indices.size()),0,nullptr,mat_index);
-		geometries.emplace_back(g1); // do not add to the object::geometries, since empty geometries will be trimmed later
+		if(g&&g->object_index==o->ID&&g->count==0) return g; // reuse empty geometry for the same object
+		geometries.emplace_back(geometry{p_mesh,uint(geometries.size()),o->ID,uint(indices.size()),0,nullptr,mat_index});
 		return &geometries.back();
 	};
 
-	//*****************************************************
+	//*********************************
 	// string buffers
 	char *buff;
 
-	//*****************************************************
+	//*********************************
 	// start parsing
 #ifdef __FGETS_SSE2_H__
 	next_t* next;
@@ -647,7 +660,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 		}
 #endif
 
-		//*****************************************************
+		//*****************************
 		// tokenize key and next buff
 		char key0=*key;
 		if(key0!='v'&&key0!='f')
@@ -658,17 +671,17 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 		obj::tab_to_space(key,len);
 		buff=obj::next_token(key+1);
 
-		//*****************************************************
+		//*****************************
 		if(key0=='v')
 		{
 			float x=float(fast::atof(buff));
 			float y=float(fast::atof(buff=obj::next_token(buff)));
 			char k1=key[1];
 
-			if(k1==0)			pos.emplace_back(x,y,float(fast::atof(obj::next_token(buff))));
-			else if(k1=='n')	nrm.emplace_back(x,y,float(fast::atof(obj::next_token(buff))));
-			else if(k1=='t')	tex.emplace_back(x,y);
-			else if(k1=='p'){} // vp: parameter space vertices
+			if(k1==0)		 pos.emplace_back(x,y,float(fast::atof(obj::next_token(buff))));
+			else if(k1=='n') nrm.emplace_back(x,y,float(fast::atof(obj::next_token(buff))));
+			else if(k1=='t') tex.emplace_back(x,y);
+			//else if(k1=='p'){} // vp: parameter space vertices
 		}
 		else if(key0=='f')
 		{
@@ -679,7 +692,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 			indices.emplace_back(i0); indices.emplace_back(i1); indices.emplace_back(i2);
 
 			// create default object/geometry if no geometry is given now
-			if(g==nullptr) g = create_geometry();
+			if(g==nullptr) g = get_or_create_geometry();
 			g->count += 3;
 			
 			buff=obj::next_token(buff);
@@ -693,14 +706,14 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 		else if(strcmp(key,"g")==0||strcmp(key,"mg")==0||strcmp(key,"o")==0)	// group, merging group, object name
 		{
 			o = p_mesh->create_object(trim(buff));
-			g = create_geometry(); // always create a new geometry; do not reuse previous emptry geometry for safety
-
+			g = get_or_create_geometry(); // always create a new geometry; do not reuse previous emptry geometry for safety
 			if(flush_messages) flush_messages( format("Loading %s (%dK faces) ...", o?o->name:"", int(indices.size()/3000) ) );
 		}
 		else if(strcmp(key,"usemtl")==0)
 		{
-			mat_index = find_mesh_material(p_mesh,trim(buff));
-			g = create_geometry();
+			mat_index = find_material(p_mesh->materials,trim(buff));
+			g = get_or_create_geometry();
+			g->material_index = mat_index;
 		}
 		else if(strcmp(key,"mtllib")==0)
 		{
@@ -710,6 +723,9 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 
 			// default material
 			if(!p_mesh->materials.empty()) mat_index = p_mesh->materials.size()>1?1:0;
+
+			// logging after loading materials
+			log_begin();
 		}
 		else if(strcmp(key,"cstype")==0);		// curve or surface type
 		else if(strcmp(key,"deg")==0);			// skip degree
@@ -737,24 +753,26 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 		else if(strcmp(key,"trace_obj")==0);	// ray tracing
 		else if(strcmp(key,"ctech")==0);		// curve approximation technique
 		else if(strcmp(key,"stech")==0);		// surface approximation technique
-		else { printf( "\n[OBJ] Unrecognized <%s> found at line %d.\n", key, k ); fclose(fp); return nullptr; }
+		else { printf( "\nobj::%s(): '%s' at line %d - unrecognized command\n", __func__, key, k ); fclose(fp); return nullptr; }
 
-		//*****************************************************
 		// flush window messages
-		if(k%(flush_count)==0){ printf("."); if(flush_messages) flush_messages(nullptr); }
+		if(k%dot_count==0) printf(".");
+		if(k%flush_count==0){ if(flush_messages) flush_messages(nullptr); }
 	}
 	fclose(fp);
 
 	// trim empty geometries and update geometry ID
 	uint gid=0; auto& mg=p_mesh->geometries;
-	for(auto it=mg.begin();it!=mg.end();){ if(it->count==0) it=mg.erase(it); else{ it->ID=gid++; it++; } }
+	for(auto it=mg.begin();it!=mg.end();)
+	{
+		if(it->count!=0){ it->ID=gid++; it++; continue; }
+		printf( "Removing empty geometry %s\n", it->name() );
+		it=mg.erase(it);
+	}
 
 	// update child geometries once again after removing empty geometries
 	for( auto& obj : p_mesh->objects )	obj.children.clear();
 	for( auto& g : p_mesh->geometries )	p_mesh->objects[g.object_index].children.push_back(g.ID);
-
-	// flush the counts
-	if(flush_messages) flush_messages( format("%s/%s objects/geometries loaded in %.0fms\n", itoasep(int(p_mesh->objects.size())), itoasep(int(p_mesh->geometries.size())), t.end()) );
 
 	// clear all temporary large-memory buffers
 	obj::pos.clear();	obj::pos.shrink_to_fit();
@@ -766,7 +784,11 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	p_mesh->shrink_to_fit();
 
 	// update bounding box
+	if(flush_messages) flush_messages( format("Updating bounds ...\n") );
 	p_mesh->update_bound(true);
+
+	// flush the counts
+	if(flush_messages) flush_messages( format("%s/%s objects/geometries loaded in %.0fms\n", itoasep(int(p_mesh->objects.size())), itoasep(int(p_mesh->geometries.size())), t.end()) );
 
 	// scale vertices by 1000 times for meter-unit scenes
 	if(p_mesh->box.radius()<100.0f)
