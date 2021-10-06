@@ -272,22 +272,22 @@ static_assert(sizeof(camera_t)%16==0, "size of struct camera_t should be aligned
 struct stereo_t
 {
 	enum model_t {NONE=0,LEFT=1,RIGHT=2,BOTH=3,ALTER=4}; // bitwise-and with left/right indicates left/right is drawn; ALTER renders left/right for even/odd frames
-	uint		model = 0;				// stereo-rendering model
-	float		ipd = 64.0f;			// inter-pupil distance for stereoscopy: 6.4 cm = men's average
-	camera_t	left, right;			// left, right cameras
+	uint		model = 0;			// stereo-rendering model
+	float		ipd = 64.0f;		// inter-pupil distance for stereoscopy: 6.4 cm = men's average
+	camera_t	left, right;		// left, right cameras
 };
 
 struct camera : public camera_t
 {
-	vec3		dir;					// dir = center - eye (view direction vector)
-	int			frame = RAND_MAX;		// frame used for this camera; used in a motion tracer
-	frustum_t	frustum;				// view frustum for culling
-	camera_t	prev;					// placeholder for the camera at the previous frame
-	stereo_t	stereo;					// stereo rendering attributes
+	vec3		dir;				// dir = center - eye (view direction vector)
+	int			frame = RAND_MAX;	// frame used for this camera; used in a motion tracer
+	frustum_t	frustum;			// view frustum for culling
+	camera_t	prev;				// placeholder for the camera at the previous frame
+	stereo_t	stereo;				// stereo rendering attributes
 
 	mat4	inverse_view_matrix() const { return mat4::look_at_inverse(eye,center,up); } // works without eye, center, up
-	float	coc_norm_scale() const { return (F/fn*0.5f)*0.5f/df/tan(fovy*0.5f); } // normalized coc scale in the screen space; E (lens_radius)=F/fn*0.5f
-	float	coc_scale( int height ) const { return coc_norm_scale()*float(height); } // screen-space coc scale; so called "K" so far
+	float	coc_norm_scale() const { float E=F/fn*0.5f; return E/df/tan(fovy*0.5f); } // normalized coc scale in the screen space; E: lens_radius
+	float	coc_scale( int height ) const { return coc_norm_scale()*float(height)*0.5f; } // screen-space coc scale; so called "K" so far
 	mat4	perspective_dx() const { mat4 m = projection_matrix; m._33 = dfar/(dnear-dfar); m._34*=0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
 	vec2	plane_size(float ecd = 1.0f) const { return vec2(2.0f/projection_matrix._11, 2.0f/projection_matrix._22)*ecd; } // plane size (width, height) at eye-coordinate distance 1
 	void	update_depth_clips( const bbox& bound ){ bbox b=view_matrix*bound; vec2 z(max(0.001f,-b.M.z),max(0.001f,-b.m.z)); dnear=max(max(bound.radius()*0.00001f, 50.0f),z.x*0.99f); dfar=max(max(dnear+1.0f,dnear*1.01f),z.y*1.01f); }
@@ -831,7 +831,7 @@ __noinline ray gen_primary_ray( camera* cam, float x, float y )	// (x,y) in [0,1
 {
 	const vec3& eye=cam->eye.xyz, center=cam->center.xyz, up=cam->up.xyz;
 	float fh=tan(cam->fovy*0.5f)*2.0f, fw=fh*cam->aspect;		// frustum height/width in NDC
-	vec3 dst=normalize(vec3(fw*(x-0.5f),fh*(y-0.5f),-1.0f));	// target pixel position on the image plane: make sure to have negative depth
+	vec3 dst=normalize(vec3(fw*(x-0.5f),fh*(y-0.5f),-1.0f));	// target pixel position at d=-1: make sure to have negative depth
 	mat4 I = mat4::look_at_inverse(eye,center,up);				// inverse view matrix
 	ray r; r.t=0.0f; r.tfar=FLT_MAX; r.o=eye; r.d=mat3(I)*dst;  return r;
 }
