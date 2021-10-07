@@ -60,6 +60,16 @@ __forceinline bool is_extension_supported( path file_path )
 } // namespace obj
 //*************************************
 
+//*************************************
+// cache forward declaration
+namespace obj::cache
+{
+	inline path& get_dir(){ static path d = path::temp(false)+L"global\\mesh\\"; if(!d.exists()&&!d.mkdir()) wprintf(L"Unable to create %s\n",d.c_str()); return d; }
+	inline path get_path( path file_path ){ return get_dir()+file_path.name()+L".rxb"; }
+	inline uint64_t get_parser_id( const char* timestamp ){ return uint64_t(std::hash<std::string>{}(std::string(__TIMESTAMP__)+std::string(__GX_MESH_H_TIMESTAMP__)+timestamp)); }
+}
+//*************************************
+
 inline void clear_absent_textures( std::vector<material_impl>& materials, path dir )
 {
 	static bool b_first; b_first=true;
@@ -108,14 +118,13 @@ inline path generate_normal_map( path bump_path, path normal_path, float bump_sc
 
 	os::timer_t t;
 
-	image* bump0 = gx::load_image(bump_path,true,false,false);	// do not force rgb to bump
-	if(bump0==nullptr){ printf("failed to load the bump map %s\n", wtoa(bump_path) ); return L""; }
-
 	// test whether the bump map is actually a normal map
-	if(bump0->channels==3&&bump0->width>16&&bump0->height>16)
+	image* bump0 = gx::load_image(bump_path,true,false,false);	// do not force rgb to bump; and use cache
+	if(bump0==nullptr){ printf("failed to load the bump map %s\n", wtoa(bump_path) ); return L""; }
+	if(bump0->channels==3&&bump0->width>8&&bump0->height>8)
 	{
 		bool gray = true;
-		for( auto s : {ivec2(15,15),ivec2(2,15),ivec2(15,2)} )
+		for( auto s : {ivec2(7,7),ivec2(2,7),ivec2(7,2)} )
 		{
 			uchar3 c = *bump0->ptr<uchar3>(s.x,s.y);
 			if(c.b>c.r&&c.b>c.g){ gray=false; break; }
@@ -178,39 +187,90 @@ inline path generate_normal_map( path bump_path, path normal_path, float bump_sc
 	return normal_path;
 }
 
-inline path get_normal_path( const material_impl& m, const path& bump_path )
+inline path get_normal_path( const material_impl& m, const path& bump_path, const char* bump_key )
 {
-	path name0=bump_path.name(false); if(name0.back()==L'b') name0.back()=0;
+	path name0=bump_path.name(false);
+	if(name0.back()==L'n')
+	{
+		path base_path;
+		if( auto it=m.path.find("albedo"); it!=m.path.end() )
+		{
+			auto& f = it->second;
+			if(_wcsnicmp(f.name(false),name0.c_str(),f.name(false).length())==0) base_path=f;
+		}
+		if(!base_path.empty())
+		{
+			image* header = gx::load_image_header( bump_path.c_str() ); if(!header){ printf("failed to load header of bump map %s\n", wtoa(bump_path) ); return L""; }
+			int channels=header->channels; gx::release_image_header(&header); if(channels==3) return bump_path;
+		}
+	}
+	
+	if(name0.back()==L'b') name0.back()=0;
 	path name = name0+L"n";
 	for( int k=0; k<4; k++, name+=L"n" )
 	{
 		path dst = name+path(L".")+bump_path.ext();
 		bool name_exists = false;
-		for( auto& [n,f] : m.path )if(f.name()==name){ name_exists=true; break;}
+		for( auto& [n,f] : m.path ){if(n!=bump_key&&f.name(false)==name){ name_exists=true; break;}}
 		if(!name_exists) return bump_path.dir()+dst;
 	}
 	return L"";
 }
 
-inline void generate_normal_maps( std::vector<material_impl>& materials, path dir, std::map<uint,float>& bump_scale_map )
+inline void generate_normal_maps( path mtl_path, std::vector<material_impl>& materials, path dir, std::map<uint,float>& bump_scale_map )
 {
-	std::map<path,path> btom; // bump_to_normal;
+	static const char* normal_key = "normal";
+	static const char* bump_key = "bump";
+	std::map<path,path> bton; // bump_to_normal;
+
+	// try to load bton cache
+	path bton_path = obj::cache::get_path(mtl_path).remove_ext()+L".bton";
+	if(bton_path.exists())
+	{
+		FILE* fp = _wfopen( bton_path.c_str(), L"r" ); if(!fp){ printf( "%s(): unable to open %s\n", __func__, bton_path.wtoa()); return; }
+		uint64_t parser_id; fscanf( fp, "%llu\n", &parser_id );
+		if(parser_id==obj::cache::get_parser_id(mtl_path.mtimestamp()))
+		{
+			char buff[4096]; while(fgets(buff,4096,fp))
+			{
+				auto vs = explode( buff, "=" ); if(vs.size()<2) continue;
+				bton[path(trim(vs.front().c_str()))] = trim(vs[1].c_str());
+			}
+		}
+		fclose(fp);
+	}
+
+	std::vector<path> bump_as_normal;
 	for( auto& m : materials )
 	{
-		auto it=m.path.find("bump"); if(it==m.path.end()||it->second.empty()) continue;
-		path bump_path = dir + it->second; if(!bump_path.exists()) continue;
+		if(auto it=m.path.find(normal_key);it!=m.path.end()&&(dir+it->second).exists()) continue;
+		path bump_path; if(auto it=m.path.find(bump_key);it==m.path.end()||it->second.empty()) continue; else bump_path=dir+it->second; if(!bump_path.exists()) continue;
+		path normal_path; if(auto it=bton.find(bump_path.name());it!=bton.end()&&!it->second.empty()) normal_path=dir+it->second;
+		if(normal_path.exists()){ m.path["normal"]=normal_path; continue; }
 
-		auto n = btom.find(bump_path.c_str());
-		if(n!=btom.end()&&n->second.exists()) m.path["normal"]=n->second;
-		else if(n==btom.end())
+		normal_path = get_normal_path( m, bump_path, bump_key ); if(normal_path.empty()){ printf("%s(): unable to find normal_path for %s\n",__func__,bump_path.to_slash().wtoa()); continue; }
+		if(bump_path!=normal_path&&!normal_path.exists())
 		{
 			float bump_scale=1.0f; if(auto s=bump_scale_map.find(m.ID);s!=bump_scale_map.end()) bump_scale=s->second;
-			path normal_path = get_normal_path( m, bump_path ); if(normal_path.empty()){ printf("%s(): unable to find normal_path for %s\n",__func__,bump_path.to_slash().wtoa()); continue; }
-			if(!normal_path.exists()) normal_path = generate_normal_map( bump_path, normal_path, bump_scale ); if(!normal_path.exists()) continue;
-			btom[ bump_path ] = normal_path;
-			m.path["normal"] = normal_path.name();
+			normal_path = generate_normal_map( bump_path, normal_path, bump_scale ); if(!normal_path.exists()) continue;
+			if(bump_path==normal_path) bump_as_normal.emplace_back(bump_path);
 		}
+		m.path["normal"]=bton[bump_path.name()]=normal_path.name();
 	}
+	
+	if(!bump_as_normal.empty())
+	{
+		printf( "The following maps are actually normal maps.\n" );
+		printf( "Consider using 'norm' (extended) tag instead of 'bump' in *.mtl\n" );
+		for( auto& f : bump_as_normal) printf( "> %s\n", f.name().wtoa() );
+	}
+
+	// save bton cache
+	FILE* fp = _wfopen( bton_path.c_str(), L"w" ); if(!fp){ printf( "%s(): unable to save %s\n", __func__, bton_path.wtoa()); return; }
+	fprintf( fp, "%llu\n", obj::cache::get_parser_id(mtl_path.mtimestamp()) );
+	for( auto& [b,n] : bton ) fprintf( fp, "%s = %s\n", b.wtoa(), n.wtoa() );
+	fclose(fp);
+	bton_path.set_filetime( mtl_path );
 }
 
 inline uint find_material( std::vector<material_impl>& materials, const char* name )
@@ -292,6 +352,7 @@ inline bool load_mtl( path file_path, std::vector<material_impl>& materials )
 		else if(key=="map_d"||key=="map_opacity"){ m->path["alpha"] = wtoken; }
 		else if(key=="map_bump"||key=="bump")
 		{
+			if(m->path.find("bump")!=m->path.end()) continue; // already processed
 			if(_stricmp("-bm", vs[1].c_str())!=0){ m->path["bump"] = wtoken; continue; }
 			if(vs.size()<4){ printf("obj::%s(): %s - not enough arguments for bump\n",__func__,m->name); return false; }
 			bump_scale_map[m->ID] = float(fast::atof(vs[2].c_str()));
@@ -350,19 +411,28 @@ inline bool load_mtl( path file_path, std::vector<material_impl>& materials )
 
 	// postprocessing
 	convert_unsupported_texture_to_jpeg( materials, mesh_dir );
-	generate_normal_maps( materials, mesh_dir, bump_scale_map );
+	generate_normal_maps( file_path, materials, mesh_dir, bump_scale_map );
 	clear_absent_textures( materials, mesh_dir );
 
 	return true;
 }
 
 //*************************************
-// Cache Implementation
+// cache implementation
 namespace obj::cache
 {
-	inline path& get_dir(){ static path d = path::temp(false)+L"global\\mesh\\"; if(!d.exists()&&!d.mkdir()) wprintf(L"Unable to create %s\n",d.c_str()); return d; }
-	inline path get_path( path file_path ){ return get_dir()+file_path.name()+L".rxb"; }
-	inline uint64_t get_parser_id( const char* timestamp ){ return uint64_t(std::hash<std::string>{}(std::string(__TIMESTAMP__)+std::string(__GX_MESH_H_TIMESTAMP__)+timestamp)); }
+	void clear( mesh* p_mesh, bool b_log )
+	{
+		if(!p_mesh) return;
+		path mesh_path=p_mesh->file_path, mtl_path=p_mesh->mtl_path; if(mesh_path.empty()||!mesh_path.exists()) return;
+		path mesh_cache_path = obj::cache::get_path(mesh_path);
+		bool r = mesh_cache_path.exists()&&mesh_cache_path.delete_file(false);
+		if(r&&b_log) wprintf( L"deleted %s\n", mesh_cache_path.c_str() );
+
+		path bton_path = p_mesh?obj::cache::get_path(mtl_path).remove_ext()+L".bton":path();
+		r = bton_path.exists()&&bton_path.delete_file(false);
+		if(r&&b_log) wprintf( L"deleted %s\n", bton_path.c_str() );
+	}
 
 	inline void save_mesh( mesh* p_mesh )
 	{
@@ -433,13 +503,15 @@ namespace obj::cache
 		char mtl_name[1024]; fgets(buff,8192,fp); sscanf( buff, "mtllib = %s\n", mtl_name );
 		path mtl_path = path(file_path).dir()+atow(mtl_name);
 		if(!mtl_path.exists()&&mtl_path!=L"default"){ fclose(fp); return nullptr; } // mtl not exists
-	
+
 		// now create mesh
 		mesh* p_mesh = new mesh();
 		wcscpy(p_mesh->file_path,file_path);
 		wcscpy(p_mesh->mtl_path,mtl_path.exists()?atow(mtl_name):L"default");
-		if(mtl_path.exists()&&!load_mtl(mtl_path, p_mesh->materials)){ delete p_mesh; return nullptr; }
 		
+		// load materials
+		if(mtl_path.exists()&&!load_mtl(mtl_path, p_mesh->materials)){ delete p_mesh; return nullptr; }
+
 		// load counters
 		uint object_count=0;	fgets(buff,8192,fp); sscanf(buff,"object_count = %u\n", &object_count );
 		uint geometry_count=0;	fgets(buff,8192,fp); sscanf(buff,"geometry_count = %u\n", &geometry_count );
@@ -718,7 +790,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 		else if(strcmp(key,"mtllib")==0)
 		{
 			path mtl_file_path = path(file_path).dir() + atow(trim(buff));
-			if(!load_mtl(mtl_file_path, p_mesh->materials )){ printf("unable to load material file: %s\n",wtoa(mtl_file_path)); return nullptr; }
+			if(!load_mtl(mtl_file_path, p_mesh->materials)){ printf("unable to load material file: %s\n",wtoa(mtl_file_path)); return nullptr; }
 			wcscpy( p_mesh->mtl_path, mtl_file_path.name(true) );
 
 			// default material
