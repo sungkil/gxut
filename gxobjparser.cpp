@@ -70,18 +70,16 @@ namespace obj::cache
 }
 //*************************************
 
-inline void clear_absent_textures( std::vector<material_impl>& materials, path dir )
+inline void clear_absent_textures( path mtl_path, std::vector<material_impl>& materials, path dir )
 {
-	static bool b_first; b_first=true;
 	for( auto& m : materials )
 	for( auto& [key,f] : m.path )
 	{
 		if(f.empty()) continue;
 		if(!f.exists()&&!(dir+f).exists())
 		{
-			if(b_first){ printf("\n"); b_first=false; }
-			wprintf( L"[%s] %s%s not exists\n", atow(key.c_str()),
-				dir.to_slash().c_str(), f.to_slash().c_str() );
+			printf( "[%s.%s.%s] %s not exists\n", mtl_path.to_slash().name().wtoa(),
+				m.name, key.c_str(), f.to_slash().wtoa() );
 			f.clear();
 		}
 	}
@@ -412,7 +410,7 @@ inline bool load_mtl( path file_path, std::vector<material_impl>& materials )
 	// postprocessing
 	convert_unsupported_texture_to_jpeg( materials, mesh_dir );
 	generate_normal_maps( file_path, materials, mesh_dir, bump_scale_map );
-	clear_absent_textures( materials, mesh_dir );
+	clear_absent_textures( file_path, materials, mesh_dir );
 
 	return true;
 }
