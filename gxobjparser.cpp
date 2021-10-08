@@ -244,7 +244,7 @@ inline void generate_normal_maps( path mtl_path, std::vector<material_impl>& mat
 		if(auto it=m.path.find(normal_key);it!=m.path.end()&&(dir+it->second).exists()) continue;
 		path bump_path; if(auto it=m.path.find(bump_key);it==m.path.end()||it->second.empty()) continue; else bump_path=dir+it->second; if(!bump_path.exists()) continue;
 		path normal_path; if(auto it=bton.find(bump_path.name());it!=bton.end()&&!it->second.empty()) normal_path=dir+it->second;
-		if(normal_path.exists()){ m.path["normal"]=normal_path; continue; }
+		if(normal_path.exists()){ m.path["normal"]=normal_path.name(); continue; }
 
 		normal_path = get_normal_path( m, bump_path, bump_key ); if(normal_path.empty()){ printf("%s(): unable to find normal_path for %s\n",__func__,bump_path.to_slash().wtoa()); continue; }
 		if(bump_path!=normal_path&&!normal_path.exists())
