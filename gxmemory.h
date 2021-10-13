@@ -246,5 +246,83 @@ __noinline uint path::crc32c() const
 }
 #endif // __GX_FILESYSTEM_H__
 
+//*************************************
+namespace base64 {
+//*************************************
+
+__noinline const char* __encoding_table()
+{
+	static char t[64]={}; if(*t) return t;
+	char *v=t;
+	for(int k=0;k<26;k++)*v++='A'+k;
+	for(int k=0;k<26;k++)*v++='a'+k;
+	for(int k=0;k<10;k++)*v++='0'+k;
+	t[62]='+';t[63]='/';
+	return t;
+}
+
+__noinline const char* __decoding_table()
+{
+	static char t[256]={}; if(*t) return t;
+	for(int k=0;k<256;k++)t[k]=char(-1);
+	int v=0;
+	for(char k='A';k<='Z';k++)t[k]=v++;
+	for(char k='a';k<='z';k++)t[k]=v++;
+	for(char k='0';k<='9';k++)t[k]=v++;
+	t['+']=62;t['/']=63;
+	return t;
+}
+
+__noinline std::string encode( const void* ptr, size_t size )
+{
+	static const char* table = __encoding_table();
+	static const auto encode3 = []( const char* t, uchar a, uchar b, uchar c )->char4
+	{
+		// fill four zero-padded 6 bits in dst[0..3]
+		return char4{ t[(a&0xFC)>>2], t[((a&0x3)<<4)|((b&0xF0)>>4)], t[((b&0xF)<<2)|((c&0xC0)>>6)], t[c&0x3F] };
+	};
+
+	if(size==0) return "";
+	uchar *src=(uchar*)ptr;
+	size_t mod = size%3;
+	std::vector<char4> v((size/3+mod)+1);
+	char4* dst=v.data();
+
+	// out-of-bound values are zero-filled
+	for( int k=0,kn=int(size)-3; k<kn; k+=3, src+=3, dst++ ) *dst = encode3( table, src[0], src[1], src[2] );
+	*dst = encode3( table, src[0], mod==1?0:src[1], mod?0:src[2] );
+	if(mod)dst->w='=';if(mod==1)dst->z='='; // padding
+	*++dst={0};
+
+	return std::string((char*)&v.front());
+}
+
+template <class T=void>
+__noinline sized_ptr_t<T> decode( const std::string& encoded )
+{
+	sized_ptr_t<T> m = {};
+	if(encoded.empty()) return m;
+	if(encoded.size()%4!=0){ printf( "%s(): encoded.size()%%4!=0\n", __func__ ); return m; }
+
+	const char* table = __decoding_table();
+	size_t el = encoded.size();
+	m.size = el/4*3; if(encoded[el-1]=='=') m.size--; if(encoded[el-2]=='=') m.size--;
+	m.ptr = (T*) malloc(m.size+1); ((char*)m.ptr)[m.size]=0; // allocate 1 more byte for encoded string 
+	uchar3*	dst = (uchar3*) m.ptr;
+	uchar* s = (uchar*) encoded.c_str();
+	for( size_t k=0, kn=encoded.size(); k<kn; k+=4, s+=4, dst++ )
+	{
+		char a=table[s[0]]; if(a<0) continue;
+		dst->x = (a<<2)|((table[s[1]]&0x30)>>4);
+		if(s[2]!='=') dst->y = (((table[s[1]]&0xf)<<4)|((table[s[2]]&0x3c)>>2));
+		if(s[3]!='=') dst->z = (((table[s[2]]&0x03)<<6)|table[s[3]]);
+	}
+	return m;
+}
+
+//*************************************
+} // namespace base64
+//*************************************
+
 //***********************************************
 #endif // __GX_MEMORY__
