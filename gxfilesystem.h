@@ -411,8 +411,8 @@ template<> __noinline sized_ptr_t<char> path::read_file<char>() const
 	std::string buffer; buffer.reserve(size0*2);
 	char buff[4096]; while(fgets(buff,4096,fp)) buffer+=buff; fclose(fp);
 	p.size = buffer.size();
-	p.ptr = (char*)memcpy(malloc((p.size+1)*sizeof(char)),buffer.c_str(),p.size*sizeof(char));
-	p.ptr[p.size]=0;
+	p.ptr = (char*)memcpy(malloc((p.size+2)*sizeof(char)),buffer.c_str(),p.size*sizeof(char));
+	p.ptr[p.size]=p.ptr[p.size+1]=0; // two more bytes for null-ended wchar_t string
 	return p;
 }
 
