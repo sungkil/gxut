@@ -283,7 +283,8 @@ struct path
 	bool delete_file( bool b_undo=false ) const { if(!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=(b_undo?FOF_ALLOWUNDO:0)|FOF_SILENT|FOF_NOCONFIRMATION|FOF_FILESONLY;fop.pFrom=data;data[wcslen(data)+1]=L'\0';return SHFileOperationW(&fop)==0;}
 	bool copy_dir( path dst, bool overwrite=true ) const { if(!is_dir()) return false;wchar_t* from=__wcsbuf();swprintf_s(from,capacity,L"%s\\*\0",data);dst[dst.size()+1]=L'\0'; SHFILEOPSTRUCTW fop={};fop.wFunc=FO_COPY;fop.fFlags=FOF_ALLOWUNDO|FOF_SILENT|FOF_NOCONFIRMATION;fop.pFrom=from;fop.pTo=dst;return SHFileOperationW(&fop)==0; }
 	bool move_dir( path dst ) const { return !is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(data,dst.c_str())!=0 : !copy_dir(dst,true) ? false: rmdir(); }
-	void open( const wchar_t* args=nullptr, bool bShowWindow=true ) const {path cmd;swprintf(cmd,capacity,L"\"%s\"",data);ShellExecuteW(GetDesktopWindow(),L"Open",cmd,args,nullptr,bShowWindow?SW_SHOW:SW_HIDE);}
+	void open( const wchar_t* args=nullptr, bool b_show_window=true ) const {path cmd;swprintf(cmd,capacity,L"\"%s\"",data);ShellExecuteW(GetDesktopWindow(),L"Open",cmd,args,nullptr,b_show_window?SW_SHOW:SW_HIDE);}
+	void open_dir() const { dir().open(nullptr,true); }
 #endif
 
 	// relative/absolute path
