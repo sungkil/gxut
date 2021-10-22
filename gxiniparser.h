@@ -114,7 +114,7 @@ __noinline bool parser_t::load( const path& file_path )
 			wchar_t* e=b; while(*e&&*e!=L']'&&*e!=L';')e++;bool eol=(*e==0);*e=0;
 			auto* t=itrim(b); b=eol?0:itrim(e+1);
 
-			int l=int(wcslen(t)); if(l<3) continue;
+			int l=int(wcslen(t)); if(l<2) continue;
 			if(t[0]==L'['){ wcscpy(sec,itrim(t+1)); continue; } // assign section
 			wchar_t* v=0; for(int k=0;k<l;k++)if(t[k]==L'='){t[k]=0;v=t+k+1;break;} t=itrim(t);v=itrim(v); if(!t||!t[0]||!v) continue;
 			swprintf_s(seckey,L"%s:%s",sec,t);get_or_create_entry(wtoa(seckey))->value=v;
