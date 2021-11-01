@@ -301,6 +301,7 @@ namespace console
 inline const wchar_t* title(){ static wchar_t buff[MAX_PATH+1]; GetConsoleTitleW(buff,MAX_PATH); return buff; }
 inline DWORD process(){ DWORD console; GetWindowThreadProcessId(GetConsoleWindow(),& console); return console; }
 inline bool has_parent(){ return GetCurrentProcessId()!=process(); }
+inline void setnobuf(){ setbuf(stdout,0);setbuf(stderr,0);setvbuf(stdout,nullptr,_IONBF,0); }
 }
 
 //*************************************
