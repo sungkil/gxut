@@ -321,6 +321,7 @@ struct path
 
 	// module/working directories
 	static inline path module_path( HMODULE h_module=nullptr ){ static path m; if(!m.empty()&&!h_module) return m; path p;GetModuleFileNameW(h_module,p,path::capacity);p[0]=::toupper(p[0]); p=p.canonical(); return h_module?p:(m=p); } // 'module' conflicts with C++ modules
+	static inline path module_name( bool with_ext=true, HMODULE h_module=nullptr ){ return module_path(h_module).name(with_ext); }
 	static inline path module_dir( HMODULE h_module=nullptr ){ static path d=module_path().dir(); return h_module?module_path(h_module).dir():d; }
 	static inline path cwd(){ path p; _wgetcwd(p.data,path::capacity); return p.absolute().add_backslash(); }	// current working dir
 	static inline void chdir( path dir ){ if(dir.is_dir()) _wchdir(dir.data); }
