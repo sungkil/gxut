@@ -42,6 +42,8 @@ inline bool operator>(  const FILETIME& f1, const FILETIME& f2 ){ return Compare
 inline bool operator<(  const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)<0; }
 inline bool operator>=( const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)>=0; }
 inline bool operator<=( const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)<=0; }
+inline bool FileTimeLess( const FILETIME& f1, const FILETIME& f2, int64_t offset=FileTimeOffset(0,0,0,10) ){ return FileTimeToUint64(f1)+offset<FileTimeToUint64(f2); }
+inline bool FileTimeGreater( const FILETIME& f1, const FILETIME& f2, int64_t offset=FileTimeOffset(0,0,0,10) ){ return FileTimeToUint64(f1)>FileTimeToUint64(f2)+offset; }
 
 //***********************************************
 // common constants
