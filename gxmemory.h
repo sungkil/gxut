@@ -230,19 +230,21 @@ __noinline void md5::update( const void* data, size_t size )
 //***********************************************
 // augmentation of filesystem
 #ifdef __GX_FILESYSTEM_H__
+__noinline uint path::crc32c() const
+{
+	auto p=read_file<void>();
+	if(!p.ptr) return 0;
+	uint c=::crc32c(p);
+	if(p.ptr) free(p.ptr);
+	return c;
+}
 __noinline uint4 path::md5() const
 {
 	auto p = read_file<void>();
 	if(!p.ptr) return ::md5(nullptr,0);
-	::md5 m(p); safe_free(p.ptr);
+	::md5 m(p);
+	if(p.ptr) free(p.ptr);
 	return m.digest;
-}
-__noinline uint path::crc32c() const
-{
-	auto p=read_file<void>();
-	if(!p.ptr) return 0; uint c=::crc32c(p);
-	safe_free(p.ptr);
-	return c;
 }
 #endif // __GX_FILESYSTEM_H__
 

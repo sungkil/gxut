@@ -202,8 +202,8 @@ struct path
 	inline size_t length()		const { return wcslen(data); }
 	inline uint64_t file_size() const { if(!cache_exists()) update_cache(); auto& c=cache(); return uint64_t(c.nFileSizeHigh)<<32ull|uint64_t(c.nFileSizeLow); }
 
-	// crc32c/md5 checksums
-	inline uint crc32c() const;	// implemented in gxmath.h
+	// crc32c/md5 checksums of the file content
+	inline uint crc32c() const;	// implemented in gxmemory.h
 	inline uint4 md5() const;	// implemented in gxmemory.h
 
 	// system-related: slash, backslash, unix, quote
@@ -300,9 +300,6 @@ struct path
 	inline path relative( bool first_dot ) const { return relative(first_dot,L""); }
 	inline path relative( const wchar_t* from=L"" ) const { return relative(false,from); }
 	inline path canonical() const { path p(*this); p.canonicalize(); return p; } // not necessarily absolute: return relative path as well
-
-	// create process
-	void create_process( const wchar_t* arguments=nullptr, bool bShowWindow=true, bool bWaitFinish=false ) const;
 
 	// time stamp
 	static const char* timestamp( const struct tm* t ){char* buff=__strbuf();sprintf(buff,"%04d%02d%02d%02d%02d%02d",t->tm_year+1900,t->tm_mon+1,t->tm_mday,t->tm_hour,t->tm_min,t->tm_sec);return buff;}
@@ -598,16 +595,6 @@ __noinline path path::relative( bool first_dot, const wchar_t* from ) const
 	if(first_dot&&(result[0]==0||result[0]!=L'.')) result=path(".\\")+result;
 
 	return this->is_dir()?result:result+name();
-}
-
-__noinline void path::create_process( const wchar_t* arguments, bool bShowWindow, bool bWaitFinish ) const
-{
-	wchar_t cmd[4096]; swprintf_s( cmd, 4096, L"\"%s\" %s", data, arguments?arguments:L""  );
-	PROCESS_INFORMATION pi={}; STARTUPINFOW si={}; si.cb=sizeof(si); si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=bShowWindow?SW_SHOW:SW_HIDE;
-	CreateProcessW( nullptr, (LPWSTR)cmd, nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi );
-	if(bWaitFinish) WaitForSingleObject(pi.hProcess,INFINITE);
-	CloseHandle( pi.hThread );    // must release handle
-	CloseHandle( pi.hProcess );   // must release handle
 }
 
 __noinline void path::canonicalize()
