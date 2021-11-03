@@ -259,8 +259,8 @@ inline void generate_normal_maps( path mtl_path, std::vector<material_impl>& mat
 	if(!bump_as_normal.empty())
 	{
 		printf( "The following maps are actually normal maps.\n" );
-		printf( "Consider using 'norm' (extended) tag instead of 'bump' in *.mtl\n" );
 		for( auto& f : bump_as_normal) printf( "> %s\n", f.name().wtoa() );
+		printf( "Consider using 'norm' (extended) tag instead of 'bump' in *.mtl\n" );
 	}
 
 	// save bton cache
@@ -616,8 +616,6 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 
 	if(!is_extension_supported(file_path)){ printf("obj::%s(): unsupported format: %s\n",__func__, file_path.ext().wtoa()); return nullptr; }
 	if(!file_path.exists()){ printf("obj::%s(): %s not exists",__func__,file_path.wtoa()); return nullptr; }
-
-	if(flush_messages) flush_messages( "" );
 
 	//*********************************
 	// 1. if there is a cache, load from cache
