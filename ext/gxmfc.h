@@ -30,9 +30,6 @@ namespace mfc {
 //*************************************
 
 // utility functions
-inline void flush_message( int sleepTime=1 ){MSG m;for(int k=0;k<100&&PeekMessageW(&m,nullptr,0,0,PM_REMOVE);k++)SendMessage(m.hwnd,m.message,m.wParam,m.lParam);if(sleepTime>=0) Sleep(sleepTime);}
-inline HWND& message_box_owner_hwnd(){ static HWND h=nullptr; return h; }
-inline bool confirm( const wchar_t* msg, HWND hOwnerWnd=nullptr ){ return IDOK==MessageBoxW(hOwnerWnd?hOwnerWnd:message_box_owner_hwnd(),msg,L"Warning", MB_OKCANCEL|MB_ICONWARNING|MB_SYSTEMMODAL); }
 inline CRect get_client_rect( CWnd* w ){ RECT rc; w->GetClientRect( &rc ); return rc; }
 inline CRect get_client_rect( CWnd& w ){ RECT rc; w.GetClientRect( &rc ); return rc; }
 inline CRect get_client_rect( HWND h ){ RECT rc; GetClientRect( h, &rc ); return rc; }
@@ -45,7 +42,12 @@ inline CRect empty_rect(){ return CRect(0,0,0,0); }
 inline CWinThread* begin_thread( AFX_THREADPROC proc, void* pUserData=nullptr, int priority=THREAD_PRIORITY_NORMAL, bool wait=false )
 {
 	CWinThread* pThread= AfxBeginThread(proc,pUserData,priority,0,wait?CREATE_SUSPENDED:0); if(!pThread) return nullptr;
-	if(wait){ pThread->m_bAutoDelete=FALSE; pThread->ResumeThread(); while(pThread&&WaitForSingleObject(pThread->m_hThread,0)!=WAIT_OBJECT_0) flush_message(); safe_delete(pThread); } // have to manually delete thread
+	if(wait)
+	{
+		pThread->m_bAutoDelete=FALSE; pThread->ResumeThread();
+		while(pThread&&WaitForSingleObject(pThread->m_hThread,0)!=WAIT_OBJECT_0){MSG m;for(int k=0;k<100&&PeekMessageW(&m,nullptr,0,0,PM_REMOVE);k++)SendMessage(m.hwnd,m.message,m.wParam,m.lParam);Sleep(1);}
+		safe_delete(pThread); // have to manually delete thread
+	}
 	return pThread;
 }
 

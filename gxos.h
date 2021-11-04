@@ -42,11 +42,32 @@
 	#include <chrono>	// microtimer
 #endif
 
+// win32 messagebox wrapper utilities
+namespace os
+{
+	inline HWND& __message_box_owner_hwnd(){ static HWND h=nullptr; return h; }
+	inline void set_message_box_owner( HWND hwnd ){ __message_box_owner_hwnd()=hwnd; }
+	inline int message_box( const char* msg, const char* title, HWND hwnd=nullptr ){ return MessageBoxA(hwnd?hwnd:__message_box_owner_hwnd(),msg,title,MB_OKCANCEL|MB_ICONWARNING|MB_SYSTEMMODAL); }
+	inline int message_box( const wchar_t* msg, const wchar_t* title, HWND hwnd=nullptr ){ return MessageBoxW(hwnd?hwnd:__message_box_owner_hwnd(),msg,title,MB_OKCANCEL|MB_ICONWARNING|MB_SYSTEMMODAL); }
+}
+
+#define __gxos_va__() va_list a;va_start(a,fmt);size_t l=size_t(_vscprintf(fmt,a));std::vector<char> v(l+1,0); char* b=v.data();vsprintf_s(b,l+1,fmt,a);va_end(a)
+#define __gxos_vw__() va_list a;va_start(a,fmt);size_t l=size_t(_vscwprintf(fmt,a));std::vector<wchar_t> v(l+1,0); wchar_t* b=v.data();vswprintf_s(b,l+1,fmt,a);va_end(a)
+__noinline bool confirm( HWND hwnd, const char* fmt, ... ){ __gxos_va__(); return IDOK==os::message_box(b,"Warning",hwnd); }
+__noinline bool confirm( HWND hwnd, const wchar_t* fmt, ... ){ __gxos_vw__(); return IDOK==os::message_box(b,L"Warning",hwnd); }
+__noinline bool confirm( const char* fmt, ... ){ __gxos_va__(); return IDOK==os::message_box(b,"Warning"); }
+__noinline bool confirm( const wchar_t* fmt, ... ){ __gxos_vw__(); return IDOK==os::message_box(b,L"Warning"); }
+__noinline bool mbox( const char* fmt, ... ){ __gxos_va__(); return IDOK==os::message_box(b,"Message"); }
+__noinline bool mbox( const wchar_t* fmt, ... ){ __gxos_vw__(); return IDOK==os::message_box(b,L"Message"); }
+
 //*************************************
 namespace os {
 //*************************************
 
-inline const wchar_t* get_last_error(){ static wchar_t buff[4096]={};DWORD e=GetLastError();wchar_t *s;FormatMessageW( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,e,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPWSTR)&s,0,nullptr);wsprintf(buff,L"%s (code=%x)",s,uint(e));LocalFree(s);return buff; }
+// win32 utilities
+__noinline const wchar_t* get_last_error(){ static wchar_t buff[4096]={};DWORD e=GetLastError();wchar_t *s;FormatMessageW( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,e,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPWSTR)&s,0,nullptr);wsprintf(buff,L"%s (code=%x)",s,uint(e));LocalFree(s);return buff; }
+__noinline void flush_message( int sleepTime=1 ){MSG m;for(int k=0;k<100&&PeekMessageW(&m,nullptr,0,0,PM_REMOVE);k++)SendMessage(m.hwnd,m.message,m.wParam,m.lParam);if(sleepTime>=0) Sleep(sleepTime);}
+
 inline void exit( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fprintf( stdout, "[%s] %s", path::module_path().name(false).wtoa(), &buff[0] ); ::exit(EXIT_FAILURE); }
 inline void exit( const wchar_t* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<wchar_t> buff(_vscwprintf(fmt,a)+1); vswprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fwprintf( stdout, L"[%s] %s", path::module_path().name(false).c_str(), &buff[0] ); ::exit(EXIT_FAILURE); }
 #if !defined(__GNUC__)&&((__cplusplus>199711L)||(_MSC_VER>=1600/*VS2010*/))
