@@ -31,19 +31,20 @@ inline int64_t FileTimeOffset( int days, int hours=0, int mins=0, int secs=0, in
 inline FILETIME DiscardFileTimeMilliseconds( FILETIME f ){uint64_t u=((uint64_t(f.dwHighDateTime)<<32|uint64_t(f.dwLowDateTime))/10000000)*10000000;return FILETIME{DWORD(u&0xffffffff),DWORD(u>>32)};} // 1ms = 10000 in FILETIME
 inline SYSTEMTIME FileTimeToSystemTime( const FILETIME& f ){ SYSTEMTIME s; FileTimeToSystemTime(&f,&s); return s; }
 inline FILETIME SystemTimeToFileTime( const SYSTEMTIME& s ){ FILETIME f; SystemTimeToFileTime(&s,&f); return f; }
-inline uint64_t FileTimeToUint64( const FILETIME& f, uint offset_days=0 ){ return (uint64_t(f.dwHighDateTime)<<32|uint64_t(f.dwLowDateTime))-FileTimeOffset(offset_days); }
+inline uint64_t FileTimeToUint64( const FILETIME& f ){ return (uint64_t(f.dwHighDateTime)<<32|uint64_t(f.dwLowDateTime)); }
 inline FILETIME	Uint64ToFileTime( uint64_t u ){ FILETIME f; f.dwHighDateTime=DWORD(u>>32); f.dwLowDateTime=u&0xffffffff; return f; }
-inline uint64_t SystemTimeToUint64( const SYSTEMTIME& s, uint offset_days=0 ){ FILETIME f; SystemTimeToFileTime( &s, &f ); return FileTimeToUint64(f,offset_days); }
+inline uint64_t SystemTimeToUint64( const SYSTEMTIME& s ){ FILETIME f; SystemTimeToFileTime( &s, &f ); return FileTimeToUint64(f); }
 inline FILETIME now(){ FILETIME f; GetSystemTimeAsFileTime(&f); return f; } // current time
 
 inline bool operator==( const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)==0; }
 inline bool operator!=( const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)!=0; }
-inline bool operator>(  const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)>0; }
-inline bool operator<(  const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)<0; }
 inline bool operator>=( const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)>=0; }
 inline bool operator<=( const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)<=0; }
-inline bool FileTimeLess( const FILETIME& f1, const FILETIME& f2, int64_t offset=FileTimeOffset(0,0,0,10) ){ return FileTimeToUint64(f1)+offset<FileTimeToUint64(f2); }
-inline bool FileTimeGreater( const FILETIME& f1, const FILETIME& f2, int64_t offset=FileTimeOffset(0,0,0,10) ){ return FileTimeToUint64(f1)>FileTimeToUint64(f2)+offset; }
+inline bool operator>(  const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)>0; }
+inline bool operator<(  const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)<0; }
+static const uint64_t DefaultFileTimeOffset = FileTimeOffset(0,0,0,10);
+// do not make FileTimeLess(), which causes confusion in use cases
+inline bool FileTimeGreater( const FILETIME& f1, const FILETIME& f2, int64_t offset=DefaultFileTimeOffset ){ return FileTimeToUint64(f1)>FileTimeToUint64(f2)+offset; }
 
 //***********************************************
 // common constants
