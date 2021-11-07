@@ -133,25 +133,15 @@ inline const std::vector<path>& paths()
 	return v;
 }
 
-inline path search( path file_name )
+inline path where( path file_name )
 {
-	for( const auto& e : paths() ) if((e+file_name).exists()) return e+file_name;
-	return path();
-}
-
-inline path search_executable( path file_name )
-{
-	if(file_name.empty()||file_name.exists()) return file_name;
-	if(file_name.is_absolute()) return L"";
+	path f=file_name; if(f.empty()) return f;
+	if(f.is_absolute()) return f.exists()?f:path();
 	// add the executable extensions
-	std::vector<path> v; if(!file_name.ext().empty()) v={file_name};
-	else for(auto x:{L".com",L".exe",L".bat",L".cmd"}) v.emplace_back( file_name+x );
-	for(auto& p:v)
-	{
-		if(p.exists()) return p;
-		for( const auto& e : paths() ) if((e+p).exists()) return e+p;
-	}
-	return L"";
+	std::vector<path> v={f}; if(file_name.ext().empty()){for(auto e:{L".com",L".exe",L".bat",L".cmd"})v.emplace_back(f+e);}
+	for(auto& p:v) if(p.exists()) return p.absolute(path::cwd());
+	for(const auto& e:paths() ){ for(auto& p:v) if((e+p).exists()) return (e+p).canonical(); }
+	return path();
 }
 
 //***********************************************
