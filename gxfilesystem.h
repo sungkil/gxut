@@ -42,7 +42,7 @@ inline bool operator>=( const FILETIME& f1, const FILETIME& f2 ){ return Compare
 inline bool operator<=( const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)<=0; }
 inline bool operator>(  const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)>0; }
 inline bool operator<(  const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)<0; }
-static const uint64_t DefaultFileTimeOffset = FileTimeOffset(0,0,0,10);
+static const uint64_t DefaultFileTimeOffset = FileTimeOffset(0,0,0,30); // server-local difference can be up to several seconds
 // do not make FileTimeLess(), which causes confusion in use cases
 inline bool FileTimeGreater( const FILETIME& f1, const FILETIME& f2, int64_t offset=DefaultFileTimeOffset ){ return FileTimeToUint64(f1)>FileTimeToUint64(f2)+offset; }
 

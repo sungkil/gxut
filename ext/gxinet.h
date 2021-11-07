@@ -62,11 +62,9 @@ __noinline bool file_t::open( HINTERNET session, const wchar_t* url )
 
 	static const DWORD flags = INTERNET_FLAG_TRANSFER_BINARY|INTERNET_FLAG_RELOAD|INTERNET_FLAG_NO_CACHE_WRITE|INTERNET_FLAG_EXISTING_CONNECT; // INTERNET_FLAG_PRAGMA_NOCACHE
 	release(); hfile=InternetOpenUrlW( session, url, 0, 0, flags, 0); if(!hfile){ release(); return false; }
-	//	DWORD status, dw_size=sizeof(status); if(!HttpQueryInfoW(hfile,HTTP_QUERY_STATUS_CODE|HTTP_QUERY_FLAG_NUMBER,&status,&dw_size,NULL)||status!=HTTP_STATUS_OK){ fprintf( stdout, "%s(%s): https status != HTTP_STATUS_OK\n", __func__, wtoa(url) ); release(); return false; }
+	// DWORD status, dw_size=sizeof(status); if(!HttpQueryInfoW(hfile,HTTP_QUERY_STATUS_CODE|HTTP_QUERY_FLAG_NUMBER,&status,&dw_size,NULL)||status!=HTTP_STATUS_OK){ fprintf( stdout, "%s(%s): https status != HTTP_STATUS_OK\n", __func__, wtoa(url) ); release(); return false; }
 	SYSTEMTIME msystemtime={}; DWORD dw_size=sizeof(msystemtime); if(!HttpQueryInfoW(hfile,HTTP_QUERY_LAST_MODIFIED|HTTP_QUERY_FLAG_SYSTEMTIME,&msystemtime,&dw_size,NULL)){ release(); return false; }
-
-	// preprocessing: invalidate second, because HTTP_QUERY_LAST_MODIFIED returns varying second
-	msystemtime.wMilliseconds=0; msystemtime.wSecond=0; // discard seconds and ms
+	msystemtime.wMilliseconds=0; // discard ms; HTTP_QUERY_LAST_MODIFIED returns varying seconds
 	SystemTimeToFileTime(&msystemtime,&mfiletime);
 	this->url = url;
 
@@ -92,7 +90,11 @@ __noinline bool session_t::download_thread_func( std::vector<std::wstring> urls,
 	for( auto url : urls )
 	{
 		file_t f; if(!f.open(handle,url.c_str())) continue; // url not exists
+		// auto s = FileTimeToSystemTime(f.mfiletime); fprintf( stdout, "%d-%d-%d-%d-%d-%d-%d", s.wYear, s.wMonth, s.wDay, s.wHour, s.wMinute, s.wSecond, s.wMilliseconds );
+
+		// server-local time difference can be up to several seconds
 		if(b_dst_exists&&!FileTimeGreater(f.mfiletime,f0)) return false; // older url file exists
+		
 		if(!f.get_file_size(handle)){ fprintf(stdout,"error: unable to get file size %s\n", dst.name().wtoa() );return false;} // now try to get the file size
 		std::vector<char> buffer(f.file_size);
 		
@@ -108,9 +110,10 @@ __noinline bool session_t::download_thread_func( std::vector<std::wstring> urls,
 		fclose(fp);
 
 		// modify the time stamp
-		dst.set_filetime(now());
-		dst.set_filetime(nullptr,nullptr,&f.mfiletime);
+		FILETIME fnow=now();
+		dst.set_filetime(&fnow,&fnow,&f.mfiletime);
 		fprintf( stdout, "%s\n", dst.name().wtoa() );
+
 		return true;
 	}
 
