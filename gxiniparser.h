@@ -99,7 +99,7 @@ __noinline bool parser_t::load( const path& file_path )
 
 	// open now
 	auto_lock_t lock(cs);
-	FILE* fp=_wfopen(file_path,L"r,ccs=UTF-8");if(fp==nullptr){ printf("Unable to open %s",file_path.wtoa()); return false; }
+	FILE* fp=file_path.fopen(L"r",true);if(fp==nullptr){ printf("Unable to open %s",file_path.wtoa()); return false; }
 
 	// clear dictionary
 	for(auto& it:dic){if(it.second!=nullptr){delete it.second;}} dic.clear();
@@ -135,7 +135,7 @@ __noinline bool parser_t::save( const path& file_path )
 	auto_lock_t lock(cs);
 
 	bool b_hidden_file=false;if(_waccess(file_path,0)==0&&(GetFileAttributesW(file_path)&FILE_ATTRIBUTE_HIDDEN)){b_hidden_file=true;SetFileAttributesW( file_path,GetFileAttributesW(file_path)&(~FILE_ATTRIBUTE_HIDDEN) );} // save and remove hidden attribute
-	FILE* fp=nullptr; for(uint k=0;fp==nullptr&&k<20;k++){ fp=_wfopen(file_path,L"w,ccs=UTF-8"); Sleep(5); } // wait 100ms for busy writing
+	FILE* fp=nullptr; for(uint k=0;fp==nullptr&&k<20;k++){ fp=file_path.fopen(L"w",true); Sleep(5); } // wait 100ms for busy writing
 	if(fp==nullptr){ printf( "%s(): Unable to open %s to write", __func__, file_path.wtoa() ); return false; }
 	fseek( fp, 0, SEEK_SET ); // remove BOM
 	

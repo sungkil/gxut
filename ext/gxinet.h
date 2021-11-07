@@ -97,7 +97,7 @@ __noinline bool session_t::download_thread_func( std::vector<std::wstring> urls,
 		std::vector<char> buffer(f.file_size);
 		
 		if(!dst.dir().exists()) dst.dir().mkdir();
-		FILE* fp = _wfopen( dst.c_str(), L"wb" ); if(!fp){ fprintf(stdout,"error: unable to open %s\n", dst.name().wtoa());return false;}
+		FILE* fp = dst.fopen("wb"); if(!fp){ fprintf(stdout,"error: unable to open %s\n", dst.name().wtoa());return false;}
 		DWORD dw_size, dw_read; do
 		{
 			InternetQueryDataAvailable(f.hfile, &dw_size, 0, 0);

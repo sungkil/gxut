@@ -327,6 +327,8 @@ struct path
 	static inline void chdir( path dir ){ if(dir.is_dir()) _wchdir(dir.data); }
 
 	// file content access: void (rb/wb), char (r/w), wchar_t (r/w,ccs=UTF-8)
+	FILE* fopen( const wchar_t* mode, bool utf8=false ) const;
+	FILE* fopen( const char* mode, bool utf8=false ) const { wchar_t m[64]={}; __mb2wc(mode,m); return fopen(m,utf8); }
 	template <class T=void> sized_ptr_t<T> read_file() const;
 	std::wstring read_file() const;
 	bool write_file( const void* ptr, size_t size ) const;
@@ -379,10 +381,18 @@ __noinline bool path::mkdir() const // make all super directories
 	return true;
 }
 
+__noinline FILE* path::fopen( const wchar_t* mode, bool utf8 ) const
+{
+	wchar_t m[32]={}; _swprintf(m,L"%s%s",mode,utf8?L",ccs=UTF-8":L"");
+	FILE* fp = _wfopen(data,m); if(!fp) return nullptr;
+	if(wcscmp(mode,L"w")==0&&utf8&&ext()!=L"sln") fseek(fp,0,SEEK_SET); // remove byte order mask (BOM); sln use BOM, but vcxproj do not use BOM
+	return fp;
+}
+
 template<> __noinline sized_ptr_t<void> path::read_file<void>() const
 {
 	sized_ptr_t<void> p={nullptr,0};
-	FILE* fp=_wfopen(data,L"rb"); if(!fp) return {nullptr,0};
+	FILE* fp=fopen(L"rb"); if(!fp) return {nullptr,0};
 	fseek(fp,0,SEEK_END); p.size=ftell(fp); fseek(fp,0,SEEK_SET);
 	if(p.size){ fread(p.ptr=malloc(p.size+1),1,p.size,fp); ((char*)p.ptr)[p.size]=0; }
 	fclose(fp);
@@ -397,7 +407,7 @@ template<> __noinline sized_ptr_t<const void> path::read_file<const void>() cons
 template<> __noinline sized_ptr_t<wchar_t> path::read_file<wchar_t>() const
 {
 	sized_ptr_t<wchar_t> p={nullptr,0};
-	FILE* fp=_wfopen(data,L"r,ccs=UTF-8"); if(!fp) return {nullptr,0};
+	FILE* fp=fopen(L"r",true); if(!fp) return {nullptr,0};
 	fseek(fp,0,SEEK_END); size_t size0=ftell(fp); fseek(fp,0,SEEK_SET);
 	if(!size0){ fclose(fp); return {nullptr,0}; }
 
@@ -417,7 +427,7 @@ template<> __noinline sized_ptr_t<const wchar_t> path::read_file<const wchar_t>(
 template<> __noinline sized_ptr_t<char> path::read_file<char>() const
 {
 	sized_ptr_t<char> p={nullptr,0};
-	FILE* fp=_wfopen(data,L"r"); if(!fp) return {nullptr,0};
+	FILE* fp=fopen(L"r"); if(!fp) return {nullptr,0};
 	fseek(fp,0,SEEK_END); size_t size0=ftell(fp); fseek(fp,0,SEEK_SET);
 	if(!size0){ fclose(fp); return {nullptr,0}; }
 
@@ -442,22 +452,21 @@ __noinline std::wstring path::read_file() const
 
 __noinline bool path::write_file( const void* ptr, size_t size ) const
 {
-	FILE* fp=_wfopen(data,L"wb"); if(!fp) return false;
+	FILE* fp=fopen(L"wb"); if(!fp) return false;
 	size_t size_written = ptr&&size?fwrite(ptr,1,size,fp):0; fclose(fp);
 	return size_written==size;
 }
 
 __noinline bool path::write_file( const char* s ) const
 {
-	FILE* fp=_wfopen(data,L"w"); if(!fp) return false;
+	FILE* fp=fopen(L"w"); if(!fp) return false;
 	int ret = s?fputs(s,fp):0; fclose(fp);
 	return ret>=0;
 }
 
 __noinline bool path::write_file( const wchar_t* s ) const
 {
-	FILE* fp=_wfopen(data,L"w,ccs=UTF-8"); if(!fp) return false;
-	if(ext()!=L".sln") fseek(fp,0,SEEK_SET); // rewind to remove BOM for non-solution files; caution: vcxproj do not use BOM
+	FILE* fp=fopen(L"w",true); if(!fp) return false;
 	int ret = s?fputws(s,fp):0; fclose(fp);
 	return ret>=0;
 }

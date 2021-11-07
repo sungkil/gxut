@@ -958,7 +958,7 @@ inline void mesh::dump_binary( const wchar_t* _dir )
 	path vertex_bin_path = dir + path(file_path).name(false).name(false) + L".vertex.bin";
 	path index_bin_path = dir + path(file_path).name(false).name(false) + L".index.bin";
 	FILE* fp = _wfopen(vertex_bin_path, L"wb"); fwrite(&vertices[0], sizeof(vertex), vertices.size(), fp); fclose(fp);
-	fp = _wfopen(index_bin_path, L"wb");  fwrite(&indices[0], sizeof(uint), indices.size(), fp);	   fclose(fp);
+	fp = _wfopen(index_bin_path, L"wb");  fwrite(&indices[0], sizeof(uint), indices.size(), fp); fclose(fp);
 }
 #endif
 
