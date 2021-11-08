@@ -60,6 +60,7 @@ public:
 	void set_name( const wchar_t* name );
 	void set_attrib( const wchar_t* name, const wchar_t* value );
 	void set_value( const wchar_t* value );
+	void clear_value();
 	void set_as_cdata( bool b=true ){ _as_cdata=b; }
 	void remove_attrib( const wchar_t* name );
 
@@ -70,6 +71,7 @@ public:
 	inline attrib_map_t& attrib_map(){ return _attrib_map; }
 	inline size_t child_count() const { return _childs.size(); }
 	inline size_t attrib_count() const { return _attrib_map.size(); }
+	inline bool is_cdata(){ return _as_cdata; }
 
 	// get child
 	node* child( int idx ){ return idx<0||idx>=int(_childs.size())?nullptr:_childs[idx]; }
