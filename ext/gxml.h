@@ -94,7 +94,7 @@ public:
 	node* create_child( const wchar_t* name, const mat4& value );
 
 	// get value by type
-	inline std::wstring& str(){	return _value; }
+	inline std::wstring& value(){	return _value; }
 	inline const wchar_t* c_str() const { return _value.c_str(); }
 
 	// value casting
