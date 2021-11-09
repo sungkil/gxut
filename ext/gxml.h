@@ -71,7 +71,6 @@ public:
 	inline attrib_map_t& attrib_map(){ return _attrib_map; }
 	inline size_t child_count() const { return _childs.size(); }
 	inline size_t attrib_count() const { return _attrib_map.size(); }
-	inline bool is_cdata(){ return _as_cdata; }
 
 	// get child
 	node* child( int idx ){ return idx<0||idx>=int(_childs.size())?nullptr:_childs[idx]; }
@@ -136,26 +135,32 @@ public:
 struct parser : public node
 {
 protected:
-	float _load_time, _save_time;
-	std::wstring indent = L"\t";
-	std::wstring file_path;
+	float	_load_time;
+	float	_save_time;
+	bool	_b_use_bom = false;
+	std::wstring	_indent = L"\t";
+	std::wstring	_file_path;
 
 public:
-	parser(){};
-	parser( const wchar_t* name ):node(name){};
+	parser(){}
+	parser( const wchar_t* name ):node(name){}
 	~parser(){ release(this); }
 
 	void release( node* n );
-	void load( const wchar_t* path );
+	void load( const wchar_t* file_path );
 	void load( const void* memData, size_t length );
-	void save( bool b_use_bom=false ){ save_as( file_path.c_str(), b_use_bom ); }
-	void save_as( const wchar_t* path, bool b_use_bom=false );
+	void save(){ save_as( _file_path.c_str() ); }
+	void save_as( const wchar_t* file_path );
 
-	// interfaces
+	// get interfaces
 	inline float load_time() const { return _load_time; }
 	inline float save_time() const { return _save_time; }
-	inline void set_indent( const wchar_t* i ){ indent=i; }
-	inline const wchar_t* get_indent() const { return indent.c_str(); }
+	inline bool get_use_bom() const { return _b_use_bom; }
+	inline const wchar_t* get_indent() const { return _indent.c_str(); }
+
+	// set interfaces
+	inline void set_use_bom( bool b ) { _b_use_bom=b; }
+	inline void set_indent( const wchar_t* i ){ _indent=i; }
 };
 
 //***********************************************
