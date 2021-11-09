@@ -12,7 +12,7 @@ namespace xml {
 struct node
 {
 public:
-	struct less { bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())<0;}};
+	struct less { bool operator()(const std::wstring& a,const std::wstring& b) const {return _wcsicmp(a.c_str(),b.c_str())<0;}};
 	using attrib_map_t = std::map<std::wstring,std::wstring,node::less>;
 	using iterator = std::vector<node*>::iterator;
 	using const_iterator = std::vector<node*>::const_iterator;
@@ -47,40 +47,40 @@ public:
 	node* clone();
 
 	// iterator
-	bool empty() const { return _childs.empty(); }
-	size_t size() const { return _childs.size(); }
-	iterator begin(){ return _childs.begin(); }
-	iterator end(){ return _childs.end(); }
-	const_iterator begin() const { return _childs.begin(); }
-	const_iterator end() const { return _childs.end(); }
-	node* front(){ return _childs.front(); }
-	node* back(){ return _childs.back(); }
+	__forceinline bool empty() const { return _childs.empty(); }
+	__forceinline size_t size() const { return _childs.size(); }
+	__forceinline iterator begin(){ return _childs.begin(); }
+	__forceinline iterator end(){ return _childs.end(); }
+	__forceinline const_iterator begin() const { return _childs.begin(); }
+	__forceinline const_iterator end() const { return _childs.end(); }
+	__forceinline node* front(){ return _childs.front(); }
+	__forceinline node* back(){ return _childs.back(); }
 
 	// set interface
-	void set_name( const wchar_t* name );
+	node* set_name( const wchar_t* name );
 	void set_attrib( const wchar_t* name, const wchar_t* value );
 	void set_value( const wchar_t* value );
 	void clear_value();
-	void set_as_cdata( bool b=true ){ _as_cdata=b; }
+	__forceinline void set_as_cdata( bool b=true ){ _as_cdata=b; }
 	void remove_attrib( const wchar_t* name );
 
 	// get interface (except value)
-	inline const wchar_t* name() const { return _name.c_str(); }
+	__forceinline const wchar_t* name() const { return _name.c_str(); }
 	const wchar_t* attrib( const wchar_t* name );
-	inline node* parent() const { return _parent; }
-	inline attrib_map_t& attrib_map(){ return _attrib_map; }
-	inline size_t child_count() const { return _childs.size(); }
-	inline size_t attrib_count() const { return _attrib_map.size(); }
+	__forceinline node* parent() const { return _parent; }
+	__forceinline attrib_map_t& attrib_map(){ return _attrib_map; }
+	__forceinline size_t child_count() const { return _childs.size(); }
+	__forceinline size_t attrib_count() const { return _attrib_map.size(); }
 
 	// get child
-	node* child( int idx ){ return idx<0||idx>=int(_childs.size())?nullptr:_childs[idx]; }
-	node* child( const wchar_t* childName ){ for(uint k=0;k<_childs.size();k++) if(_wcsicmp(childName,_childs[k]->name())==0) return _childs[k]; return nullptr; }
-	node* child_by_attrib( const wchar_t* attribName, const wchar_t* attribValue ){ for(uint k=0;k<_childs.size();k++) if(_wcsicmp(_childs[k]->attrib(attribName),attribValue)==0) return _childs[k]; return nullptr; }
-	node* child_by_name_attrib( const wchar_t* childName, const wchar_t* attribName, const wchar_t* attribValue ){ for(uint k=0;k<_childs.size();k++) if(_wcsicmp(childName,_childs[k]->name())==0&&_wcsicmp(_childs[k]->attrib(attribName),attribValue)==0) return _childs[k]; return nullptr; }
+	node* child( int idx ){ return _childs[idx]; }
+	node* child( const wchar_t* name ){ for(auto* c:_childs) if(_wcsicmp(name,c->name())==0) return c; return nullptr; }
+	node* child_by_attrib( const wchar_t* attrib_name, const wchar_t* attrib_value ){ for(auto* c:_childs) if(_wcsicmp(c->attrib(attrib_name),attrib_value)==0) return c; return nullptr; }
+	node* child_by_name_attrib( const wchar_t* name, const wchar_t* attrib_name, const wchar_t* attrib_value ){ for(auto* c:_childs) if(_wcsicmp(name,c->name())==0&&_wcsicmp(c->attrib(attrib_name),attrib_value)==0) return c; return nullptr; }
 
 	// get child list
 	inline std::vector<node*>& childs(){ return _childs; }
-	inline std::vector<node*> childs( const wchar_t* name_filter=nullptr ) const { if(name_filter==nullptr||name_filter[0]==0) return _childs; std::vector<node*> v; for(size_t k=0,kn=_childs.size();k<kn;k++) if(_wcsicmp(name_filter,_childs[k]->name())==0) v.emplace_back(_childs[k]); return v; }
+	inline std::vector<node*> childs( const wchar_t* name_filter ) const { if(!name_filter||!*name_filter) return _childs; std::vector<node*> v; for(auto* c:_childs) if(_wcsicmp(name_filter,c->name())==0) v.emplace_back(c); return v; }
 
 	// overloading add_child() by type
 	node* create_child( const wchar_t* name, bool value );
@@ -95,31 +95,21 @@ public:
 	node* create_child( const wchar_t* name, const mat4& value );
 
 	// get value by type
-	inline std::wstring& value(){	return _value; }
+	inline std::wstring& value(){ return _value; }
 	inline const wchar_t* c_str() const { return _value.c_str(); }
 
 	// value casting
-	template <class T> inline T value_cast() const;
-	template<> inline bool		value_cast<bool>() const {	return _wtoi(_value.c_str())!=0; }
-	template<> inline int		value_cast<int>() const {	return _wtoi(_value.c_str()); }
-	template<> inline uint		value_cast<uint>() const {	return uint(_wtoi(_value.c_str())); }
-	template<> inline float		value_cast<float>() const {	return float(_wtof(_value.c_str())); }
-	template<> inline float2	value_cast<float2>() const {float2 v;	swscanf( _value.c_str(), L"%f %f", &v[0], &v[1] ); return v; }
-	template<> inline float3	value_cast<float3>() const {float3 v;	swscanf( _value.c_str(), L"%f %f %f", &v[0], &v[1], &v[2] ); return v; }
-	template<> inline float4	value_cast<float4>() const {float4 v;	swscanf( _value.c_str(), L"%f %f %f %f", &v[0], &v[1], &v[2], &v[3] ); return v; }
-	template<> inline mat2		value_cast<mat2>() const {	mat2 m;		swscanf( _value.c_str(), L"%f %f %f %f", &m._11, &m._12, &m._21, &m._22 ); return m; }
-	template<> inline mat3		value_cast<mat3>() const {	mat3 m;		swscanf( _value.c_str(), L"%f %f %f %f %f %f %f %f %f", &m._11, &m._12, &m._13, &m._21, &m._22, &m._23, &m._31, &m._32, &m._33 ); return m; }
-	template<> inline mat4		value_cast<mat4>() const {	mat4 m;		swscanf( _value.c_str(), L"%f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f", &m._11, &m._12, &m._13, &m._14, &m._21, &m._22, &m._23, &m._24, &m._31, &m._32, &m._33, &m._34, &m._41, &m._42, &m._43, &m._44 ); return m; }
-
-	// value casting by operator overloading
-	operator bool() const {		return value_cast<bool>(); }
-	operator int() const {		return value_cast<int>(); }
-	operator float() const {	return value_cast<float>(); }
-	operator float2() const {	return value_cast<float2>(); }
-	operator float3() const {	return value_cast<float3>(); }
-	operator float4() const {	return value_cast<float4>(); }
-	operator mat3() const {		return value_cast<mat3>(); }
-	operator mat4() const {		return value_cast<mat4>(); }
+	template <class T> T	 value_cast() const;
+	template<> inline bool	 value_cast<bool>() const { return _wtoi(_value.c_str())!=0; }
+	template<> inline int	 value_cast<int>() const { return _wtoi(_value.c_str()); }
+	template<> inline uint	 value_cast<uint>() const { return uint(_wtoi(_value.c_str())); }
+	template<> inline float	 value_cast<float>() const { return float(_wtof(_value.c_str())); }
+	template<> inline float2 value_cast<float2>() const { float2 v; swscanf( _value.c_str(), L"%f %f", &v[0], &v[1] ); return v; }
+	template<> inline float3 value_cast<float3>() const { float3 v; swscanf( _value.c_str(), L"%f %f %f", &v[0], &v[1], &v[2] ); return v; }
+	template<> inline float4 value_cast<float4>() const { float4 v; swscanf( _value.c_str(), L"%f %f %f %f", &v[0], &v[1], &v[2], &v[3] ); return v; }
+	template<> inline mat2	 value_cast<mat2>() const {		mat2 m; swscanf( _value.c_str(), L"%f %f %f %f", &m._11, &m._12, &m._21, &m._22 ); return m; }
+	template<> inline mat3	 value_cast<mat3>() const {		mat3 m; swscanf( _value.c_str(), L"%f %f %f %f %f %f %f %f %f", &m._11, &m._12, &m._13, &m._21, &m._22, &m._23, &m._31, &m._32, &m._33 ); return m; }
+	template<> inline mat4	 value_cast<mat4>() const {		mat4 m; swscanf( _value.c_str(), L"%f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f", &m._11, &m._12, &m._13, &m._14, &m._21, &m._22, &m._23, &m._24, &m._31, &m._32, &m._33, &m._34, &m._41, &m._42, &m._43, &m._44 ); return m; }
 
 	// print
 	void begin_print( FILE* fp, int depth, const wchar_t* indent );
@@ -127,8 +117,8 @@ public:
 
 	// traversal with callback
 	void traverse( void(*callback_func)(node*) );
-	void traverse_if( bool(*callback_func)(node*) );			// while callback function returns true, depth-first-traverse the nodes
-	void traverse_remove_child_if( bool(*callback_func)(node*) );		// if callback function returns true, then remove the nodes
+	void traverse_if( bool(*callback_func)(node*) );				// while callback function returns true, depth-first-traverse the nodes
+	void traverse_remove_child_if( bool(*callback_func)(node*) );	// if callback function returns true, then remove the nodes
 };
 
 //***********************************************
