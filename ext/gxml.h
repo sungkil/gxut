@@ -57,7 +57,7 @@ public:
 	__forceinline node* back(){ return _childs.back(); }
 
 	// set interface
-	node* set_name( const wchar_t* name );
+	void set_name( const wchar_t* name );
 	void set_attrib( const wchar_t* name, const wchar_t* value );
 	void set_value( const wchar_t* value );
 	void clear_value();
