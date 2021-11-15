@@ -28,9 +28,9 @@ inline void create_process_redir( const wchar_t* cmd )
 
 	HANDLE stdout_read=INVALID_HANDLE_VALUE;		// parent process's stdout read handle
 	HANDLE stdout_write=INVALID_HANDLE_VALUE;	// child process' stdout write handle
-	if(!CreatePipe( &stdout_read, &stdout_write, &sa, REDIR_BUFFER_SIZE )){ fprintf( stdout, "[redir] CreatePipe(stdout) failed: %s\n", os::get_last_error() ); return; }
-	if(stdout_read==INVALID_HANDLE_VALUE||stdout_write==INVALID_HANDLE_VALUE){ fprintf( stdout, "[redir] CreatePipe(stdout) failed: %s\n", os::get_last_error() ); return; }
-	if(!SetHandleInformation(stdout_read,HANDLE_FLAG_INHERIT,0)){ fprintf( stdout, "[redir] SetHandleInformation() failed: %s\n", os::get_last_error() ); return; }
+	if(!CreatePipe( &stdout_read, &stdout_write, &sa, REDIR_BUFFER_SIZE )){ fprintf( stdout, "[redir] CreatePipe(stdout) failed: %s\n", wtoa(os::get_last_error()) ); return; }
+	if(stdout_read==INVALID_HANDLE_VALUE||stdout_write==INVALID_HANDLE_VALUE){ fprintf( stdout, "[redir] CreatePipe(stdout) failed: %s\n", wtoa(os::get_last_error()) ); return; }
+	if(!SetHandleInformation(stdout_read,HANDLE_FLAG_INHERIT,0)){ fprintf( stdout, "[redir] SetHandleInformation() failed: %s\n", wtoa(os::get_last_error()) ); return; }
 
 	// additional configuration for non-buffered IO
 	setvbuf( stdout, nullptr, _IONBF, 0 );	// absolutely needed
@@ -48,7 +48,7 @@ inline void create_process_redir( const wchar_t* cmd )
 	si.dwFlags = STARTF_USESHOWWINDOW|STARTF_USESTDHANDLES;
 
 	// Launch the child process.
-	if(!CreateProcessW(nullptr, (LPWSTR)cmd, nullptr, nullptr, TRUE, 0, nullptr, path::cwd(), &si, &pi )) return void(fprintf( stdout, "[redir] CreateProcess() failed: %s\n", os::get_last_error() ));
+	if(!CreateProcessW(nullptr, (LPWSTR)cmd, nullptr, nullptr, TRUE, 0, nullptr, path::cwd(), &si, &pi )) return void(fprintf( stdout, "[redir] CreateProcess() failed: %s\n", wtoa(os::get_last_error()) ));
 
 	// infinite loop to read
 	read_redir( stdout_read, pi.hProcess );
