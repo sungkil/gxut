@@ -47,7 +47,7 @@ protected:
 	std::pair<const char*,const char*> split_section_key( const char* seckey ){ char *sk=__tstrdup(seckey),*colon=(char*)strchr(&sk[0],':');if(colon==nullptr)return std::make_pair("",sk);else{colon[0]=0;return std::make_pair(sk,colon+1);} }
 
 public:
-	~parser_t(){ DeleteCriticalSection(&cs); }
+	~parser_t(){ for(auto& it:dic)if(it.second!=nullptr){delete it.second;} dic.clear(); DeleteCriticalSection(&cs); }
 	parser_t(){ InitializeCriticalSectionAndSpinCount(&cs,2000); }
 	parser_t( path file_path ):parser_t(){ set_path(file_path); }
 
@@ -62,9 +62,8 @@ public:
 	std::vector<entry_t*> entries( const char* sec=nullptr ){ std::vector<entry_t*> el; for(auto& it:dic) if(sec==nullptr||_stricmp(it.second->section.c_str(),sec)==0) el.emplace_back(it.second); std::sort(el.begin(),el.end(),entry_t::compare_by_index); return el; } // return all entries if no section is given
 
 	// clear
-	void clear(){ for(auto& it:dic)if(it.second!=nullptr){delete it.second;} dic.clear(); save(); }
-	void clear_entry( const char* seckey ){ auto it=dic.find(seckey);if(it==dic.end())return; delete it->second; dic.erase(it); save(); }
-	void clear_entry( const char* sec, const char* key ){ char sk[4096]; sprintf_s(sk,4096,"%s:%s",sec,key); clear_entry(sk); save(); }
+	void clear( const char* seckey ){ auto it=dic.find(seckey);if(it==dic.end())return; delete it->second; dic.erase(it); save(); }
+	void clear( const char* sec, const char* key ){ char sk[4096]; sprintf_s(sk,4096,"%s:%s",sec,key); clear(sk); save(); }
 	void clear_section( const std::string& sec ){ bool b_save=false; for(auto it=dic.begin();it!=dic.end();){if(_stricmp(it->second->section.c_str(),sec.c_str())==0){delete it->second;it=dic.erase(it);b_save=true; }else it++;} save(); }
 
 	// load/save
