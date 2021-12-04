@@ -109,6 +109,7 @@ struct path
 	path( const path& p ) noexcept { wcscpy(alloc(),p); cache()=p.cache(); } // do not canonicalize for copy constructor
 	path( path&& p ) noexcept { data=p.data; p.data=nullptr; } // cache moves as well
 	path( const wchar_t* s ) noexcept : path() { wcscpy(data,s); }
+	path( const wchar_t* s, size_t length ) noexcept : path() { memcpy(data,s,length*sizeof(wchar_t)); data[length]=0; }
 	path( const char* s ) noexcept : path() { __mb2wc(s,data); }
 	explicit path( const std::wstring& s ) noexcept : path() { wcscpy(data,s.c_str()); }
 	explicit path( const std::string& s ) noexcept : path() { __mb2wc(s.c_str(),data); }
