@@ -257,7 +257,7 @@ struct camera_t
 {
 	mat4 view_matrix, projection_matrix;
 	union { struct { union {float fovy, height;}; float aspect,dnear,dfar; }; vec4 pp; }; // fov in radians; height for orthographic projection; pp=perspective parameters
-	alignas(16) vec3 eye, center, up;	// lookAt params (16-bytes aligned for std140 layout)
+	alignas(16)	vec3 eye, center, up;	// lookAt params (16-bytes aligned for std140 layout)
 	float F, E, df, fn;					// focal distance, lens radius, focusing depth (in object distance), f-number
 
 	camera_t() = default;
@@ -265,6 +265,13 @@ struct camera_t
 	camera_t(const camera_t& c) = default;
 	camera_t& operator=(camera_t&& c) = default;
 	camera_t& operator=(const camera_t& c) = default;
+
+	mat4	inverse_view_matrix() const { return mat4::look_at_inverse(eye,center,up); } // works without eye, center, up
+	float	coc_norm_scale() const { float E=F/fn*0.5f; return E/df/tan(fovy*0.5f); } // normalized coc scale in the screen space; E: lens_radius
+	float	coc_scale( int height ) const { return coc_norm_scale()*float(height)*0.5f; } // screen-space coc scale; so called "K" so far
+	mat4	perspective_dx() const { mat4 m = projection_matrix; m._33 = dfar/(dnear-dfar); m._34*=0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
+	vec2	plane_size(float ecd = 1.0f) const { return vec2(2.0f/projection_matrix._11, 2.0f/projection_matrix._22)*ecd; } // plane size (width, height) at eye-coordinate distance 1
+	void	update_depth_clips( const bbox& bound ){ bbox b=view_matrix*bound; vec2 z(max(0.001f,-b.M.z),max(0.001f,-b.m.z)); dnear=max(max(bound.radius()*0.00001f, 50.0f),z.x*0.99f); dfar=max(max(dnear+1.0f,dnear*1.01f),z.y*1.01f); }
 };
 static_assert(sizeof(camera_t)%16==0, "size of struct camera_t should be aligned at 16-byte boundary");
 #endif
@@ -279,20 +286,14 @@ struct stereo_t
 
 struct camera : public camera_t
 {
-	vec3		dir;				// dir = center - eye (view direction vector)
-	int			frame = RAND_MAX;	// frame used for this camera; used in a motion tracer
-	frustum_t	frustum;			// view frustum for culling
-	camera_t	prev;				// placeholder for the camera at the previous frame
-	stereo_t	stereo;				// stereo rendering attributes
-
-	mat4	inverse_view_matrix() const { return mat4::look_at_inverse(eye,center,up); } // works without eye, center, up
-	float	coc_norm_scale() const { float E=F/fn*0.5f; return E/df/tan(fovy*0.5f); } // normalized coc scale in the screen space; E: lens_radius
-	float	coc_scale( int height ) const { return coc_norm_scale()*float(height)*0.5f; } // screen-space coc scale; so called "K" so far
-	mat4	perspective_dx() const { mat4 m = projection_matrix; m._33 = dfar/(dnear-dfar); m._34*=0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
-	vec2	plane_size(float ecd = 1.0f) const { return vec2(2.0f/projection_matrix._11, 2.0f/projection_matrix._22)*ecd; } // plane size (width, height) at eye-coordinate distance 1
-	void	update_depth_clips( const bbox& bound ){ bbox b=view_matrix*bound; vec2 z(max(0.001f,-b.M.z),max(0.001f,-b.m.z)); dnear=max(max(bound.radius()*0.00001f, 50.0f),z.x*0.99f); dfar=max(max(dnear+1.0f,dnear*1.01f),z.y*1.01f); }
-	void	update_view_frustum(){ frustum.update(projection_matrix*view_matrix); }
+	vec3		dir;					// dir = center - eye (view direction vector)
+	int			frame = RAND_MAX;		// frame used for this camera; used in a motion tracer
+	camera_t	last;					// placeholder for the camera at the previous frame
+	frustum_t	frustum;				// view frustum for culling
+	stereo_t	stereo;					// stereo rendering attributes
+	
 	bool	cull( const bbox_t& b ) const { return frustum.cull(b); }
+	void	update_view_frustum(){ frustum.update(projection_matrix*view_matrix); }
 	void	update_stereo(){ if(!stereo.model) return; float s=0.5f*stereo.ipd, o=s*dnear/df, t=dnear*tanf(0.5f*fovy*(fovy<PI<float>?1.0f:PI<float>/180.0f)), R=t*aspect; vec3 stereo_dir = normalize(cross(dir,up))*s; auto& l=stereo.left=*this; l.eye-=stereo_dir; l.center-=stereo_dir; l.view_matrix=mat4::look_at(l.eye, l.center, l.up); l.projection_matrix=mat4::perspective_off_center(-R+o, R+o, t, -t, dnear, dfar); auto& r=stereo.right=*this; r.eye+=stereo_dir; r.center+=stereo_dir; r.view_matrix=mat4::look_at(r.eye,r.center,r.up); r.projection_matrix=mat4::perspective_off_center(-R-o, R-o, t, -t, dnear, dfar);}
 };
 
