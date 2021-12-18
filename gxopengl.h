@@ -218,9 +218,14 @@ namespace gl {
 		GLuint bind_range( GLuint index, GLintptr offset, GLsizeiptr size, bool b_bind=true ){ GLuint b0=binding(); if(base_bindable(target)&&(!b_bind||b0!=ID)) glBindBufferRange( target, index, b_bind?ID:0, offset, size ); return b0; }
 		__forceinline bool base_bindable( GLenum target1 ){ return target1==GL_SHADER_STORAGE_BUFFER||target1==GL_UNIFORM_BUFFER||target1==GL_TRANSFORM_FEEDBACK_BUFFER||target1==GL_ATOMIC_COUNTER_BUFFER; }
 
-		void set_sub_data( GLsizeiptr size, GLvoid* data, GLintptr offset=0 ){ if(glNamedBufferSubData) glNamedBufferSubData(ID,offset,size,data); else { GLuint b0=bind(); glBufferSubData(target,offset,size,data); glBindBuffer(target,b0); } }
-		void get_data( GLvoid* data, GLsizeiptr size=0 ){ get_sub_data( data, size, 0 ); }
+		void set_sub_data( const GLvoid* data, GLsizeiptr size, GLintptr offset=0 ){ if(glNamedBufferSubData) glNamedBufferSubData(ID,offset,size,data); else { GLuint b0=bind(); glBufferSubData(target,offset,size,data); glBindBuffer(target,b0); } }
+		template <class T> void set_data( const T* data, GLsizeiptr count ){ set_sub_data((const GLvoid*)data,sizeof(T)*count,0); }
+		template <class T> void set_data( T data ){ set_sub_data(&data,GLsizeiptr(sizeof(T)),0); }
+		template <class T> void set_data( const std::vector<T>& data ){ set_sub_data( data.data(), GLsizeiptr(sizeof(T)*data.size()), 0 ); }
+		template <class T, size_t N> void set_data( const std::array<T,N>& data ){ set_sub_data( data.data(), GLsizeiptr(sizeof(T)*N), 0 ); }
 		void get_sub_data( GLvoid* data, GLsizeiptr size, GLintptr offset=0 ){ if(glGetNamedBufferSubData) glGetNamedBufferSubData(ID,offset,size?size:this->size(),data); else if(glGetBufferSubData){ GLuint b0=bind(); glGetBufferSubData(target,offset,size?size:this->size(),data); glBindBuffer(target,b0); } }
+		template <class T> T get_data(){ T v; get_sub_data(&v,sizeof(T),0); return v; }
+		template <class T> std::vector<T> get_data( GLsizeiptr count ){ std::vector<T> v; v.resize(count); get_sub_data(v.data(),sizeof(T)*count,0); return v; }
 		void copy_data( Buffer* write_buffer, GLsizei size=0 ){ copy_sub_data( write_buffer, size?size:this->size() ); }
 		void copy_sub_data( Buffer* write_buffer, GLsizei size, GLintptr read_offset=0, GLintptr write_offset=0 ){ if(glCopyNamedBufferSubData) glCopyNamedBufferSubData(ID,write_buffer->ID,read_offset,write_offset,size); else printf("Buffer::copySubData(): glCopyNamedBufferSubData==nullptr (only supports named mode)\n" ); }
 		void clear_data( GLenum internalformat, GLenum format, GLenum type, const void* data, GLintptr offset=0, GLsizeiptr size=0 ){ if(!glClearBufferData||!glClearBufferSubData) return; if(!size&&!offset){ GLuint b0=bind(true); glClearBufferData(target,internalformat,format,type,data); bind(b0); return; } GLuint b0=bind(true); glClearBufferSubData(target,internalformat,offset,size?size:parameteriv(GL_BUFFER_SIZE),format,type,data); bind(b0); }
