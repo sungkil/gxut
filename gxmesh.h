@@ -230,8 +230,8 @@ struct frustum_t : public std::array<vec4, 6> // left, right, top, bottom, near,
 	__forceinline frustum_t() = default;
 	__forceinline frustum_t( frustum_t&& ) = default;
 	__forceinline frustum_t( const frustum_t& ) = default;
-	__forceinline frustum_t( const mat4& view_matrix, const mat4& projection_matrix ){ update(projection_matrix*view_matrix); }
-	__forceinline frustum_t( camera_t& c );
+	__forceinline frustum_t( const mat4& view_projection_matrix ){ update(view_projection_matrix); }
+	__forceinline frustum_t( camera_t& c ){ update(c); }
 	__forceinline frustum_t( vpl_t& c ){ update(c); }
 	__forceinline frustum_t& operator=( frustum_t&& ) = default;
 	__forceinline frustum_t& operator=( const frustum_t& ) = default;
@@ -297,7 +297,6 @@ struct camera : public camera_t
 	void	update_stereo(){ if(!stereo.model) return; float s=0.5f*stereo.ipd, o=s*dnear/df, t=dnear*tanf(0.5f*fovy*(fovy<PI<float>?1.0f:PI<float>/180.0f)), R=t*aspect; vec3 stereo_dir = normalize(cross(dir,up))*s; auto& l=stereo.left=*this; l.eye-=stereo_dir; l.center-=stereo_dir; l.view_matrix=mat4::look_at(l.eye, l.center, l.up); l.projection_matrix=mat4::perspective_off_center(-R+o, R+o, t, -t, dnear, dfar); auto& r=stereo.right=*this; r.eye+=stereo_dir; r.center+=stereo_dir; r.view_matrix=mat4::look_at(r.eye,r.center,r.up); r.projection_matrix=mat4::perspective_off_center(-R-o, R-o, t, -t, dnear, dfar);}
 };
 
-__forceinline frustum_t::frustum_t( camera_t& c ){ update(c); }
 __forceinline frustum_t& frustum_t::update( camera_t& c ){ return update(c.projection_matrix*c.view_matrix); }
 
 //*************************************
