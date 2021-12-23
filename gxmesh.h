@@ -287,11 +287,12 @@ struct stereo_t
 
 struct camera : public camera_t
 {
-	vec3		dir;					// dir = center - eye (view direction vector)
-	int			frame = RAND_MAX;		// frame used for this camera; used in a motion tracer
-	camera_t	last;					// placeholder for the camera at the previous frame
-	frustum_t	frustum;				// view frustum for culling
-	stereo_t	stereo;					// stereo rendering attributes
+	camera*		last=nullptr;		// current to last
+	camera*		next=nullptr;		// last to current
+	vec3		dir;				// dir = center - eye (view direction vector)
+	int			frame = RAND_MAX;	// frame used for this camera; used in a motion tracer
+	frustum_t	frustum;			// view frustum for culling
+	stereo_t	stereo;				// stereo rendering attributes
 	
 	bool	cull( const bbox_t& b ) const { return frustum.cull(b); }
 	void	update_view_frustum(){ frustum.update(projection_matrix*view_matrix); }
