@@ -135,6 +135,10 @@ inline const char* dtoa( const double3& v ){static const char* fmt="%g %g %g";si
 inline const char* dtoa( const double4& v ){static const char* fmt="%g %g %g %g";size_t size=size_t(_scprintf(fmt,v[0],v[1],v[2],v[3]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v[0],v[1],v[2],v[3]);return buff;}
 
 //***********************************************
+// 6.1 bitwise conversion
+template <class T> inline const char* unpack_bits( const T& v ){ size_t n=sizeof(T)*8; char* buff=_strbuf(n); buff[n]=0; for(size_t k=0,s=0;k<n;k++,s=k%8) buff[k]=(((const char*)&v)[k>>3]&(1<<s))?'1':'0'; return buff; }
+
+//***********************************************
 // 6.2 Special-purpose functions
 
 // conversion int to string with commas
