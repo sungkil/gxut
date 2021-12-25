@@ -860,6 +860,16 @@ __noinline bool intersect( ray r, vec3 v0, vec3 v1, vec3 v2, isect& h )
 	return true;
 }
 
+// ray-ray intersection: find the closest points on two 3D rays, which may skew in space
+__noinline vec2 intersect_rays( vec3 ro, vec3 rd, vec3 po, vec3 pd )
+{
+	vec3 a=rd, b=pd, c=(po-ro);
+	vec3 ab=cross(a,b), ca=cross(c,a), cb=cross(c,b);
+	float l=dot(ab,ab); if(l==0) return vec2(0,0); // parallel lines
+	//if(dot(c,ab)!=0) return 0.0f; // non-coplanar rays, which mostly happens due to limited floating-point precision
+	return vec2(dot(cb,ab),dot(ca,ab))/l; // t of the closest point on (r,p)
+}
+
 // box intersection
 __noinline bool bbox::intersect( ray r )
 {
