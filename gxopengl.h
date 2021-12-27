@@ -1341,7 +1341,7 @@ inline void glfxDeleteParser( glfx::IParser** pp_parser ){ if(!pp_parser||!(*pp_
 #endif // GLFX_PARSER_IMPL
 //***********************************************
 
-inline gl::Effect* gxCreateEffect( const char* name, const char* effect_source, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr )
+inline gl::Effect* gxCreateEffect( const char* name, const char* source, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr )
 {
 #ifndef GLFX_PARSER_IMPL
 	static glfx::IParser*(*glfxCreateParser)() = (glfx::IParser*(*)()) GetProcAddress(GetModuleHandleW(nullptr),"glfxCreateParser"); if(glfxCreateParser==nullptr){ printf( "%s(): unable to link to glfxCreateParser()\n", __func__ ); return nullptr; }
@@ -1349,7 +1349,7 @@ inline gl::Effect* gxCreateEffect( const char* name, const char* effect_source, 
 #endif
 
 	// preprocess source code
-	std::string src; if(p_macro&&p_macro[0]) src=p_macro; if(!src.empty()&&src.back()!='\n') src+='\n'; src+=effect_source;
+	std::string src; if(p_macro&&p_macro[0]) src=p_macro; if(!src.empty()&&src.back()!='\n') src+='\n'; src+=source;
 
 	// load shaders from effect
 	glfx::IParser* parser = glfxCreateParser(); if(parser==nullptr){ printf( "%s(): unable to create parser\n", __func__ ); return nullptr; }
@@ -1365,6 +1365,11 @@ inline gl::Effect* gxCreateEffect( const char* name, const char* effect_source, 
 
 	return e;
 }
+
+inline gl::Effect* gxCreateEffect( const char* name, std::vector<const char*> sources, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr ){ std::string s;for(auto e:sources)s+=e;return gxCreateEffect(name,s.c_str(),p_macro,p_effect_to_append); }
+inline gl::Effect* gxCreateEffect( const char* name, std::vector<std::string> sources, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr ){ std::string s;for(auto& e:sources)s+=e;return gxCreateEffect(name,s.c_str(),p_macro,p_effect_to_append); }
+inline gl::Effect* gxCreateEffect( const char* name, std::initializer_list<const char*> sources, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr ){ std::string s;for(auto e:sources)s+=e;return gxCreateEffect(name,s.c_str(),p_macro,p_effect_to_append); }
+inline gl::Effect* gxCreateEffect( const char* name, std::initializer_list<std::string> sources, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr ){ std::string s;for(auto& e:sources)s+=e;return gxCreateEffect(name,s.c_str(),p_macro,p_effect_to_append); }
 
 inline bool gl::Effect::attach( const char* name, const char* effect_source, const char* p_macro )
 {
