@@ -43,10 +43,15 @@ template <class T,template <class> class A=tarray2> struct tvec2
 
 	union{struct{T x,y;};struct{T r,g;};A<T> xy,rg;};
 
-	// constructor inheritance
-	__forceinline tvec2( const A<T>& v ){x=v.x;y=v.y;}
+	// basic constructors
+	__forceinline tvec2( A<T> v ){x=v.x;y=v.y;}
 	__forceinline tvec2( T a ){x=y=a;}
 	__forceinline tvec2( T a, T b ){x=a;y=b;}
+
+	// extended constructors with explicit casting
+	template <class X> __forceinline tvec2( tvec2<X,tarray2> v ){x=T(v.x);y=T(v.y);}
+	template <class X> __forceinline tvec2( X a ){x=y=T(a);}
+	template <class X,class Y> __forceinline tvec2( X a, Y b ){x=T(a);y=T(b);}
 
 	// assignment operators
 	__forceinline tvec2& operator=( A<T>&& v ){ memmove(this,&v,sizeof(v)); return *this; }
@@ -102,12 +107,19 @@ template <class T,template <class> class A=tarray3> struct tvec3
 
 	union{struct{T x,y,z;};struct{T r,g,b;};union{V2 xy,rg;};struct{T _x;union{V2 yz,gb;};};A<T> xyz,rgb;};
 
-	// constructor inheritance
-	__forceinline tvec3( const A<T>& v ){x=v.x;y=v.y;z=v.z;}
+	// constructors
+	__forceinline tvec3( A<T> v ){x=v.x;y=v.y;z=v.z;}
 	__forceinline tvec3( T a ){x=y=z=a;}
 	__forceinline tvec3( T a, T b, T c ){x=a;y=b;z=c;}
-	__forceinline tvec3( const V2& v, T c ){x=v.x;y=v.y;z=c;}
-	__forceinline tvec3( T a, const V2& v ){x=a;y=v.x;z=v.y;}
+	__forceinline tvec3( V2 v, T c ){x=v.x;y=v.y;z=c;}
+	__forceinline tvec3( T a, V2 v ){x=a;y=v.x;z=v.y;}
+
+	// extended constructors with explicit casting
+	template <class X> __forceinline tvec3( tvec3<X,tarray3> v ){x=T(v.x);y=T(v.y);z=T(v.z);}
+	template <class X> __forceinline tvec3( X a ){x=y=z=T(a);}
+	template <class X,class Y,class Z> __forceinline tvec3( X a, Y b, Z c ){x=T(a);y=T(b);z=T(c);}
+	template <class X,class Z> __forceinline tvec3( tvec2<X,tarray2> v, Z c ){x=T(v.x);y=T(v.y);z=T(c);}
+	template <class X,class Y> __forceinline tvec3( X a, tvec2<Y,tarray2> v ){x=a;y=T(v.x);z=T(v.y);}
 
 	// assignment operators
 	__forceinline tvec3& operator=( A<T>&& v ){ memmove(this,&v,sizeof(v)); return *this; }
@@ -167,16 +179,27 @@ template <class T,template <class> class A=tarray4> struct tvec4
 
 	union{struct{T x,y,z,w;};struct{T r,g,b,a;};struct{union{V2 xy,rg;};union{V2 zw,ba;};};union{V3 xyz,rgb;};struct{T _x;union{V3 yzw,gba;V2 yz,gb;};};A<T> xyzw,rgba;};
 
-	// constructor inheritance
-	__forceinline tvec4( const A<T>& v ){x=v.x;y=v.y;z=v.z;w=v.w;}
+	// basic constructors
+	__forceinline tvec4( A<T> v ){x=v.x;y=v.y;z=v.z;w=v.w;}
 	__forceinline tvec4( T a ){x=y=z=w=a;}
 	__forceinline tvec4( T a, T b, T c, T d ){x=a;y=b;z=c;w=d;}
-	__forceinline tvec4( T a, const V2& v, T d ){x=a;y=v.x;z=v.y;w=d;}
-	__forceinline tvec4( T a, const V3& v ){x=a;y=v.x;z=v.y;w=v.z;}
-	__forceinline tvec4( T a, T b, const V2& v ){x=a;y=b;z=v.x;w=v.y;}
-	__forceinline tvec4( const V2& v, T c, T d ){x=v.x;y=v.y;z=c;w=d;}
-	__forceinline tvec4( const V2& v1, const V2& v2 ){x=v1.x;y=v1.y;z=v2.x;w=v2.y;}
-	__forceinline tvec4( const V3& v, T d ){x=v.x;y=v.y;z=v.z;w=d;}
+	__forceinline tvec4( T a, V2 v, T d ){x=a;y=v.x;z=v.y;w=d;}
+	__forceinline tvec4( T a, V3 v ){x=a;y=v.x;z=v.y;w=v.z;}
+	__forceinline tvec4( T a, T b, V2 v ){x=a;y=b;z=v.x;w=v.y;}
+	__forceinline tvec4( V2 v, T c, T d ){x=v.x;y=v.y;z=c;w=d;}
+	__forceinline tvec4( V2 v, V2 u ){x=v.x;y=v.y;z=u.x;w=u.y;}
+	__forceinline tvec4( V3 v, T d ){x=v.x;y=v.y;z=v.z;w=d;}
+
+	// extended constructors with explicit casting
+	template <class X> __forceinline tvec4( tvec4<X,tarray4> v ){x=T(v.x);y=T(v.y);z=T(v.z);w=T(v.w);}
+	template <class X> __forceinline tvec4( X a ){x=y=z=w=T(a);}
+	template <class X,class Y,class Z,class W> __forceinline tvec4( X a, Y b, Z c, W d ){x=T(a);y=T(b);z=T(c);w=T(d);}
+	template <class X,class Y,class W> __forceinline tvec4( X a, tvec2<Y,tarray2> v, W d ){x=T(a);y=T(v.x);z=T(v.y);w=T(d);}
+	template <class X,class Y> __forceinline tvec4( X a, tvec3<Y,tarray3> v ){x=T(a);y=T(v.x);z=T(v.y);w=T(v.z);}
+	template <class X,class Y,class Z> __forceinline tvec4( X a, Y b, tvec2<Z,tarray2> v ){x=T(a);y=T(b);z=T(v.x);w=T(v.y);}
+	template <class X,class Z,class W> __forceinline tvec4( tvec2<X,tarray2> v, Z c, W d ){x=T(v.x);y=T(v.y);z=T(c);w=T(d);}
+	template <class X,class Z> __forceinline tvec4( tvec2<X,tarray2> v, tvec2<Z,tarray2> u ){x=T(v.x);y=T(v.y);z=T(u.x);w=T(u.y);}
+	template <class X,class W> __forceinline tvec4( tvec3<X,tarray3> v, W d ){x=T(v.x);y=T(v.y);z=T(v.z);w=T(d);}
 
 	// assignment operators
 	__forceinline tvec4& operator=( A<T>&& v ){ memmove(this,&v,sizeof(v)); return *this; }
