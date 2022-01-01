@@ -118,7 +118,7 @@ namespace gl
 	unsigned int crc32c( const void* ptr, size_t size, unsigned int crc0=0 );
 	struct Texture; struct Buffer; struct Program; struct VertexArray;
 	using shader_source_t = std::map<GLuint,std::vector<std::string>>;
-	using shader_lines_t = std::vector<std::pair<size_t,std::string>>;
+	using shader_lines_t = std::vector<std::pair<int,std::string>>;
 }
 
 gl::Texture*		gxCreateTexture1D(const char*,GLint,GLsizei,GLsizei,GLint,GLvoid*,bool);
@@ -1116,9 +1116,9 @@ inline std::string gxJoinShaderSource( gl::shader_lines_t& v )
 	return source;
 }
 
-inline std::map<size_t,std::string> gxExplodeShaderSourceMap( const char* source, int first_index=1 )
+inline std::map<int,std::string> gxExplodeShaderSourceMap( const char* source, int first_index=1 )
 {
-	std::map<size_t,std::string> m;
+	std::map<int,std::string> m;
 	for( const auto& s : gxExplodeShaderSource(source,first_index) )
 		if(!strstr(s.second.c_str(),"#line")) m.emplace(s);
 	return m;
@@ -1132,17 +1132,23 @@ inline void gxInfoLog( const char* name, const char* msg, const std::vector<std:
 	else
 	{
 		struct line_t { int page; int offset; std::string s; }; std::map<size_t,line_t> lines;
+		std::vector<int> offsets; offsets.resize(p_source->size(),0);
 		for( int k=0, kn=int(p_source->size()); k<kn; k++ )
 		{
-			int offset=lines.empty()?0:int(lines.rbegin()->first), first_index=offset+1;
-			for(auto& it:gxExplodeShaderSourceMap(p_source->at(k).c_str(),first_index)) lines.emplace(it.first,line_t{k,offset,it.second});
+			if(k>0&&!lines.empty()) offsets[k] = int(lines.rbegin()->first);
+			for(auto& it:gxExplodeShaderSourceMap(p_source->at(k).c_str(),offsets[k]+1))
+			{
+				int offset=offsets[k]; if(k>0&&it.first<=offset){ for(int j=k-1;j>=0&&it.first<=offset;j--) offset=offsets[j]; }
+				lines.emplace(it.first,line_t{k,offset,it.second});
+			}
 		}
 
 		auto extract = [&]( std::string& m, int idx, bool b_replace=false )->std::string
 		{
 			if(idx<0) return "";
-			auto it=lines.find(size_t(idx)); if(it==lines.end()) return ""; auto& l = it->second;
-			std::string pl = format("%d(%d)",l.page,idx-l.offset);;
+			auto it=lines.find(size_t(idx)); if(it==lines.end()) return "";
+			auto& l = it->second; if(idx<=l.offset) return "";
+			std::string pl = format("%d(%d)",l.page,idx-l.offset);
 			if(b_replace) m = str_replace(m.c_str(),format("0(%d)",idx),pl.c_str());
 			l.s = trim(str_replace(l.s.c_str(),"%", "%%")); // % causes crash in gprintf
 			return l.s.empty() ? "": format( "\n%s> %s", pl.c_str(), l.s.c_str() );
