@@ -708,7 +708,6 @@ namespace gl {
 		size_t size() const { return programs.size(); }
 		Program* get_program( const char* program_name ) const { for(uint k=0;k<programs.size();k++)if(_stricmp(programs[k]->name,program_name)==0) return programs[k]; printf("Unable to find program \"%s\" in effect \"%s\"\n", program_name, name ); return nullptr; }
 		Program* get_program( uint index ) const { if(index<programs.size()) return programs[index]; else { printf("[%s] Out-of-bound program index\n", name ); return nullptr; } }
-		Program* create_program( const char* prefix, const char* name, const shader_source_t& source, const char* p_macro=nullptr, std::vector<const char*>* tf_varyings=nullptr ){ Program* p=gxCreateProgram(prefix,name,source,p_macro,tf_varyings); if(!p) return nullptr; return attach_program(p); }
 		Program* create_program( const char* prefix, const char* name, const std::map<GLuint,std::string>& source, const char* p_macro=nullptr, std::vector<const char*>* tf_varyings=nullptr ){ gl::shader_source_t ss; for( auto& it:source) ss[it.first]={it.second}; Program* p=gxCreateProgram(prefix,name,ss,p_macro,tf_varyings); if(!p) return nullptr; return attach_program(p); }
 		Program* attach_program( Program* program ){ if(!program) return nullptr; programs.emplace_back(program); auto& m=program->uniform_block_map;for(auto& it:m){gl::Program::UniformBlock& ub=it.second;ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size);} return program; }
 		bool attach( const char* name, const char* effect_source, const char* p_macro=nullptr );
