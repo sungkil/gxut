@@ -115,8 +115,10 @@ inline bool		gxHasMultidraw(){ return GX_ARB_bindless_texture&&GX_ARB_shader_dra
 // forward declarations
 namespace gl
 {
-	struct Texture; struct Buffer; struct Program; struct VertexArray;
 	unsigned int crc32c( const void* ptr, size_t size, unsigned int crc0=0 );
+	struct Texture; struct Buffer; struct Program; struct VertexArray;
+	using shader_source_t = std::map<GLuint,std::vector<std::string>>;
+	using shader_lines_t = std::vector<std::pair<size_t,std::string>>;
 }
 
 gl::Texture*		gxCreateTexture1D(const char*,GLint,GLsizei,GLsizei,GLint,GLvoid*,bool);
@@ -127,7 +129,7 @@ gl::Texture*		gxCreateTextureBuffer(const char*,gl::Buffer*,GLint);
 gl::Texture*		gxCreateTextureRectangle(const char*,GLsizei,GLsizei,GLint,GLvoid*);
 gl::Texture*		gxCreateTextureView(gl::Texture*,GLuint,GLuint,GLuint,GLuint,bool,GLenum);
 gl::Buffer*			gxCreateBuffer(const char*,GLenum,GLsizeiptr,GLenum,const void*,GLbitfield);
-gl::Program*		gxCreateProgram(const char*,const char*,const std::map<GLuint,std::string>&,const char*,std::vector<const char*>*);
+gl::Program*		gxCreateProgram(const char*,const char*,const gl::shader_source_t&,const char*,std::vector<const char*>*);
 gl::VertexArray*	gxCreateQuadVertexArray();
 gl::VertexArray*	gxCreatePointVertexArray( GLsizei width, GLsizei height );
 
@@ -599,10 +601,10 @@ namespace gl {
 		GLuint get_atomic_counter_buffer_binding( const char* name ){ auto it=atomic_counter_buffer_binding_map.find(name); return it==atomic_counter_buffer_binding_map.end()?-1:it->second; }
 
 		// query source
-		const char* get_shader_source( GLuint shader_type ) const { auto it=shader_source_map.find(shader_type); return it==shader_source_map.end()?"":it->second.c_str(); }
+		std::vector<std::string> get_shader_source( GLuint shader_type ) const { auto it=source.find(shader_type); return it==source.end()?std::vector<std::string>():it->second; }
 
 		// member variables
-		std::map<GLuint,std::string>		shader_source_map;
+		shader_source_t						source;
 		std::map<std::string,Uniform>		uniform_cache;
 		std::set<std::string>				invalid_uniform_cache;
 		std::map<std::string,GLint>			shader_storage_block_binding_map;
@@ -706,7 +708,8 @@ namespace gl {
 		size_t size() const { return programs.size(); }
 		Program* get_program( const char* program_name ) const { for(uint k=0;k<programs.size();k++)if(_stricmp(programs[k]->name,program_name)==0) return programs[k]; printf("Unable to find program \"%s\" in effect \"%s\"\n", program_name, name ); return nullptr; }
 		Program* get_program( uint index ) const { if(index<programs.size()) return programs[index]; else { printf("[%s] Out-of-bound program index\n", name ); return nullptr; } }
-		bool create_program( const char* prefix, const char* name, const std::map<GLuint,std::string>& shaderSourceMap, const char* p_macro=nullptr, std::vector<const char*>* tfVaryings=nullptr ){ Program* program=gxCreateProgram(prefix,name,shaderSourceMap,p_macro,tfVaryings); if(!program) return false; programs.emplace_back(program); auto& m=program->uniform_block_map;for(auto& it:m){gl::Program::UniformBlock& ub=it.second;ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size);} return true; }
+		Program* create_program( const char* prefix, const char* name, const shader_source_t& source, const char* p_macro=nullptr, std::vector<const char*>* tf_varyings=nullptr ){ Program* p=gxCreateProgram(prefix,name,source,p_macro,tf_varyings); if(!p) return nullptr; return attach_program(p); }
+		Program* attach_program( Program* program ){ if(!program) return nullptr; programs.emplace_back(program); auto& m=program->uniform_block_map;for(auto& it:m){gl::Program::UniformBlock& ub=it.second;ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size);} return program; }
 		bool attach( const char* name, const char* effect_source, const char* p_macro=nullptr );
 
 		Program::Uniform* get_uniform( const char* name ){ return active_program?active_program->get_uniform(name):nullptr; }
@@ -1089,57 +1092,86 @@ inline GLuint gxLoadProgramBinary( const char* name, uint crc )
 	return ID;
 }
 
-inline void gxInfoLog( const char* name, const char* msg, std::map<size_t,std::string>* lines=nullptr )
+// explode shader source by exploiting #line directives
+inline gl::shader_lines_t gxExplodeShaderSource( const char* source, int first_index=1 )
 {
-	char L[53]={}; for(int k=0;k<50;k++)L[k]='_'; L[50]=L[51]='\n';
-	printf("\n"); printf("%s",L);
-	std::vector<std::string> vm=explode(msg,"\n");
-	for( size_t k=0,kn=vm.size();k<kn;k++ )
+	gl::shader_lines_t v;
+	std::vector<const char*> vs = explode_conservative(source,'\n');
+
+	for( int k=0, kn=int(vs.size()), idx=first_index; k<kn; k++ )
 	{
-		const char* v = vm[k].c_str(); printf("%s: %s\n", name, v ); if(lines==nullptr) continue;
-		char s[16384]={};const char *l=strchr(v,'('), *r=strchr(v,')'); if(!l||!r||l>=r) continue;
-		memcpy(s,l+1,r-l-1); s[r-l-1]=0; int idx=atoi(s);
-		int j=idx; //for( j=idx-1,jn=j+3;j<jn;j++)
+		const char* s = ltrim(vs[k]);
+		bool b_line = strncmp(s,"#line",5)==0;
+		if(b_line) sscanf( s+6, "%d", &idx );
+		v.emplace_back( std::make_pair(idx,vs[k]) );
+		if(!b_line) idx++;
+	}
+	return v;
+}
+
+inline std::string gxJoinShaderSource( gl::shader_lines_t& v )
+{
+	std::string source; for( auto& s : v ) source += s.second + '\n';
+	return source;
+}
+
+inline std::map<size_t,std::string> gxExplodeShaderSourceMap( const char* source, int first_index=1 )
+{
+	std::map<size_t,std::string> m;
+	for( const auto& s : gxExplodeShaderSource(source,first_index) )
+		if(!strstr(s.second.c_str(),"#line")) m.emplace(s);
+	return m;
+}
+
+inline void gxInfoLog( const char* name, const char* msg, const std::vector<std::string>* p_source=nullptr )
+{
+	char L[53]={}; for(int k=0;k<50;k++)L[k]='_'; L[50]=L[51]='\n'; printf("\n%s",L);
+
+	if(!p_source){ for( auto& v : explode(msg,"\n") ) printf("%s: %s\n", name, v.c_str() ); }
+	else
+	{
+		struct line_t { int page; int offset; std::string s; }; std::map<size_t,line_t> lines;
+		for( int k=0, kn=int(p_source->size()); k<kn; k++ )
 		{
-			auto it=lines->find(size_t(j)); if(it==lines->end()) continue;
-			printf( "%d> %s\n", j, trim(str_replace(it->second.c_str(),"%", "%%")) ); // % causes crash in gprintf
+			int offset=lines.empty()?0:int(lines.rbegin()->first), first_index=offset+1;
+			for(auto& it:gxExplodeShaderSourceMap(p_source->at(k).c_str(),first_index)) lines.emplace(it.first,line_t{k,offset,it.second});
+		}
+
+		auto extract = [&]( std::string& m, int idx, bool b_replace=false )->std::string
+		{
+			if(idx<0) return "";
+			auto it=lines.find(size_t(idx)); if(it==lines.end()) return ""; auto& l = it->second;
+			std::string pl = format("%d(%d)",l.page,idx-l.offset);;
+			if(b_replace) m = str_replace(m.c_str(),format("0(%d)",idx),pl.c_str());
+			l.s = trim(str_replace(l.s.c_str(),"%", "%%")); // % causes crash in gprintf
+			return l.s.empty() ? "": format( "\n%s> %s", pl.c_str(), l.s.c_str() );
+		};
+
+		for( auto& m : explode(msg,"\n") )
+		{
+			const char *l=strchr(m.c_str(),'('), *r=strchr(m.c_str(),')');
+			if(l&&r&&l<r)
+			{
+				char s[4096]={}; memcpy(s,l+1,r-l-1); s[r-l-1]=0; int idx=atoi(s);
+				m += extract(m,idx-1) + extract(m,idx,true) + extract(m,idx+1);
+			}
+			printf("%s: %s\n", name, m.c_str() );
 		}
 	}
 	printf("%s",L);
 }
 
-// explode shader source by exploiting #line directives
-inline std::vector<std::pair<size_t,std::string>> gxExplodeShaderSource( const char* source )
+inline GLuint gxCompileShader( GLenum shader_type, const char* name, const std::vector<std::string>& source )
 {
-	std::vector<std::pair<size_t,std::string>> v;
-	std::vector<const char*> vs = explode_conservative(source,'\n');
-	for( int k=0,kn=int(vs.size()),idx=1; k<kn;k++,idx++ )
-	{
-		const char* s = trim(vs[k]);
-		bool b_line = strncmp(s,"#line",5)==0;
-		if(b_line) sscanf(str_replace(s,"\t"," "),"#line %d",&idx);
-		v.emplace_back( std::make_pair(idx,vs[k]) );
-		if(b_line) idx--;
-	}
-	return v;
-}
+	GLuint ID = glCreateShader( shader_type ); if(ID==0){ printf("%s(): unable to glCreateShader(%d)\n", __func__, shader_type); return 0; }
+	std::vector<const char*> ps; for( auto& s : source ) ps.push_back(s.c_str());
 
-inline std::map<size_t,std::string> gxExplodeShaderSourceMap( const char* source )
-{
-	auto v = gxExplodeShaderSource(source);
-	std::map<size_t,std::string> m; for( size_t k=0,kn=v.size();k<kn;k++) if(!strstr(v[k].second.c_str(),"#line")) m[v[k].first]=v[k].second;
-	return m;
-}
-
-inline GLuint gxCompileShaderSource( GLenum shader_type, const char* name, const char* source )
-{
-	GLuint ID = glCreateShader( shader_type ); if(ID==0){ printf("compileShaderSource(): unable to glCreateShader(%d)\n", shader_type); return 0; }
-	glShaderSource( ID, 1, &source, nullptr );
+	glShaderSource( ID, GLsizei(ps.size()), ps.data(), nullptr );
 	glCompileShader( ID );
 
-	static const int MAX_LOG_LENGTH=8192; static char msg[MAX_LOG_LENGTH] = {}; GLint L; bool bLogExists;
-	glGetShaderInfoLog(ID,MAX_LOG_LENGTH,&L,msg); bLogExists=L>1&&L<=MAX_LOG_LENGTH;
-	if(bLogExists){ auto v=gxExplodeShaderSourceMap(source); gxInfoLog(name,msg,&v); }
+	static const int MAX_LOG_LENGTH=8192; static char msg[MAX_LOG_LENGTH] = {};
+	GLint L; glGetShaderInfoLog(ID,MAX_LOG_LENGTH,&L,msg);
+	if(L>1&&L<=MAX_LOG_LENGTH) gxInfoLog(name,msg,&source);
 	if(gxGetShaderiv(ID,GL_COMPILE_STATUS)!=GL_TRUE){ glDeleteShader(ID); return 0; }
 
 	return ID;
@@ -1161,50 +1193,59 @@ inline bool gxValidateProgram( const char* name, GLuint ID, bool bLog=true ) // 
 	return true;
 }
 
-// the last element of attribNames should be nullptr
-inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const std::map<GLuint,std::string>& shader_source_map, const char* p_macro, std::vector<const char*>* tf_varyings )
+namespace gl { struct directive_t { std::string version, extension, pragma, layout; }; }
+inline gl::directive_t gxExtractShaderDirectives( std::string& src, bool keep_blank=true )
+{
+	static const char v[]="#version", e[]="#extension", p[]="#pragma", l[]="layout";
+	constexpr size_t le=sizeof(e)-1, lp=sizeof(p)-1, lv=sizeof(v)-1, ll=sizeof(l)-1; // exclude trailing zeros
+
+	gl::directive_t d; std::string src0=src; src.clear();
+	for( auto& j : gxExplodeShaderSource(src0.c_str()) )
+	{
+		std::string* pd=nullptr;
+		const char* s=str_replace(trim(j.second.c_str()),"\t"," "); if(s[0]=='#')
+		{
+			if(strncmp(s,v,lv)==0){ pd=&d.version; if(gl::context::is_core_profile()&&!strstr(s,"core")) j.second+=" core"; } // add "core" to core profile version
+			else if(strncmp(s,e,le)==0){ pd=&d.extension; }
+			else if(strncmp(s,p,lp)==0){ pd=&d.pragma; }
+			else if(strncmp(s,l,ll)==0){ pd=&d.layout; }
+		}
+		if(!pd){src+=j.second+'\n'; }
+		else{	*pd+=j.second+'\n'; if(keep_blank) src+='\n'; }
+	}
+	return d;
+}
+
+inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const gl::shader_source_t& source, const char* p_macro=nullptr, std::vector<const char*>* tf_varyings=nullptr )
 {
 	std::string sname = format("%s%s%s",prefix?prefix:"",prefix?".":"",name); const char* pname=sname.c_str();
 
 	// 0. preprocess macros
-	std::string macro = p_macro&&p_macro[0]?p_macro:""; if(!macro.empty()&&macro.back()!='\n') macro+='\n';
-	std::vector<std::string> macros; for(auto& j:explode_conservative(macro.c_str(),'\n')) macros.emplace_back(j);
+	std::string macro; if(p_macro&&*p_macro){ macro=p_macro; if(macro.back()!='\n') macro+='\n'; }
+	auto md =  gxExtractShaderDirectives(macro,false);
 
 	// 1. combine macro with shader sources, and add layout qualifier
-	for( auto& it : shader_source_map )
+	for( auto& it : source )
 	{
-		auto v = gxExplodeShaderSource(it.second.c_str());
+		if(it.second.empty()) continue;
+		auto& first = const_cast<std::string&>(it.second.front()); // first source element
+		auto d = gxExtractShaderDirectives(first);
 
-		// layout
-		std::vector<std::string> layouts;
-		if(it.first==GL_FRAGMENT_SHADER) layouts.emplace_back("layout(pixel_center_integer) in vec4 gl_FragCoord;");
-
-		// preprocess directives
-		std::vector<std::string> directives;
-		for(auto& j:v)
-		{
-			const char* s=str_replace(trim(j.second.c_str()),"\t"," "); if(s[0]!='#') continue;
-			static const char e[]="#extension", p[]="#pragma", v[]="#version";
-			constexpr size_t le=sizeof(e)-1, lp=sizeof(p)-1, lv=sizeof(v)-1; // exclude trailing zeros
-			if(strncmp(s,v,lv)==0&&gl::context::is_core_profile()&&!strstr(s,"core")) j.second+=" core"; // add "core" to core profile version
-			if(strncmp(s,v,lv)==0||strncmp(s,e,le)==0||strncmp(s,p,lp)==0){ directives.emplace_back(j.second); j.second.clear(); } // should be cleared to avoid repetition
-		}
-
-		// merge all together
-		std::string& s = const_cast<std::string&>(it.second); s.clear();
-		for( auto& j: directives )	s+=j+'\n';
-		for( auto& j: layouts )		s+=j+'\n';
-		for( auto& j: macros )		s+=j+'\n';
-		for( auto& j: v )			s+=j.second+'\n';
+		std::string v = d.version + md.version;
+		std::string e = md.extension + d.extension;
+		std::string p = md.pragma + d.pragma;
+		std::string l = md.layout + d.layout; if(it.first==GL_FRAGMENT_SHADER) l+="layout(pixel_center_integer) in vec4 gl_FragCoord;\n";
+		std::string m = macro; if(strncmp(ltrim(first.c_str()),"#line 1",7)!=0) m += "#line 1\n";
+		first = v+e+p+l+m+first; // merge all together
 	}
 
 	// 2. trivial return for the default program
-	auto vit=shader_source_map.find(GL_VERTEX_SHADER);	bool vertex_shader_exists = vit!=shader_source_map.end()&&!vit->second.empty();
-	auto cit=shader_source_map.find(GL_COMPUTE_SHADER);	bool compute_shader_exists = cit!=shader_source_map.end()&&!cit->second.empty();
+	auto vit=source.find(GL_VERTEX_SHADER);		bool vertex_shader_exists = vit!=source.end()&&!vit->second.empty();
+	auto cit=source.find(GL_COMPUTE_SHADER);	bool compute_shader_exists = cit!=source.end()&&!cit->second.empty();
 	if(!vertex_shader_exists&&!compute_shader_exists) return new gl::Program(0,name);
 
 	// 3. create md5 hash of shader souces
-	std::string crcsrc=pname; for( auto& it : shader_source_map ) crcsrc += it.second;
+	std::string crcsrc=pname; for( auto& it : source ){ for( auto& s : it.second ) crcsrc += s; }
 	for( size_t k=0; tf_varyings&& k < tf_varyings->size(); k++ ) crcsrc += tf_varyings->at(k);
 	uint crc = gl::crc32c(crcsrc.c_str(),crcsrc.length());
 
@@ -1213,7 +1254,7 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 	if(binary_program_ID&&gxCheckProgramLink(name, binary_program_ID,false))
 	{
 		gl::Program* program = new gl::Program(binary_program_ID, name);
-		program->shader_source_map = shader_source_map;
+		program->source = source;
 		program->update_uniform_cache();
 		program->update_uniform_block();
 		return program;
@@ -1222,7 +1263,7 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 	// 5. create program first
 	GLuint program_ID = glCreateProgram();
 	gl::Program* program = new gl::Program( program_ID, name );
-	program->shader_source_map = shader_source_map;
+	program->source = source;
 
 	// 6. compile and attach shaders
 	__int64 freq;	QueryPerformanceFrequency((LARGE_INTEGER*)&freq);
@@ -1230,10 +1271,10 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 	printf( "compiling %s ... ", pname );
 
 	std::vector<GLuint> attached_shaders;
-	for( auto& it : program->shader_source_map )
+	for( auto& it : program->source )
 	{
 		GLuint shader_type = it.first;
-		GLuint shader_ID = gxCompileShaderSource( shader_type, format("%s",pname), it.second.c_str() );
+		GLuint shader_ID = gxCompileShader( shader_type, format("%s",pname), it.second );
 
 		if( !it.second.empty() && shader_ID==0 ) return nullptr;
 		if( shader_ID ){ glAttachShader( program->ID, shader_ID ); attached_shaders.emplace_back( shader_ID ); }
@@ -1304,6 +1345,12 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 	return program;
 }
 
+inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const std::map<GLuint,std::string>& source, const char* p_macro=nullptr, std::vector<const char*>* tf_varyings=nullptr )
+{
+	gl::shader_source_t ss; for( auto& it:source) ss[it.first]={it.second};
+	return gxCreateProgram( prefix, name, ss, p_macro, tf_varyings );
+}
+
 inline gl::Effect* gxCreateEffect( const char* name )
 {
 	return new gl::Effect(0, name);
@@ -1343,37 +1390,55 @@ inline glfx::IParser* glfxCreateParser(){ return new glfxParserImpl; }
 inline void glfxDeleteParser( glfx::IParser** pp_parser ){ if(!pp_parser||!(*pp_parser)) return; delete *((glfxParserImpl**)pp_parser); *(pp_parser)=nullptr; }
 
 #endif // GLFX_PARSER_IMPL
-//***********************************************
 
-inline gl::Effect* gxCreateEffect( const char* name, const char* source, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr )
+inline std::vector<std::string> gxSplitEffectSource( const char* parsed, const std::vector<std::string>& sources )
+{
+	std::vector<int> counters;
+	for( auto& e : sources )
+	{
+		int count=0;for(const char* p=e.c_str();*p;p++) if(*p=='\n') count++; // should ignore appended newline for each file
+		counters.push_back(counters.empty()?count:counters.back()+count );
+	}
+
+	std::vector<std::string> v; v.resize(sources.size());
+	int page_index=0; for( auto& l : gxExplodeShaderSource(parsed) )
+	{
+		if(int(l.first)>counters[page_index]) page_index++;
+		v[page_index] += l.second + '\n';
+	}
+
+	return v;
+}
+
+//***********************************************
+inline gl::Effect* gxCreateEffect( const char* name, std::vector<std::string> sources, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr )
 {
 #ifndef GLFX_PARSER_IMPL
-	static glfx::IParser*(*glfxCreateParser)() = (glfx::IParser*(*)()) GetProcAddress(GetModuleHandleW(nullptr),"glfxCreateParser"); if(glfxCreateParser==nullptr){ printf( "%s(): unable to link to glfxCreateParser()\n", __func__ ); return nullptr; }
-	static void(*glfxDeleteParser)(glfx::IParser**) = (void(*)(glfx::IParser**)) GetProcAddress(GetModuleHandleW(nullptr),"glfxDeleteParser"); if(glfxDeleteParser==nullptr){ printf( "%s(): unable to link to glfxDeleteParser()\n", __func__ ); return nullptr; }
+	static glfx::IParser*(*glfxCreateParser)() = (glfx::IParser*(*)()) GetProcAddress(GetModuleHandleW(nullptr),"glfxCreateParser"); if(!glfxCreateParser){ printf( "%s(): unable to link to glfxCreateParser()\n", __func__ ); return nullptr; }
+	static void(*glfxDeleteParser)(glfx::IParser**) = (void(*)(glfx::IParser**)) GetProcAddress(GetModuleHandleW(nullptr),"glfxDeleteParser"); if(!glfxDeleteParser){ printf( "%s(): unable to link to glfxDeleteParser()\n", __func__ ); return nullptr; }
 #endif
 
-	// preprocess source code
-	std::string src; if(p_macro&&p_macro[0]) src=p_macro; if(!src.empty()&&src.back()!='\n') src+='\n'; src+=source;
+	// preprocess multi-source shader sources
+	std::string s; for(auto& e:sources) s+=e+='\n'; // must append newline for different files
 
 	// load shaders from effect
-	glfx::IParser* parser = glfxCreateParser(); if(parser==nullptr){ printf( "%s(): unable to create parser\n", __func__ ); return nullptr; }
-	if(!parser->parse(src.c_str())){ printf( "%s(%s)\n%s\n", __func__, name, parser->parse_log() ); return nullptr; }
+	glfx::IParser* parser = glfxCreateParser(); if(!parser){ printf( "%s(): unable to create parser\n", __func__ ); return nullptr; }
+	if(!parser->parse(s.c_str())){ printf( "%s(%s)\n%s\n", __func__, name, parser->parse_log() ); return nullptr; }
 
 	gl::Effect* e = p_effect_to_append ? p_effect_to_append : new gl::Effect(0, name);
 	for( int k=0, kn=parser->program_count(); k<kn; k++ )
 	{
-		std::map<uint,std::string> shader_map; for( int j=0; j<parser->shader_count(k); j++ ) shader_map[parser->shader_type(k,j)]=parser->shader_source(k,j);
-		if(!e->create_program( name, parser->program_name(k), shader_map, nullptr )){ printf( "%s(): unable to create %s.%s\n", __func__, name, parser->program_name(k) ); glfxDeleteParser(&parser); if(e!=p_effect_to_append) delete e; return nullptr; }
+		gl::shader_source_t ss; for( int j=0, jn=parser->shader_count(k); j<jn; j++ ) ss[parser->shader_type(k,j)] = gxSplitEffectSource(parser->shader_source(k,j),sources);
+		gl::Program* program = gxCreateProgram(name,parser->program_name(k),ss,p_macro,nullptr); if(!program){ glfxDeleteParser(&parser); if(e!=p_effect_to_append) delete e; return nullptr; }
+		e->attach_program(program);
 	}
 	glfxDeleteParser(&parser);
 
 	return e;
 }
 
-inline gl::Effect* gxCreateEffect( const char* name, std::vector<const char*> sources, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr ){ std::string s;for(auto e:sources)s+=e;return gxCreateEffect(name,s.c_str(),p_macro,p_effect_to_append); }
-inline gl::Effect* gxCreateEffect( const char* name, std::vector<std::string> sources, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr ){ std::string s;for(auto& e:sources)s+=e;return gxCreateEffect(name,s.c_str(),p_macro,p_effect_to_append); }
-inline gl::Effect* gxCreateEffect( const char* name, std::initializer_list<const char*> sources, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr ){ std::string s;for(auto e:sources)s+=e;return gxCreateEffect(name,s.c_str(),p_macro,p_effect_to_append); }
-inline gl::Effect* gxCreateEffect( const char* name, std::initializer_list<std::string> sources, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr ){ std::string s;for(auto& e:sources)s+=e;return gxCreateEffect(name,s.c_str(),p_macro,p_effect_to_append); }
+inline gl::Effect* gxCreateEffect( const char* name, const char* source, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr ){ return gxCreateEffect( name, std::vector<std::string>{source}, p_macro, p_effect_to_append ); }
+inline gl::Effect* gxCreateEffect( const char* name, std::initializer_list<std::string> sources, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr ){ std::vector<std::string> v;for(auto e:sources)v.emplace_back(e);return gxCreateEffect(name,v,p_macro,p_effect_to_append); }
 
 inline bool gl::Effect::attach( const char* name, const char* effect_source, const char* p_macro )
 {
