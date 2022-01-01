@@ -710,7 +710,8 @@ namespace gl {
 		Program* get_program( uint index ) const { if(index<programs.size()) return programs[index]; else { printf("[%s] Out-of-bound program index\n", name ); return nullptr; } }
 		Program* create_program( const char* prefix, const char* name, const shader_source_t& source, const char* p_macro=nullptr, std::vector<const char*>* tf_varyings=nullptr ){ Program* p=gxCreateProgram(prefix,name,source,p_macro,tf_varyings); return p?attach_program(p):nullptr; }
 		Program* attach_program( Program* program ){ if(!program) return nullptr; programs.emplace_back(program); auto& m=program->uniform_block_map;for(auto& it:m){gl::Program::UniformBlock& ub=it.second;ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size);} return program; }
-		bool attach( const char* name, const char* effect_source, const char* p_macro=nullptr );
+		bool attach( const char* name, const std::vector<std::string>& source, const char* p_macro=nullptr );
+		bool attach( const char* name, const char* source, const char* p_macro=nullptr ){ return attach(name,std::vector<std::string>{source},p_macro); }
 
 		Program::Uniform* get_uniform( const char* name ){ return active_program?active_program->get_uniform(name):nullptr; }
 		Program::Uniform* get_uniform( const std::string& name ){ return active_program?active_program->get_uniform(name.c_str()):nullptr; }
@@ -1153,7 +1154,7 @@ inline void gxInfoLog( const char* name, const char* msg, const std::vector<std:
 			if(l&&r&&l<r)
 			{
 				char s[4096]={}; memcpy(s,l+1,r-l-1); s[r-l-1]=0; int idx=atoi(s);
-				m += extract(m,idx-1) + extract(m,idx,true) + extract(m,idx+1);
+				m += extract(m,idx-1) + extract(m,idx,true);
 			}
 			printf("%s: %s\n", name, m.c_str() );
 		}
@@ -1228,14 +1229,24 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 	for( auto& it : source )
 	{
 		if(it.second.empty()) continue;
-		auto& first = const_cast<std::string&>(it.second.front()); // first source element
-		auto d = gxExtractShaderDirectives(first);
+		std::string v = md.version;
+		std::string e = md.extension;
+		std::string p = md.pragma;
+		std::string l = md.layout; if(it.first==GL_FRAGMENT_SHADER) l+="layout(pixel_center_integer) in vec4 gl_FragCoord;\n";
+		std::string m = macro;
 
-		std::string v = d.version + md.version;
-		std::string e = md.extension + d.extension;
-		std::string p = md.pragma + d.pragma;
-		std::string l = md.layout + d.layout; if(it.first==GL_FRAGMENT_SHADER) l+="layout(pixel_center_integer) in vec4 gl_FragCoord;\n";
-		std::string m = macro; if(strncmp(ltrim(first.c_str()),"#line 1",7)!=0) m += "#line 1\n";
+		for( auto& f: it.second )
+		{
+			auto& s = const_cast<std::string&>(f); // source element
+			auto d = gxExtractShaderDirectives(s);
+
+			v += d.version;
+			e += d.extension;
+			p += d.pragma;
+			l += d.layout;
+		}
+
+		auto& first = const_cast<std::string&>(it.second.front()); // first source element
 		first = v+e+p+l+m+first; // merge all together
 	}
 
@@ -1432,12 +1443,7 @@ inline gl::Effect* gxCreateEffect( const char* name, std::vector<std::string> so
 }
 
 inline gl::Effect* gxCreateEffect( const char* name, const char* source, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr ){ return gxCreateEffect( name, std::vector<std::string>{source}, p_macro, p_effect_to_append ); }
-inline gl::Effect* gxCreateEffect( const char* name, std::initializer_list<std::string> sources, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr ){ std::vector<std::string> v;for(auto e:sources)v.emplace_back(e);return gxCreateEffect(name,v,p_macro,p_effect_to_append); }
-
-inline bool gl::Effect::attach( const char* name, const char* effect_source, const char* p_macro )
-{
-	return gxCreateEffect(name,effect_source,p_macro,this)==this;
-}
+inline bool gl::Effect::attach( const char* name, const std::vector<std::string>& source, const char* p_macro ){ return gxCreateEffect(name,source,p_macro,this)==this; }
 
 inline gl::Framebuffer* gxCreateFramebuffer( const char* name=nullptr )
 {
