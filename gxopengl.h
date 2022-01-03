@@ -117,8 +117,6 @@ namespace gl
 {
 	unsigned int crc32c( const void* ptr, size_t size, unsigned int crc0=0 );
 	struct Texture; struct Buffer; struct Program; struct VertexArray;
-	using shader_source_t = std::map<GLuint,std::vector<std::string>>;
-	using shader_lines_t = std::vector<std::pair<int,std::string>>;
 }
 
 gl::Texture*		gxCreateTexture1D(const char*,GLint,GLsizei,GLsizei,GLint,GLvoid*,bool);
@@ -129,7 +127,6 @@ gl::Texture*		gxCreateTextureBuffer(const char*,gl::Buffer*,GLint);
 gl::Texture*		gxCreateTextureRectangle(const char*,GLsizei,GLsizei,GLint,GLvoid*);
 gl::Texture*		gxCreateTextureView(gl::Texture*,GLuint,GLuint,GLuint,GLuint,bool,GLenum);
 gl::Buffer*			gxCreateBuffer(const char*,GLenum,GLsizeiptr,GLenum,const void*,GLbitfield);
-gl::Program*		gxCreateProgram(const char*,const char*,const gl::shader_source_t&,const char*,std::vector<const char*>*);
 gl::VertexArray*	gxCreateQuadVertexArray();
 gl::VertexArray*	gxCreatePointVertexArray( GLsizei width, GLsizei height );
 
@@ -440,317 +437,6 @@ namespace gl {
 	};
 
 	//***********************************************
-	struct Program : public GLObject
-	{
-		struct Uniform
-		{
-			GLint		ID=-1;
-			GLchar		name[256];
-			GLint		array_size=1;
-			GLenum		type;
-			GLint		textureID=-1;
-			Texture*	texture=nullptr;
-
-			template <class T> inline void set( GLuint prog, T* v, GLsizei count )
-			{
-				switch(type)
-				{
-				case GL_FLOAT:				glProgramUniform1fv( prog, ID, count, (const GLfloat*) v );	break;
-				case GL_FLOAT_VEC2:			glProgramUniform2fv( prog, ID, count, (const GLfloat*) v );	break;
-				case GL_FLOAT_VEC3:			glProgramUniform3fv( prog, ID, count, (const GLfloat*) v );	break;
-				case GL_FLOAT_VEC4:			glProgramUniform4fv( prog, ID, count, (const GLfloat*) v );	break;
-				case GL_INT:				glProgramUniform1iv( prog, ID, count, (const GLint*) v );	break;
-				case GL_INT_VEC2:			glProgramUniform2iv( prog, ID, count, (const GLint*) v );	break;
-				case GL_INT_VEC3:			glProgramUniform3iv( prog, ID, count, (const GLint*) v );	break;
-				case GL_INT_VEC4:			glProgramUniform4iv( prog, ID, count, (const GLint*) v );	break;
-				case GL_UNSIGNED_INT:		glProgramUniform1uiv( prog, ID, count, (const GLuint*) v );	break;
-				case GL_UNSIGNED_INT_VEC2:	glProgramUniform2uiv( prog, ID, count, (const GLuint*)v );	break;
-				case GL_UNSIGNED_INT_VEC3:	glProgramUniform3uiv( prog, ID, count, (const GLuint*)v );	break;
-				case GL_UNSIGNED_INT_VEC4:	glProgramUniform4uiv( prog, ID, count, (const GLuint*)v );	break;
-				case GL_BOOL:				glProgramUniform1iv( prog, ID, count, (const GLint*) v );	break;
-				case GL_BOOL_VEC2:			glProgramUniform2iv( prog, ID, count, (const GLint*) v );	break;
-				case GL_BOOL_VEC3:			glProgramUniform3iv( prog, ID, count, (const GLint*) v );	break;
-				case GL_BOOL_VEC4:			glProgramUniform4iv( prog, ID, count, (const GLint*) v );	break;
-				case GL_FLOAT_MAT2:			glProgramUniformMatrix2fv( prog, ID, count, GL_TRUE, (const GLfloat*)v );	break;
-				case GL_FLOAT_MAT3:			glProgramUniformMatrix3fv( prog, ID, count, GL_TRUE, (const GLfloat*)v );	break;
-				case GL_FLOAT_MAT4:			glProgramUniformMatrix4fv( prog, ID, count, GL_TRUE, (const GLfloat*)v );	break;
-				}
-			}
-
-			const char* type_name()
-			{
-				switch(type)
-				{
-					case GL_FLOAT:				return "float";
-					case GL_FLOAT_VEC2:			return "vec2";
-					case GL_FLOAT_VEC3:			return "vec3";
-					case GL_FLOAT_VEC4:			return "vec4";
-					case GL_INT:				return "int";
-					case GL_INT_VEC2:			return "ivec2";
-					case GL_INT_VEC3:			return "ivec3";
-					case GL_INT_VEC4:			return "ivec4";
-					case GL_UNSIGNED_INT:		return "uint";
-					case GL_UNSIGNED_INT_VEC2:	return "uvec2";
-					case GL_UNSIGNED_INT_VEC3:	return "uvec3";
-					case GL_UNSIGNED_INT_VEC4:	return "uvec4";
-					case GL_BOOL:				return "bool";
-					case GL_BOOL_VEC2:			return "bvec2";
-					case GL_BOOL_VEC3:			return "bvec3";
-					case GL_BOOL_VEC4:			return "bvec5";
-					case GL_FLOAT_MAT2:			return "mat2";
-					case GL_FLOAT_MAT3:			return "mat3";
-					case GL_FLOAT_MAT4:			return "mat4";
-				}
-				return "";
-			}
-
-			const char* get_value( GLuint prog )
-			{
-				static vec4 f; static ivec4 i; static uvec4 u; static bvec4 b; static mat2 m2; static mat3 m3; static mat4 m4;
-
-				switch(type)
-				{
-				case GL_FLOAT:				glGetUniformfv(prog,ID,&f.x); return ftoa(f.x);
-				case GL_FLOAT_VEC2:			glGetUniformfv(prog,ID,&f.x); return ftoa(f.xy);
-				case GL_FLOAT_VEC3:			glGetUniformfv(prog,ID,&f.x); return ftoa(f.xyz);
-				case GL_FLOAT_VEC4:			glGetUniformfv(prog,ID,&f.x); return ftoa(f); 
-				case GL_INT:				glGetUniformiv(prog,ID,&i.x); return itoa(i.x);
-				case GL_INT_VEC2:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xy);
-				case GL_INT_VEC3:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xyz);
-				case GL_INT_VEC4:			glGetUniformiv(prog,ID,&i.x); return itoa(i);
-				case GL_UNSIGNED_INT:		glGetUniformuiv(prog,ID,&u.x); return utoa(u.x);
-				case GL_UNSIGNED_INT_VEC2:	glGetUniformuiv(prog,ID,&u.x); return utoa(u.xy);
-				case GL_UNSIGNED_INT_VEC3:	glGetUniformuiv(prog,ID,&u.x); return utoa(u.xyz);
-				case GL_UNSIGNED_INT_VEC4:	glGetUniformuiv(prog,ID,&u.x); return utoa(u);
-				case GL_BOOL:				glGetUniformiv(prog,ID,&i.x); return itoa(i.x);
-				case GL_BOOL_VEC2:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xy);
-				case GL_BOOL_VEC3:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xyz);
-				case GL_BOOL_VEC4:			glGetUniformiv(prog,ID,&i.x); return itoa(i);
-				case GL_FLOAT_MAT2:			glGetUniformfv(prog,ID,&m2._11); return ftoa(m2.transpose());
-				case GL_FLOAT_MAT3:			glGetUniformfv(prog,ID,&m3._11); return ftoa(m3.transpose());
-				case GL_FLOAT_MAT4:			glGetUniformfv(prog,ID,&m4._11); return ftoa(m4.transpose());
-				}
-				return "";
-			}
-
-			bool is_matrix(){ return type==GL_FLOAT_MAT2||type==GL_FLOAT_MAT3||type==GL_FLOAT_MAT4; }
-		};
-
-		Program( GLuint ID, const char* name ) : GLObject(ID,name,GL_PROGRAM){ get_instances().emplace(this); }
-		~Program() override { if(!ID) return; glDeleteProgram(ID); uniform_cache.clear(); invalid_uniform_cache.clear(); get_instances().erase(this); }
-		static void unbind(){ glUseProgram(0); }
-		GLuint bind( bool b_bind=true );
-
-		// uniform attributes
-		GLint get_active_uniform_count(){ GLint count=0; if(glGetProgramInterfaceiv) glGetProgramInterfaceiv( ID, GL_UNIFORM, GL_ACTIVE_RESOURCES, &count ); else if(glGetProgramiv) glGetProgramiv( ID, GL_ACTIVE_UNIFORMS, &count ); return count; }
-		std::vector<Uniform> get_active_uniforms( bool b_bind=true );
-
-		// in-program uniform variables
-		Uniform* get_uniform( const char* name )
-		{
-			{auto it=uniform_cache.find(name);if(it!=uniform_cache.end()) return &it->second;}
-#ifdef WARN_INVALID_UNIFORM
-			{auto it=invalid_uniform_cache.find(name);if(it!=invalid_uniform_cache.end()) return nullptr;}
-			printf( "[Warning] %s.get_uniform(%s) not exists\n",this->name, name );
-			invalid_uniform_cache.emplace(name);
-#endif
-			return nullptr;
-		}
-
-		// set_uniform
-		template <class T>
-		void set_uniform( const char* name, T* v, GLsizei count=1 ){			Uniform* u=get_uniform(name); if(!u) return; u->set(ID,v,count); }
-		void set_uniform( const char* name, const float& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const vec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const vec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const vec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const int& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
-		void set_uniform( const char* name, const ivec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
-		void set_uniform( const char* name, const ivec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
-		void set_uniform( const char* name, const ivec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
-		void set_uniform( const char* name, const uint& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
-#ifdef _M_X64
-		void set_uniform( const char* name, const size_t& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; if(count==1) u->set(ID,(uint*)&v,count); else {std::vector<uint> l(count);for(int j=0;j<count;j++)l[j]=uint((&v)[j]);u->set(ID,(uint*)&l[0],count);} }
-#endif
-		void set_uniform( const char* name, const uvec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
-		void set_uniform( const char* name, const uvec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
-		void set_uniform( const char* name, const uvec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
-		void set_uniform( const char* name, const bool& b, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; int v=b?1:0; u->set(ID,(int*)&v,count); }
-		void set_uniform( const char* name, const mat4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const mat3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const mat2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, Texture* t ){ if(!t) return;		Uniform* u=get_uniform(name); if(!u) return; if(u->ID<0||u->textureID<0) return; u->texture=t; glUseProgram(ID); glProgramUniform1i( ID, u->ID, u->textureID ); if(glBindTextureUnit) glBindTextureUnit( u->textureID, u->texture->ID ); else {glActiveTexture(GL_TEXTURE0+u->textureID); u->texture->bind();} }
-
-		// uniform cache/block/dump
-		void update_uniform_cache();
-		void update_uniform_block();
-		const char* dump_uniforms( bool b_matrix=false, bool b_array=false );
-
-		// uniform block, used with uniform buffer: uniform buffer is assigned from effect to share it with other programs
-		struct UniformBlock
-		{
-			GLuint ID; GLchar name[256]; GLint size=0; Program* program=nullptr; gl::Buffer* buffer=nullptr;
-			GLuint get_binding() const { return gxGetActiveUniformBlockiv(program->ID,ID, GL_UNIFORM_BLOCK_BINDING ); }
-			void set_binding( GLuint binding_point ){ glUniformBlockBinding(program->ID,ID,binding_point); if(buffer&&buffer->target==GL_UNIFORM_BUFFER) buffer->bind_base(binding_point); }
-		};
-
-		// uniform/program block query
-		UniformBlock* get_uniform_block( const char* name ){ auto it=uniform_block_map.find(name); return it==uniform_block_map.end() ? nullptr : &it->second; }
-		GLuint get_uniform_block_binding( const char* name ){ auto* ub=get_uniform_block(name); return ub?ub->get_binding():-1; }
-		GLuint get_shader_storage_block_binding( const char* name ){ auto it=shader_storage_block_binding_map.find(name); if(it!=shader_storage_block_binding_map.end()) return it->second; const GLenum prop=GL_BUFFER_BINDING; GLint binding;glGetProgramResourceiv(ID,GL_SHADER_STORAGE_BLOCK,glGetProgramResourceIndex(ID,GL_SHADER_STORAGE_BLOCK,name),1,&prop,1,nullptr,&binding); return shader_storage_block_binding_map[name]=binding; }
-		GLuint get_atomic_counter_buffer_binding( const char* name ){ auto it=atomic_counter_buffer_binding_map.find(name); return it==atomic_counter_buffer_binding_map.end()?-1:it->second; }
-
-		// query source
-		std::vector<std::string> get_shader_source( GLuint shader_type ) const { auto it=source.find(shader_type); return it==source.end()?std::vector<std::string>():it->second; }
-
-		// member variables
-		shader_source_t						source;
-		std::map<std::string,Uniform>		uniform_cache;
-		std::set<std::string>				invalid_uniform_cache;
-		std::map<std::string,GLint>			shader_storage_block_binding_map;
-		std::map<std::string,GLint>			atomic_counter_buffer_binding_map;
-		std::map<std::string,UniformBlock>	uniform_block_map;
-
-		// instances
-		static std::set<Program*>& get_instances(){ static std::set<Program*> i; return i; }
-	};
-
-	// template specialization on bool array
-	template<> inline void Program::Uniform::set<bool>( GLuint program_ID, bool* v, GLsizei count ){ std::vector<int> i(count);for(int k=0;k<count;k++)i[k]=int(v[k]); glProgramUniform1iv( program_ID, ID, count, &i[0] ); }
-
-	// bind
-	inline GLuint Program::bind( bool b_bind )
-	{
-		GLuint b0=binding(); if(!b_bind||b0!=ID) glUseProgram(b_bind?ID:0); if(!b_bind) return b0;
-		if(uniform_cache.empty()) update_uniform_cache();
-		else if( Texture::b_texture_deleted() ){std::set<Program*>& s=get_instances();for(auto it:s)it->update_uniform_cache();Texture::b_texture_deleted()=false;}
-		for(auto it:uniform_cache)
-		{
-			Uniform& u=it.second;if(!u.texture||u.textureID==-1) continue;
-			if(glBindTextureUnit) glBindTextureUnit( u.textureID, u.texture->ID );
-			else {glActiveTexture(GL_TEXTURE0+u.textureID);glBindTexture(u.texture->target,u.texture->ID);}
-		}
-		return b0;
-	}
-
-	// late implementations of Program
-	inline std::vector<gl::Program::Uniform> gl::Program::get_active_uniforms( bool b_bind )
-	{
-		GLint program0=-1; if(b_bind&&glProgramUniform1i) glGetIntegerv(GL_CURRENT_PROGRAM,&program0); if(program0>=0) glUseProgram(ID);
-		std::vector<Uniform> v;
-		for(int k=0,kn=get_active_uniform_count();k<kn;k++)
-		{
-			static const GLenum pnames[]={GL_BLOCK_INDEX,GL_LOCATION,GL_NAME_LENGTH,GL_TYPE,GL_ARRAY_SIZE,GL_OFFSET,GL_ARRAY_STRIDE,GL_MATRIX_STRIDE,GL_IS_ROW_MAJOR,GL_ATOMIC_COUNTER_BUFFER_INDEX};
-			static std::array<GLint,std::extent<decltype(pnames)>::value> values;
-			glGetProgramResourceiv(ID,GL_UNIFORM,k,GLsizei(values.size()),pnames,GLsizei(values.size()),nullptr,&values[0]);
-			static std::map<GLenum,GLint> prop; for(int j=0,jn=int(values.size());j<jn;j++) prop[pnames[j]]=values[j];
-			Uniform u; u.type=prop[GL_TYPE]; u.array_size=prop[GL_ARRAY_SIZE]; u.ID=prop[GL_LOCATION];
-			glGetProgramResourceName(ID,GL_UNIFORM,k,prop[GL_NAME_LENGTH],nullptr,u.name);
-			if(strstr(u.name,"gl_")) continue; // query name now, and skip for built-in gl variables
-			if(prop[GL_ATOMIC_COUNTER_BUFFER_INDEX]!=-1){ int b; glGetActiveAtomicCounterBufferiv(ID,prop[GL_ATOMIC_COUNTER_BUFFER_INDEX],GL_ATOMIC_COUNTER_BUFFER_BINDING,&b); atomic_counter_buffer_binding_map[u.name]=b; }
-			if(prop[GL_BLOCK_INDEX]>=0||prop[GL_LOCATION]<0) continue;
-			v.emplace_back(u);
-		}
-		if(program0>=0) glUseProgram(program0); // restore the original program
-		return v;
-	}
-
-	inline void gl::Program::update_uniform_cache()
-	{
-		GLint program0=-1; if(glProgramUniform1i) glGetIntegerv(GL_CURRENT_PROGRAM,&program0); if(program0>=0) glUseProgram(ID);
-		int texture_id=0; for( auto& u : get_active_uniforms(false) )
-		{
-			bool b_texture = gxIsSamplerType(u.type);
-			if(b_texture){ u.textureID=texture_id++; if(glProgramUniform1i)glProgramUniform1i(ID,u.ID,u.textureID);else glUniform1i(u.ID,u.textureID); } // setting sampler locations avoids validation error in Intel Compiler
-			uniform_cache[u.name]=u; if(u.array_size==1) continue;
-			GLchar name[256]; strcpy(name,u.name); GLchar* bracket=strchr(name,'['); if(bracket) bracket[0]='\0';
-			for( GLint loc=bracket?1:0;loc<u.array_size;loc++){ Uniform u1=u;sprintf(u1.name,"%s[%d]",name,loc);u1.ID=glGetUniformLocation(ID,u1.name);if(u1.ID==-1)continue;u1.array_size=u.array_size-loc;if(b_texture)u1.textureID=texture_id++;uniform_cache[u1.name]=u1; }
-		}
-		if(program0>=0) glUseProgram(program0); // restore the original program
-	}
-
-	inline const char* gl::Program::dump_uniforms( bool b_matrix, bool b_array )
-	{
-		static std::string buff; buff.clear();
-		int texID=0; for( auto& u : get_active_uniforms(false) )
-		{
-			if(!b_array&&strchr(u.name,'[')) continue;
-			if(!b_matrix&&u.is_matrix()) continue;
-			buff += format( "[%04d] %s %s%s %s\n", u.ID, u.type_name(), u.name, u.array_size>1?format("[%d]",u.array_size):"", u.get_value(ID) );
-		}
-		return buff.c_str();
-	}
-
-	inline void Program::update_uniform_block()
-	{
-		uniform_block_map.clear();
-		for(int k=0,kn=gxGetProgramiv(ID,GL_ACTIVE_UNIFORM_BLOCKS);k<kn;k++)
-		{
-			UniformBlock ub; ub.ID = k; ub.program = this; ub.size = gxGetActiveUniformBlockiv(ID,k,GL_UNIFORM_BLOCK_DATA_SIZE);
-			GLsizei l=gxGetActiveUniformBlockiv(ID,k,GL_UNIFORM_BLOCK_NAME_LENGTH); /* length includes NULL */ if(l>std::extent<decltype(UniformBlock::name)>::value) printf("[%s] uniform block name is too long\n",name);
-			glGetActiveUniformBlockName(ID,k,l,&l,ub.name);
-			uniform_block_map[ ub.name ] = ub;
-		}
-	}
-
-	//***********************************************
-	// a set of programs
-	struct Effect : public GLObject
-	{
-		Effect( GLuint ID, const char* name ) : GLObject(ID,name,0), active_program(nullptr), quad(nullptr){ if(!(quad=gxCreateQuadVertexArray())) printf("[%s] unable to create quad buffer\n",name); }
-		~Effect() override { active_program=nullptr; if(quad){ delete quad; quad=nullptr; } if(!pts.empty()){ for(auto it:pts) safe_delete(it.second); pts.clear(); } for(auto& it:uniform_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} uniform_buffer_map.clear(); for(auto* p:programs) delete p; programs.clear(); }
-		static void unbind(){ glUseProgram(0); }
-
-		Program* bind( const char* program_name, ... ){ char buff[1024]; va_list a;va_start(a,program_name);vsprintf_s(buff,1024,program_name,a);va_end(a); active_program=get_program(buff); if(active_program) active_program->bind(); else{ active_program=nullptr; glUseProgram(0); } return active_program; }
-		Program* bind( uint index ){ active_program=get_program(index); if(active_program) active_program->bind(); else { active_program=nullptr; glUseProgram(0); } return active_program; }
-
-		bool empty() const { return programs.empty(); }
-		size_t size() const { return programs.size(); }
-		Program* get_program( const char* program_name ) const { for(uint k=0;k<programs.size();k++)if(_stricmp(programs[k]->name,program_name)==0) return programs[k]; printf("Unable to find program \"%s\" in effect \"%s\"\n", program_name, name ); return nullptr; }
-		Program* get_program( uint index ) const { if(index<programs.size()) return programs[index]; else { printf("[%s] Out-of-bound program index\n", name ); return nullptr; } }
-		Program* create_program( const char* prefix, const char* name, const shader_source_t& source, const char* p_macro=nullptr, std::vector<const char*>* tf_varyings=nullptr ){ Program* p=gxCreateProgram(prefix,name,source,p_macro,tf_varyings); return p?attach_program(p):nullptr; }
-		Program* attach_program( Program* program ){ if(!program) return nullptr; programs.emplace_back(program); auto& m=program->uniform_block_map;for(auto& it:m){gl::Program::UniformBlock& ub=it.second;ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size);} return program; }
-		bool attach( const char* name, const std::vector<std::string>& source, const char* p_macro=nullptr );
-		bool attach( const char* name, const char* source, const char* p_macro=nullptr ){ return attach(name,std::vector<std::string>{source},p_macro); }
-
-		Program::Uniform* get_uniform( const char* name ){ return active_program?active_program->get_uniform(name):nullptr; }
-		Program::Uniform* get_uniform( const std::string& name ){ return active_program?active_program->get_uniform(name.c_str()):nullptr; }
-		template <class T>	void set_uniform( const char* name, const T& v, GLsizei count=1 ){ if(active_program) active_program->set_uniform(name,v,count); }
-		template <class T>	void set_uniform( const char* name, T* v, GLsizei count=1 ){ if(active_program) active_program->set_uniform(name,v,count); }
-		void set_uniform( const char* name, Texture* t ){ if(active_program) active_program->set_uniform(name,t); }
-		template <class T>	void set_uniform( const std::string& name, const T& v, GLsizei count=1 ){ if(active_program) active_program->set_uniform(name.c_str(),v,count); }
-		template <class T>	void set_uniform( const std::string& name, T* v, GLsizei count=1 ){ if(active_program) active_program->set_uniform(name.c_str(),v,count); }
-		void set_uniform( const std::string& name, Texture* t ){ if(active_program) active_program->set_uniform(name.c_str(),t); }
-
-		// uniform buffer/block
-		gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name); if(b&&b->size()!=size){ static std::set<std::string> warns; auto it=warns.find(name); if(it==warns.end()){ warns.insert(name); printf("[%s] %s(): uniform_buffer(%s).size(=%d)!=%d\n",this->name,__func__,name,int(b->size()),int(size));} } if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr,GL_DYNAMIC_STORAGE_BIT|GL_MAP_WRITE_BIT); if(b){ bind_uniform_buffer(name,b); return uniform_buffer_map[name]=b; } printf("[%s] unable to create uniform buffer [%s]\n", this->name, name); return nullptr; }
-		gl::Buffer* get_uniform_buffer( const char* name ){ auto it=uniform_buffer_map.find(name); return it==uniform_buffer_map.end()?nullptr:it->second; }
-		GLint get_uniform_block_binding( const char* name ){ GLint binding=active_program?active_program->get_uniform_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_uniform_block_binding(name); if(b!=-1) return b; } return -1; }
-		gl::Buffer* bind_uniform_buffer( const char* name, gl::Buffer* ub=nullptr /* if nullptr, use default buffer */ ){ gl::Buffer* b=ub?ub:get_uniform_buffer(name); GLuint binding=get_uniform_block_binding(name); if(b&&binding!=-1){ b->bind_base(binding); return b; } else{ if(!b) printf( "[%s] %s(): unable to find uniform buffer %s\n", this->name, __func__, name ); else printf( "[%s] %s(): unable to find uniform buffer binding %s\n", this->name, __func__, name ); return nullptr; } }
-
-		// blocks: uniform, shader storage, and atomic counter
-		GLint get_shader_storage_block_binding( const char* name ){ GLint binding=active_program?active_program->get_shader_storage_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_shader_storage_block_binding(name); if(b!=-1) return b; } printf( "[%s] %s(): unable to find shader storage block binding %s\n", this->name, __func__, name ); return -1; }
-		void bind_shader_storage_buffer( const char* name, Buffer* buffer ){ GLint binding=get_shader_storage_block_binding(name); if(binding<0) return; if(buffer->target==GL_SHADER_STORAGE_BUFFER) buffer->bind_base(binding); else buffer->bind_base_as(GL_SHADER_STORAGE_BUFFER,binding); }
-		GLint get_atomic_counter_buffer_binding( const char* name ){ GLint binding=active_program?active_program->get_atomic_counter_buffer_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_atomic_counter_buffer_binding(name); if(b!=-1) return b; } printf( "[%s] %s(): unable to find atomic counter buffer binding %s\n", this->name, __func__, name ); return -1; }
-		void bind_atomic_counter_buffer( const char* name, Buffer* buffer ){ GLint binding=get_atomic_counter_buffer_binding(name); if(binding<0) return; if(buffer->target==GL_ATOMIC_COUNTER_BUFFER) buffer->bind_base(binding); else buffer->bind_base_as(GL_ATOMIC_COUNTER_BUFFER,binding); }
-
-		// draw or compute
-		inline void draw_quads(){ if(!quad) return; if(quad->index_buffer) quad->draw_elements(0,4,GL_TRIANGLE_STRIP); else quad->draw_arrays(0,4,GL_TRIANGLE_STRIP); }
-		inline void draw_points( GLsizei width, GLsizei height, bool no_attrib=false ){ if(no_attrib) return draw_points_no_attrib( width*height ); uint64_t key=uint64_t(width)|(uint64_t(height)<<32); auto it=pts.find(key); VertexArray* va=it!=pts.end()?it->second:(pts[key]=gxCreatePointVertexArray(width,height)); if(va) va->draw_arrays(0,width*height,GL_POINTS); }
-		inline void draw_points_no_attrib( GLsizei count ){ GLuint v=0; if(context::is_core_profile()){ auto it=pts.find(0);VertexArray* va=it!=pts.end()?it->second:(pts[0]=gxCreatePointVertexArray(0,0)); if(va)v=va->ID; } glBindVertexArray(v); glDrawArrays( GL_POINTS, 0, count ); } // core profile should bind non-empty VAO; attribute-less rendering without binding any vertex array: simply using gl_VertexID in vertex shaders
-		inline void dispatch_compute( GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z=1 ){ glDispatchCompute( num_groups_x?num_groups_x:1, num_groups_y?num_groups_y:1, num_groups_z?num_groups_z:1 ); }
-		inline void dispatch_compute( GLuint num_threads_x, double local_size_x, GLuint num_threads_y, double local_size_y, GLuint num_threads_z=1, double local_size_z=1 )	{ GLuint num_groups_x = max(GLuint(ceil(num_threads_x/float(local_size_x))),1u), num_groups_y = max(GLuint(ceil(num_threads_y/float(local_size_y))),1u), num_groups_z = max(GLuint(ceil(num_threads_z/float(local_size_z))),1u); dispatch_compute(num_groups_x, num_groups_y, num_groups_z ); }
-		inline void dispatch_compute_indirect( GLintptr indirect ){ glDispatchComputeIndirect( indirect ); }
-
-		// internal members
-		Program*						active_program;
-		std::vector<Program*>			programs;
-		std::map<std::string,Buffer*>	uniform_buffer_map;	// Do not define uniform buffers in each program, since they are shared across programs.
-		std::map<uint64_t,VertexArray*>	pts;				// point vertex array
-		VertexArray*					quad;
-	};
-
-	//***********************************************
 	struct Framebuffer : public GLObject
 	{
 		struct depth_key_t { union { struct {uint width:16, height:16, multisamples:8, layers:16, renderbuffer:1, dummy:7;}; uint64_t value; }; depth_key_t():value(0){} };
@@ -942,6 +628,401 @@ namespace gl {
 		glViewport( 0, 0, width, height ); // set viewport
 	}
 
+	//***********************************************
+	// shader/program/effect source structures
+	struct named_string_t { std::string name, value; };
+	using  shader_source_t	= std::vector<named_string_t>;			// a list of source strings
+	using  program_source_t	= std::map<GLuint,shader_source_t>;		// <shader_type,shader_source_t>
+	struct shader_macro_t : std::vector<std::string>
+	{
+		void append( const char* m, ... ){char b[4096];va_list a;va_start(a,m);size_t len=size_t(_vscprintf(m,a));vsprintf_s(b,len+1,m,a);va_end(a); for(auto& s:*this) if(strcmp(s.c_str(),b)==0) return; emplace_back(b); }
+		std::string merge() const { std::string m; for(auto& s:*this){ m+=s; if(s.back()!='\n') m+='\n'; } if(!m.empty()) m+='\n'; return m; }
+	};
+
+	//***********************************************
+	struct Program : public GLObject
+	{
+		struct Uniform
+		{
+			GLint		ID=-1;
+			GLchar		name[256];
+			GLint		array_size=1;
+			GLenum		type;
+			GLint		textureID=-1;
+			Texture*	texture=nullptr;
+
+			template <class T> inline void set( GLuint prog, T* v, GLsizei count )
+			{
+				switch(type)
+				{
+				case GL_FLOAT:				glProgramUniform1fv( prog, ID, count, (const GLfloat*) v );	break;
+				case GL_FLOAT_VEC2:			glProgramUniform2fv( prog, ID, count, (const GLfloat*) v );	break;
+				case GL_FLOAT_VEC3:			glProgramUniform3fv( prog, ID, count, (const GLfloat*) v );	break;
+				case GL_FLOAT_VEC4:			glProgramUniform4fv( prog, ID, count, (const GLfloat*) v );	break;
+				case GL_INT:				glProgramUniform1iv( prog, ID, count, (const GLint*) v );	break;
+				case GL_INT_VEC2:			glProgramUniform2iv( prog, ID, count, (const GLint*) v );	break;
+				case GL_INT_VEC3:			glProgramUniform3iv( prog, ID, count, (const GLint*) v );	break;
+				case GL_INT_VEC4:			glProgramUniform4iv( prog, ID, count, (const GLint*) v );	break;
+				case GL_UNSIGNED_INT:		glProgramUniform1uiv( prog, ID, count, (const GLuint*) v );	break;
+				case GL_UNSIGNED_INT_VEC2:	glProgramUniform2uiv( prog, ID, count, (const GLuint*)v );	break;
+				case GL_UNSIGNED_INT_VEC3:	glProgramUniform3uiv( prog, ID, count, (const GLuint*)v );	break;
+				case GL_UNSIGNED_INT_VEC4:	glProgramUniform4uiv( prog, ID, count, (const GLuint*)v );	break;
+				case GL_BOOL:				glProgramUniform1iv( prog, ID, count, (const GLint*) v );	break;
+				case GL_BOOL_VEC2:			glProgramUniform2iv( prog, ID, count, (const GLint*) v );	break;
+				case GL_BOOL_VEC3:			glProgramUniform3iv( prog, ID, count, (const GLint*) v );	break;
+				case GL_BOOL_VEC4:			glProgramUniform4iv( prog, ID, count, (const GLint*) v );	break;
+				case GL_FLOAT_MAT2:			glProgramUniformMatrix2fv( prog, ID, count, GL_TRUE, (const GLfloat*)v );	break;
+				case GL_FLOAT_MAT3:			glProgramUniformMatrix3fv( prog, ID, count, GL_TRUE, (const GLfloat*)v );	break;
+				case GL_FLOAT_MAT4:			glProgramUniformMatrix4fv( prog, ID, count, GL_TRUE, (const GLfloat*)v );	break;
+				}
+			}
+
+			const char* type_name()
+			{
+				switch(type)
+				{
+					case GL_FLOAT:				return "float";
+					case GL_FLOAT_VEC2:			return "vec2";
+					case GL_FLOAT_VEC3:			return "vec3";
+					case GL_FLOAT_VEC4:			return "vec4";
+					case GL_INT:				return "int";
+					case GL_INT_VEC2:			return "ivec2";
+					case GL_INT_VEC3:			return "ivec3";
+					case GL_INT_VEC4:			return "ivec4";
+					case GL_UNSIGNED_INT:		return "uint";
+					case GL_UNSIGNED_INT_VEC2:	return "uvec2";
+					case GL_UNSIGNED_INT_VEC3:	return "uvec3";
+					case GL_UNSIGNED_INT_VEC4:	return "uvec4";
+					case GL_BOOL:				return "bool";
+					case GL_BOOL_VEC2:			return "bvec2";
+					case GL_BOOL_VEC3:			return "bvec3";
+					case GL_BOOL_VEC4:			return "bvec5";
+					case GL_FLOAT_MAT2:			return "mat2";
+					case GL_FLOAT_MAT3:			return "mat3";
+					case GL_FLOAT_MAT4:			return "mat4";
+				}
+				return "";
+			}
+
+			const char* get_value( GLuint prog )
+			{
+				static vec4 f; static ivec4 i; static uvec4 u; static bvec4 b; static mat2 m2; static mat3 m3; static mat4 m4;
+
+				switch(type)
+				{
+				case GL_FLOAT:				glGetUniformfv(prog,ID,&f.x); return ftoa(f.x);
+				case GL_FLOAT_VEC2:			glGetUniformfv(prog,ID,&f.x); return ftoa(f.xy);
+				case GL_FLOAT_VEC3:			glGetUniformfv(prog,ID,&f.x); return ftoa(f.xyz);
+				case GL_FLOAT_VEC4:			glGetUniformfv(prog,ID,&f.x); return ftoa(f); 
+				case GL_INT:				glGetUniformiv(prog,ID,&i.x); return itoa(i.x);
+				case GL_INT_VEC2:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xy);
+				case GL_INT_VEC3:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xyz);
+				case GL_INT_VEC4:			glGetUniformiv(prog,ID,&i.x); return itoa(i);
+				case GL_UNSIGNED_INT:		glGetUniformuiv(prog,ID,&u.x); return utoa(u.x);
+				case GL_UNSIGNED_INT_VEC2:	glGetUniformuiv(prog,ID,&u.x); return utoa(u.xy);
+				case GL_UNSIGNED_INT_VEC3:	glGetUniformuiv(prog,ID,&u.x); return utoa(u.xyz);
+				case GL_UNSIGNED_INT_VEC4:	glGetUniformuiv(prog,ID,&u.x); return utoa(u);
+				case GL_BOOL:				glGetUniformiv(prog,ID,&i.x); return itoa(i.x);
+				case GL_BOOL_VEC2:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xy);
+				case GL_BOOL_VEC3:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xyz);
+				case GL_BOOL_VEC4:			glGetUniformiv(prog,ID,&i.x); return itoa(i);
+				case GL_FLOAT_MAT2:			glGetUniformfv(prog,ID,&m2._11); return ftoa(m2.transpose());
+				case GL_FLOAT_MAT3:			glGetUniformfv(prog,ID,&m3._11); return ftoa(m3.transpose());
+				case GL_FLOAT_MAT4:			glGetUniformfv(prog,ID,&m4._11); return ftoa(m4.transpose());
+				}
+				return "";
+			}
+
+			bool is_matrix(){ return type==GL_FLOAT_MAT2||type==GL_FLOAT_MAT3||type==GL_FLOAT_MAT4; }
+		};
+
+		Program( GLuint ID, const char* name ) : GLObject(ID,name,GL_PROGRAM){ get_instances().emplace(this); }
+		~Program() override { if(!ID) return; glDeleteProgram(ID); uniform_cache.clear(); invalid_uniform_cache.clear(); get_instances().erase(this); }
+		static void unbind(){ glUseProgram(0); }
+		GLuint bind( bool b_bind=true );
+
+		// uniform attributes
+		GLint get_active_uniform_count(){ GLint count=0; if(glGetProgramInterfaceiv) glGetProgramInterfaceiv( ID, GL_UNIFORM, GL_ACTIVE_RESOURCES, &count ); else if(glGetProgramiv) glGetProgramiv( ID, GL_ACTIVE_UNIFORMS, &count ); return count; }
+		std::vector<Uniform> get_active_uniforms( bool b_bind=true );
+
+		// in-program uniform variables
+		Uniform* get_uniform( const char* name )
+		{
+			{auto it=uniform_cache.find(name);if(it!=uniform_cache.end()) return &it->second;}
+#ifdef WARN_INVALID_UNIFORM
+			{auto it=invalid_uniform_cache.find(name);if(it!=invalid_uniform_cache.end()) return nullptr;}
+			printf( "[Warning] %s.get_uniform(%s) not exists\n",this->name, name );
+			invalid_uniform_cache.emplace(name);
+#endif
+			return nullptr;
+		}
+
+		// set_uniform
+		template <class T>
+		void set_uniform( const char* name, T* v, GLsizei count=1 ){			Uniform* u=get_uniform(name); if(!u) return; u->set(ID,v,count); }
+		void set_uniform( const char* name, const float& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const vec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const vec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const vec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const int& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, const ivec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, const ivec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, const ivec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, const uint& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
+#ifdef _M_X64
+		void set_uniform( const char* name, const size_t& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; if(count==1) u->set(ID,(uint*)&v,count); else {std::vector<uint> l(count);for(int j=0;j<count;j++)l[j]=uint((&v)[j]);u->set(ID,(uint*)&l[0],count);} }
+#endif
+		void set_uniform( const char* name, const uvec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
+		void set_uniform( const char* name, const uvec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
+		void set_uniform( const char* name, const uvec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
+		void set_uniform( const char* name, const bool& b, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; int v=b?1:0; u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, const mat4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const mat3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const mat2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, Texture* t ){ if(!t) return;		Uniform* u=get_uniform(name); if(!u) return; if(u->ID<0||u->textureID<0) return; u->texture=t; glUseProgram(ID); glProgramUniform1i( ID, u->ID, u->textureID ); if(glBindTextureUnit) glBindTextureUnit( u->textureID, u->texture->ID ); else {glActiveTexture(GL_TEXTURE0+u->textureID); u->texture->bind();} }
+
+		// uniform cache/block/dump
+		void update_uniform_cache();
+		void update_uniform_block();
+		const char* dump_uniforms( bool b_matrix=false, bool b_array=false );
+
+		// uniform block, used with uniform buffer: uniform buffer is assigned from effect to share it with other programs
+		struct UniformBlock
+		{
+			GLuint ID; GLchar name[256]; GLint size=0; Program* program=nullptr; gl::Buffer* buffer=nullptr;
+			GLuint get_binding() const { return gxGetActiveUniformBlockiv(program->ID,ID, GL_UNIFORM_BLOCK_BINDING ); }
+			void set_binding( GLuint binding_point ){ glUniformBlockBinding(program->ID,ID,binding_point); if(buffer&&buffer->target==GL_UNIFORM_BUFFER) buffer->bind_base(binding_point); }
+		};
+
+		// uniform/program block query
+		UniformBlock* get_uniform_block( const char* name ){ auto it=uniform_block_map.find(name); return it==uniform_block_map.end() ? nullptr : &it->second; }
+		GLuint get_uniform_block_binding( const char* name ){ auto* ub=get_uniform_block(name); return ub?ub->get_binding():-1; }
+		GLuint get_shader_storage_block_binding( const char* name ){ auto it=shader_storage_block_binding_map.find(name); if(it!=shader_storage_block_binding_map.end()) return it->second; const GLenum prop=GL_BUFFER_BINDING; GLint binding;glGetProgramResourceiv(ID,GL_SHADER_STORAGE_BLOCK,glGetProgramResourceIndex(ID,GL_SHADER_STORAGE_BLOCK,name),1,&prop,1,nullptr,&binding); return shader_storage_block_binding_map[name]=binding; }
+		GLuint get_atomic_counter_buffer_binding( const char* name ){ auto it=atomic_counter_buffer_binding_map.find(name); return it==atomic_counter_buffer_binding_map.end()?-1:it->second; }
+
+		// query source
+		shader_source_t get_shader_source( GLuint shader_type ) const { auto it=source.find(shader_type); return it==source.end()?shader_source_t():it->second; }
+
+		// member variables
+		program_source_t					source;
+		std::map<std::string,Uniform>		uniform_cache;
+		std::set<std::string>				invalid_uniform_cache;
+		std::map<std::string,GLint>			shader_storage_block_binding_map;
+		std::map<std::string,GLint>			atomic_counter_buffer_binding_map;
+		std::map<std::string,UniformBlock>	uniform_block_map;
+
+		// instances
+		static std::set<Program*>& get_instances(){ static std::set<Program*> i; return i; }
+	};
+
+	// template specialization on bool array
+	template<> inline void Program::Uniform::set<bool>( GLuint program_ID, bool* v, GLsizei count ){ std::vector<int> i(count);for(int k=0;k<count;k++)i[k]=int(v[k]); glProgramUniform1iv( program_ID, ID, count, &i[0] ); }
+
+	// bind
+	inline GLuint Program::bind( bool b_bind )
+	{
+		GLuint b0=binding(); if(!b_bind||b0!=ID) glUseProgram(b_bind?ID:0); if(!b_bind) return b0;
+		if(uniform_cache.empty()) update_uniform_cache();
+		else if( Texture::b_texture_deleted() ){std::set<Program*>& s=get_instances();for(auto it:s)it->update_uniform_cache();Texture::b_texture_deleted()=false;}
+		for(auto it:uniform_cache)
+		{
+			Uniform& u=it.second;if(!u.texture||u.textureID==-1) continue;
+			if(glBindTextureUnit) glBindTextureUnit( u.textureID, u.texture->ID );
+			else {glActiveTexture(GL_TEXTURE0+u.textureID);glBindTexture(u.texture->target,u.texture->ID);}
+		}
+		return b0;
+	}
+
+	// late implementations of Program
+	inline std::vector<gl::Program::Uniform> gl::Program::get_active_uniforms( bool b_bind )
+	{
+		GLint program0=-1; if(b_bind&&glProgramUniform1i) glGetIntegerv(GL_CURRENT_PROGRAM,&program0); if(program0>=0) glUseProgram(ID);
+		std::vector<Uniform> v;
+		for(int k=0,kn=get_active_uniform_count();k<kn;k++)
+		{
+			static const GLenum pnames[]={GL_BLOCK_INDEX,GL_LOCATION,GL_NAME_LENGTH,GL_TYPE,GL_ARRAY_SIZE,GL_OFFSET,GL_ARRAY_STRIDE,GL_MATRIX_STRIDE,GL_IS_ROW_MAJOR,GL_ATOMIC_COUNTER_BUFFER_INDEX};
+			static std::array<GLint,std::extent<decltype(pnames)>::value> values;
+			glGetProgramResourceiv(ID,GL_UNIFORM,k,GLsizei(values.size()),pnames,GLsizei(values.size()),nullptr,&values[0]);
+			static std::map<GLenum,GLint> prop; for(int j=0,jn=int(values.size());j<jn;j++) prop[pnames[j]]=values[j];
+			Uniform u; u.type=prop[GL_TYPE]; u.array_size=prop[GL_ARRAY_SIZE]; u.ID=prop[GL_LOCATION];
+			glGetProgramResourceName(ID,GL_UNIFORM,k,prop[GL_NAME_LENGTH],nullptr,u.name);
+			if(strstr(u.name,"gl_")) continue; // query name now, and skip for built-in gl variables
+			if(prop[GL_ATOMIC_COUNTER_BUFFER_INDEX]!=-1){ int b; glGetActiveAtomicCounterBufferiv(ID,prop[GL_ATOMIC_COUNTER_BUFFER_INDEX],GL_ATOMIC_COUNTER_BUFFER_BINDING,&b); atomic_counter_buffer_binding_map[u.name]=b; }
+			if(prop[GL_BLOCK_INDEX]>=0||prop[GL_LOCATION]<0) continue;
+			v.emplace_back(u);
+		}
+		if(program0>=0) glUseProgram(program0); // restore the original program
+		return v;
+	}
+
+	inline void gl::Program::update_uniform_cache()
+	{
+		GLint program0=-1; if(glProgramUniform1i) glGetIntegerv(GL_CURRENT_PROGRAM,&program0); if(program0>=0) glUseProgram(ID);
+		int texture_id=0; for( auto& u : get_active_uniforms(false) )
+		{
+			bool b_texture = gxIsSamplerType(u.type);
+			if(b_texture){ u.textureID=texture_id++; if(glProgramUniform1i)glProgramUniform1i(ID,u.ID,u.textureID);else glUniform1i(u.ID,u.textureID); } // setting sampler locations avoids validation error in Intel Compiler
+			uniform_cache[u.name]=u; if(u.array_size==1) continue;
+			GLchar name[256]; strcpy(name,u.name); GLchar* bracket=strchr(name,'['); if(bracket) bracket[0]='\0';
+			for( GLint loc=bracket?1:0;loc<u.array_size;loc++){ Uniform u1=u;sprintf(u1.name,"%s[%d]",name,loc);u1.ID=glGetUniformLocation(ID,u1.name);if(u1.ID==-1)continue;u1.array_size=u.array_size-loc;if(b_texture)u1.textureID=texture_id++;uniform_cache[u1.name]=u1; }
+		}
+		if(program0>=0) glUseProgram(program0); // restore the original program
+	}
+
+	inline const char* gl::Program::dump_uniforms( bool b_matrix, bool b_array )
+	{
+		static std::string buff; buff.clear();
+		int texID=0; for( auto& u : get_active_uniforms(false) )
+		{
+			if(!b_array&&strchr(u.name,'[')) continue;
+			if(!b_matrix&&u.is_matrix()) continue;
+			buff += format( "[%04d] %s %s%s %s\n", u.ID, u.type_name(), u.name, u.array_size>1?format("[%d]",u.array_size):"", u.get_value(ID) );
+		}
+		return buff.c_str();
+	}
+
+	inline void Program::update_uniform_block()
+	{
+		uniform_block_map.clear();
+		for(int k=0,kn=gxGetProgramiv(ID,GL_ACTIVE_UNIFORM_BLOCKS);k<kn;k++)
+		{
+			UniformBlock ub; ub.ID = k; ub.program = this; ub.size = gxGetActiveUniformBlockiv(ID,k,GL_UNIFORM_BLOCK_DATA_SIZE);
+			GLsizei l=gxGetActiveUniformBlockiv(ID,k,GL_UNIFORM_BLOCK_NAME_LENGTH); /* length includes NULL */ if(l>std::extent<decltype(UniformBlock::name)>::value) printf("[%s] uniform block name is too long\n",name);
+			glGetActiveUniformBlockName(ID,k,l,&l,ub.name);
+			uniform_block_map[ ub.name ] = ub;
+		}
+	}
+
+	struct indexed_string_t : public std::string { int index=0; }; // string with index in a source
+	struct effect_source_t : public std::vector<named_string_t>
+	{
+		shader_macro_t macro; // embedded macro
+
+		effect_source_t() = default;
+		effect_source_t( const std::vector<named_string_t>& v ){ reinterpret_cast<std::vector<named_string_t>&>(*this)=v; }
+		effect_source_t( const std::initializer_list<named_string_t>& v ){ reinterpret_cast<std::vector<named_string_t>&>(*this)=v; }
+
+		void clear(){ __super::clear(); macro.clear(); }
+		void append( std::string name, std::string source ){ if(!name.empty()){for(auto& s:*this) if(_stricmp(s.name.c_str(),name.c_str())==0){ s.value=source; return; }} emplace_back( named_string_t{name,source} ); }
+		std::string get_name( int index ) const { if(!macro.empty()){ if(index==0) return "macro.fx"; index--; } return this->at(index).name; }
+		std::vector<std::string> names() const { std::vector<std::string> vs; if(!macro.empty()) vs.emplace_back("macro.fx"); for( auto& s:*this) vs.emplace_back(s.name); return vs; }
+		std::vector<std::string> sources() const { std::vector<std::string> vs; if(!macro.empty()) vs.emplace_back(macro.merge()); for( auto& s:*this) vs.emplace_back(s.value); return vs; }
+		std::string merge() const { std::string m=macro.merge(); for(auto& s:*this) m+=s.value+'\n'; return m; }
+		std::vector<std::string> explode_parsed( const char* parsed ) const;
+
+		// recursive append with template parameter pack
+		template <typename T, class... Ts> void append_r( T arg, Ts... args ){ append("",arg); append_r(args...); }
+		void append_r( std::string arg ){ if(!arg.empty()) append("",arg); }
+		void append_r( const char* arg ){ if(arg&&*arg) append("",arg); }
+	};
+
+//***********************************************
+} // namespace gl
+//***********************************************
+
+// explode shader source by exploiting #line directives
+inline std::vector<gl::indexed_string_t> gxExplodeShaderSource( const char* source, int first_index=1 )
+{
+	std::vector<gl::indexed_string_t> v;
+	std::vector<const char*> vs = explode_conservative(source,'\n');
+
+	for( int k=0, kn=int(vs.size()), idx=first_index; k<kn; k++ )
+	{
+		const char* s = ltrim(vs[k]);
+		bool b_line = strncmp(s,"#line",5)==0;
+		if(b_line) sscanf( s+6, "%d", &idx );
+		gl::indexed_string_t i; reinterpret_cast<std::string&>(i)=vs[k]; i.index=idx;
+		v.emplace_back(i);
+		if(!b_line) idx++;
+	}
+	return v;
+}
+
+inline std::map<int,std::string> gxExplodeShaderSourceMap( const char* source, int first_index=1 )
+{
+	std::map<int,std::string> m;
+	for( auto s : gxExplodeShaderSource(source,first_index) )
+		if(!strstr(s.c_str(),"#line")) m.emplace(s.index,s);//reinterpret_cast<std::string&>(s));
+	return m;
+}
+
+inline std::vector<std::string> gl::effect_source_t::explode_parsed( const char* parsed ) const
+{
+	if(!parsed||!*parsed) return std::vector<std::string>();
+	auto ss=sources(); if(ss.empty()) return std::vector<std::string>();
+	std::vector<int> n; int c0=0; for(auto& e:ss){ int c=1; for(const char* p=e.c_str();*p;p++){if(*p=='\n')c++;} n.push_back(c0+=c); }
+
+	std::vector<std::string> v; v.resize(ss.size());
+	int page_index=0; for( auto& l : gxExplodeShaderSource(parsed) )
+	{
+		if(l.index>=n[page_index]) page_index++;
+		if(page_index>=v.size()){ printf("%s(): page_index(%d)>=v.size(%d)\n",__func__,page_index,int(v.size())); break; }
+		v[page_index] += l + '\n';
+	}
+
+	return v;
+}
+
+//***********************************************
+namespace gl {
+//***********************************************
+	
+	// effect: a list of programs
+	struct Effect : public GLObject
+	{
+		Effect( GLuint ID, const char* name ) : GLObject(ID,name,0){ if(!(quad=gxCreateQuadVertexArray())) printf("[%s] unable to create quad buffer\n",name); }
+		~Effect() override { active_program=nullptr; if(quad){ delete quad; quad=nullptr; } if(!pts.empty()){ for(auto it:pts) safe_delete(it.second); pts.clear(); } for(auto& it:uniform_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} uniform_buffer_map.clear(); for(auto* p:programs) delete p; programs.clear(); }
+		static void unbind(){ glUseProgram(0); }
+
+		Program* bind( const char* program_name, ... ){ char buff[1024]; va_list a;va_start(a,program_name);vsprintf_s(buff,1024,program_name,a);va_end(a); active_program=get_program(buff); if(active_program) active_program->bind(); else{ active_program=nullptr; glUseProgram(0); } return active_program; }
+		Program* bind( uint index ){ active_program=get_program(index); if(active_program) active_program->bind(); else { active_program=nullptr; glUseProgram(0); } return active_program; }
+
+		bool empty() const { return programs.empty(); }
+		size_t size() const { return programs.size(); }
+		Program* get_program( const char* name ) const { for(uint k=0;k<programs.size();k++)if(_stricmp(programs[k]->name,name)==0) return programs[k]; printf("Unable to find program \"%s\" in effect \"%s\"\n", name, this->name ); return nullptr; }
+		Program* get_program( uint index ) const { if(index<programs.size()) return programs[index]; else { printf("[%s] Out-of-bound program index\n", name ); return nullptr; } }
+		Program* create_program( const char* prefix, const char* name, const program_source_t& source );
+		Program* append_program( Program* program ){ if(!program) return nullptr; programs.emplace_back(program); auto& m=program->uniform_block_map;for(auto& it:m){gl::Program::UniformBlock& ub=it.second;ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size);} return program; }
+		bool append( gl::effect_source_t source );
+		template <class... Ts> bool append( Ts... args ){ gl::effect_source_t source; source.append_r(args...); return append(source); }
+
+		Program::Uniform* get_uniform( const char* name ){ return active_program?active_program->get_uniform(name):nullptr; }
+		Program::Uniform* get_uniform( const std::string& name ){ return active_program?active_program->get_uniform(name.c_str()):nullptr; }
+		template <class T>	void set_uniform( const char* name, const T& v, GLsizei count=1 ){ if(active_program) active_program->set_uniform(name,v,count); }
+		template <class T>	void set_uniform( const char* name, T* v, GLsizei count=1 ){ if(active_program) active_program->set_uniform(name,v,count); }
+		void set_uniform( const char* name, Texture* t ){ if(active_program) active_program->set_uniform(name,t); }
+		template <class T>	void set_uniform( const std::string& name, const T& v, GLsizei count=1 ){ if(active_program) active_program->set_uniform(name.c_str(),v,count); }
+		template <class T>	void set_uniform( const std::string& name, T* v, GLsizei count=1 ){ if(active_program) active_program->set_uniform(name.c_str(),v,count); }
+		void set_uniform( const std::string& name, Texture* t ){ if(active_program) active_program->set_uniform(name.c_str(),t); }
+
+		// uniform buffer/block
+		gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name); if(b&&b->size()!=size){ static std::set<std::string> warns; auto it=warns.find(name); if(it==warns.end()){ warns.insert(name); printf("[%s] %s(): uniform_buffer(%s).size(=%d)!=%d\n",this->name,__func__,name,int(b->size()),int(size));} } if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr,GL_DYNAMIC_STORAGE_BIT|GL_MAP_WRITE_BIT); if(b){ bind_uniform_buffer(name,b); return uniform_buffer_map[name]=b; } printf("[%s] unable to create uniform buffer [%s]\n", this->name, name); return nullptr; }
+		gl::Buffer* get_uniform_buffer( const char* name ){ auto it=uniform_buffer_map.find(name); return it==uniform_buffer_map.end()?nullptr:it->second; }
+		GLint get_uniform_block_binding( const char* name ){ GLint binding=active_program?active_program->get_uniform_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_uniform_block_binding(name); if(b!=-1) return b; } return -1; }
+		gl::Buffer* bind_uniform_buffer( const char* name, gl::Buffer* ub=nullptr /* if nullptr, use default buffer */ ){ gl::Buffer* b=ub?ub:get_uniform_buffer(name); GLuint binding=get_uniform_block_binding(name); if(b&&binding!=-1){ b->bind_base(binding); return b; } else{ if(!b) printf( "[%s] %s(): unable to find uniform buffer %s\n", this->name, __func__, name ); else printf( "[%s] %s(): unable to find uniform buffer binding %s\n", this->name, __func__, name ); return nullptr; } }
+
+		// blocks: uniform, shader storage, and atomic counter
+		GLint get_shader_storage_block_binding( const char* name ){ GLint binding=active_program?active_program->get_shader_storage_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_shader_storage_block_binding(name); if(b!=-1) return b; } printf( "[%s] %s(): unable to find shader storage block binding %s\n", this->name, __func__, name ); return -1; }
+		void bind_shader_storage_buffer( const char* name, Buffer* buffer ){ GLint binding=get_shader_storage_block_binding(name); if(binding<0) return; if(buffer->target==GL_SHADER_STORAGE_BUFFER) buffer->bind_base(binding); else buffer->bind_base_as(GL_SHADER_STORAGE_BUFFER,binding); }
+		GLint get_atomic_counter_buffer_binding( const char* name ){ GLint binding=active_program?active_program->get_atomic_counter_buffer_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_atomic_counter_buffer_binding(name); if(b!=-1) return b; } printf( "[%s] %s(): unable to find atomic counter buffer binding %s\n", this->name, __func__, name ); return -1; }
+		void bind_atomic_counter_buffer( const char* name, Buffer* buffer ){ GLint binding=get_atomic_counter_buffer_binding(name); if(binding<0) return; if(buffer->target==GL_ATOMIC_COUNTER_BUFFER) buffer->bind_base(binding); else buffer->bind_base_as(GL_ATOMIC_COUNTER_BUFFER,binding); }
+
+		// draw or compute
+		inline void draw_quads(){ if(!quad) return; if(quad->index_buffer) quad->draw_elements(0,4,GL_TRIANGLE_STRIP); else quad->draw_arrays(0,4,GL_TRIANGLE_STRIP); }
+		inline void draw_points( GLsizei width, GLsizei height, bool no_attrib=false ){ if(no_attrib) return draw_points_no_attrib( width*height ); uint64_t key=uint64_t(width)|(uint64_t(height)<<32); auto it=pts.find(key); VertexArray* va=it!=pts.end()?it->second:(pts[key]=gxCreatePointVertexArray(width,height)); if(va) va->draw_arrays(0,width*height,GL_POINTS); }
+		inline void draw_points_no_attrib( GLsizei count ){ GLuint v=0; if(context::is_core_profile()){ auto it=pts.find(0);VertexArray* va=it!=pts.end()?it->second:(pts[0]=gxCreatePointVertexArray(0,0)); if(va)v=va->ID; } glBindVertexArray(v); glDrawArrays( GL_POINTS, 0, count ); } // core profile should bind non-empty VAO; attribute-less rendering without binding any vertex array: simply using gl_VertexID in vertex shaders
+		inline void dispatch_compute( GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z=1 ){ glDispatchCompute( num_groups_x?num_groups_x:1, num_groups_y?num_groups_y:1, num_groups_z?num_groups_z:1 ); }
+		inline void dispatch_compute( GLuint num_threads_x, double local_size_x, GLuint num_threads_y, double local_size_y, GLuint num_threads_z=1, double local_size_z=1 )	{ GLuint num_groups_x = max(GLuint(ceil(num_threads_x/float(local_size_x))),1u), num_groups_y = max(GLuint(ceil(num_threads_y/float(local_size_y))),1u), num_groups_z = max(GLuint(ceil(num_threads_z/float(local_size_z))),1u); dispatch_compute(num_groups_x, num_groups_y, num_groups_z ); }
+		inline void dispatch_compute_indirect( GLintptr indirect ){ glDispatchComputeIndirect( indirect ); }
+
+		// internal members
+		Program*						active_program=nullptr;
+		std::vector<Program*>			programs;
+		std::map<std::string,Buffer*>	uniform_buffer_map;	// do not define uniform buffers in each program, since they are shared across programs.
+		std::map<uint64_t,VertexArray*>	pts;				// point vertex array
+		VertexArray*					quad=nullptr;
+	};
+
 //***********************************************
 } // end namespace gl
 //***********************************************
@@ -1093,38 +1174,7 @@ inline GLuint gxLoadProgramBinary( const char* name, uint crc )
 	return ID;
 }
 
-// explode shader source by exploiting #line directives
-inline gl::shader_lines_t gxExplodeShaderSource( const char* source, int first_index=1 )
-{
-	gl::shader_lines_t v;
-	std::vector<const char*> vs = explode_conservative(source,'\n');
-
-	for( int k=0, kn=int(vs.size()), idx=first_index; k<kn; k++ )
-	{
-		const char* s = ltrim(vs[k]);
-		bool b_line = strncmp(s,"#line",5)==0;
-		if(b_line) sscanf( s+6, "%d", &idx );
-		v.emplace_back( std::make_pair(idx,vs[k]) );
-		if(!b_line) idx++;
-	}
-	return v;
-}
-
-inline std::string gxJoinShaderSource( gl::shader_lines_t& v )
-{
-	std::string source; for( auto& s : v ) source += s.second + '\n';
-	return source;
-}
-
-inline std::map<int,std::string> gxExplodeShaderSourceMap( const char* source, int first_index=1 )
-{
-	std::map<int,std::string> m;
-	for( const auto& s : gxExplodeShaderSource(source,first_index) )
-		if(!strstr(s.second.c_str(),"#line")) m.emplace(s);
-	return m;
-}
-
-inline void gxInfoLog( const char* name, const char* msg, const std::vector<std::string>* p_source=nullptr )
+inline void gxInfoLog( const char* name, const char* msg, const std::vector<gl::named_string_t>* p_source=nullptr )
 {
 	char L[53]={}; for(int k=0;k<50;k++)L[k]='_'; L[50]=L[51]='\n'; printf("\n%s",L);
 
@@ -1136,7 +1186,7 @@ inline void gxInfoLog( const char* name, const char* msg, const std::vector<std:
 		for( int k=0, kn=int(p_source->size()); k<kn; k++ )
 		{
 			if(k>0&&!lines.empty()) offsets[k] = int(lines.rbegin()->first);
-			for(auto& it:gxExplodeShaderSourceMap(p_source->at(k).c_str(),offsets[k]+1))
+			for(auto& it:gxExplodeShaderSourceMap(p_source->at(k).value.c_str(),offsets[k]+1))
 			{
 				int offset=offsets[k]; if(k>0&&it.first<=offset){ for(int j=k-1;j>=0&&it.first<=offset;j--) offset=offsets[j]; }
 				lines.emplace(it.first,line_t{k,offset,it.second});
@@ -1148,7 +1198,8 @@ inline void gxInfoLog( const char* name, const char* msg, const std::vector<std:
 			if(idx<0) return "";
 			auto it=lines.find(size_t(idx)); if(it==lines.end()) return "";
 			auto& l = it->second; if(idx<=l.offset) return "";
-			std::string pl = format("%d(%d)",l.page,idx-l.offset);
+			std::string pname = p_source->at(l.page).name;
+			std::string pl = pname.empty()?format("%d(%d)",l.page,idx-l.offset):format("%s(%d)",pname.c_str(),idx-l.offset);
 			if(b_replace) m = str_replace(m.c_str(),format("0(%d)",idx),pl.c_str());
 			l.s = trim(str_replace(l.s.c_str(),"%", "%%")); // % causes crash in gprintf
 			return l.s.empty() ? "": format( "\n%s> %s", pl.c_str(), l.s.c_str() );
@@ -1168,11 +1219,11 @@ inline void gxInfoLog( const char* name, const char* msg, const std::vector<std:
 	printf("%s",L);
 }
 
-inline GLuint gxCompileShader( GLenum shader_type, const char* name, const std::vector<std::string>& source )
+inline GLuint gxCompileShader( GLenum shader_type, const char* name, const std::vector<gl::named_string_t>& source )
 {
+	std::vector<const char*> ps; for( auto& s : source ) ps.push_back(s.value.c_str());
+	
 	GLuint ID = glCreateShader( shader_type ); if(ID==0){ printf("%s(): unable to glCreateShader(%d)\n", __func__, shader_type); return 0; }
-	std::vector<const char*> ps; for( auto& s : source ) ps.push_back(s.c_str());
-
 	glShaderSource( ID, GLsizei(ps.size()), ps.data(), nullptr );
 	glCompileShader( ID );
 
@@ -1210,40 +1261,36 @@ inline gl::directive_t gxExtractShaderDirectives( std::string& src, bool keep_bl
 	for( auto& j : gxExplodeShaderSource(src0.c_str()) )
 	{
 		std::string* pd=nullptr;
-		const char* s=str_replace(trim(j.second.c_str()),"\t"," "); if(s[0]=='#')
+		const char* s=str_replace(trim(j.c_str()),"\t"," "); if(s[0]=='#')
 		{
-			if(strncmp(s,v,lv)==0){ pd=&d.version; if(gl::context::is_core_profile()&&!strstr(s,"core")) j.second+=" core"; } // add "core" to core profile version
+			if(strncmp(s,v,lv)==0){ pd=&d.version; if(gl::context::is_core_profile()&&!strstr(s,"core")) j+=" core"; } // add "core" to core profile version
 			else if(strncmp(s,e,le)==0){ pd=&d.extension; }
 			else if(strncmp(s,p,lp)==0){ pd=&d.pragma; }
 			else if(strncmp(s,l,ll)==0){ pd=&d.layout; }
 		}
-		if(!pd){src+=j.second+'\n'; }
-		else{	*pd+=j.second+'\n'; if(keep_blank) src+='\n'; }
+		if(!pd){src+=j+'\n'; }
+		else{	*pd+=j+'\n'; if(keep_blank) src+='\n'; }
 	}
 	return d;
 }
 
-inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const gl::shader_source_t& source, const char* p_macro=nullptr, std::vector<const char*>* tf_varyings=nullptr )
+inline gl::Program* gxCreateProgram( std::string prefix, std::string name, const gl::program_source_t& source )
 {
-	std::string sname = format("%s%s%s",prefix?prefix:"",prefix?".":"",name); const char* pname=sname.c_str();
+	if(!prefix.empty()) prefix+='.';
+	std::string pname_s = prefix+name; const char* pname = pname_s.c_str();
 
-	// 0. preprocess macros
-	std::string macro; if(p_macro&&*p_macro){ macro=p_macro; if(macro.back()!='\n') macro+='\n'; }
-	auto md =  gxExtractShaderDirectives(macro,false);
-
-	// 1. combine macro with shader sources, and add layout qualifier
+	// 1. extract directives, and add layout qualifier
 	for( auto& it : source )
 	{
 		if(it.second.empty()) continue;
-		std::string v = md.version;
-		std::string e = md.extension;
-		std::string p = md.pragma;
-		std::string l = md.layout; if(it.first==GL_FRAGMENT_SHADER) l+="layout(pixel_center_integer) in vec4 gl_FragCoord;\n";
-		std::string m = macro;
+		std::string v;
+		std::string e;
+		std::string p;
+		std::string l; if(it.first==GL_FRAGMENT_SHADER) l="layout(pixel_center_integer) in vec4 gl_FragCoord;\n";
 
 		for( auto& f: it.second )
 		{
-			auto& s = const_cast<std::string&>(f); // source element
+			auto& s = const_cast<std::string&>(f.value); // source element
 			auto d = gxExtractShaderDirectives(s);
 
 			v += d.version;
@@ -1252,34 +1299,33 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 			l += d.layout;
 		}
 
-		auto& first = const_cast<std::string&>(it.second.front()); // first source element
-		first = v+e+p+l+m+first; // merge all together
+		auto& first = const_cast<std::string&>(it.second.front().value); // first source element
+		first = v+e+p+l+first; // merge all together
 	}
 
 	// 2. trivial return for the default program
 	auto vit=source.find(GL_VERTEX_SHADER);		bool vertex_shader_exists = vit!=source.end()&&!vit->second.empty();
 	auto cit=source.find(GL_COMPUTE_SHADER);	bool compute_shader_exists = cit!=source.end()&&!cit->second.empty();
-	if(!vertex_shader_exists&&!compute_shader_exists) return new gl::Program(0,name);
+	if(!vertex_shader_exists&&!compute_shader_exists) return new gl::Program(0,name.c_str());
 
 	// 3. create md5 hash of shader souces
-	std::string crcsrc=pname; for( auto& it : source ){ for( auto& s : it.second ) crcsrc += s; }
-	for( size_t k=0; tf_varyings&& k < tf_varyings->size(); k++ ) crcsrc += tf_varyings->at(k);
+	std::string crcsrc=pname; for( auto& it : source ){ for( auto& s : it.second ) crcsrc += s.value; }
 	uint crc = gl::crc32c(crcsrc.c_str(),crcsrc.length());
 
 	// 4. try to load binary cache
 	GLuint binary_program_ID = gxLoadProgramBinary( pname, crc );
-	if(binary_program_ID&&gxCheckProgramLink(name, binary_program_ID,false))
+	if(binary_program_ID&&gxCheckProgramLink(pname, binary_program_ID,false))
 	{
-		gl::Program* program = new gl::Program(binary_program_ID, name);
+		gl::Program* program = new gl::Program(binary_program_ID, name.c_str());
 		program->source = source;
 		program->update_uniform_cache();
 		program->update_uniform_block();
 		return program;
 	}
-	
+
 	// 5. create program first
 	GLuint program_ID = glCreateProgram();
-	gl::Program* program = new gl::Program( program_ID, name );
+	gl::Program* program = new gl::Program( program_ID, name.c_str() );
 	program->source = source;
 
 	// 6. compile and attach shaders
@@ -1290,12 +1336,12 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 	std::vector<GLuint> attached_shaders;
 	for( auto& it : program->source )
 	{
-		GLuint shader_type = it.first;
-		GLuint shader_ID = gxCompileShader( shader_type, format("%s",pname), it.second );
+		if(it.second.empty()) continue;
 
-		if( !it.second.empty() && shader_ID==0 ) return nullptr;
-		if( shader_ID ){ glAttachShader( program->ID, shader_ID ); attached_shaders.emplace_back( shader_ID ); }
-		if( shader_type == GL_GEOMETRY_SHADER )
+		GLuint shader_ID = gxCompileShader( it.first, pname, it.second ); if(shader_ID==0) return nullptr;
+		glAttachShader( program->ID, shader_ID );
+		attached_shaders.emplace_back( shader_ID );
+		if(it.first==GL_GEOMETRY_SHADER)
 		{
 			int maxGeometryOutputVertices;
 			glGetIntegerv( GL_MAX_GEOMETRY_OUTPUT_VERTICES, &maxGeometryOutputVertices );
@@ -1305,10 +1351,7 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 		}
 	}
 
-	// 7. specify the output varyings of transform feedback, if given
-	if(tf_varyings&&!tf_varyings->empty()) glTransformFeedbackVaryings( program->ID, (GLsizei)tf_varyings->size(), &(*tf_varyings)[0], GL_INTERLEAVED_ATTRIBS );
-
-	// 8. first linking of program
+	// 7. first linking of program
 	glLinkProgram( program->ID );
 	if(!gxCheckProgramLink( pname, program->ID ))
 	{
@@ -1316,7 +1359,7 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 		return nullptr;
 	}
 
-	// 9. query the active attributes
+	// 8. query the active attributes
 	char aname[256] = {};
 	GLint active_attribute_count = gxGetProgramiv( program->ID, GL_ACTIVE_ATTRIBUTES );
 	if(active_attribute_count!=3)
@@ -1339,27 +1382,32 @@ inline gl::Program* gxCreateProgram( const char* prefix, const char* name, const
 		glLinkProgram( program->ID ); if(!gxCheckProgramLink( pname, program->ID )){ if(program){ delete program; program=nullptr; } return nullptr; }
 	}
 
-	// 10. update uniforms before validating the program
+	// 9. update uniforms before validating the program
 	program->update_uniform_cache(); // to avoid validation errors in Intel compilers
 	program->update_uniform_block();
 
-	// 11. validation: test if the program can run in the current state
+	// 10. validation: test if the program can run in the current state
 	if(!gxValidateProgram( pname, program->ID )){ if(program){ delete program; program=nullptr; } return nullptr; }
 
-	// 12. save cache
+	// 11. save cache
 	glProgramParameteri( program->ID, GL_PROGRAM_BINARY_RETRIEVABLE_HINT, GL_TRUE );
 	gxSaveProgramBinary( pname, program->ID, crc );
 
-	// 13. detach/delete shaders
+	// 12. detach/delete shaders
 	GLsizei shader_count; GLuint shaders[256];
 	glGetAttachedShaders( program->ID,256,&shader_count,shaders);
 	for(GLsizei k=0;k<shader_count;k++){ glDetachShader(program->ID,shaders[k]); glDeleteShader(shaders[k]); }
 
-	// 14. logging
+	// 13. logging
 	__int64 tend; QueryPerformanceCounter((LARGE_INTEGER*)&tend);
 	printf( "completed in %.1f ms\n", (float)(double(tend-tbegin)/double(freq)*1000.0) );
 
 	return program;
+}
+
+inline gl::Program* gl::Effect::create_program( const char* prefix, const char* name, const program_source_t& source )
+{
+	gl::Program* p=gxCreateProgram(prefix,name,source); return p?append_program(p):nullptr;
 }
 
 inline gl::Effect* gxCreateEffect( const char* name )
@@ -1402,54 +1450,54 @@ inline void glfxDeleteParser( glfx::IParser** pp_parser ){ if(!pp_parser||!(*pp_
 
 #endif // GLFX_PARSER_IMPL
 
-inline std::vector<std::string> gxSplitEffectSource( const char* parsed, const std::vector<std::string>& sources )
-{
-	std::vector<int> counters;
-	for( auto& e : sources )
-	{
-		int count=0;for(const char* p=e.c_str();*p;p++) if(*p=='\n') count++; // should ignore appended newline for each file
-		counters.push_back(counters.empty()?count:counters.back()+count );
-	}
-
-	std::vector<std::string> v; v.resize(sources.size());
-	int page_index=0; for( auto& l : gxExplodeShaderSource(parsed) )
-	{
-		if(int(l.first)>counters[page_index]) page_index++;
-		v[page_index] += l.second + '\n';
-	}
-
-	return v;
-}
-
 //***********************************************
-inline gl::Effect* gxCreateEffect( const char* name, std::vector<std::string> sources, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr )
+inline gl::Effect* __gxCreateEffectImpl( gl::Effect* parent, const char* fxname, gl::effect_source_t source )
 {
 #ifndef GLFX_PARSER_IMPL
 	static glfx::IParser*(*glfxCreateParser)() = (glfx::IParser*(*)()) GetProcAddress(GetModuleHandleW(nullptr),"glfxCreateParser"); if(!glfxCreateParser){ printf( "%s(): unable to link to glfxCreateParser()\n", __func__ ); return nullptr; }
 	static void(*glfxDeleteParser)(glfx::IParser**) = (void(*)(glfx::IParser**)) GetProcAddress(GetModuleHandleW(nullptr),"glfxDeleteParser"); if(!glfxDeleteParser){ printf( "%s(): unable to link to glfxDeleteParser()\n", __func__ ); return nullptr; }
 #endif
 
-	// preprocess multi-source shader sources
-	std::string s; for(auto& e:sources) s+=e+='\n'; // must append newline for different files
-
 	// load shaders from effect
 	glfx::IParser* parser = glfxCreateParser(); if(!parser){ printf( "%s(): unable to create parser\n", __func__ ); return nullptr; }
-	if(!parser->parse(s.c_str())){ printf( "%s(%s)\n%s\n", __func__, name, parser->parse_log() ); return nullptr; }
+	if(!parser->parse(source.merge().c_str())){ printf( "%s(): failed to parse %s\n%s\n", __func__, fxname, parser->parse_log() ); return nullptr; }
 
-	gl::Effect* e = p_effect_to_append ? p_effect_to_append : new gl::Effect(0, name);
+	gl::Effect* e = parent ? parent : new gl::Effect(0, fxname);
 	for( int k=0, kn=parser->program_count(); k<kn; k++ )
 	{
-		gl::shader_source_t ss; for( int j=0, jn=parser->shader_count(k); j<jn; j++ ) ss[parser->shader_type(k,j)] = gxSplitEffectSource(parser->shader_source(k,j),sources);
-		gl::Program* program = gxCreateProgram(name,parser->program_name(k),ss,p_macro,nullptr); if(!program){ glfxDeleteParser(&parser); if(e!=p_effect_to_append) delete e; return nullptr; }
-		e->attach_program(program);
+		gl::program_source_t ss;
+		for( int j=0, jn=parser->shader_count(k); j<jn; j++ )
+		{
+			std::vector<gl::named_string_t> ns;
+			auto ev = source.explode_parsed(parser->shader_source(k,j));
+			for( int e=0, en=int(ev.size()); e<en; e++ ) ns.emplace_back( gl::named_string_t{source.get_name(e), ev[e]} );
+			ss[parser->shader_type(k,j)] = ns;
+		}
+		
+		gl::Program* program = gxCreateProgram(fxname?fxname:"",parser->program_name(k),ss); if(!program){ glfxDeleteParser(&parser); if(e!=parent) delete e; return nullptr; }
+		
+		e->append_program(program);
 	}
-	glfxDeleteParser(&parser);
 
+	glfxDeleteParser(&parser);
 	return e;
 }
 
-inline gl::Effect* gxCreateEffect( const char* name, const char* source, const char* p_macro=nullptr, gl::Effect* p_effect_to_append=nullptr ){ return gxCreateEffect( name, std::vector<std::string>{source}, p_macro, p_effect_to_append ); }
-inline bool gl::Effect::attach( const char* name, const std::vector<std::string>& source, const char* p_macro ){ return gxCreateEffect(name,source,p_macro,this)==this; }
+inline gl::Effect* gxCreateEffect( const char* fxname, gl::effect_source_t source )
+{
+	return __gxCreateEffectImpl(nullptr,fxname,source);
+}
+
+template <class... Ts> inline gl::Effect* gxCreateEffect( const char* fxname, Ts... args )
+{
+	gl::effect_source_t source; source.append_r(args...);
+	return gxCreateEffect(fxname,source);
+}
+
+inline bool gl::Effect::append( gl::effect_source_t source )
+{
+	return __gxCreateEffectImpl(this,this->name,source);
+}
 
 inline gl::Framebuffer* gxCreateFramebuffer( const char* name=nullptr )
 {
