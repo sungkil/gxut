@@ -471,7 +471,7 @@ template <class T> struct tmat4
 	__forceinline tmat4& set_scale( const V3& v ){ set_identity(); _11=v.x; _22=v.y; _33=v.z; return *this; }
 	__forceinline tmat4& set_scale( T x,T y,T z ){ set_identity(); _11=x; _22=y; _33=z; return *this; }
 	__forceinline tmat4& set_shear( const V2& yz, const V2& zx, const V2& xy ){ set_identity(); _12=yz.x; _13=yz.y; _21=zx.y; _23=zx.x; _31=xy.x; _32=xy.y; return *this; }
-	tmat4& set_rotate_vec_to_vec( const V3& from, const V3& to );
+	tmat4& set_rotate_vec_to_vec( const V3& from, const V3& to ){ T d=max(min(from.dot(to),T(1)),T(-1)); if(d>T(0.999999)) return set_identity(); V3 x=from.cross(to); return set_rotate( normalize(x), acos(d) ); }
 	tmat4& set_rotate( const V3& axis, T angle );
 
 	// viewport, lookat, projection
@@ -493,14 +493,6 @@ template <class T> struct tmat4
 	__forceinline tmat4& set_ortho_dx( T width, T height, T dn, T df ){ set_ortho( width, height, dn, df ); _33*=T(0.5); _34=dn/(dn-df); return *this; }
 	__forceinline tmat4& set_ortho_off_center_dx( T left, T right, T top, T bottom, T dn, T df ){ set_ortho_off_center( left, right, top, bottom, dn, df ); _33*=T(0.5); _34=dn/(dn-df); return *this; }
 };
-
-template <class T>
-__noinline tmat4<T>& tmat4<T>::set_rotate_vec_to_vec( const tvec3<T>& from, const tvec3<T>& to )
-{
-	T fdt=from.dot(to); if(abs(fdt)>T(0.999999)) return fdt>0?set_identity():set_scale(T(-1.0),T(-1.0),T(-1.0)); // degenerate case:s exactly the same vectors or flipped
-	V3 n=from.cross(to); T l=n.length();
-	return set_rotate( n/l, asin(l<T(1.0)?l:T(1.0)) );
-}
 
 template <class T>
 __noinline tmat4<T>& tmat4<T>::set_rotate( const tvec3<T>& axis, T angle )
