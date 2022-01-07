@@ -125,7 +125,7 @@ gl::Texture*		gxCreateTexture3D(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,
 gl::Texture*		gxCreateTextureCube(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,GLvoid*[6],bool);
 gl::Texture*		gxCreateTextureBuffer(const char*,gl::Buffer*,GLint);
 gl::Texture*		gxCreateTextureRectangle(const char*,GLsizei,GLsizei,GLint,GLvoid*);
-gl::Texture*		gxCreateTextureView(gl::Texture*,GLuint,GLuint,GLuint,GLuint,bool,GLenum);
+gl::Texture*		gxCreateTextureView(gl::Texture*,GLuint,GLuint,GLuint,GLuint,GLenum,bool);
 gl::Buffer*			gxCreateBuffer(const char*,GLenum,GLsizeiptr,GLenum,const void*,GLbitfield);
 gl::VertexArray*	gxCreateQuadVertexArray();
 gl::VertexArray*	gxCreatePointVertexArray( GLsizei width, GLsizei height );
@@ -344,11 +344,11 @@ namespace gl {
 		static bool& b_texture_deleted(){ static bool bDeleted=true; return bDeleted; }
 
 		// view-related function: wrapper to createTextureView
-		inline static uint crc( GLuint min_level, GLuint levels, GLuint min_layer, GLuint layers, bool force_array, GLenum target ){ struct info { GLuint min_level, levels, min_layer, layers; bool force_array; GLenum target; }; info i={min_level,levels,min_layer,layers,force_array,target}; return gl::crc32c(&i,sizeof(i)); }
-		inline Texture* view( GLuint min_level, GLuint levels, GLuint min_layer=0, GLuint layers=1, GLint internal_format=0, GLenum target=0 ){ return gxCreateTextureView(this,min_level,levels,min_layer,layers,false,target); } // view support (> OpenGL 4.3)
+		inline static uint crc( GLuint min_level, GLuint levels, GLuint min_layer, GLuint layers, GLenum target, bool force_array ){ struct info { GLuint min_level, levels, min_layer, layers; GLenum target; bool force_array; }; info i={min_level,levels,min_layer,layers,target,force_array}; return gl::crc32c(&i,sizeof(i)); }
+		inline Texture* view( GLuint min_level, GLuint levels, GLuint min_layer=0, GLuint layers=1, GLenum target=0 ){ return gxCreateTextureView(this,min_level,levels,min_layer,layers,target,false); } // view support (> OpenGL 4.3)
 		inline Texture* slice( GLuint layer, GLuint level=0 ){ return view(level,1,layer,1); }
 		inline Texture* last_mip( GLuint layer=0 ){ return view(_levels-1,1,layer,1); }
-		inline Texture* array_view(){ return (layers()>1)?this:gxCreateTextureView(this,0,mip_levels(),0,layers(),true,0); }
+		inline Texture* array_view(){ return (layers()>1)?this:gxCreateTextureView(this,0,mip_levels(),0,layers(),0,true); }
 
 		// dimensions
 		GLint		_width;
@@ -1523,7 +1523,7 @@ inline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsizei w
 	GLenum type = gxGetTextureType( internal_format );
 
 	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type); if(width==0) return texture;
-	texture->key = gl::Texture::crc(0,levels,0,layers,false,target);
+	texture->key = gl::Texture::crc(0,levels,0,layers,target,false);
 	glBindTexture( target, ID );
 
 	// allocate storage
@@ -1561,7 +1561,7 @@ inline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsizei w
 	GLenum type = gxGetTextureType( internal_format );
 
 	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type); if(width==0||height==0) return texture;
-	texture->key = gl::Texture::crc(0,levels,0,layers,false,target);
+	texture->key = gl::Texture::crc(0,levels,0,layers,target,false);
 	glBindTexture( target, ID );
 
 	// multipsamples
@@ -1613,7 +1613,7 @@ inline gl::Texture* gxCreateTexture3D( const char* name, GLint levels, GLsizei w
 	GLenum type = gxGetTextureType( internal_format );
 
 	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type); if(width==0||height==0||depth==0) return texture;
-	texture->key = gl::Texture::crc(0,levels,0,depth,false,target);
+	texture->key = gl::Texture::crc(0,levels,0,depth,target,false);
 	glBindTexture( target, ID );
 
 	// allocate storage
@@ -1653,7 +1653,7 @@ inline gl::Texture* gxCreateTextureCube( const char* name, GLint levels, GLsizei
 	GLenum type = gxGetTextureType( internal_format );
 
 	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type);
-	texture->key = gl::Texture::crc(0,levels,0,count,false,target);
+	texture->key = gl::Texture::crc(0,levels,0,count,target,false);
 
 	glBindTexture( target, ID );
 	if( target==GL_TEXTURE_CUBE_MAP )
@@ -1703,7 +1703,7 @@ inline gl::Texture* gxCreateTextureBuffer( const char* name, gl::Buffer* buffer,
 
 	// create a texture
 	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type);
-	texture->key = gl::Texture::crc(0,1,0,1,false,target);
+	texture->key = gl::Texture::crc(0,1,0,1,target,false);
 	glBindTexture( target, ID );
 
 	// create a buffer object and bind the storage using buffer object
@@ -1731,7 +1731,7 @@ inline gl::Texture* gxCreateTextureRectangle( const char* name, GLsizei width, G
 	GLenum type = gxGetTextureType( internal_format );
 
 	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type); if(width==0||height==0) return texture;
-	texture->key = gl::Texture::crc(0,1,0,1,false,target);
+	texture->key = gl::Texture::crc(0,1,0,1,target,false);
 	glBindTexture( target, ID );
 
 	// allocate storage
@@ -1753,12 +1753,12 @@ inline gl::Texture* gxCreateTextureRectangle( const char* name, GLsizei width, G
 	return texture;
 }
 
-inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLuint levels, GLuint min_layer=0, GLuint layers=1, bool force_array=false, GLenum target=0 )
+inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLuint levels, GLuint min_layer=0, GLuint layers=1, GLenum target=0, bool force_array=false )
 {
-	uint key = gl::Texture::crc(min_level,levels,min_layer,layers,force_array,target);
+	uint key = gl::Texture::crc(min_level,levels,min_layer,layers,target,force_array);
 	for(gl::Texture* t=src; t; t=t->next ) if(t->key==key) return t;
 
-	if(src->target==GL_TEXTURE_BUFFER){ printf( "%s(): %s->view should not be a texture buffer\n", __func__, src->name ); return nullptr; }
+	if(src->target==GL_TEXTURE_BUFFER){ printf( "%s(): texture buffer (%s) cannot have a view\n", __func__, src->name ); return nullptr; }
 	if(levels==0){ printf( "%s(): %s->view should have more than one levels\n", __func__, src->name ); return nullptr; }
 	if(layers==0){ printf( "%s(): %s->view should have more than one layers\n", __func__, src->name ); return nullptr; }
 	if((min_level+levels)>GLuint(src->mip_levels())){ printf( "%s(): %s->view should have less than %d levels\n", __func__, src->name, src->mip_levels() ); return nullptr; }
@@ -1811,8 +1811,8 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLu
 	
 	// set dimensions
 	t1->_multisamples = src->_multisamples;
-	t1->_width	= src->_width;
-	t1->_height	= src->_height;
+	t1->_width	= src->width(min_level);
+	t1->_height	= src->height(min_level);
 	t1->_depth	= layers;
 	t1->_levels	= levels;
 
