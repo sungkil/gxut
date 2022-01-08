@@ -28,7 +28,7 @@
 // sampler interface (for lens/rays): vec4(x,y,z,weight) in a unit surface
 struct isampler_t
 {
-	enum model_t { HAMMERSLEY, HALTON, POISSON, PMJ };
+	enum model_t { HAMMERSLEY, HALTON, POISSON };
 	enum surface_t { SQUARE, CIRCLE, HEMISPHERE, COSHEMI, SPHERE, CYLINDER }; // COSHEMI: cosine-weighted hemisphere
 	
 	model_t			model=POISSON;
