@@ -22,7 +22,12 @@
 	#if __has_include("gxmath.h")
 		#include "gxmath.h"
 	#endif
+	#if __has_include("gxfilesystem.h")
+		#include "gxfilesystem.h"
+	#endif
 #endif
+
+#include <deque>
 
 //*************************************
 // sampler interface (for lens/rays): vec4(x,y,z,weight) in a unit surface
@@ -198,7 +203,8 @@ __noinline path poisson_disk_cache_path( uint count, bool circular, uint seed )
 	hash = tcrc32<>(&count, sizeof(count), hash );
 	hash = tcrc32<>(&circular, sizeof(circular), hash );
 	hash = tcrc32<>(&seed, sizeof(seed), hash );
-	return cache_dir+format(L"%08x",hash);
+	wchar_t b[64]; swprintf(b,64,L"%08x",hash);
+	return cache_dir+b;
 }
 
 __noinline bool poisson_disk_cache( vec4* v, uint count, bool circular, uint seed )

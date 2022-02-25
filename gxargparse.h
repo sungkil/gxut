@@ -341,7 +341,7 @@ inline bool parser_t::usage( const char* alt_name )
 	// now, prints the results
 	std::string module_name = path::module_path().name(false).wtoa();
 	fprintf( stdout, "\n%s version %04d-%02d-%02d\n", module_name.c_str(), gx::compiler::year(), gx::compiler::month(), gx::compiler::day() );
-	if(!attrib.copyright.empty()) fprintf( stdout, attrib.copyright.c_str() );
+	if(!attrib.copyright.empty()) fprintf( stdout, "%s\n", trim(attrib.copyright.c_str()) );
 	if(!attrib.header.empty()) fprintf( stdout, "%s\n\n", attrib.header.c_str() );
 
 	fprintf( stdout, "usage: %s", get_command_names() );
@@ -352,7 +352,12 @@ inline bool parser_t::usage( const char* alt_name )
 		else				fprintf( stdout, " [<command>]" );
 	}
 	if(!options.empty()) fprintf( stdout, " [options...]" );
-	for( auto* a : arguments ) if(!a->name.empty()) fprintf( stdout, " %s<%s>%s", a->optional?"[":"",a->name.c_str(),a->optional?"]":"" );
+	for( auto* a : arguments )
+	{
+		if(a->name.empty()) continue;
+		if(a->optional)	fprintf( stdout, " [%s]", a->name.c_str() );
+		else			fprintf( stdout, " %s", a->name.c_str() );
+	}
 	fprintf( stdout, " ...\n\n" );
 
 	std::string sfmt=format(" %%-%ds %%s\n",int(cap+4));
@@ -368,8 +373,8 @@ inline bool parser_t::usage( const char* alt_name )
 	if(!req_args.empty()||!opt_args.empty())
 	{
 		fprintf( stdout, "arguments:\n");
-		for( auto& a : req_args ) print_option( fmt, format("<%s>",a.first.c_str()), a.second.c_str() );
-		for( auto& a : opt_args ) print_option( fmt, format("<%s>",a.first.c_str()), a.second.c_str() );
+		for( auto& a : req_args ) print_option( fmt, format(" %s",a.first.c_str()), a.second.c_str() );
+		for( auto& a : opt_args ) print_option( fmt, format("[%s]",a.first.c_str()), a.second.c_str() );
 		fprintf( stdout, "\n" );
 	}
 
@@ -381,6 +386,7 @@ inline bool parser_t::usage( const char* alt_name )
 	}
 
 	if(!attrib.footer.empty()) fprintf( stdout, "%s\n\n", attrib.footer.c_str() );
+
 	if(!os::console::has_parent()) _wsystem(L"pause");
 
 	return false;

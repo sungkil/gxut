@@ -23,10 +23,10 @@ static const char* __GX_MESH_H_TIMESTAMP__ = _strdup(__TIMESTAMP__);
 
 #if defined(__has_include)
 	#if __has_include("gxmath.h")
-		#include "gxmath.h" // the only necessary header for gxmesh
+		#include "gxmath.h"
 	#endif
-	#if __has_include("gxsampler.h")
-		#include "gxsampler.h"
+	#if __has_include("gxfilesystem.h")
+		#include "gxfilesystem.h"
 	#endif
 #endif
 
@@ -668,7 +668,8 @@ __noinline int mesh::find_up_vector() const
 	for(auto f:{"floor","ground","ceil","terrain","plane"})
 		for(auto& o:objects)
 		{
-			if(!_stristr(o.name,f)||o.box.max_extent()<(o.box.min_extent()*4.0f)) continue;
+			char buff[4096]; strcpy(buff,o.name);
+			if(!strstr(_strlwr(buff),f)||o.box.max_extent()<(o.box.min_extent()*4.0f)) continue;
 			d[o.box.min_axis()] += 1.0; break;
 		}
 	
@@ -711,7 +712,8 @@ __noinline mesh* create_box_mesh( bbox box=bbox{vec3(-1.0f),vec3(1.0f)}, const c
 	// create box line elements
 	auto line_indices = std::move(get_box_line_indices());
 	m->indices.insert(m->indices.end(),line_indices.begin(),line_indices.end());
-	m->create_object(format("%s.lines",name))->create_geometry(uint(indices.size()),uint(line_indices.size()),(bbox*)&box, size_t(-1));
+	char buff[4096]; sprintf(buff,"%s.lines",name);
+	m->create_object(buff)->create_geometry(uint(indices.size()),uint(line_indices.size()),(bbox*)&box, size_t(-1));
 
 	return m;
 }
