@@ -324,7 +324,7 @@ inline const T* trim( const T* src, T delim )
 template <class T>
 inline T* itrim( T* src, const T* delims=_strcvt<T>(" \t\n") )
 {
-	if(!src&&!src[0]) return src;
+	if(!src||!src[0]) return src; // return as-is
 	src += strspn(src,delims);
 	src[strlen(src)-_strrspn(src,delims)]=0;
 	return src;
