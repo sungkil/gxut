@@ -42,7 +42,7 @@ struct isampler_t
 	const uint		n=1;
 };
 
-template <size_t max_samples=4096> // up to 4K samples by default
+template <size_t _capacity=4096> // up to 4K samples by default
 struct tsampler_t : public isampler_t
 {
 	uint			crc;		// crc32c to detect the change of samples
@@ -51,7 +51,7 @@ struct tsampler_t : public isampler_t
 	tsampler_t()	= default;
 	tsampler_t( size_t size, bool b_resample=true ){ resize(size,b_resample); }
 
-	constexpr uint	capacity() { return max_samples; }
+	constexpr uint	capacity() { return _capacity; }
 	bool			empty() const { return n==0; }
 	bool			dirty() const { return crc!=tcrc32<>(&model,sizeof(isampler_t)); }
 	uint			size() const { return n; }
@@ -59,7 +59,7 @@ struct tsampler_t : public isampler_t
 	const vec4*		end() const { return begin() + n; }
 	const vec4&		operator[]( ptrdiff_t i ) const { return _data[i]; }
 	const vec4&		at( ptrdiff_t i ) const { return _data[i]; }
-	void			resize( size_t size, bool b_resample=true ){ const_cast<uint&>(n)=uint(size<max_samples?size:max_samples); if(b_resample) resample(); }
+	void			resize( size_t size, bool b_resample=true ){ const_cast<uint&>(n)=uint(size<_capacity?size:_capacity); if(b_resample) resample(); }
 	void			rewind(){ index=0; }
 	const vec4&		next(){ index=(++index)%n; return _data[index]; } // only for fixed sequence; needs to be improved for sequential sampling
 	uint			resample(); // return the number of generated samples
@@ -69,14 +69,14 @@ protected:
 	void			normalize();
 	void			reshape( surface_t dst );
 
-	std::vector<vec4> _data = std::move(std::vector<vec4>(max_samples));
+	std::vector<vec4> _data = std::move(std::vector<vec4>(_capacity));
 };
 
 using sampler_t = tsampler_t<>;
 
 // make the center position of samples to the origin
-template <size_t max_samples>
-inline void tsampler_t<max_samples>::normalize()
+template <size_t _capacity>
+inline void tsampler_t<_capacity>::normalize()
 {
 	if(empty()||surface==HEMISPHERE||surface==SPHERE||surface==CYLINDER) return;
 	dvec3 m=dvec3(0,0,0); vec4* v=(vec4*)&_data[0]; for(size_t k=0;k<n;k++) m+=dvec3(v[k].x,v[k].y,v[k].z); m/=double(n);
@@ -84,8 +84,8 @@ inline void tsampler_t<max_samples>::normalize()
 	for(size_t k=0,kn=size();k<kn;k++)v[k].xyz+=f;
 } 
 
-template <size_t max_samples>
-inline void tsampler_t<max_samples>::reshape( surface_t dst )
+template <size_t _capacity>
+inline void tsampler_t<_capacity>::reshape( surface_t dst )
 {
 	vec4* d=(vec4*)(&_data);
 
@@ -129,8 +129,8 @@ uint halton_cube(vec4*,uint);
 uint simple_square(vec4*,uint);
 uint poisson_disk( vec4* v, uint _count, bool circular, uint seed );
 
-template <size_t max_samples>
-__noinline void tsampler_t<max_samples>::generate( vec4* v, uint n )
+template <size_t _capacity>
+__noinline void tsampler_t<_capacity>::generate( vec4* v, uint n )
 {
 	if(model==HAMMERSLEY)	hammersley_square(v,n);
 	else if(model==HALTON)	halton_cube(v,n);
@@ -138,8 +138,8 @@ __noinline void tsampler_t<max_samples>::generate( vec4* v, uint n )
 	else					simple_square(v,n);
 }
 
-template <size_t max_samples>
-__noinline uint tsampler_t<max_samples>::resample()
+template <size_t _capacity>
+__noinline uint tsampler_t<_capacity>::resample()
 {
 	if(surface==surface_t::CYLINDER&&model!=sampler_t::HALTON){ printf("[Sampler] cylinder sampling is supported only in Halton sampling\n" ); return 0; }
 	
