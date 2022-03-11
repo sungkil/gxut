@@ -42,11 +42,14 @@ struct isampler_t
 	const uint		n=1;
 };
 
-template <size_t max_samples=65536> // up to 64K samples
+template <size_t max_samples=4096> // up to 4K samples by default
 struct tsampler_t : public isampler_t
 {
 	uint			crc;		// crc32c to detect the change of samples
 	uint			index=0;	// index for sequential sampling
+
+	tsampler_t()	= default;
+	tsampler_t( size_t size, bool b_resample=true ){ resize(size,b_resample); }
 
 	constexpr uint	capacity() { return max_samples; }
 	bool			empty() const { return n==0; }
@@ -56,7 +59,7 @@ struct tsampler_t : public isampler_t
 	const vec4*		end() const { return begin() + n; }
 	const vec4&		operator[]( ptrdiff_t i ) const { return _data[i]; }
 	const vec4&		at( ptrdiff_t i ) const { return _data[i]; }
-	void			resize( uint new_size, bool b_resample=true ){ const_cast<uint&>(n)=new_size<uint(max_samples)?new_size:uint(max_samples);if(b_resample)resample();}
+	void			resize( size_t size, bool b_resample=true ){ const_cast<uint&>(n)=uint(size<max_samples?size:max_samples); if(b_resample) resample(); }
 	void			rewind(){ index=0; }
 	const vec4&		next(){ index=(++index)%n; return _data[index]; } // only for fixed sequence; needs to be improved for sequential sampling
 	uint			resample(); // return the number of generated samples
