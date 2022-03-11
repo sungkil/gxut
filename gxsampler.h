@@ -48,7 +48,6 @@ struct tsampler_t : public isampler_t
 	uint			crc;		// crc32c to detect the change of samples
 	uint			index=0;	// index for sequential sampling
 
-	tsampler_t(){ _data.resize(max_samples); }
 	constexpr uint	capacity() { return max_samples; }
 	bool			empty() const { return n==0; }
 	bool			dirty() const { return crc!=tcrc32<>(&model,sizeof(isampler_t)); }
@@ -67,7 +66,7 @@ protected:
 	void			normalize();
 	void			reshape( surface_t dst );
 
-	std::vector<vec4> _data;
+	std::vector<vec4> _data = std::move(std::vector<vec4>(max_samples));
 };
 
 using sampler_t = tsampler_t<>;
