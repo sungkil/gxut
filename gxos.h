@@ -234,18 +234,19 @@ struct timer_t
 
 class mutex_t
 {
-	HANDLE h_mutex=nullptr;
+	int		wait_counter = 256;
+	HANDLE	h_mutex=nullptr;
 public:
-	mutex_t( const wchar_t* name );
+	mutex_t( const wchar_t* name, int wait_time=2560 );
 	~mutex_t(){ close(); }
 	operator bool() const { return h_mutex!=nullptr; }
 	HANDLE& close(){ if(h_mutex) CloseHandle(h_mutex); return h_mutex=0; }
 };
 
-inline mutex_t::mutex_t( const wchar_t* name )
+inline mutex_t::mutex_t( const wchar_t* name, int wait_time ):wait_counter(wait_time/10)
 {
 	close()=CreateMutexW(0,FALSE,name); DWORD e=GetLastError();
-	for(uint k=0,kn=256;k<kn&&e==ERROR_ALREADY_EXISTS;k++){ close()=CreateMutexW(0,FALSE,name);e=GetLastError(); Sleep(10); }
+	for(uint k=0,kn=wait_counter;k<kn&&e==ERROR_ALREADY_EXISTS;k++){ close()=CreateMutexW(0,FALSE,name);e=GetLastError(); Sleep(10); }
 	if(e==ERROR_ALREADY_EXISTS) close();
 }
 
