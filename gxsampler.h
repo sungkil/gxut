@@ -79,7 +79,7 @@ template <size_t _capacity>
 inline void tsampler_t<_capacity>::normalize()
 {
 	if(empty()||surface==HEMISPHERE||surface==SPHERE||surface==CYLINDER) return;
-	dvec3 m=dvec3(0,0,0); vec4* v=(vec4*)&_data[0]; for(size_t k=0;k<n;k++) m+=dvec3(v[k].x,v[k].y,v[k].z); m/=double(n);
+	dvec3 m=dvec3(0,0,0); vec4* v=_data.data(); for(size_t k=0;k<n;k++) m+=dvec3(v[k].x,v[k].y,v[k].z); m/=double(n);
 	vec3 f=vec3(float(-m.x),float(-m.y),float(-m.z));
 	for(size_t k=0,kn=size();k<kn;k++)v[k].xyz+=f;
 } 
@@ -87,7 +87,7 @@ inline void tsampler_t<_capacity>::normalize()
 template <size_t _capacity>
 inline void tsampler_t<_capacity>::reshape( surface_t dst )
 {
-	vec4* d=(vec4*)(&_data);
+	vec4* d=_data.data();
 
 	if(empty()||dst==surface_t::SQUARE) return;
 	else if(dst==surface_t::CYLINDER&&model!=sampler_t::HALTON){printf("[Sampler] cylindrical sampling supports only Halton sequences\n" );return;}
@@ -142,8 +142,8 @@ template <size_t _capacity>
 __noinline uint tsampler_t<_capacity>::resample()
 {
 	if(surface==surface_t::CYLINDER&&model!=sampler_t::HALTON){ printf("[Sampler] cylinder sampling is supported only in Halton sampling\n" ); return 0; }
-	
-	auto* v = (vec4*)&_data[0];
+
+	auto* v = _data.data();
 	sprand(seed);
 	generate(v,n);
 	if(surface!=SQUARE&&(model!=POISSON||surface!=CIRCLE)) reshape(surface); // reshape to circle, hemisphere, sphere, ...
