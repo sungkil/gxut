@@ -58,12 +58,12 @@ struct camera_t;
 #ifndef __cplusplus // std140 definition for shaders
 struct light_t
 {
-	vec4	pos, color, normal;		// use normal.xyz
+	vec4	pos, color, normal;		// normal: use only normal.xyz
 };
 
 struct vpl_t
 {
-	vec4	pos, color, normal;		// use normal.xyz
+	vec4	pos, color, normal;		// normal: use only normal.xyz
 	mat4	view_matrix, projection_matrix;
 	float	fovy, aspect, dnear, dfar;
 };
