@@ -218,9 +218,9 @@ namespace gl {
 		__forceinline bool base_bindable( GLenum target1 ){ return target1==GL_SHADER_STORAGE_BUFFER||target1==GL_UNIFORM_BUFFER||target1==GL_TRANSFORM_FEEDBACK_BUFFER||target1==GL_ATOMIC_COUNTER_BUFFER; }
 
 		void set_sub_data( const GLvoid* data, GLsizeiptr size, GLintptr offset=0 ){ if(glNamedBufferSubData) glNamedBufferSubData(ID,offset,size,data); else { GLuint b0=bind(); glBufferSubData(target,offset,size,data); glBindBuffer(target,b0); } }
-		template <class T> void set_data( const T* data, GLsizeiptr count ){ set_sub_data((const GLvoid*)data,sizeof(T)*count,0); }
-		template <class T> void set_data( T data ){ set_sub_data(&data,GLsizeiptr(sizeof(T)),0); }
-		template <class T> void set_data( const std::vector<T>& data ){ set_sub_data( data.data(), GLsizeiptr(sizeof(T)*data.size()), 0 ); }
+		template <class T> void set_data( const T* data, GLsizeiptr count, GLintptr offset=0 ){ set_sub_data((const GLvoid*)data,sizeof(T)*count,offset); }
+		template <class T> void set_data( T data, GLintptr offset=0 ){ set_sub_data(&data,GLsizeiptr(sizeof(T)),offset); }
+		template <class T> void set_data( const std::vector<T>& data, GLintptr offset=0 ){ set_sub_data( data.data(), GLsizeiptr(sizeof(T)*data.size()), offset ); }
 		template <class T, size_t N> void set_data( const std::array<T,N>& data ){ set_sub_data( data.data(), GLsizeiptr(sizeof(T)*N), 0 ); }
 		void get_sub_data( GLvoid* data, GLsizeiptr size, GLintptr offset=0 ){ if(glGetNamedBufferSubData) glGetNamedBufferSubData(ID,offset,size?size:this->size(),data); else if(glGetBufferSubData){ GLuint b0=bind(); glGetBufferSubData(target,offset,size?size:this->size(),data); glBindBuffer(target,b0); } }
 		template <class T> T get_data(){ T v; get_sub_data(&v,sizeof(T),0); return v; }
