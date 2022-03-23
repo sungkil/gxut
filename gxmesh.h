@@ -78,9 +78,6 @@ struct light_t
 	uint	bind:1;				// dynamic binding to an object
 	uint	object_index:24;	// ID of object bound to this light
 
-	// transformation to camera (eye-coordinate) space
-	vec4	ecpos( const mat4& view_matrix ) const { return pos.a==0 ? vec4(mat3(view_matrix)*pos.xyz, 0.0f) : view_matrix*pos; }
-	vec3	ecnorm( const mat4& view_matrix ) const { return mat3(view_matrix)*normal; }
 	vec3	dir() const { return normalize(pos.xyz); }				// directions and angles against view vector
 	float	phi() const { vec3 d=dir(); return atan2(d.y,d.x); }	// angle on the xy plane orthogonal to the optical axis
 	float	theta() const { return acos(dir().z); }					// angle between outgoing light direction and the optical axis
@@ -107,13 +104,10 @@ static_assert(sizeof(light_t)%16==0, "size of struct light_t should be aligned a
 static_assert(sizeof(vpl_t)%16==0,	 "size of struct vpl_t should be aligned at 16-byte boundaries");
 #endif
 
-//*************************************
-// light list type
-struct lights_t : public std::vector<light_t>
-{
-	uint crc=0;	// crc32c to detect the change of samples
-	void clear() noexcept { __super::clear(); crc=0; }
-};
+// overloading light transformations to camera space
+inline light_t operator*( const mat4& view_matrix, const light_t& light ){ return light_t{ light.pos.a==0?vec4(mat3(view_matrix)*light.pos.xyz,0):view_matrix*light.pos, light.color, mat3(view_matrix)*light.normal }; }
+inline std::vector<light_t> operator*( const mat4& view_matrix, const std::vector<light_t>& lights ){ std::vector<light_t> v; if(lights.empty()) return v; v.reserve(lights.size()); for( const auto& l : lights ) v.emplace_back(view_matrix*l); return v; }
+inline std::vector<light_t> operator*( const mat4& view_matrix, const std::vector<light_t>* lights ){ std::vector<light_t> v; if(!lights||lights->empty()) return v; v.reserve(lights->size()); for(auto& l:*lights) v.emplace_back(view_matrix*l); return v; }
 
 //*************************************
 // ray for ray tracing
