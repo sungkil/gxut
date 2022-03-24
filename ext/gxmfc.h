@@ -136,11 +136,11 @@ inline CFont* get_edit_font()
 	if(font->GetSafeHandle()) return font;
 
 	if(
-		!font->CreatePointFont(80,L"Segoe UI Mono")&&
-		!font->CreatePointFont(80,L"FixedSys")&&
-		!font->CreatePointFont(80,L"Consolas")&&
-		!font->CreatePointFont(80,L"Monaco")&&
-		!font->CreatePointFont(80,L"Courier New")
+		!font->CreatePointFont(90,L"Segoe UI Mono")&&
+		!font->CreatePointFont(90,L"Consolas")&&
+		!font->CreatePointFont(90,L"Monaco")&&
+		!font->CreatePointFont(90,L"FixedSys")&&
+		!font->CreatePointFont(90,L"Courier New")
 	) return get_default_gui_font(false,0);
 
 	LOGFONT lf; font->GetLogFont(&lf);
@@ -154,7 +154,10 @@ inline CFont* get_sublime_gui_font()
 {
 	static CFont* font = new CFont;
 	if(font->GetSafeHandle()) return font;
-	if(!font->CreatePointFont(90,L"Segoe UI")) return get_default_gui_font(false,0);
+	if(
+		!font->CreatePointFont(100,L"Open Sans") &&
+		!font->CreatePointFont(100,L"Segoe UI")
+	) return get_default_gui_font(false,0);
 
 	LOGFONT lf; font->GetLogFont(&lf);
 	lf.lfPitchAndFamily = FIXED_PITCH|FF_MODERN;	// fixed|monospace: just desired spec. (non-necessarily loaded)
