@@ -331,10 +331,9 @@ namespace gl {
 		void generate_mipmap(){ if(get_texture_parameteriv(GL_TEXTURE_IMMUTABLE_FORMAT)&&get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)<1){ printf( "Texture::generate_mipmap(%s): no mipmap generated for 1 level.\n", name ); return; } int w=get_texture_level_parameteriv(GL_TEXTURE_WIDTH,0), h=get_texture_level_parameteriv(GL_TEXTURE_HEIGHT,0), d=get_texture_level_parameteriv(GL_TEXTURE_DEPTH,0); texture_parameteri(GL_TEXTURE_BASE_LEVEL,0); texture_parameteri(GL_TEXTURE_MAX_LEVEL,0+gxGetMipLevels(w,h,d)-1); if(glGenerateTextureMipmap) glGenerateTextureMipmap(ID); else { GLuint b0=gxGetIntegerv(target_binding); glBindTexture(target,ID); glGenerateMipmap(target); glBindTexture(target,b0); }if(get_texture_parameteriv(GL_TEXTURE_MIN_FILTER)==GL_LINEAR) texture_parameteri( GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR ); else if(get_texture_parameteriv(GL_TEXTURE_MIN_FILTER)==GL_NEAREST) texture_parameteri(GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST ); }
 
 		// get_image/set_image
-		void read_pixels( GLvoid* pixels, GLint level=0 ){ if(target==GL_TEXTURE_BUFFER){ printf("[%s] read_pixels() not supports GL_TEXTURE_BUFFER\n", name ); return; } else if(glGetTextureImage){ glGetTextureImage( ID, level, format(), type(), GLsizei(mem_size()), pixels ); return; } GLuint b0=bind(); glGetTexImage( target, level, format(), type(), pixels ); glBindTexture( target, b0 ); }
-		void get_image( GLvoid* pixels, GLint level=0 ){ read_pixels(pixels,level); }
-		void sub_image2D( GLvoid* pixels, GLint level=0, GLsizei width=0, GLsizei height=0, GLint xoffset=0, GLint yoffset=0 ){ if(glTextureSubImage2D) glTextureSubImage2D(ID,0,xoffset,yoffset,width?width:this->width(),height?height:this->height(),format(),type(),pixels); else { GLuint b0=bind(); glTexSubImage2D(target,0,xoffset,yoffset,width?width:this->width(),height?height:this->height(),format(),type(),pixels); glBindTexture(target,b0); } }
-		void set_image( GLvoid* pixels, GLint level=0, GLsizei width=0, GLsizei height=0, GLint xoffset=0, GLint yoffset=0 ){ sub_image2D( pixels, level, width, height, xoffset, yoffset ); }
+		void read_pixels( GLvoid* pixels, GLint level=0 ){ get_image(pixels,level); }
+		void get_image( GLvoid* pixels, GLint level=0 ){ if(target==GL_TEXTURE_BUFFER){ printf("[%s] read_pixels() not supports GL_TEXTURE_BUFFER\n", name ); return; } else if(glGetTextureImage){ glGetTextureImage( ID, level, format(), type(), GLsizei(mem_size()), pixels ); return; } GLuint b0=bind(); glGetTexImage( target, level, format(), type(), pixels ); glBindTexture( target, b0 ); }
+		void set_image( GLvoid* pixels, GLint level=0, GLsizei width=0, GLsizei height=0, GLsizei depth=0, GLint x=0, GLint y=0, GLint z=0 );
 
 		// instance-related
 		inline Texture* clone( const char* name );
@@ -369,6 +368,16 @@ namespace gl {
 		Texture*	next;		// next view node: a node of linked list, starting from the parent node
 		uint64_t	crtheap;	// heap handle to the parent, require to allocate view across DLL boundaries
 	};
+
+	inline void Texture::set_image( GLvoid* pixels, GLint level, GLsizei width, GLsizei height, GLsizei depth, GLint x, GLint y, GLint z )
+	{
+		GLenum g=target, f=format(),t=type(); GLsizei w=width?width:this->width(),h=height?height:this->height(),d=depth?depth:this->depth();
+		bool dsa=glTextureSubImage1D&&glTextureSubImage2D&&glTextureSubImage3D; GLuint b0=dsa?0:bind();
+		if(g==GL_TEXTURE_1D){ if(dsa) glTextureSubImage1D(ID,0,x,w,f,t,pixels); else glTexSubImage1D(g,0,x,w,f,t,pixels); }
+		else if(g==GL_TEXTURE_2D||g==GL_TEXTURE_1D_ARRAY||(g>=GL_TEXTURE_CUBE_MAP_POSITIVE_X&&g<=GL_TEXTURE_CUBE_MAP_NEGATIVE_Z)){ if(dsa) glTextureSubImage2D(ID,0,x,y,w,h,f,t,pixels); else glTexSubImage2D(g,0,x,y,w,h,f,t,pixels); }
+		else if(g==GL_TEXTURE_3D||g==GL_TEXTURE_2D_ARRAY){ if(dsa) glTextureSubImage3D(ID,0,x,y,z,w,h,d,f,t,pixels); else glTexSubImage3D(g,0,x,y,z,w,h,d,f,t,pixels); }
+		if(b0) glBindTexture(g,b0);
+	}
 
 	inline Texture* Texture::clone( const char* name )
 	{
@@ -1527,8 +1536,8 @@ inline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsizei w
 	glBindTexture( target, ID );
 
 	// allocate storage
-	if( target==GL_TEXTURE_1D ){	glTexStorage1D( target, levels, internal_format, width );			if(data) glTexSubImage1D( target, 0, 0, width, format, type, data ); }
-	else {							glTexStorage2D( target, levels, internal_format, width, layers );	if(data) glTexSubImage2D( target, 0, 0, 0, width, layers, format, type, data ); }
+	if(target==GL_TEXTURE_1D ){	glTexStorage1D(target,levels,internal_format,width );			if(data) glTexSubImage1D( target, 0, 0, width, format, type, data ); }
+	else{						glTexStorage2D(target,levels,internal_format,width,layers );	if(data) glTexSubImage2D( target, 0, 0, 0, width, layers, format, type, data ); }
 
 	// set dimensions
 	texture->_width		= width;
