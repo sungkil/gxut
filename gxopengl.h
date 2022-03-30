@@ -309,9 +309,10 @@ namespace gl {
 		inline GLint  channels() const { return _channels; }
 		inline GLint  bpc() const { return _bpp/_channels; } // bits per channel
 		inline GLint  bpp() const { return _bpp; } // bits per pixels
+		inline GLint  Bpp() const { return _bpp>>3; } // bytes per pixels
 		inline GLsizei multisamples() const { return target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY?_multisamples:1; }
-		size_t width_step( GLint level=0 ) const { return (((width(level)*bpp()+3)>>2)<<2); } // 4byte-aligned size in a single row
-		size_t mem_size( GLint level=0 ) const { return width_step(level)*height(level); }
+		size_t width_step( GLint level=0 ) const { return (((width(level)*Bpp()+3)>>2)<<2); } // 4byte-aligned size in a single row
+		size_t mem_size( GLint level=0 ) const { return width_step(level)*size_t(height(level)); }
 
 		// set attributes
 		void set_filter( GLint min_filter, GLint mag_filter=0, bool b_sync_view=true ){ static const GLenum n=GL_NEAREST,l=GL_LINEAR,nn=GL_NEAREST_MIPMAP_NEAREST,nl=GL_NEAREST_MIPMAP_LINEAR,ln=GL_LINEAR_MIPMAP_NEAREST,ll=GL_LINEAR_MIPMAP_LINEAR; GLint i=min_filter,g=mag_filter?mag_filter:min_filter; texture_parameteri( GL_TEXTURE_MIN_FILTER, _levels==1?(i==nn||i==nl?n:i==ln||i==ll?l:i):i==n?nn:i==l?ll:i ); texture_parameteri( GL_TEXTURE_MAG_FILTER, g==nn||g==nl?n:g==ln||g==ll?l:g ); if(b_sync_view&&next) next->set_filter( min_filter, mag_filter ); }
@@ -331,7 +332,6 @@ namespace gl {
 		void generate_mipmap(){ if(get_texture_parameteriv(GL_TEXTURE_IMMUTABLE_FORMAT)&&get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)<1){ printf( "Texture::generate_mipmap(%s): no mipmap generated for 1 level.\n", name ); return; } int w=get_texture_level_parameteriv(GL_TEXTURE_WIDTH,0), h=get_texture_level_parameteriv(GL_TEXTURE_HEIGHT,0), d=get_texture_level_parameteriv(GL_TEXTURE_DEPTH,0); texture_parameteri(GL_TEXTURE_BASE_LEVEL,0); texture_parameteri(GL_TEXTURE_MAX_LEVEL,0+gxGetMipLevels(w,h,d)-1); if(glGenerateTextureMipmap) glGenerateTextureMipmap(ID); else { GLuint b0=gxGetIntegerv(target_binding); glBindTexture(target,ID); glGenerateMipmap(target); glBindTexture(target,b0); }if(get_texture_parameteriv(GL_TEXTURE_MIN_FILTER)==GL_LINEAR) texture_parameteri( GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR ); else if(get_texture_parameteriv(GL_TEXTURE_MIN_FILTER)==GL_NEAREST) texture_parameteri(GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST ); }
 
 		// get_image/set_image
-		void read_pixels( GLvoid* pixels, GLint level=0 ){ get_image(pixels,level); }
 		void get_image( GLvoid* pixels, GLint level=0 ){ if(target==GL_TEXTURE_BUFFER){ printf("[%s] read_pixels() not supports GL_TEXTURE_BUFFER\n", name ); return; } else if(glGetTextureImage){ glGetTextureImage( ID, level, format(), type(), GLsizei(mem_size()), pixels ); return; } GLuint b0=bind(); glGetTexImage( target, level, format(), type(), pixels ); glBindTexture( target, b0 ); }
 		void set_image( GLvoid* pixels, GLint level=0, GLsizei width=0, GLsizei height=0, GLsizei depth=0, GLint x=0, GLint y=0, GLint z=0 );
 

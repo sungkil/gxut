@@ -299,6 +299,7 @@ namespace std
 
 //*************************************
 // half-precision float and conversion
+#ifndef __GXMATH_NO_HALF__
 struct half { unsigned short mantissa:10,exponent:5,sign:1; __forceinline operator float() const; };	// IEEE 754-2008 half-precision (16-bit) floating-point storage. // https://github.com/HeliumProject/Helium/blob/master/Math/Float16.cpp
 __forceinline float	htof( half value ){ struct _float32_t {uint mantissa:23,exponent:8,sign:1;}; _float32_t result;result.sign = value.sign;uint exponent=value.exponent,mantissa=value.mantissa; if(exponent==31){result.exponent=255;result.mantissa=0;} else if(exponent==0&&mantissa==0){result.exponent=0;result.mantissa=0;} else if(exponent==0){uint mantissa_shift=10-static_cast<uint>(log2(float(mantissa)));result.exponent=127-(15-1)-mantissa_shift;result.mantissa=mantissa<<(mantissa_shift+23-10);} else{result.exponent=127-15+exponent;result.mantissa=static_cast<uint>(value.mantissa)<<(23-10);} return reinterpret_cast<float&>(result); }
 __forceinline half::operator float() const {return htof(*this);}
@@ -314,6 +315,7 @@ __forceinline half2	ftoh( const vec2& v ){ return half2{ftoh(v.x),ftoh(v.y)}; }
 __forceinline half3	ftoh( const vec3& v ){ return half3{ftoh(v.x),ftoh(v.y),ftoh(v.z)}; }
 __forceinline half4 ftoh( const vec4& v ){ return half4{ftoh(v.x),ftoh(v.y),ftoh(v.z),ftoh(v.w)}; }
 __forceinline half* ftoh( const float* pf, half* ph, size_t nElements, size_t half_stride=1 ){ if(pf==nullptr||ph==nullptr||nElements==0) return ph; half* ph0=ph; for( size_t k=0; k < nElements; k++, pf++, ph+=half_stride ) *ph=ftoh(*pf); return ph0; }
+#endif
 
 //*************************************
 // common matrix implemenetations
@@ -702,12 +704,16 @@ __forceinline uint packUnorm2x16( vec2 v ){ ushort2 u; for(int k=0;k<2;k++) u[k]
 __forceinline uint packSnorm2x16( vec2 v ){ short2 s; for(int k=0;k<2;k++) s[k]=short(round(clamp(v[k],-1.0f,1.0f)*32767.0f)); return reinterpret_cast<uint&>(s); }
 __forceinline uint packUnorm4x8( vec4 v ){ uchar4 u; for(int k=0;k<4;k++) u[k]=uchar(round(clamp(v[k],0.0f,1.0f)*255.0f)); return reinterpret_cast<uint&>(u); }
 __forceinline uint packSnorm4x8( vec4 v ){ char4 s; for(int k=0;k<4;k++) s[k]=char(round(clamp(v[k],-1.0f,1.0f)*127.0f)); return reinterpret_cast<uint&>(s); }
+#ifndef __GXMATH_NO_HALF__
 __forceinline uint packHalf2x16( vec2 v ){ half2 h=ftoh(v); return reinterpret_cast<uint&>(h); }
+#endif
 __forceinline vec2 unpackUnorm2x16( uint u ){ vec2 v; for(int k=0;k<2;k++) v[k]=reinterpret_cast<ushort2&>(u)[k]/65535.0f; return v; }
 __forceinline vec2 unpackSnorm2x16( uint u ){ vec2 v; for(int k=0;k<2;k++) v[k]=clamp(reinterpret_cast<short2&>(u)[k]/32767.0f,-1.0f,1.0f); return v; }
 __forceinline vec4 unpackUnorm4x8( uint u ){ vec4 v; for(int k=0;k<4;k++) v[k]=reinterpret_cast<uchar4&>(u)[k]/255.0f; return v; }
 __forceinline vec4 unpackSnorm4x8( uint u ){ vec4 v; for(int k=0;k<4;k++) v[k]=clamp(reinterpret_cast<char4&>(u)[k]/127.0f,-1.0f,1.0f); return v; }
+#ifndef __GXMATH_NO_HALF__
 __forceinline vec2 unpackHalf2x16( uint u ){ return htof(reinterpret_cast<half2&>(u)); }
+#endif
 __forceinline uint packUint4x8( uint4 v ){ return (v[0]&0xff)+((v[1]&0xff)<<8)+((v[2]&0xff)<<16)+((v[3]&0xff)<<24); }
 __forceinline uvec4 unpackUint4x8( uint u ){ return uvec4(u&0xff,(u>>8)&0xff,(u>>16)&0xff,(u>>24)&0xff); }
 __forceinline uint floatBitsToUint( float f ){ return reinterpret_cast<uint&>(f); }
