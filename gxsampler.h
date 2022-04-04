@@ -59,7 +59,7 @@ struct tsampler_t : public isampler_t
 	const vec4*		end() const { return begin() + n; }
 	const vec4&		operator[]( ptrdiff_t i ) const { return _data[i]; }
 	const vec4&		at( ptrdiff_t i ) const { return _data[i]; }
-	void			resize( size_t size, bool b_resample=true ){ const_cast<uint&>(n)=uint(size<_capacity?size:_capacity); if(b_resample) resample(); }
+	void			resize( size_t size, bool b_resample=false ){ const_cast<uint&>(n)=uint(size<_capacity?size:_capacity); if(b_resample) resample(); }
 	void			rewind(){ index=0; }
 	const vec4&		next(){ index=(++index)%n; return _data[index]; } // only for fixed sequence; needs to be improved for sequential sampling
 	uint			resample(); // return the number of generated samples
