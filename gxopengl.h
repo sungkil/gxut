@@ -144,7 +144,7 @@ namespace gl {
 	struct GLObject
 	{
 		const GLuint	ID;
-		const char		name[64];
+		const char		name[256];
 		const GLenum	target;
 		const GLenum	target_binding;
 
@@ -349,8 +349,19 @@ namespace gl {
 		inline Texture* last_mip( GLuint layer=0 ){ return view(_levels-1,1,layer,1); }
 		inline Texture* array_view(){ return (layers()>1)?this:gxCreateTextureView(this,0,mip_levels(),0,layers(),0,true); }
 
+		// friend functions to access data members
+		friend Texture* ::gxCreateTexture1D(const char*,GLint,GLsizei,GLsizei,GLint,GLvoid*,bool);
+		friend Texture* ::gxCreateTexture2D(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,GLvoid*,bool,bool,GLsizei);
+		friend Texture* ::gxCreateTexture3D(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,GLvoid*);
+		friend Texture* ::gxCreateTextureCube(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,GLvoid* data[6],bool);
+		friend Texture* ::gxCreateTextureBuffer(const char*,Buffer*,GLint);
+		friend Texture* ::gxCreateTextureRectangle(const char*,GLsizei,GLsizei,GLint,GLvoid*);
+		friend Texture* ::gxCreateTextureView(Texture* src,GLuint,GLuint,GLuint,GLuint,GLenum,bool);
+
+	protected: // protected data members
+
 		// dimensions
-		GLint		_width;
+		GLint		_width=1;
 		GLint		_height=1;
 		GLint		_depth=1;
 		GLint		_levels=1;
@@ -363,7 +374,7 @@ namespace gl {
 		GLint		_bpp;
 		GLsizei		_multisamples;
 
-		// view-related protected members
+		// view-related
 		uint		key;		// key of the current view
 		Texture*	next;		// next view node: a node of linked list, starting from the parent node
 		uint64_t	crtheap;	// heap handle to the parent, require to allocate view across DLL boundaries
