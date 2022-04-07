@@ -167,6 +167,7 @@ inline const wchar_t* itow( int i ){			return atow(itoa(i)); }
 inline const wchar_t* utow( uint u ){			return atow(utoa(u)); }
 inline const wchar_t* ftow( float f ){			return atow(ftoa(f)); }
 inline const wchar_t* dtow( double d ){			return atow(dtoa(d)); }
+inline const wchar_t* illtow( int64_t i ){		return atow(illtoa(i)); }
 inline const wchar_t* ulltow( uint64_t u ){		return atow(ulltoa(u)); }
 inline const wchar_t* itow( const int2& v ){	return atow(itoa(v)); }
 inline const wchar_t* itow( const int3& v ){	return atow(itoa(v)); }
@@ -226,6 +227,7 @@ namespace fast
 inline bool atob( const char* a ){		return _stricmp(a,"true")==0||fast::atoi(a)!=0; }
 inline uint atou( const char* a ){		char* e=nullptr;uint v=(uint)strtoul(a,&e,10); return v; }
 inline uint atou( const wchar_t* w ){	wchar_t* e=nullptr;uint v=(uint)wcstoul(w,&e,10); return v; }
+inline int64_t atoill( const char* a ){	char* e=nullptr;int64_t v=strtoll(a,&e,10); return v; }
 inline uint64_t atoull( const char* a ){char* e=nullptr;uint64_t v=strtoull(a,&e,10); return v; }
 inline int2 atoi2( const char* a ){		int2 v;char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=(int)strtol(a,&e,10); return v; }
 inline int3 atoi3( const char* a ){		int3 v;char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=(int)strtol(a,&e,10); return v; }
@@ -246,6 +248,7 @@ inline int atoi( const wchar_t* w ){		return fast::atoi(wtoa(w)); }
 inline double atof( const wchar_t* w ){		return fast::atof(wtoa(w)); }
 inline bool wtob( const wchar_t* w ){		return w&&w[0]&&(_wcsicmp(w,L"true")==0||_wtoi(w)!=0); }
 inline uint wtou( const wchar_t* w ){		return atou(wtoa(w)); }
+inline int64_t wtoill( const wchar_t* w ){	return atoill(wtoa(w)); }
 inline uint64_t wtoull( const wchar_t* w ){	return atoull(wtoa(w)); }
 
 inline int2 wtoi2( const wchar_t* w ){		return atoi2(wtoa(w)); }
