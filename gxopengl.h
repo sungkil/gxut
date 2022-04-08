@@ -101,6 +101,7 @@ inline GLint	gxGetTextureBPC( GLint internal_format ){ GLint s=0; switch(gxGetTe
 inline GLint	gxGetTextureBPP( GLint internal_format ){ return gxGetTextureBPC(internal_format)*gxGetTextureChannels(internal_format); }
 inline GLenum	gxGetImageTextureInternalFormat( int depth, int channels ){ if(depth==8) return channels==1?GL_R8:channels==2?GL_RG8:channels==3?GL_RGB8:channels==4?GL_RGBA8:0; else if(depth==16)	return channels==1?GL_R16F:channels==2?GL_RG16F:channels==3?GL_RGB16F:channels==4?GL_RGBA16F:0; else if(depth==32)	return channels==1?GL_R32F:channels==2?GL_RG32F:channels==3?GL_RGB32F:channels==4?GL_RGBA32F:0; return 0; }
 inline bool		gxIsSamplerType( GLenum uniformType ){ GLenum t=uniformType; if(t>=GL_SAMPLER_1D && t<=GL_SAMPLER_2D_SHADOW) return true; if(t>=GL_SAMPLER_1D_ARRAY && t<=GL_SAMPLER_CUBE_SHADOW) return true; if(t>=GL_INT_SAMPLER_1D && t<=GL_UNSIGNED_INT_SAMPLER_2D_ARRAY) return true; if(t>=GL_SAMPLER_2D_RECT && t<=GL_SAMPLER_2D_RECT_SHADOW ) return true; if(t>=GL_SAMPLER_BUFFER && t<=GL_UNSIGNED_INT_SAMPLER_BUFFER ) return true; if(t>=GL_SAMPLER_CUBE_MAP_ARRAY && t<=GL_UNSIGNED_INT_SAMPLER_CUBE_MAP_ARRAY ) return true; if(t>=GL_SAMPLER_2D_MULTISAMPLE && t<=GL_UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE_ARRAY ) return true; /* TODO: if(t>=GL_SAMPLER_RENDERBUFFER_NV && t<=GL_UNSIGNED_INT_SAMPLER_RENDERBUFFER_NV ) return true;*/ return false; }
+inline bool		gxIsImageType( GLenum uniformType ){ GLenum t=uniformType; if(t>=GL_IMAGE_1D && t<=GL_UNSIGNED_INT_IMAGE_2D_MULTISAMPLE_ARRAY) return true; return false; }
 inline path		gxGetProgramBinaryPath( const char* name ){ path p=path::temp()+L"glfx\\binary\\"+atow(name)+L".bin"; if(!p.dir().exists()) p.dir().mkdir(); return p; }
 inline int		gxGetMipLevels( int width, int height=1, int depth=1 ){ int l=0,s=uint(max(max(width,height),depth)); while(s){s=s>>1;l++;} return l; }
 inline uint		gxGetMipLevels( uint width, uint height=1, uint depth=1 ){ uint l=0,s=uint(max(max(width,height),depth)); while(s){s=s>>1;l++;} return l; }
@@ -659,103 +660,107 @@ namespace gl {
 		std::string merge() const { std::string m; for(auto& s:*this){ m+=s; if(s.back()!='\n') m+='\n'; } if(!m.empty()) m+='\n'; return m; }
 	};
 
+	struct Uniform
+	{
+		GLint		ID=-1;
+		GLchar		name[256];
+		GLint		array_size=1;
+		GLenum		type;
+		GLint		textureID=-1;
+		Texture*	texture=nullptr;
+		GLint		binding=-1; // only for image texture unit
+
+		template <class T> inline void set( GLuint prog, T* v, GLsizei count )
+		{
+			switch(type)
+			{
+			case GL_FLOAT:				glProgramUniform1fv( prog, ID, count, (const GLfloat*) v );	break;
+			case GL_FLOAT_VEC2:			glProgramUniform2fv( prog, ID, count, (const GLfloat*) v );	break;
+			case GL_FLOAT_VEC3:			glProgramUniform3fv( prog, ID, count, (const GLfloat*) v );	break;
+			case GL_FLOAT_VEC4:			glProgramUniform4fv( prog, ID, count, (const GLfloat*) v );	break;
+			case GL_INT:				glProgramUniform1iv( prog, ID, count, (const GLint*) v );	break;
+			case GL_INT_VEC2:			glProgramUniform2iv( prog, ID, count, (const GLint*) v );	break;
+			case GL_INT_VEC3:			glProgramUniform3iv( prog, ID, count, (const GLint*) v );	break;
+			case GL_INT_VEC4:			glProgramUniform4iv( prog, ID, count, (const GLint*) v );	break;
+			case GL_UNSIGNED_INT:		glProgramUniform1uiv( prog, ID, count, (const GLuint*) v );	break;
+			case GL_UNSIGNED_INT_VEC2:	glProgramUniform2uiv( prog, ID, count, (const GLuint*)v );	break;
+			case GL_UNSIGNED_INT_VEC3:	glProgramUniform3uiv( prog, ID, count, (const GLuint*)v );	break;
+			case GL_UNSIGNED_INT_VEC4:	glProgramUniform4uiv( prog, ID, count, (const GLuint*)v );	break;
+			case GL_BOOL:				glProgramUniform1iv( prog, ID, count, (const GLint*) v );	break;
+			case GL_BOOL_VEC2:			glProgramUniform2iv( prog, ID, count, (const GLint*) v );	break;
+			case GL_BOOL_VEC3:			glProgramUniform3iv( prog, ID, count, (const GLint*) v );	break;
+			case GL_BOOL_VEC4:			glProgramUniform4iv( prog, ID, count, (const GLint*) v );	break;
+			case GL_FLOAT_MAT2:			glProgramUniformMatrix2fv( prog, ID, count, GL_TRUE, (const GLfloat*)v );	break;
+			case GL_FLOAT_MAT3:			glProgramUniformMatrix3fv( prog, ID, count, GL_TRUE, (const GLfloat*)v );	break;
+			case GL_FLOAT_MAT4:			glProgramUniformMatrix4fv( prog, ID, count, GL_TRUE, (const GLfloat*)v );	break;
+			}
+		}
+
+		const char* type_name()
+		{
+			switch(type)
+			{
+				case GL_FLOAT:				return "float";
+				case GL_FLOAT_VEC2:			return "vec2";
+				case GL_FLOAT_VEC3:			return "vec3";
+				case GL_FLOAT_VEC4:			return "vec4";
+				case GL_INT:				return "int";
+				case GL_INT_VEC2:			return "ivec2";
+				case GL_INT_VEC3:			return "ivec3";
+				case GL_INT_VEC4:			return "ivec4";
+				case GL_UNSIGNED_INT:		return "uint";
+				case GL_UNSIGNED_INT_VEC2:	return "uvec2";
+				case GL_UNSIGNED_INT_VEC3:	return "uvec3";
+				case GL_UNSIGNED_INT_VEC4:	return "uvec4";
+				case GL_BOOL:				return "bool";
+				case GL_BOOL_VEC2:			return "bvec2";
+				case GL_BOOL_VEC3:			return "bvec3";
+				case GL_BOOL_VEC4:			return "bvec5";
+				case GL_FLOAT_MAT2:			return "mat2";
+				case GL_FLOAT_MAT3:			return "mat3";
+				case GL_FLOAT_MAT4:			return "mat4";
+			}
+			return "";
+		}
+
+		const char* get_value( GLuint prog )
+		{
+			static vec4 f; static ivec4 i; static uvec4 u; static bvec4 b; static mat2 m2; static mat3 m3; static mat4 m4;
+
+			switch(type)
+			{
+			case GL_FLOAT:				glGetUniformfv(prog,ID,&f.x); return ftoa(f.x);
+			case GL_FLOAT_VEC2:			glGetUniformfv(prog,ID,&f.x); return ftoa(f.xy);
+			case GL_FLOAT_VEC3:			glGetUniformfv(prog,ID,&f.x); return ftoa(f.xyz);
+			case GL_FLOAT_VEC4:			glGetUniformfv(prog,ID,&f.x); return ftoa(f); 
+			case GL_INT:				glGetUniformiv(prog,ID,&i.x); return itoa(i.x);
+			case GL_INT_VEC2:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xy);
+			case GL_INT_VEC3:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xyz);
+			case GL_INT_VEC4:			glGetUniformiv(prog,ID,&i.x); return itoa(i);
+			case GL_UNSIGNED_INT:		glGetUniformuiv(prog,ID,&u.x); return utoa(u.x);
+			case GL_UNSIGNED_INT_VEC2:	glGetUniformuiv(prog,ID,&u.x); return utoa(u.xy);
+			case GL_UNSIGNED_INT_VEC3:	glGetUniformuiv(prog,ID,&u.x); return utoa(u.xyz);
+			case GL_UNSIGNED_INT_VEC4:	glGetUniformuiv(prog,ID,&u.x); return utoa(u);
+			case GL_BOOL:				glGetUniformiv(prog,ID,&i.x); return itoa(i.x);
+			case GL_BOOL_VEC2:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xy);
+			case GL_BOOL_VEC3:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xyz);
+			case GL_BOOL_VEC4:			glGetUniformiv(prog,ID,&i.x); return itoa(i);
+			case GL_FLOAT_MAT2:			glGetUniformfv(prog,ID,&m2._11); return ftoa(m2.transpose());
+			case GL_FLOAT_MAT3:			glGetUniformfv(prog,ID,&m3._11); return ftoa(m3.transpose());
+			case GL_FLOAT_MAT4:			glGetUniformfv(prog,ID,&m4._11); return ftoa(m4.transpose());
+			}
+			return "";
+		}
+
+		bool is_matrix(){ return type==GL_FLOAT_MAT2||type==GL_FLOAT_MAT3||type==GL_FLOAT_MAT4; }
+	};
+	
+	// template specialization on bool array
+	template<> inline void Uniform::set<bool>( GLuint program_ID, bool* v, GLsizei count ){ std::vector<int> i(count);for(int k=0;k<count;k++)i[k]=int(v[k]); glProgramUniform1iv( program_ID, ID, count, &i[0] ); }
+
 	//***********************************************
 	struct Program : public GLObject
 	{
-		struct Uniform
-		{
-			GLint		ID=-1;
-			GLchar		name[256];
-			GLint		array_size=1;
-			GLenum		type;
-			GLint		textureID=-1;
-			Texture*	texture=nullptr;
-
-			template <class T> inline void set( GLuint prog, T* v, GLsizei count )
-			{
-				switch(type)
-				{
-				case GL_FLOAT:				glProgramUniform1fv( prog, ID, count, (const GLfloat*) v );	break;
-				case GL_FLOAT_VEC2:			glProgramUniform2fv( prog, ID, count, (const GLfloat*) v );	break;
-				case GL_FLOAT_VEC3:			glProgramUniform3fv( prog, ID, count, (const GLfloat*) v );	break;
-				case GL_FLOAT_VEC4:			glProgramUniform4fv( prog, ID, count, (const GLfloat*) v );	break;
-				case GL_INT:				glProgramUniform1iv( prog, ID, count, (const GLint*) v );	break;
-				case GL_INT_VEC2:			glProgramUniform2iv( prog, ID, count, (const GLint*) v );	break;
-				case GL_INT_VEC3:			glProgramUniform3iv( prog, ID, count, (const GLint*) v );	break;
-				case GL_INT_VEC4:			glProgramUniform4iv( prog, ID, count, (const GLint*) v );	break;
-				case GL_UNSIGNED_INT:		glProgramUniform1uiv( prog, ID, count, (const GLuint*) v );	break;
-				case GL_UNSIGNED_INT_VEC2:	glProgramUniform2uiv( prog, ID, count, (const GLuint*)v );	break;
-				case GL_UNSIGNED_INT_VEC3:	glProgramUniform3uiv( prog, ID, count, (const GLuint*)v );	break;
-				case GL_UNSIGNED_INT_VEC4:	glProgramUniform4uiv( prog, ID, count, (const GLuint*)v );	break;
-				case GL_BOOL:				glProgramUniform1iv( prog, ID, count, (const GLint*) v );	break;
-				case GL_BOOL_VEC2:			glProgramUniform2iv( prog, ID, count, (const GLint*) v );	break;
-				case GL_BOOL_VEC3:			glProgramUniform3iv( prog, ID, count, (const GLint*) v );	break;
-				case GL_BOOL_VEC4:			glProgramUniform4iv( prog, ID, count, (const GLint*) v );	break;
-				case GL_FLOAT_MAT2:			glProgramUniformMatrix2fv( prog, ID, count, GL_TRUE, (const GLfloat*)v );	break;
-				case GL_FLOAT_MAT3:			glProgramUniformMatrix3fv( prog, ID, count, GL_TRUE, (const GLfloat*)v );	break;
-				case GL_FLOAT_MAT4:			glProgramUniformMatrix4fv( prog, ID, count, GL_TRUE, (const GLfloat*)v );	break;
-				}
-			}
-
-			const char* type_name()
-			{
-				switch(type)
-				{
-					case GL_FLOAT:				return "float";
-					case GL_FLOAT_VEC2:			return "vec2";
-					case GL_FLOAT_VEC3:			return "vec3";
-					case GL_FLOAT_VEC4:			return "vec4";
-					case GL_INT:				return "int";
-					case GL_INT_VEC2:			return "ivec2";
-					case GL_INT_VEC3:			return "ivec3";
-					case GL_INT_VEC4:			return "ivec4";
-					case GL_UNSIGNED_INT:		return "uint";
-					case GL_UNSIGNED_INT_VEC2:	return "uvec2";
-					case GL_UNSIGNED_INT_VEC3:	return "uvec3";
-					case GL_UNSIGNED_INT_VEC4:	return "uvec4";
-					case GL_BOOL:				return "bool";
-					case GL_BOOL_VEC2:			return "bvec2";
-					case GL_BOOL_VEC3:			return "bvec3";
-					case GL_BOOL_VEC4:			return "bvec5";
-					case GL_FLOAT_MAT2:			return "mat2";
-					case GL_FLOAT_MAT3:			return "mat3";
-					case GL_FLOAT_MAT4:			return "mat4";
-				}
-				return "";
-			}
-
-			const char* get_value( GLuint prog )
-			{
-				static vec4 f; static ivec4 i; static uvec4 u; static bvec4 b; static mat2 m2; static mat3 m3; static mat4 m4;
-
-				switch(type)
-				{
-				case GL_FLOAT:				glGetUniformfv(prog,ID,&f.x); return ftoa(f.x);
-				case GL_FLOAT_VEC2:			glGetUniformfv(prog,ID,&f.x); return ftoa(f.xy);
-				case GL_FLOAT_VEC3:			glGetUniformfv(prog,ID,&f.x); return ftoa(f.xyz);
-				case GL_FLOAT_VEC4:			glGetUniformfv(prog,ID,&f.x); return ftoa(f); 
-				case GL_INT:				glGetUniformiv(prog,ID,&i.x); return itoa(i.x);
-				case GL_INT_VEC2:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xy);
-				case GL_INT_VEC3:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xyz);
-				case GL_INT_VEC4:			glGetUniformiv(prog,ID,&i.x); return itoa(i);
-				case GL_UNSIGNED_INT:		glGetUniformuiv(prog,ID,&u.x); return utoa(u.x);
-				case GL_UNSIGNED_INT_VEC2:	glGetUniformuiv(prog,ID,&u.x); return utoa(u.xy);
-				case GL_UNSIGNED_INT_VEC3:	glGetUniformuiv(prog,ID,&u.x); return utoa(u.xyz);
-				case GL_UNSIGNED_INT_VEC4:	glGetUniformuiv(prog,ID,&u.x); return utoa(u);
-				case GL_BOOL:				glGetUniformiv(prog,ID,&i.x); return itoa(i.x);
-				case GL_BOOL_VEC2:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xy);
-				case GL_BOOL_VEC3:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xyz);
-				case GL_BOOL_VEC4:			glGetUniformiv(prog,ID,&i.x); return itoa(i);
-				case GL_FLOAT_MAT2:			glGetUniformfv(prog,ID,&m2._11); return ftoa(m2.transpose());
-				case GL_FLOAT_MAT3:			glGetUniformfv(prog,ID,&m3._11); return ftoa(m3.transpose());
-				case GL_FLOAT_MAT4:			glGetUniformfv(prog,ID,&m4._11); return ftoa(m4.transpose());
-				}
-				return "";
-			}
-
-			bool is_matrix(){ return type==GL_FLOAT_MAT2||type==GL_FLOAT_MAT3||type==GL_FLOAT_MAT4; }
-		};
-
 		Program( GLuint ID, const char* name ) : GLObject(ID,name,GL_PROGRAM){ get_instances().emplace(this); }
 		~Program() override { if(!ID) return; glDeleteProgram(ID); uniform_cache.clear(); invalid_uniform_cache.clear(); get_instances().erase(this); }
 		static void unbind(){ glUseProgram(0); }
@@ -799,7 +804,14 @@ namespace gl {
 		void set_uniform( const char* name, const mat4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
 		void set_uniform( const char* name, const mat3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
 		void set_uniform( const char* name, const mat2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, Texture* t ){ if(!t) return;		Uniform* u=get_uniform(name); if(!u) return; if(u->ID<0||u->textureID<0) return; u->texture=t; glUseProgram(ID); glProgramUniform1i( ID, u->ID, u->textureID ); if(glBindTextureUnit) glBindTextureUnit( u->textureID, u->texture->ID ); else {glActiveTexture(GL_TEXTURE0+u->textureID); u->texture->bind();} }
+		void set_uniform( const char* name, Texture* t ){ if(!t) return;		Uniform* u=get_uniform(name); if(!u) return; if(u->ID<0||u->textureID<0) return; if(binding()!=ID) glUseProgram(ID); u->texture=t; glProgramUniform1i(ID,u->ID,u->textureID); if(glBindTextureUnit) glBindTextureUnit(u->textureID,u->texture->ID); else { glActiveTexture(GL_TEXTURE0+u->textureID);u->texture->bind();} }
+
+		// bind image texture
+		void bind_image_texture( const char* name, Texture* t, GLenum access=GL_READ_WRITE /* or GL_WRITE_ONLY or GL_READ_ONLY */, GLint level=0, GLenum format=0, bool bLayered=false, GLint layer=0 )
+		{
+			Uniform* u=get_uniform(name); if(!u||u->ID<0||u->binding<0){ printf( "%s(): %s not found\n", __func__, name ); return; }
+			u->texture=t; glBindImageTexture( u->binding, t->ID, level, bLayered?GL_TRUE:GL_FALSE, layer, access, format?format:t->internal_format() );
+		}
 
 		// uniform cache/block/dump
 		void update_uniform_cache();
@@ -835,26 +847,21 @@ namespace gl {
 		static std::set<Program*>& get_instances(){ static std::set<Program*> i; return i; }
 	};
 
-	// template specialization on bool array
-	template<> inline void Program::Uniform::set<bool>( GLuint program_ID, bool* v, GLsizei count ){ std::vector<int> i(count);for(int k=0;k<count;k++)i[k]=int(v[k]); glProgramUniform1iv( program_ID, ID, count, &i[0] ); }
-
 	// bind
 	inline GLuint Program::bind( bool b_bind )
 	{
 		GLuint b0=binding(); if(!b_bind||b0!=ID) glUseProgram(b_bind?ID:0); if(!b_bind) return b0;
-		if(uniform_cache.empty()) update_uniform_cache();
-		else if( Texture::b_texture_deleted() ){std::set<Program*>& s=get_instances();for(auto it:s)it->update_uniform_cache();Texture::b_texture_deleted()=false;}
-		for(auto it:uniform_cache)
+		if(uniform_cache.empty()) update_uniform_cache(); else if( Texture::b_texture_deleted() ){std::set<Program*>& s=get_instances();for(auto it:s)it->update_uniform_cache();Texture::b_texture_deleted()=false;}
+		for(auto& [n,u]:uniform_cache)
 		{
-			Uniform& u=it.second;if(!u.texture||u.textureID==-1) continue;
-			if(glBindTextureUnit) glBindTextureUnit( u.textureID, u.texture->ID );
-			else {glActiveTexture(GL_TEXTURE0+u.textureID);glBindTexture(u.texture->target,u.texture->ID);}
+			if(u.ID<0||!u.texture||u.textureID<0) continue;
+			if(glBindTextureUnit) glBindTextureUnit(u.textureID,u.texture->ID); else { glActiveTexture(GL_TEXTURE0+u.textureID);glBindTexture(u.texture->target,u.texture->ID); }
 		}
 		return b0;
 	}
 
 	// late implementations of Program
-	inline std::vector<gl::Program::Uniform> gl::Program::get_active_uniforms( bool b_bind )
+	inline std::vector<gl::Uniform> gl::Program::get_active_uniforms( bool b_bind )
 	{
 		GLint program0=-1; if(b_bind&&glProgramUniform1i) glGetIntegerv(GL_CURRENT_PROGRAM,&program0); if(program0>=0) glUseProgram(ID);
 		std::vector<Uniform> v;
@@ -864,11 +871,11 @@ namespace gl {
 			static std::array<GLint,std::extent<decltype(pnames)>::value> values;
 			glGetProgramResourceiv(ID,GL_UNIFORM,k,GLsizei(values.size()),pnames,GLsizei(values.size()),nullptr,&values[0]);
 			static std::map<GLenum,GLint> prop; for(int j=0,jn=int(values.size());j<jn;j++) prop[pnames[j]]=values[j];
-			Uniform u; u.type=prop[GL_TYPE]; u.array_size=prop[GL_ARRAY_SIZE]; u.ID=prop[GL_LOCATION];
+			Uniform u; u.ID=prop[GL_LOCATION]; u.type=prop[GL_TYPE]; u.array_size=prop[GL_ARRAY_SIZE]; u.binding=-1;
 			glGetProgramResourceName(ID,GL_UNIFORM,k,prop[GL_NAME_LENGTH],nullptr,u.name);
 			if(strstr(u.name,"gl_")) continue; // query name now, and skip for built-in gl variables
 			if(prop[GL_ATOMIC_COUNTER_BUFFER_INDEX]!=-1){ int b; glGetActiveAtomicCounterBufferiv(ID,prop[GL_ATOMIC_COUNTER_BUFFER_INDEX],GL_ATOMIC_COUNTER_BUFFER_BINDING,&b); atomic_counter_buffer_binding_map[u.name]=b; }
-			if(prop[GL_BLOCK_INDEX]>=0||prop[GL_LOCATION]<0) continue;
+			if(u.ID<0||prop[GL_BLOCK_INDEX]>=0) continue;
 			v.emplace_back(u);
 		}
 		if(program0>=0) glUseProgram(program0); // restore the original program
@@ -880,8 +887,8 @@ namespace gl {
 		GLint program0=-1; if(glProgramUniform1i) glGetIntegerv(GL_CURRENT_PROGRAM,&program0); if(program0>=0) glUseProgram(ID);
 		int texture_id=0; for( auto& u : get_active_uniforms(false) )
 		{
-			bool b_texture = gxIsSamplerType(u.type);
-			if(b_texture){ u.textureID=texture_id++; if(glProgramUniform1i)glProgramUniform1i(ID,u.ID,u.textureID);else glUniform1i(u.ID,u.textureID); } // setting sampler locations avoids validation error in Intel Compiler
+			if(gxIsImageType(u.type)) glGetUniformiv(ID,u.ID,&u.binding);
+			bool b_texture = gxIsSamplerType(u.type); if(b_texture){ u.textureID=texture_id++; if(glProgramUniform1i)glProgramUniform1i(ID,u.ID,u.textureID);else glUniform1i(u.ID,u.textureID); } // setting sampler locations avoids validation error in Intel Compiler
 			uniform_cache[u.name]=u; if(u.array_size==1) continue;
 			GLchar name[256]; strcpy(name,u.name); GLchar* bracket=strchr(name,'['); if(bracket) bracket[0]='\0';
 			for( GLint loc=bracket?1:0;loc<u.array_size;loc++){ Uniform u1=u;sprintf(u1.name,"%s[%d]",name,loc);u1.ID=glGetUniformLocation(ID,u1.name);if(u1.ID==-1)continue;u1.array_size=u.array_size-loc;if(b_texture)u1.textureID=texture_id++;uniform_cache[u1.name]=u1; }
@@ -1006,14 +1013,17 @@ namespace gl {
 		bool append( gl::effect_source_t source );
 		template <class... Ts> bool append( Ts... args ){ gl::effect_source_t source; source.append_r(args...); return append(source); }
 
-		Program::Uniform* get_uniform( const char* name ){ return active_program?active_program->get_uniform(name):nullptr; }
-		Program::Uniform* get_uniform( const std::string& name ){ return active_program?active_program->get_uniform(name.c_str()):nullptr; }
+		Uniform* get_uniform( const char* name ){ return active_program?active_program->get_uniform(name):nullptr; }
+		Uniform* get_uniform( const std::string& name ){ return active_program?active_program->get_uniform(name.c_str()):nullptr; }
 		template <class T>	void set_uniform( const char* name, const T& v, GLsizei count=1 ){ if(active_program) active_program->set_uniform(name,v,count); }
 		template <class T>	void set_uniform( const char* name, T* v, GLsizei count=1 ){ if(active_program) active_program->set_uniform(name,v,count); }
 		void set_uniform( const char* name, Texture* t ){ if(active_program) active_program->set_uniform(name,t); }
 		template <class T>	void set_uniform( const std::string& name, const T& v, GLsizei count=1 ){ if(active_program) active_program->set_uniform(name.c_str(),v,count); }
 		template <class T>	void set_uniform( const std::string& name, T* v, GLsizei count=1 ){ if(active_program) active_program->set_uniform(name.c_str(),v,count); }
 		void set_uniform( const std::string& name, Texture* t ){ if(active_program) active_program->set_uniform(name.c_str(),t); }
+
+		// image textures
+		void bind_image_texture( const char* name, Texture* t, GLenum access=GL_READ_WRITE /* or GL_WRITE_ONLY or GL_READ_ONLY */, GLint level=0, GLenum format=0, bool bLayered=false, GLint layer=0 ){ if(active_program) active_program->bind_image_texture(name,t,access,level,format,bLayered,layer); }
 
 		// uniform buffer/block
 		gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name); if(b&&b->size()!=size){ static std::set<std::string> warns; auto it=warns.find(name); if(it==warns.end()){ warns.insert(name); printf("[%s] %s(): uniform_buffer(%s).size(=%d)!=%d\n",this->name,__func__,name,int(b->size()),int(size));} } if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr,GL_DYNAMIC_STORAGE_BIT|GL_MAP_WRITE_BIT); if(b){ bind_uniform_buffer(name,b); return uniform_buffer_map[name]=b; } printf("[%s] unable to create uniform buffer [%s]\n", this->name, name); return nullptr; }
