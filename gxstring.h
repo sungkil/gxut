@@ -485,4 +485,24 @@ __noinline bool glob( const T* str, const T* pattern )
 }
 
 //***********************************************
+// 15. common unnecesary unicode symbols to common ansi
+
+__noinline const wchar_t* unicode_symbols_to_ansi( const wchar_t* str )
+{
+	wchar_t* b=__tstrdup(str);
+	static std::map<wchar_t,wchar_t> lut =
+	{
+		{0x2013,L'-'}, {0x2014,L'-'}, {0x2015,L'-'}, {0x2212,L'-'},
+		{0x2018,L'\''},{0x2019,L'\''},{0x2032,L'\''},
+		{0x201C,L'\"'},{0x201D,L'\"'},{0x2033,L'\"'},
+		{0x2022,L'-'},{0x00B7,L'-'},{0x22C5,L'-'},
+	};
+
+	for( size_t k=0, kn=wcslen(b); k<kn; k++ )
+	{ auto it=lut.find(b[k]); if(it!=lut.end()) b[k]=it->second; }
+
+	return b;
+}
+
+//***********************************************
 #endif // __GX_STRING_H__
