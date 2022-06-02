@@ -150,4 +150,10 @@ using char2		= tarray2<char>;	using char3		= tarray3<char>;	using char4		= tarra
 using uchar2	= tarray2<uchar>;	using uchar3	= tarray3<uchar>;	using uchar4	= tarray4<uchar>;
 using bool2		= tarray2<bool>;	using bool3		= tarray3<bool>;	using bool4		= tarray4<bool>;
 
+// Common unique types in std namespace
+// these types should hardly have the same names in user definitions
+using std::string;
+using std::wstring;
+using std::vector;
+
 #endif // __GXUT_TYPE_H__
