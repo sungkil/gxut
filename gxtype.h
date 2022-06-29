@@ -69,6 +69,7 @@
 #include <map>
 #include <set>
 #include <string>
+using namespace std::string_literals; // enables s-suffix for std::string literals
 #include <vector>
 // C++11
 #if (__cplusplus>199711L) || (_MSC_VER>=1600/*VS2010*/)

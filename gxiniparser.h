@@ -138,7 +138,7 @@ __noinline bool parser_t::save( const path& file_path )
 	if(fp==nullptr){ printf( "%s(): Unable to open %s to write", __func__, file_path.wtoa() ); return false; }
 	fseek( fp, 0, SEEK_SET ); // remove BOM
 	
-	std::string sec=""; bool bLine0=true;
+	std::string sec; bool bLine0=true;
 	for( auto it=dic.begin(); it!=dic.end(); )
 	{
 		entry_t* e=it->second;
