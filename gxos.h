@@ -59,6 +59,8 @@ __noinline bool confirm( const char* fmt, ... ){ __gxos_va__(); return IDOK==os:
 __noinline bool confirm( const wchar_t* fmt, ... ){ __gxos_vw__(); return IDOK==os::message_box(b,L"Warning"); }
 __noinline bool mbox( const char* fmt, ... ){ __gxos_va__(); return IDOK==os::message_box(b,"Message"); }
 __noinline bool mbox( const wchar_t* fmt, ... ){ __gxos_vw__(); return IDOK==os::message_box(b,L"Message"); }
+__noinline int ebox( const char* fmt, ... ){ __gxos_va__(); os::message_box(b,"Error"); return -1; }
+__noinline int ebox( const wchar_t* fmt, ... ){ __gxos_vw__(); os::message_box(b,L"Error"); return -1; }
 
 //*************************************
 namespace os {
