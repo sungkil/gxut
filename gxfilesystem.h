@@ -202,7 +202,7 @@ struct path
 	inline bool empty()			const { return data[0]==0; }
 	inline size_t size()		const { return wcslen(data); }
 	inline size_t length()		const { return wcslen(data); }
-	inline uint64_t file_size() const { if(!cache_exists()) update_cache(); auto& c=cache(); return uint64_t(c.nFileSizeHigh)<<32ull|uint64_t(c.nFileSizeLow); }
+	inline uint64_t file_size() const { if(!cache_exists()) update_cache(); auto& c=cache(); if(c.dwFileAttributes==INVALID_FILE_ATTRIBUTES) return 0; return uint64_t(c.nFileSizeHigh)<<32ull|uint64_t(c.nFileSizeLow); }
 
 	// crc32c/md5 checksums of the file content
 	inline uint crc32c() const;	// implemented in gxmemory.h
