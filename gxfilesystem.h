@@ -216,7 +216,7 @@ struct path
 	path add_slash()		const { path p(*this); size_t l=wcslen(p.data); if(l&&p.data[l-1]=='\\') p.data[l-1]='/'; else if(l&&p.data[l-1]!='/'){p.data[l]='/';p.data[l+1]=L'\0';} return p; }
 	path remove_backslash()	const { path p(*this); size_t l=wcslen(p.data); if(l&&(p.data[l-1]=='\\'||p.data[l-1]=='/')) p.data[l-1]=L'\0'; return p; }
 	path remove_slash()		const { path p(*this); size_t l=wcslen(p.data); if(l&&(p.data[l-1]=='\\'||p.data[l-1]=='/')) p.data[l-1]=L'\0'; return p; }
-	path auto_quote()		const { if(!data[0]||!wcschr(data,L' ')||(data[0]==L'\"'&&data[wcslen(data)-1]==L'\"')) return *this; path p; p[0]=L'\"'; size_t l=wcslen(data); memcpy(p.data+1,data,l*sizeof(wchar_t)); p[l+1]=L'\"'; p[l+2]=0; return p; }
+	path auto_quote()		const { if(!*data||!wcschr(data,L' ')||(data[0]==L'\"'&&data[wcslen(data)-1]==L'\"')) return *this; path p; p[0]=L'\"'; size_t l=wcslen(data); memcpy(p.data+1,data,l*sizeof(wchar_t)); p[l+1]=L'\"'; p[l+2]=0; return p; }
 	path unix()				const {	path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; p.data[1]=wchar_t(::tolower(p.data[0])); p.data[0]=L'/'; return p; }
 	path cygwin()			const { path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; path p2; swprintf_s( p2, capacity, L"/cygdrive/%c%s", ::tolower(p[0]), p.data+2 ); return p2; }
 
@@ -226,7 +226,7 @@ struct path
 
 	// path info/operations
 	volume_t volume() const { return (is_unc()||is_rsync()||!drive().exists())?volume_t():volume_t(drive().c_str()); }
-	path drive() const { if(!data[0])return path();if(is_unc())return unc_root();path d;_wsplitpath_s(data,d.data,_MAX_DRIVE,0,0,0,0,0,0);return d; }
+	path drive() const { if(!*data) return path();if(is_unc()) return unc_root();path d;_wsplitpath_s(data,d.data,_MAX_DRIVE,0,0,0,0,0,0);return d; }
 	path dir() const { path p; wchar_t* d=__wcsbuf();if(is_unc()){path r=unc_root();size_t rl=r.length();if(length()<=rl+1){if(r.data[rl-1]!=L'\\'){r.data[rl]='\\';r.data[rl+1]=0;}return r;}} _wsplitpath_s(data,p.data,_MAX_DRIVE,d,_MAX_DIR,0,0,0,0); size_t pl=wcslen(p.data), dl=wcslen(d); if(0==(pl+dl)) return L".\\"; if(dl){ memcpy(p.data+pl,d,dl*sizeof(wchar_t)); p.data[pl+dl]=0; } return p; }
 	path unc_root() const { if(!is_unc()) return path(); path r=*this;size_t l=wcslen(data);for(size_t k=0;k<l;k++)if(r[k]==L'/')r[k]=L'\\'; auto* b=wcschr(r.data+2,L'\\');if(b)b[0]=0; return r; } // similar to drive (but to the root unc path without backslash)
 	path name( bool with_ext=true ) const { path p; wchar_t* ext=with_ext?__wcsbuf():nullptr; _wsplitpath_s(data,0,0,0,0,p.data,_MAX_FNAME,ext,ext?_MAX_EXT:0); if(!ext) return p; size_t pl=wcslen(p.data), el=wcslen(ext); if(el){ memcpy(p.data+pl,ext,el*sizeof(wchar_t)); p.data[pl+el]=0; } return p; }
@@ -254,15 +254,15 @@ struct path
 	inline void		clear_cache() const { attrib_t* a=(attrib_t*)(data+capacity); memset(a,0,sizeof(attrib_t)); a->dwFileAttributes=INVALID_FILE_ATTRIBUTES; }
 
 	// get attributes
-	bool exists() const {				if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES; }
-	bool is_dir() const {				if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_DIRECTORY)!=0; }
-	bool is_root_dir() const {			if(!data[0]) return false; size_t l=length(); return is_dir()&&l<4&&l>1&&data[1]==L':'; }
-	bool is_hidden() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_HIDDEN)!=0; }
-	bool is_readonly() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_READONLY)!=0; }
-	bool is_system() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_SYSTEM)!=0; }
-	bool is_junction() const {			if(!data[0]) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_REPARSE_POINT)!=0; }
-	bool is_ssh() const {				if(!data[0]) return false; return wcsstr(data+2,L":\\")!=nullptr||wcsstr(data+2,L":/")!=nullptr; }
-	bool is_synology() const {			if(!data[0]) return false; return __wcsistr(data,L":\\volume")!=nullptr||__wcsistr(data,L":/volume")!=nullptr; }
+	bool exists() const {				if(!*data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES; }
+	bool is_dir() const {				if(!*data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_DIRECTORY)!=0; }
+	bool is_root_dir() const {			if(!*data) return false; size_t l=length(); return is_dir()&&l<4&&l>1&&data[1]==L':'; }
+	bool is_hidden() const {			if(!*data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_HIDDEN)!=0; }
+	bool is_readonly() const {			if(!*data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_READONLY)!=0; }
+	bool is_system() const {			if(!*data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_SYSTEM)!=0; }
+	bool is_junction() const {			if(!*data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_REPARSE_POINT)!=0; }
+	bool is_ssh() const {				if(!*data) return false; return wcsstr(data+2,L":\\")!=nullptr||wcsstr(data+2,L":/")!=nullptr; }
+	bool is_synology() const {			if(!*data) return false; return __wcsistr(data,L":\\volume")!=nullptr||__wcsistr(data,L":/volume")!=nullptr; }
 
 	// set attributes
 	void set_hidden( bool h ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(data,a=h?(a|FILE_ATTRIBUTE_HIDDEN):(a^FILE_ATTRIBUTE_HIDDEN)); }
@@ -297,7 +297,7 @@ struct path
 	inline bool is_unc() const { return (data[0]==L'\\'&&data[1]==L'\\')||(data[0]==L'/'&&data[1]==L'/'); }
 	inline bool is_rsync() const { auto* p=wcsstr(data,L":\\"); if(!p) p=wcsstr(data,L":/"); return p!=nullptr&&p>data+1; }
 	inline bool is_subdir( const path& ancestor ) const { return _wcsnicmp(data,ancestor.data,ancestor.size())==0; } // do not check existence
-	inline path absolute( const wchar_t* base=L"" ) const { if(!data[0]) return *this; return _wfullpath(__wcsbuf(),(!*base||is_absolute())?data:wcscat(wcscpy(__wcsbuf(),path(base).add_backslash()),data),capacity); }	// do not directly return for non-canonicalized path
+	inline path absolute( const wchar_t* base=L"" ) const { if(!*data) return *this; return _wfullpath(__wcsbuf(),(!*base||is_absolute())?data:wcscat(wcscpy(__wcsbuf(),path(base).add_backslash()),data),capacity); }	// do not directly return for non-canonicalized path
 	inline path relative( bool first_dot, const wchar_t* from ) const;
 	inline path relative( bool first_dot ) const { return relative(first_dot,L""); }
 	inline path relative( const wchar_t* from=L"" ) const { return relative(false,from); }
