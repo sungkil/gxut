@@ -76,12 +76,9 @@ inline void clear_absent_textures( path mtl_path, std::vector<material_impl>& ma
 	for( auto& [key,f] : m.path )
 	{
 		if(f.empty()) continue;
-		if(!f.exists()&&!(dir+f).exists())
-		{
-			printf( "[%s.%s.%s] %s not exists\n", mtl_path.to_slash().name().wtoa(),
-				m.name, key.c_str(), f.to_slash().wtoa() );
-			f.clear();
-		}
+		if(f.exists()||(dir+f).exists()) continue;
+		printf( "[%s.%s.%s] %s not exists\n", mtl_path.to_slash().name().wtoa(), m.name, key.c_str(), f.to_slash().wtoa() );
+		f.clear();
 	}
 }
 
@@ -244,7 +241,7 @@ inline void generate_normal_maps( path mtl_path, std::vector<material_impl>& mat
 		if(auto it=m.path.find(normal_key);it!=m.path.end()&&(dir+it->second).exists()) continue;
 		path bump_path; if(auto it=m.path.find(bump_key);it==m.path.end()||it->second.empty()) continue; else bump_path=dir+it->second; if(!bump_path.exists()) continue;
 		path normal_path; if(auto it=bton.find(bump_path.name());it!=bton.end()&&!it->second.empty()) normal_path=dir+it->second;
-		if(normal_path.exists()){ m.path["normal"]=normal_path.name(); continue; }
+		if(normal_path.exists()){ m.path["normal"]=normal_path.relative(false,dir); continue; }
 
 		normal_path = get_normal_path( m, bump_path, bump_key ); if(normal_path.empty()){ printf("%s(): unable to find normal_path for %s\n",__func__,bump_path.to_slash().wtoa()); continue; }
 		if(bump_path!=normal_path&&!normal_path.exists())
@@ -253,14 +250,15 @@ inline void generate_normal_maps( path mtl_path, std::vector<material_impl>& mat
 			normal_path = generate_normal_map( bump_path, normal_path, bump_scale ); if(!normal_path.exists()) continue;
 			if(bump_path==normal_path) bump_as_normal.emplace_back(bump_path);
 		}
-		m.path["normal"]=bton[bump_path.name()]=normal_path.name();
+		m.path["normal"]=bton[bump_path.name()]=normal_path.relative(false,dir);
 	}
 	
 	if(!bump_as_normal.empty())
 	{
 		printf( "The following maps are actually normal maps.\n" );
-		for( auto& f : bump_as_normal) printf( "> %s\n", f.name().wtoa() );
 		printf( "Consider using 'norm' (extended) tag instead of 'bump' in *.mtl\n" );
+		for( auto& f : bump_as_normal) printf( "> %s\n", f.name().wtoa() );
+		printf( "\n" );
 	}
 
 	// save bton cache
@@ -677,10 +675,16 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	p_mesh->objects.reserve(1<<12);
 
 	//*********************************
+	auto get_or_create_object = [&]( const char* name )->object*
+	{
+		auto* obj = p_mesh->find_object(name);
+		return obj ? obj : p_mesh->create_object(name);
+	};
+
 	auto get_or_create_geometry = [&]()->geometry*
 	{
-		if(!o) o=p_mesh->create_object("default_object");
-		if(g&&g->object_index==o->ID&&g->count==0) return g; // reuse empty geometry for the same object
+		if(!o) o = p_mesh->create_object( "default" );
+		if(g&&g->count==0){ g->object_index=o->ID; return g; } // reuse empty existing geometry with the new object
 		geometries.emplace_back(geometry{p_mesh,uint(geometries.size()),o->ID,uint(indices.size()),0,nullptr,mat_index});
 		return &geometries.back();
 	};
@@ -754,15 +758,15 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 		else if(key0=='f')
 		{
 			// counter-clockwise faces
-			uint i0 = get_or_create_vertex(buff);
-			uint i1 = get_or_create_vertex(buff=obj::next_token(buff));
-			uint i2 = get_or_create_vertex(buff=obj::next_token(buff));
-			indices.emplace_back(i0); indices.emplace_back(i1); indices.emplace_back(i2);
+			uint i0 = get_or_create_vertex(buff);						indices.emplace_back(i0);
+			uint i1 = get_or_create_vertex(buff=obj::next_token(buff));	indices.emplace_back(i1);
+			uint i2 = get_or_create_vertex(buff=obj::next_token(buff)); indices.emplace_back(i2);
 
 			// create default object/geometry if no geometry is given now
-			if(g==nullptr) g = get_or_create_geometry();
+			if(!g) g = get_or_create_geometry();
 			g->count += 3;
 			
+			// process further to read quads
 			buff=obj::next_token(buff);
 			if(buff&&*buff&&*buff!=' ')
 			{
@@ -771,29 +775,30 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 				g->count += 3;
 			}
 		}
-		else if(strcmp(key,"g")==0||strcmp(key,"mg")==0||strcmp(key,"o")==0)	// group, merging group, object name
+		else if(strcmp(key,"o")==0);	// ignore object name
+		else if(strcmp(key,"g")==0||strcmp(key,"mg")==0) // group, merging group
 		{
-			o = p_mesh->create_object(trim(buff));
-			g = get_or_create_geometry(); // always create a new geometry; do not reuse previous emptry geometry for safety
+			o = get_or_create_object(trim(buff));
+			g = get_or_create_geometry();
 			if(flush_messages) flush_messages( format("Loading %s (%dK faces) ...", o?o->name:"", int(indices.size()/3000) ) );
 		}
 		else if(strcmp(key,"usemtl")==0)
 		{
-			mat_index = find_material(p_mesh->materials,trim(buff));
 			g = get_or_create_geometry();
-			g->material_index = mat_index;
+			g->material_index = mat_index = find_material(p_mesh->materials,trim(buff));
 		}
 		else if(strcmp(key,"mtllib")==0)
 		{
-			path mtl_file_path = path(file_path).dir() + atow(trim(buff));
-			if(!load_mtl(mtl_file_path, p_mesh->materials)){ printf("unable to load material file: %s\n",wtoa(mtl_file_path)); return nullptr; }
-			wcscpy( p_mesh->mtl_path, mtl_file_path.name(true) );
-
-			// default material
-			if(!p_mesh->materials.empty()) mat_index = p_mesh->materials.size()>1?1:0;
-
-			// logging after loading materials
-			log_begin();
+			if(!p_mesh->mtl_path[0]) // load material only when the mtl_path is empty
+			{
+				path mtl_path = path(file_path).dir() + atow(trim(buff));
+				if(!load_mtl(mtl_path, p_mesh->materials)){ printf("unable to load material file: %s\n",wtoa(mtl_path)); return nullptr; }
+				wcscpy( p_mesh->mtl_path, mtl_path.relative(false,path(file_path).dir()) );
+				
+				// postprocessing
+				if(!p_mesh->materials.empty()) mat_index = p_mesh->materials.size()>1?1:0; // default material
+				log_begin(); // logging after loading materials
+			}
 		}
 		else if(strcmp(key,"cstype")==0);		// curve or surface type
 		else if(strcmp(key,"deg")==0);			// skip degree
@@ -831,10 +836,10 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 
 	// trim empty geometries and update geometry ID
 	uint gid=0; auto& mg=p_mesh->geometries;
-	for(auto it=mg.begin();it!=mg.end();)
+	int k=0; for( auto it=mg.begin();it!=mg.end(); k++ )
 	{
 		if(it->count!=0){ it->ID=gid++; it++; continue; }
-		printf( "Removing empty geometry %s\n", it->name() );
+		printf( "Pruning geometry[%d] %s\n", k, it->name() );
 		it=mg.erase(it);
 	}
 
