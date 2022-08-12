@@ -1382,18 +1382,9 @@ inline gl::Program* gxCreateProgram( std::string prefix, std::string name, const
 	for( auto& it : program->source )
 	{
 		if(it.second.empty()) continue;
-
 		GLuint shader_ID = gxCompileShader( it.first, pname, it.second ); if(shader_ID==0) return nullptr;
 		glAttachShader( program->ID, shader_ID );
 		attached_shaders.emplace_back( shader_ID );
-		if(it.first==GL_GEOMETRY_SHADER)
-		{
-			int maxGeometryOutputVertices;
-			glGetIntegerv( GL_MAX_GEOMETRY_OUTPUT_VERTICES, &maxGeometryOutputVertices );
-			glProgramParameteri( program->ID, GL_GEOMETRY_VERTICES_OUT, maxGeometryOutputVertices);
-			glProgramParameteri( program->ID, GL_GEOMETRY_INPUT_TYPE, GL_TRIANGLES );
-			glProgramParameteri( program->ID, GL_GEOMETRY_OUTPUT_TYPE, GL_TRIANGLES );
-		}
 	}
 
 	// 7. first linking of program
