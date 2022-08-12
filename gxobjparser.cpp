@@ -684,7 +684,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	auto get_or_create_geometry = [&]()->geometry*
 	{
 		if(!o) o = p_mesh->create_object( "default" );
-		if(g&&g->count==0){ g->object_index=o->ID; return g; } // reuse empty existing geometry with the new object
+		if(g&&g->count==0){ g->object_index=o->ID; return g; } // reuse empty existing geometry with the current object
 		geometries.emplace_back(geometry{p_mesh,uint(geometries.size()),o->ID,uint(indices.size()),0,nullptr,mat_index});
 		return &geometries.back();
 	};
@@ -775,7 +775,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 				g->count += 3;
 			}
 		}
-		else if(strcmp(key,"o")==0);	// ignore object name
+		else if(strcmp(key,"o")==0); // ignore object name
 		else if(strcmp(key,"g")==0||strcmp(key,"mg")==0) // group, merging group
 		{
 			o = get_or_create_object(trim(buff));
@@ -789,7 +789,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 		}
 		else if(strcmp(key,"mtllib")==0)
 		{
-			if(!p_mesh->mtl_path[0]) // load material only when the mtl_path is empty
+			if(!p_mesh->mtl_path[0]) // load material only once
 			{
 				path mtl_path = path(file_path).dir() + atow(trim(buff));
 				if(!load_mtl(mtl_path, p_mesh->materials)){ printf("unable to load material file: %s\n",wtoa(mtl_path)); return nullptr; }
