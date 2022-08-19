@@ -137,10 +137,10 @@ inline const std::vector<path>& paths()
 
 inline path where( path file_name )
 {
-	path f=file_name; if(f.empty()) return f;
-	if(f.is_absolute()) return f.exists()?f:path();
+	if(file_name.empty()) return file_name;
+	if(file_name.is_absolute()&&file_name.exists()) return file_name;
 	// add the executable extensions
-	std::vector<path> v={f}; if(file_name.ext().empty()){for(auto e:{L".com",L".exe",L".bat",L".cmd"})v.emplace_back(f+e);}
+	std::vector<path> v={file_name}; if(file_name.ext().empty()){for(auto e:{L".com",L".exe",L".bat",L".cmd"})v.emplace_back(file_name+e);}
 	for(auto& p:v) if(p.exists()) return p.absolute(path::cwd());
 	for(const auto& e:paths() ){ for(auto& p:v) if((e+p).exists()) return (e+p).canonical(); }
 	return path();
@@ -293,18 +293,32 @@ inline HWND find_window( const wchar_t* filter )
 
 //*************************************
 // process
+__noinline bool __extract_app_path_from_arguments( const wchar_t*& app, const wchar_t*& arguments )
+{
+	wchar_t *ctx, *token=strtok_s(__tstrdup(arguments),L" \t\n",&ctx); path t=path(token).to_backslash();
+	const wchar_t *c=__tstrdup((std::wstring(L"/c ")+arguments).c_str()); arguments=trim(arguments+wcslen(token)+1);
+	if(t.exists()){ app=__tstrdup(t.c_str()); return true; } // trivial exit
+	path e=env::where(t); if(e.empty()) return false;
+	if(e.ext()!=L"bat"&&e.ext()!=L"cmd") app=__tstrdup(e.c_str());
+	else { app=__tstrdup(env::where(L"cmd.exe").c_str()); arguments=c; }
+	return true;
+}
+
 __noinline bool create_process( const wchar_t* app=nullptr, const wchar_t* arguments=nullptr, bool bShowWindow=true, bool bWaitFinish=false )
 {
-	wchar_t *exe=(wchar_t*) malloc(sizeof(wchar_t)*4096), *cmd=(wchar_t*) malloc(sizeof(wchar_t)*4096);
-	if(!app||!*app) exe[0]=0; else swprintf_s( exe, 4096, L"%s ", path(app).auto_quote().c_str() );
-	swprintf_s( cmd, 4096, L"%s%s", exe, arguments?arguments:L"" );
+	if((!app||!*app))
+	{
+		if(!arguments||!*arguments){ ebox( L"Both of app or arguments are null.\n" ); return false; }
+		if(*arguments==L'\"') return _wsystem(arguments)==0; // directly run from cmd to handle quoted arguments
+		if(!__extract_app_path_from_arguments( app, arguments )) return false;
+	}
+
 	PROCESS_INFORMATION pi={}; STARTUPINFOW si={}; si.cb=sizeof(si); si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=bShowWindow?SW_SHOW:SW_HIDE;
-	BOOL r=CreateProcessW( app, (LPWSTR)cmd, nullptr, nullptr, FALSE, NORMAL_PRIORITY_CLASS, nullptr, nullptr, &si, &pi );
+	bool r=CreateProcessW( app, (LPWSTR)arguments, nullptr, nullptr, FALSE, NORMAL_PRIORITY_CLASS, nullptr, nullptr, &si, &pi )!=0;
 	if(r&&bWaitFinish&&pi.hProcess) WaitForSingleObject(pi.hProcess,INFINITE);
 	if(pi.hThread) CloseHandle( pi.hThread );
 	if(pi.hProcess) CloseHandle( pi.hProcess );
-	if(exe) free(exe); if(cmd) free(cmd);
-	return bool(r);
+	return r;
 }
 
 //*************************************
