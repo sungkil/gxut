@@ -295,24 +295,23 @@ inline HWND find_window( const wchar_t* filter )
 // process
 __noinline bool create_process( const wchar_t* app=nullptr, const wchar_t* arguments=nullptr, bool bShowWindow=true, bool bWaitFinish=false )
 {
-	// prioritize com against exe for no-extension commands
-	wchar_t* buff=nullptr;
+	// static buffers
+	static wchar_t* cmd=(wchar_t*) malloc(sizeof(wchar_t)*4096);
+	static wchar_t* buf=(wchar_t*) malloc(sizeof(wchar_t)*4096);
+
+	// prioritize com against exe for no-extension apps
 	if(!app&&arguments&&*arguments!=L'\"')
 	{
-		buff=wcscpy((wchar_t*)malloc((wcslen(arguments)+16)*sizeof(wchar_t)),arguments);
-		wchar_t *ctx, *token=wcstok_s(buff,L" \t\n",&ctx); path t=path(token).to_backslash();
-		if(!t.exists()&&t.ext().empty()){ path e=env::where(t); if(!e.empty()&&e.ext()==L"com"){ std::wstring b=std::wstring(token)+L".com "+(buff+wcslen(token)+1); wcscpy(buff,b.c_str()); arguments=buff; } }
+		wcscpy(buf,arguments); wchar_t *ctx, *token=wcstok_s(buf,L" \t\n",&ctx); path t=path(token).to_backslash(), e=env::where(t);
+		if(!t.exists()&&t.ext().empty()&&!e.empty()&&e.ext()==L"com") arguments=wcscpy(buf,wcscat(wcscat(wcscpy(cmd,token),L".com "),buf+wcslen(token)+1)); // use cmd as temp
 	}
 
-	wchar_t *exe=(wchar_t*) malloc(sizeof(wchar_t)*4096), *cmd=(wchar_t*) malloc(sizeof(wchar_t)*4096);
-	if(!app||!*app) exe[0]=0; else swprintf_s( exe, 4096, L"%s ", path(app).auto_quote().c_str() );
-	swprintf_s( cmd, 4096, L"%s%s", exe, arguments?arguments:L"" );
-
+	// cmdline must have the app path
+	swprintf_s( cmd, 4096, L"%s%s%s", app&&*app?path(app).auto_quote().c_str():L"",app&&*app?L" ":L"", arguments?arguments:L"" );
 	PROCESS_INFORMATION pi={}; STARTUPINFOW si={}; si.cb=sizeof(si); si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=bShowWindow?SW_SHOW:SW_HIDE;
 	bool r=CreateProcessW( app, (LPWSTR)cmd, nullptr, nullptr, FALSE, NORMAL_PRIORITY_CLASS, nullptr, nullptr, &si, &pi )!=0;
-	if(r&&bWaitFinish&&pi.hProcess) WaitForSingleObject(pi.hProcess,INFINITE);
-	if(pi.hThread) CloseHandle( pi.hThread ); if(pi.hProcess) CloseHandle( pi.hProcess );
-	if(buff) free(buff); if(exe) free(exe); if(cmd) free(cmd);
+	if(!r) ebox( get_last_error() ); else if(bWaitFinish&&pi.hProcess) WaitForSingleObject(pi.hProcess,INFINITE);
+	if(pi.hThread) CloseHandle(pi.hThread); if(pi.hProcess) CloseHandle(pi.hProcess);
 
 	return r;
 }
