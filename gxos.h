@@ -293,11 +293,10 @@ inline HWND find_window( const wchar_t* filter )
 
 //*************************************
 // process
-__noinline bool create_process( const wchar_t* app=nullptr, const wchar_t* arguments=nullptr, bool bShowWindow=true, bool bWaitFinish=false )
+__noinline bool create_process( const wchar_t* app=nullptr, const wchar_t* arguments=nullptr, bool show_window=true, bool wait_finish=false )
 {
 	// static buffers
-	static wchar_t* cmd=(wchar_t*) malloc(sizeof(wchar_t)*4096);
-	static wchar_t* buf=(wchar_t*) malloc(sizeof(wchar_t)*4096);
+	static wchar_t *cmd=(wchar_t*)malloc(sizeof(wchar_t)*4096), *buf=(wchar_t*)malloc(sizeof(wchar_t)*4096);
 
 	// prioritize com against exe for no-extension apps
 	if(!app&&arguments&&*arguments!=L'\"')
@@ -306,14 +305,15 @@ __noinline bool create_process( const wchar_t* app=nullptr, const wchar_t* argum
 		if(!t.exists()&&t.ext().empty()&&!e.empty()&&e.ext()==L"com") arguments=wcscpy(buf,wcscat(wcscat(wcscpy(cmd,token),L".com "),buf+wcslen(token)+1)); // use cmd as temp
 	}
 
-	// cmdline must have the app path
-	swprintf_s( cmd, 4096, L"%s%s%s", app&&*app?path(app).auto_quote().c_str():L"",app&&*app?L" ":L"", arguments?arguments:L"" );
-	PROCESS_INFORMATION pi={}; STARTUPINFOW si={}; si.cb=sizeof(si); si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=bShowWindow?SW_SHOW:SW_HIDE;
-	bool r=CreateProcessW( app, (LPWSTR)cmd, nullptr, nullptr, FALSE, NORMAL_PRIORITY_CLASS, nullptr, nullptr, &si, &pi )!=0;
-	if(!r) ebox( get_last_error() ); else if(bWaitFinish&&pi.hProcess) WaitForSingleObject(pi.hProcess,INFINITE);
-	if(pi.hThread) CloseHandle(pi.hThread); if(pi.hProcess) CloseHandle(pi.hProcess);
+	// build cmdline, which should also embed app path
+	*cmd=0; bool p=app&&*app,g=arguments&&*arguments;
+	if(p) wcscpy(cmd,path(app).auto_quote().c_str()); if(p&&g) wcscat(cmd,L" "); if(g) wcscat(cmd,arguments);
 
-	return r;
+	// create process and wait if necessary
+	PROCESS_INFORMATION pi={}; STARTUPINFOW si={}; si.cb=sizeof(si); si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=show_window?SW_SHOW:SW_HIDE;
+	if(!CreateProcessW( app, (LPWSTR)cmd, nullptr, nullptr, FALSE, NORMAL_PRIORITY_CLASS, nullptr, nullptr, &si, &pi )){ ebox(get_last_error()); return false; }
+	if(wait_finish&&pi.hProcess) WaitForSingleObject(pi.hProcess,INFINITE); if(pi.hThread) CloseHandle(pi.hThread); if(pi.hProcess) CloseHandle(pi.hProcess);
+	return true;
 }
 
 //*************************************
