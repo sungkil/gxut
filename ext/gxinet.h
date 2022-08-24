@@ -4,20 +4,25 @@
 
 #ifdef __has_include
 	#if __has_include("gxfilesystem.h")
-		#include "gxfilesystem.h"
 		#include "gxstring.h"
+		#include "gxfilesystem.h"
 	#elif __has_include("../gxfilesystem.h")
-		#include "../gxfilesystem.h"
 		#include "../gxstring.h"
+		#include "../gxfilesystem.h"
 	#elif __has_include(<gxut/gxfilesystem.h>)
-		#include <gxut/gxfilesystem.h>
 		#include <gxut/gxstring.h>
+		#include <gxut/gxfilesystem.h>
 	#endif
 #endif
 
+#include <winsock2.h>
+#include <windns.h>
+#include <ws2tcpip.h>
 #include <wininet.h>
 #include <future> // std::async
+#pragma comment( lib, "ws2_32.lib" )
 #pragma comment( lib, "wininet.lib" )
+#pragma comment( lib, "Dnsapi.lib" )
 
 //***********************************************
 namespace gx { namespace inet {
@@ -126,6 +131,19 @@ __noinline bool session_t::download( std::vector<std::wstring> urls, path dst )
 	auto t=std::async(std::launch::async,&session_t::download_thread_func,this,urls,dst);
 	while(std::future_status::ready!=t.wait_for(std::chrono::milliseconds(1)));
 	return t.get();
+}
+
+// registered ip can be retrieved using cmdline:
+// >> nslookup myip.opendns.com resolver1.opendns.com
+__noinline const char* get_registered_ip_address()
+{
+	static char* buff=nullptr; if(buff) return buff; buff=(char*)malloc(1024*sizeof(char));
+	WSADATA wsadata; if(WSAStartup(MAKEWORD(2,2), &wsadata)!=0) return nullptr;
+	DWORD dns[]={1,1111}; if(!inet_pton(AF_INET,"208.67.222.222",(struct sockaddr_in*)&dns[1])) return nullptr;
+	PDNS_RECORD rec; if(DnsQuery_A("myip.opendns.com",DNS_TYPE_A,DNS_QUERY_BYPASS_CACHE,dns,&rec,nullptr)!=0||!rec) return nullptr;
+	if(rec&&buff&&!inet_ntop(AF_INET,(struct sockaddr_in*)&rec->Data.A.IpAddress,buff,1024)) return nullptr;
+	DnsFree(rec, DnsFreeRecordList);
+	return buff;
 }
 
 //***********************************************

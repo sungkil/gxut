@@ -80,6 +80,9 @@ using namespace std::string_literals; // enables s-suffix for std::string litera
 #endif
 // Windows
 #if defined(_WIN32)||defined(_WIN64) // Windows
+	#ifndef WIN32_LEAN_AND_MEAN
+		#define WIN32_LEAN_AND_MEAN
+	#endif
 	#include <windows.h>
 #endif
 // platform-specific

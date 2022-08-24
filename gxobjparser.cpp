@@ -1,6 +1,8 @@
-#include <gxut/gxos.h>
-#include <gxut/gxstring.h>
 #include <gxut/gxmath.h>
+#include <gxut/gxstring.h>
+#include <shellapi.h>
+#include <gxut/gxfilesystem.h>
+#include <gxut/gxos.h>
 #include <gxut/ext/gxzip.h>
 #include <gxut/gxobjparser.h>
 #include <gximage/gximage.h>
