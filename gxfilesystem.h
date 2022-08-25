@@ -24,6 +24,7 @@
 #include <io.h>			// low-level io functions
 #include <time.h>
 #include <deque>
+#include <shellapi.h>	// shell functions
 
 //***********************************************
 // Win32-like filetime utilities
