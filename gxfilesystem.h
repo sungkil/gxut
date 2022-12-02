@@ -274,7 +274,7 @@ struct path
 	bool has_file( const path& file_name ) const { return is_dir()&&cat(file_name).exists(); }
 
 	// chdir/make/copy/delete file/dir operations
-	void chdir() const { if(is_dir()) _wchdir(data); }
+	path chdir() const { path old=cwd(); if(is_dir()) _wchdir(data); return old; } // return old working directory
 	bool mkdir() const; // make all super directories
 	bool copy_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()||dst.empty()) return false; if(dst.is_dir()||dst.back()==L'\\') dst=dst.add_backslash()+name(); dst.dir().mkdir(); if(dst.exists()&&overwrite){ if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } return bool(CopyFileW( data, dst, overwrite?FALSE:TRUE )); }
 	bool move_file( path dst ) const { return is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(data,dst.c_str())!=0 : !copy_file(dst,true) ? false: rmfile(); }
@@ -326,7 +326,7 @@ struct path
 	static inline path module_name( bool with_ext=true, HMODULE h_module=nullptr ){ return module_path(h_module).name(with_ext); }
 	static inline path module_dir( HMODULE h_module=nullptr ){ static path d=module_path().dir(); return h_module?module_path(h_module).dir():d; }
 	static inline path cwd(){ path p; _wgetcwd(p.data,path::capacity); return p.absolute().add_backslash(); }	// current working dir
-	static inline void chdir( path dir ){ if(dir.is_dir()) _wchdir(dir.data); }
+	static inline path chdir( path dir ){ return dir.chdir(); }
 
 	// file content access: void (rb/wb), char (r/w), wchar_t (r/w,ccs=UTF-8)
 	FILE* fopen( const wchar_t* mode, bool utf8=false ) const;
