@@ -341,6 +341,22 @@ inline const std::vector<DWORD>& enum_process_indices()
 	return pids;
 }
 
+inline path get_process_path( DWORD pid )
+{
+	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ,FALSE,pid); if(!hProcess) return L"";
+	HMODULE hMod; DWORD cbNeeded; if(!EnumProcessModules(hProcess,&hMod,sizeof(hMod),&cbNeeded)){ CloseHandle(hProcess); return L""; }
+	std::array<wchar_t,4096> buff; GetModuleFileNameExW(hProcess,hMod,buff.data(),DWORD(buff.size()*sizeof(wchar_t))); CloseHandle(hProcess);
+	return !buff.empty()&&buff[0]?path(buff.data()):path();
+}
+
+inline path get_process_name( DWORD pid )
+{
+	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ,FALSE,pid); if(!hProcess) return L"";
+	HMODULE hMod; DWORD cbNeeded; if(!EnumProcessModules(hProcess,&hMod,sizeof(hMod),&cbNeeded)){ CloseHandle(hProcess); return L""; }
+	std::array<wchar_t,4096> buff; GetModuleBaseNameW(hProcess,hMod,buff.data(),DWORD(buff.size()*sizeof(wchar_t))); CloseHandle(hProcess);
+	return !buff.empty()&&buff[0]?path(buff.data()):path();
+}
+
 inline std::vector<DWORD> find_process( const wchar_t* name_or_path )
 {
 	std::vector<DWORD> v;
@@ -392,8 +408,8 @@ inline bool process_exists( path file_path )
 namespace console
 {
 inline const wchar_t* title(){ static wchar_t buff[MAX_PATH+1]; GetConsoleTitleW(buff,MAX_PATH); return buff; }
-inline DWORD process(){ DWORD console; GetWindowThreadProcessId(GetConsoleWindow(),&console); return console; }
-inline bool has_parent(){ return GetCurrentProcessId()!=process(); }
+inline DWORD get_console_process(){ DWORD console; GetWindowThreadProcessId(GetConsoleWindow(),&console); return console; }
+inline bool has_parent(){ return GetCurrentProcessId()!=get_console_process(); }
 inline void setnobuf(){ setbuf(stdout,0);setbuf(stderr,0);setvbuf(stdout,nullptr,_IONBF,0); }
 }
 
