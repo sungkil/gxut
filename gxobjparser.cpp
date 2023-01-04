@@ -5,13 +5,15 @@
 #include <gxut/gxos.h>
 #include <gxut/ext/gxzip.h>
 #include <gxut/gxobjparser.h>
-#include <gximage/gximage.h>
 #include <future> // std::async
 #if defined(__has_include) && __has_include(<fgets_sse2/fgets_sse2_slee.h>)
 	#include <fgets_sse2/fgets_sse2_slee.h>
 #endif
 
+// config and timestamps
 static const bool USE_MODEL_CACHE = true;
+const char* __GX_OBJPARSER_CPP_TIMESTAMP__ = __TIMESTAMP__;
+extern const char* __GX_MTLPARSER_CPP_TIMESTAMP__;
 
 //*************************************
 // support data and routines for fast string conversion
@@ -49,7 +51,7 @@ __forceinline int rm_newline( char* str, int len ){ if(str[len-1]=='\n')str[--le
 __forceinline char* next_token( char* buff ){while(*buff!=' '&&*buff)buff++;if(!*buff)return nullptr;*(buff++)=0;while(*buff==' ')buff++;return buff; }
 __forceinline char* tab_to_space( char* buff, int len ){ for(int j=0;j<len;j++,buff++)if(*buff=='\t')*buff=' '; return buff; }
 __forceinline char* rtrim( char* buff, int& len ){ int j;for(j=len-1;j>=0;j--)if(buff[j]!=' ')break;buff[len=j+1]='\0';return buff; }
-__forceinline char  tolower( char c ){ uchar d=static_cast<uchar>(c-'A');return d<26?'a'+d:c;}
+__forceinline char tolower( char c ){ uchar d=static_cast<uchar>(c-'A');return d<26?'a'+d:c;}
 __forceinline path decompress( const path& file_path );
 __forceinline bool is_extension_supported( path file_path )
 {
@@ -63,362 +65,19 @@ __forceinline bool is_extension_supported( path file_path )
 //*************************************
 
 //*************************************
-// cache forward declaration
-namespace obj::cache
-{
-	inline path& get_dir(){ static path d = path::temp(false)+L"global\\mesh\\"; if(!d.exists()&&!d.mkdir()) wprintf(L"Unable to create %s\n",d.c_str()); return d; }
-	inline path get_path( path file_path ){ return get_dir()+file_path.name()+L".rxb"; }
-	inline uint64_t get_parser_id( const char* timestamp ){ return uint64_t(std::hash<std::string>{}(std::string(__TIMESTAMP__)+std::string(__GX_MESH_H_TIMESTAMP__)+timestamp)); }
-}
-//*************************************
-
-inline void clear_absent_textures( path mtl_path, std::vector<material_impl>& materials, path dir )
-{
-	for( auto& m : materials )
-	for( auto& [key,f] : m.path )
-	{
-		if(f.empty()) continue;
-		if(f.exists()||(dir+f).exists()) continue;
-		printf( "[%s.%s.%s] %s not exists\n", mtl_path.to_slash().name().wtoa(), m.name, key.c_str(), f.to_slash().wtoa() );
-		f.clear();
-	}
-}
-
-inline void convert_unsupported_texture_to_jpeg( std::vector<material_impl>& materials, path mesh_dir )
-{
-	bool b_first = true;
-	for( auto& m : materials )
-	for( auto& it : m.path )
-	{
-		path src = mesh_dir+it.second; if(!src.exists()) continue;
-		if(src.ext()==L"tga")
-		{
-			image* img = gx::load_image(src);
-			path dst = src.dir()+src.name(false)+(img->channels==3?L".jpg":L".png");
-			if(!dst.exists())
-			{
-				gx::save_image( dst, img );
-				if(b_first){ wprintf( L"\n"); b_first=false; }
-				wprintf( L"converting %s to %s\n", src.name().c_str(), dst.name().c_str() );
-			}
-			gx::release_image(&img);
-			it.second = dst.name();
-		}
-	}
-}
-
-inline path generate_normal_map( path bump_path, path normal_path, float bump_scale )
-{
-	if(!bump_path.exists()) return L"";
-	FILETIME bump_mtime = bump_path.mfiletime();
-	if(normal_path.exists()&&normal_path.mfiletime()>=bump_mtime) return normal_path;
-
-	os::timer_t t;
-
-	// test whether the bump map is actually a normal map
-	image* bump0 = gx::load_image(bump_path,true,false,false);	// do not force rgb to bump; and use cache
-	if(bump0==nullptr){ printf("failed to load the bump map %s\n", wtoa(bump_path) ); return L""; }
-	if(bump0->channels==3&&bump0->width>8&&bump0->height>8)
-	{
-		bool gray = true;
-		for( auto s : {ivec2(7,7),ivec2(2,7),ivec2(7,2)} )
-		{
-			uchar3 c = *bump0->ptr<uchar3>(s.x,s.y);
-			if(c.b>c.r&&c.b>c.g){ gray=false; break; }
-		}
-		if(!gray){ gx::release_image(&bump0); return bump_path; }
-	}
-
-	wprintf( L"Generating %s ... ", normal_path.name().c_str() );
-
-	// convert uchar bumpmap to 1-channel float image
-	image* bump = gx::create_image( bump0->width, bump0->height, 32, 1 );
-	int yn=bump->height, c0=bump0->channels, xn=bump->width;
-	for( int y=0; y<yn; y++ )
-	{
-		uchar* src = bump0->ptr<uchar>(y);
-		float* dst = bump->ptr<float>(y);
-		for( int x=0; x<xn; x++, src+=c0, dst++ ) dst[0] = float(src[0])/255.0f;
-	}
-
-	// create normal image
-	image* normal = gx::create_image( bump->width, bump->height, 8, 3 );
-
-	// apply sobel filter to the bump
-	bump_scale = min(1000.0f,1.0f/(bump_scale+0.000001f));
-	uchar *B=bump->data, *N=normal->data;
-	int NW=int(normal->stride()), BW=int(bump->stride());
-	
-	for( int y=0; y<yn; y++ )
-	{
-		uchar3* dst = (uchar3*)(N+y*NW);
-		float* src2 = (float*)(B+((y-1+yn)%yn)*BW);
-		float* src1 = (float*)(B+y*BW);
-		float* src0 = (float*)(B+((y+1)%yn)*BW);
-
-		for( int x=0; x<xn; x++, dst++ )
-		{
-			int l=(x-1+xn)%xn, r=(x+1)%xn;
-			float nx = (src2[r]-src2[l]) + (src1[r]-src1[l])*2.0f + (src0[r]-src0[l]);
-			float ny = (src2[l]-src0[l]) + (src2[x]-src0[x])*2.0f + (src2[r]-src0[r]);
-			float nz = bump_scale*2.4f;	// scaling
-			float nlen = sqrtf(nx*nx+ny*ny+nz*nz);
-
-			// save as RGB
-			dst->x = uchar((nx/nlen+1.0f)*127.5f);
-			dst->y = uchar((ny/nlen+1.0f)*127.5f);
-			dst->z = uchar((nz/nlen+1.0f)*127.5f);
-		}
-	}
-
-	// first write to the temporary image
-	gx::save_image( normal_path, normal );
-	if(normal_path.exists()) normal_path.set_filetime(nullptr,nullptr,&bump_mtime);
-
-	gx::release_image(&bump0);
-	gx::release_image(&bump);
-	gx::release_image(&normal);
-
-	wprintf( L"completed in %.f ms\n", t.end() );
-
-	return normal_path;
-}
-
-inline path get_normal_path( const material_impl& m, const path& bump_path, const char* bump_key )
-{
-	path name0=bump_path.name(false);
-	if(name0.back()==L'n')
-	{
-		path base_path;
-		if( auto it=m.path.find("albedo"); it!=m.path.end() )
-		{
-			auto& f = it->second;
-			if(_wcsnicmp(f.name(false),name0.c_str(),f.name(false).length())==0) base_path=f;
-		}
-		if(!base_path.empty())
-		{
-			image* header = gx::load_image_header( bump_path.c_str() ); if(!header){ printf("failed to load header of bump map %s\n", wtoa(bump_path) ); return L""; }
-			int channels=header->channels; gx::release_image_header(&header); if(channels==3) return bump_path;
-		}
-	}
-	
-	if(name0.back()==L'b') name0.back()=0;
-	path name = name0+L"n";
-	for( int k=0; k<4; k++, name+=L"n" )
-	{
-		path dst = name+path(L".")+bump_path.ext();
-		bool name_exists = false;
-		for( auto& [n,f] : m.path ){if(n!=bump_key&&f.name(false)==name){ name_exists=true; break;}}
-		if(!name_exists) return bump_path.dir()+dst;
-	}
-	return L"";
-}
-
-inline void generate_normal_maps( path mtl_path, std::vector<material_impl>& materials, path dir, std::map<uint,float>& bump_scale_map )
-{
-	static const char* normal_key = "normal";
-	static const char* bump_key = "bump";
-	std::map<path,path> bton; // bump_to_normal;
-
-	// try to load bton cache
-	path bton_path = obj::cache::get_path(mtl_path).remove_ext()+L".bton";
-	if(bton_path.exists())
-	{
-		FILE* fp = _wfopen( bton_path.c_str(), L"r" ); if(!fp){ printf( "%s(): unable to open %s\n", __func__, bton_path.wtoa()); return; }
-		uint64_t parser_id; fscanf( fp, "%llu\n", &parser_id );
-		if(parser_id==obj::cache::get_parser_id(mtl_path.mtimestamp()))
-		{
-			char buff[4096]; while(fgets(buff,4096,fp))
-			{
-				auto vs = explode( buff, "=" ); if(vs.size()<2) continue;
-				bton[path(trim(vs.front().c_str()))] = trim(vs[1].c_str());
-			}
-		}
-		fclose(fp);
-	}
-
-	std::vector<path> bump_as_normal;
-	for( auto& m : materials )
-	{
-		if(auto it=m.path.find(normal_key);it!=m.path.end()&&(dir+it->second).exists()) continue;
-		path bump_path; if(auto it=m.path.find(bump_key);it==m.path.end()||it->second.empty()) continue; else bump_path=dir+it->second; if(!bump_path.exists()) continue;
-		path normal_path; if(auto it=bton.find(bump_path.name());it!=bton.end()&&!it->second.empty()) normal_path=dir+it->second;
-		if(normal_path.exists()){ m.path["normal"]=normal_path.relative(false,dir); continue; }
-
-		normal_path = get_normal_path( m, bump_path, bump_key ); if(normal_path.empty()){ printf("%s(): unable to find normal_path for %s\n",__func__,bump_path.to_slash().wtoa()); continue; }
-		if(bump_path!=normal_path&&!normal_path.exists())
-		{
-			float bump_scale=1.0f; if(auto s=bump_scale_map.find(m.ID);s!=bump_scale_map.end()) bump_scale=s->second;
-			normal_path = generate_normal_map( bump_path, normal_path, bump_scale ); if(!normal_path.exists()) continue;
-			if(bump_path==normal_path) bump_as_normal.emplace_back(bump_path);
-		}
-		m.path["normal"]=bton[bump_path.name()]=normal_path.relative(false,dir);
-	}
-	
-	if(!bump_as_normal.empty())
-	{
-		printf( "The following maps are actually normal maps.\n" );
-		printf( "Consider using 'norm' (extended) tag instead of 'bump' in *.mtl\n" );
-		for( auto& f : bump_as_normal) printf( "> %s\n", f.name().wtoa() );
-		printf( "\n" );
-	}
-
-	// save bton cache
-	FILE* fp = _wfopen( bton_path.c_str(), L"w" ); if(!fp){ printf( "%s(): unable to save %s\n", __func__, bton_path.wtoa()); return; }
-	fprintf( fp, "%llu\n", obj::cache::get_parser_id(mtl_path.mtimestamp()) );
-	for( auto& [b,n] : bton ) fprintf( fp, "%s = %s\n", b.wtoa(), n.wtoa() );
-	fclose(fp);
-	bton_path.set_filetime( mtl_path );
-}
-
-inline uint find_material( std::vector<material_impl>& materials, const char* name )
-{
-	for(uint k=0,kn=uint(materials.size());k<kn;k++)
-		if(_stricmp(name,materials[k].name)==0) return k;
-	return -1;
-}
-
-inline void create_default_material( std::vector<material_impl>& materials )
-{
-	materials.emplace_back(material_impl(uint(materials.size())));
-	auto& m = materials.back();
-	m.color = vec4(0.7f,0.7f,0.7f,1.0f);
-	strcpy(m.name,"default");
-}
-
-inline bool load_mtl( path file_path, std::vector<material_impl>& materials )
-{
-	if(!file_path.exists()){ printf("%s(): %s not exists\n", __func__, file_path.wtoa() ); return false; }
-	FILE* fp = _wfopen(file_path,L"r"); if(!fp){ printf("%s(): unable to open %s\n", __func__, file_path.wtoa()); return false; }
-	path mesh_dir = file_path.dir();
-
-	// additional temporary attributes
-	std::map<uint,float> bump_scale_map;
-
-	// default material for light source (mat_index==0 or emissive>0)
-	materials.clear();
-	materials.emplace_back(material_impl(0));
-	material_impl* m = &materials.back();
-	strcpy(m->name,"light");
-	m->color = vec4(1.0f,1.0f,1.0f,1.0f);
-	m->metal = 0.0f;
-	m->emissive = 1.0f;
-
-	// start parsing
-	char buff[8192]={};
-	for( uint k=0; fgets(buff,8192,fp)&&k<65536; k++ )
-	{
-		char c0=buff[0]; if(!c0||c0=='#'||strncmp(buff,"Wavefront",9)==0) continue;
-		char c1=buff[1]; if(!c1) continue;
-
-		std::vector<std::string> vs = explode(_strlwr(buff)); if(vs.size()<2) continue;
-		std::string& key		= vs[0];
-		const char* token		= vs[1].c_str();
-		std::wstring vs1w		= atow(token);
-		const wchar_t* wtoken	= vs1w.c_str();
-		float f					= float(fast::atof(token));
-
-		if(key=="newmtl")
-		{
-			materials.emplace_back(material_impl(uint(materials.size())+1));
-			m = &materials.back();
-			strcpy( m->name, token );
-		}
-		else if(key=="ka");		// ambient materials
-		else if(key=="kd")
-		{
-			if(vs.size()<4){ wprintf(L"Kd size < 3\n"); return false; }
-			m->color[0] = f;
-			m->color[1] = float(fast::atof(vs[2].c_str()));
-			m->color[2] = float(fast::atof(vs[3].c_str()));
-			m->color[3] = 1.0f;
-		}
-		else if(key=="ks")
-		{
-			m->specular = f;
-		}
-		else if(key=="ns") // specular power
-		{
-			m->beta = f;
-			if(m->rough>0) m->rough = beta_to_roughness(m->beta); // only for non-reflection
-		}
-		else if(key=="ni")	m->n = f; // refractive index
-		else if(key=="d")	m->color.a = f;
-		else if(key=="tr")	m->color.a = 1.0f-f; // transparency
-		else if(key=="map_ka"){ m->path["ambient"] = wtoken; }	// ambient occlusion
-		else if(key=="map_kd"){ m->path["albedo"] = wtoken; }
-		else if(key=="map_d"||key=="map_opacity"){ m->path["alpha"] = wtoken; }
-		else if(key=="map_bump"||key=="bump")
-		{
-			if(m->path.find("bump")!=m->path.end()) continue; // already processed
-			if(_stricmp("-bm", vs[1].c_str())!=0){ m->path["bump"] = wtoken; continue; }
-			if(vs.size()<4){ printf("obj::%s(): %s - not enough arguments for bump\n",__func__,m->name); return false; }
-			bump_scale_map[m->ID] = float(fast::atof(vs[2].c_str()));
-			m->path["bump"] = atow(vs[3].c_str());
-		}
-		else if(key=="refl")	// reflection map
-		{
-			if(_wcsistr(wtoken,L"metal")) m->path["metal"] = wtoken; // some mtl uses refl for map_pm for legacy compatibility
-			else if( !vs[1].empty()) m->rough = 0.0f; 	// ignore the reflection map and use the global env map
-		}
-		else if(key=="illum");	// illumination model
-		else if(key=="map_ks");	// specular map
-		else if(key=="map_ns"); // specular power map
-		else if(key=="disp");	// displacement map
-		else if(key=="tf");		// Transmission filter
-		else if(key=="fr");		// Fresnel reflectance
-		else if(key=="ft");		// Fresnel transmittance
-		else if(key=="Ia");		// ambient light
-		else if(key=="Ir");		// intensity from reflected direction
-		else if(key=="It");		// intensity from transmitted direction
-		// PBR extensions: http://exocortex.com/blog/extending_wavefront_mtl_to_support_pbr
-		else if(key=="ke"){ m->emissive = 1.0f; }
-		else if(key=="Pr"){ if(m->rough>0) m->rough = f; } // only for non-reflection
-		else if(key=="map_ke"){ m->path["emissive"] = wtoken; }
-		else if(key=="map_pr"){ m->path["rough"] = wtoken; }
-		else if(key=="map_pm"){ m->path["metal"] = wtoken; }
-		else if(key=="map_ps"){ m->path["sheen"] = wtoken; }
-		else if(key=="norm"){ m->path["normal"] = wtoken; }
-		else if(key=="pc"){ m->path["clearcoat"] = wtoken; }
-		else if(key=="pcr"){ m->path["clearcoatroughness"] = wtoken; }
-		else if(key=="aniso"){ m->path["anisotropy"] = wtoken; }
-		else if(key=="anisor"){ m->path["anisotropyrotation"] = wtoken; }
-		// DirectXMesh toolkit extension
-		else if(key=="map_RMA"){ m->path["rma"] = wtoken; } // (roughness, metalness, ambient occlusion)
-		else if(key=="map_ORM"){ m->path["orm"] = wtoken; } // (ambient occlusion, roughness, metalness)
-		// unrecognized
-		else if(k>0){ printf("obj::%s(): unrecognized command - %s %s\n",__func__,key.c_str(),token); return false; }
-	}
-	fclose(fp);
-
-	//*********************************
-	// postprocessing
-	//********************************* 
-
-	path mtl_dir = file_path.dir();
-	for( auto& m : materials )
-	{
-		// convert from specular to metallic
-		m.metal = clamp(m.color.r/m.specular,0.0f,1.0f);
-
-		// absolute paths to relative paths
-		for( auto& it : m.path )
-			if(!it.second.empty()&&it.second.is_absolute())
-				it.second=it.second.relative(false,mtl_dir);
-	}
-
-	// postprocessing
-	convert_unsupported_texture_to_jpeg( materials, mesh_dir );
-	generate_normal_maps( file_path, materials, mesh_dir, bump_scale_map );
-	clear_absent_textures( file_path, materials, mesh_dir );
-
-	return true;
-}
-
-//*************************************
 // cache implementation
 namespace obj::cache
 {
+	inline uint64_t get_parser_id( const char* timestamp )
+	{
+		static const std::string timestamps = 
+			std::string(__GX_MESH_H_TIMESTAMP__)+
+			std::string(__GX_OBJPARSER_H_TIMESTAMP__)+
+			std::string(__GX_OBJPARSER_CPP_TIMESTAMP__)+
+			std::string(__GX_MTLPARSER_CPP_TIMESTAMP__);
+		return uint64_t(std::hash<std::string>{}(timestamps+timestamp));
+	}
+
 	void clear( mesh* p_mesh, bool b_log )
 	{
 		if(!p_mesh) return;
@@ -841,7 +500,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	int k=0; for( auto it=mg.begin();it!=mg.end(); k++ )
 	{
 		if(it->count!=0){ it->ID=gid++; it++; continue; }
-		printf( "Pruning geometry[%d] %s\n", k, it->name() );
+		printf( "pruning geometry[%d] %s\n", k, it->name() );
 		it=mg.erase(it);
 	}
 
