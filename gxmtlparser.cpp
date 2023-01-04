@@ -177,9 +177,8 @@ static path get_normal_path( const path& bump_path, nocase::set<path> used_image
 
 static void optimize_textures( path file_path, std::vector<mtl_section_t>& sections, bool& b_dirty )
 {
-	os::timer_t t;
 	path dir = file_path.dir();
-
+	
 	// cleanup and scan crc
 	nocase::map<std::string,uint> crc_map; // sorted by path
 	for( auto& section : sections )
@@ -356,7 +355,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials )
 
 	// preprocessing
 	optimize_textures( file_path, sections, b_dirty );
-
+	
 	// start loading
 	for( auto& section : sections )
 	{
