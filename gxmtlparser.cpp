@@ -72,29 +72,36 @@ struct mtl_section_t
 	}
 };
 
+static const std::vector<vec2> halton_samples =
+{
+	{0.015625f,0.061224f}, {0.515625f,0.204082f}, {0.265625f,0.346939f}, {0.765625f,0.489796f}, {0.140625f,0.632653f}, {0.640625f,0.775510f}, {0.390625f,0.918367f}, {0.890625f,0.081633f},
+	{0.078125f,0.224490f}, {0.578125f,0.367347f}, {0.328125f,0.510204f}, {0.828125f,0.653061f}, {0.203125f,0.795918f}, {0.703125f,0.938776f}, {0.453125f,0.102041f}, {0.953125f,0.244898f},
+	{0.046875f,0.387755f}, {0.546875f,0.530612f}, {0.296875f,0.673469f}, {0.796875f,0.816326f}, {0.171875f,0.959184f}, {0.671875f,0.122449f}, {0.421875f,0.265306f}, {0.921875f,0.408163f},
+	{0.109375f,0.551020f}, {0.609375f,0.693878f}, {0.359375f,0.836735f}, {0.859375f,0.979592f}, {0.234375f,0.142857f}, {0.734375f,0.285714f}, {0.484375f,0.428571f}, {0.984375f,0.571429f},
+};
+
 static bool is_normal_map( path file_path )
 {
 	static nocase::map<path,bool> cache;
 	if(auto it=cache.find(file_path); it!=cache.end()) return it->second;
 	
 	cache[file_path]=false;
-	image* h=gx::load_image_header(file_path); if(!h){ printf("failed to load header of %s\n", file_path.wtoa() ); return false; }
-	bool early_exit = h->channels!=3||h->width<64||h->height<64; gx::release_image_header(&h);
+	image* header=gx::load_image_header(file_path); if(!header){ printf("failed to load header of %s\n", file_path.wtoa() ); return false; }
+	bool early_exit = header->channels!=3||header->width<64||header->height<64; gx::release_image_header(&header);
 	if(early_exit) return false;
 
 	// do not force rgb to bump; and use cache
 	image* i = gx::load_image(file_path,true,false,false); if(!i){ printf("failed to load the bump map %s\n", wtoa(file_path) ); return false; }
-	static const std::vector<ivec2> halton =
+	int w=i->width, h=i->height; int bcount=0;
+	for( auto s : halton_samples )
 	{
-		{0,1}, {31,10}, {16,19}, {47,28},	{8,37}, {39,46}, {24,55}, {55,3},
-		{4,12}, {35,21}, {20,30}, {51,39},	{12,48}, {43,57}, {28,4}, {59,13},
-		{2,22}, {33,31}, {18,40}, {49,49},	{10,58}, {41,5}, {26,14}, {57,23},
-		{6,32},	{37,41}, {22,50}, {53,59},	{14,6}, {45,15}, {30,24}, {61,33},
-	};
-	
-	int bcount=0; for( auto s : halton ){ uchar3 c = *i->ptr<uchar3>(s.x,s.y); if(c.b>c.r&&c.b>c.g) bcount++; }
+		ivec2 tc = ivec2(std::min(w-1,int((w-1)*s.x)),std::min(h-1,int((h-1)*s.y)));
+		uchar3 c = *i->ptr<uchar3>(tc.y,tc.x);	if(c.b<c.r||c.b<c.g||c.b<127) continue;
+		vec3 n = vec3(c.r,c.g,c.b)/127.5f-1.0f;	if(fabs(n.length()-1.0f)>0.3f) continue;
+		bcount++;
+	}
 	gx::release_image(&i);
-	return cache[file_path] = bcount>int(halton.size()*0.95f) ? true : false;
+	return cache[file_path] = bcount>int(halton_samples.size()*0.9f) ? true : false;
 }
 
 static path generate_normal_map( path normal_path, path bump_path )
@@ -252,7 +259,7 @@ static void optimize_textures( path file_path, std::vector<mtl_section_t>& secti
 		{
 			//if(norm_path.exists()) printf("%s already exists\n", norm_path.name().wtoa());
 			if(!generate_normal_map( norm_path, bump_path ))
-				printf( "failed to generate normal map %s\n" );
+				printf( "failed to generate normal map %s\n", norm_path.wtoa() );
 		}
 		used_images.insert(norm_path);
 		b_dirty=true;

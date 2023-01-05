@@ -556,8 +556,8 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	// logging
 	t.end();
 	if(pLoadingTime) *pLoadingTime += (float) t.delta();
-	printf( " completed in %.2f ms (%s faces, %s vertices)\n", t.delta(),
-		itoasep(int(p_mesh->face_count())), itoasep(int(p_mesh->vertices.size())) );
+	printf( " completed in %.2f ms\n", t.delta() );
+	printf( "faces: %s, vertices: %s\n", itoasep(int(p_mesh->face_count())), itoasep(int(p_mesh->vertices.size())) );
 
 	return p_mesh;
 }
