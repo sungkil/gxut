@@ -167,7 +167,7 @@ namespace obj::cache
 		wcscpy(p_mesh->mtl_path,mtl_path.exists()?atow(mtl_name):L"default");
 		
 		// load materials
-		if(mtl_path.exists()&&!load_mtl(mtl_path, p_mesh->materials)){ delete p_mesh; return nullptr; }
+		if(mtl_path.exists()&&!load_mtl(mtl_path, p_mesh->materials, true )){ delete p_mesh; return nullptr; }
 
 		// load counters
 		uint object_count=0;	fgets(buff,8192,fp); sscanf(buff,"object_count = %u\n", &object_count );

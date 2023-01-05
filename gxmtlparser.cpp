@@ -342,8 +342,11 @@ void create_default_material( std::vector<material_impl>& materials )
 	strcpy(m.name,"default");
 }
 
-bool load_mtl( path file_path, std::vector<material_impl>& materials )
+bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_cache )
 {
+	os::timer_t timer;
+	if(!with_cache) wprintf( L"Loading %s ...", file_path.name().c_str() );
+
 	// attributes
 	bool b_dirty = false; // something changed?
 
@@ -467,6 +470,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials )
 		file_path.set_filetime( nullptr, nullptr, &mfiletime0 ); // keep time stamp
 	}
 
+	if(!with_cache) printf( "%scompleted in %.2f ms\n", b_dirty?"\n":" ", timer.end() );
 	return true;
 }
 
