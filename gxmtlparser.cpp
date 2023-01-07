@@ -175,8 +175,9 @@ static path get_normal_path( const path& bump_path, nocase::map<path,path>& bton
 	return L"";
 }
 
-static void optimize_textures( path file_path, std::vector<mtl_section_t>& sections, bool& b_dirty )
+static float optimize_textures( path file_path, std::vector<mtl_section_t>& sections, bool& b_dirty )
 {
+	os::timer_t timer;
 	path dir = file_path.dir();
 	
 	// preliminary cleanup and scan crc
@@ -200,16 +201,15 @@ static void optimize_textures( path file_path, std::vector<mtl_section_t>& secti
 	}
 
 	// replace redundant map path
-	std::vector<path> redundant_files;
 	for( auto& section : sections )
 	for( auto& t : section.items )
 	{
 		if(!t.is_map_type()) continue;
 		if(!t.map_path(dir).exists()) continue;
 		auto &src = t.back(), dst = crc_lut[t.map_crc]; if(_stricmp(src.c_str(),dst.c_str())==0) continue;
-		printf( "replace: %s << %s\n", src.c_str(), dst.c_str() );
-		redundant_files.emplace_back(t.map_path(dir));
+		printf( "[%s] replace: %s << %s\n", file_path.name().wtoa(), src.c_str(), dst.c_str() );
 		src = dst;
+		b_dirty = true;
 	}
 
 	// find valid images and delete non-existing images
@@ -219,7 +219,7 @@ static void optimize_textures( path file_path, std::vector<mtl_section_t>& secti
 	{
 		if(!t.is_map_type()) continue;
 		path map_path = t.map_path(dir); if(map_path.exists()){ used_images.insert(map_path); continue; }
-		printf( "\n[%s] %s.%s: %s not exists\n", file_path.name().wtoa(), section.name.c_str(), t.key.c_str(), map_path.name().wtoa() );
+		printf( "[%s] %s.%s: %s not exists\n", file_path.name().wtoa(), section.name.c_str(), t.key.c_str(), map_path.name().wtoa() );
 		t.clear(); b_dirty=true;
 	}
 
@@ -241,7 +241,7 @@ static void optimize_textures( path file_path, std::vector<mtl_section_t>& secti
 		path normal_path = n->map_path(dir);
 		auto it=normal_test.find(normal_path);
 		bool b = it!=normal_test.end() ? it->second : (normal_test[normal_path]=is_normal_map(normal_path)); if(b) continue;
-		printf( "\n[%s] %s.%s: %s is not a normal map\n", file_path.name().wtoa(), section.name.c_str(), n->key.c_str(), normal_path.name().wtoa() );
+		printf( "[%s] %s.%s: %s is not a normal map\n", file_path.name().wtoa(), section.name.c_str(), n->key.c_str(), normal_path.name().wtoa() );
 		n->clear();
 		b_dirty = true;
 	}
@@ -271,20 +271,14 @@ static void optimize_textures( path file_path, std::vector<mtl_section_t>& secti
 		b_dirty=true;
 	}
 
-	// delete redundant files
-	if(!redundant_files.empty()) b_dirty = true;
-	for( auto& f : redundant_files )
-	{
-		if(!f.delete_file(true)) continue;
-		printf( "[%s] deleting duplicates: %s\n", file_path.name(true).wtoa(), f.name().wtoa() );
-	}
-
 	// delete non-used images
-	for( auto& f : dir.scan( false, L"jpg;jpeg;png;tga" ) )
+	for( auto& f : dir.scan( false, L"jpg;png" ) )
 	{
 		if(used_images.find(f)!=used_images.end()||!f.delete_file(true)) continue;
 		printf( "[%s] deleting redundancy: %s\n", file_path.name(true).wtoa(), f.name().wtoa() );
 	}
+
+	return timer.end();
 }
 
 std::vector<mtl_section_t> parse_mtl( path file_path, bool& b_dirty )
@@ -326,11 +320,11 @@ std::vector<mtl_section_t> parse_mtl( path file_path, bool& b_dirty )
 	return v;
 }
 
-static bool save_mtl( path file_path, const std::vector<mtl_section_t>& sections )
+static bool save_mtl( path file_path, const std::vector<mtl_section_t>& sections, float opt_time )
 {
 	auto mfiletime0 = file_path.mfiletime();
 	FILE* fp = _wfopen( file_path, L"w" ); if(!fp){ printf("%s(): failed to open %s\n", __func__, file_path.to_slash().wtoa() ); return false; }
-	printf( "Optimizing %s ... ", file_path.name().wtoa() );
+	printf( "[%s] optimization ... ", file_path.name().wtoa() );
 
 	for( size_t k=0, kn=sections.size(); k<kn; k++ )
 	{
@@ -344,7 +338,7 @@ static bool save_mtl( path file_path, const std::vector<mtl_section_t>& sections
 	}
 	fclose(fp);
 	file_path.set_filetime( nullptr, nullptr, &mfiletime0 ); // keep time stamp
-	printf( "completed\n" );
+	printf( "completed in %.2f ms\n", opt_time );
 
 	return true;
 }
@@ -381,7 +375,6 @@ void create_light_material( std::vector<material_impl>& materials )
 bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_cache )
 {
 	os::timer_t timer;
-	if(!with_cache) wprintf( L"Loading %s ... ", file_path.name().c_str() );
 
 	// attributes
 	bool b_dirty = false; // something changed?
@@ -395,7 +388,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 	create_light_material( materials );
 
 	// preprocessing only for fresh loading
-	if(!with_cache) optimize_textures( file_path, sections, b_dirty );
+	float opt_time = with_cache ? 0.0f : optimize_textures( file_path, sections, b_dirty );
 
 	// tags to bypass
 	static nocase::set<std::string> passtags
@@ -485,8 +478,8 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 	}
 
 	// update file after bump_as_normal
-	if(!with_cache) printf( "completed in %.2f ms\n", timer.end() );
-	if(b_dirty) save_mtl( file_path, sections );
+	if(b_dirty) save_mtl( file_path, sections, opt_time );
+	if(!with_cache) wprintf( L"Loading %s ... completed in %.2f ms\n", file_path.name().c_str(), timer.end() );
 	
 	return true;
 }
