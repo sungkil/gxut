@@ -68,14 +68,17 @@ __forceinline bool is_extension_supported( path file_path )
 // cache implementation
 namespace obj::cache
 {
-	inline uint64_t get_parser_id( const char* timestamp )
+	inline uint64_t get_parser_id( path file_path )
 	{
-		static const std::string timestamps = 
+		static const std::string codestamp = 
 			std::string(__GX_MESH_H_TIMESTAMP__)+
 			std::string(__GX_OBJPARSER_H_TIMESTAMP__)+
 			std::string(__GX_OBJPARSER_CPP_TIMESTAMP__)+
 			std::string(__GX_MTLPARSER_CPP_TIMESTAMP__);
-		return uint64_t(std::hash<std::string>{}(timestamps+timestamp));
+		std::string s = codestamp+file_path.mtimestamp();
+		for( auto& f : file_path.dir().absolute().scan( true, L"obj;mtl;7z;zip;jpg;jpeg;png;hdr" ) )
+			s += f.mtimestamp();
+		return uint64_t(std::hash<std::string>{}(s));
 	}
 
 	void clear( mesh* p_mesh, bool b_log )
@@ -98,7 +101,7 @@ namespace obj::cache
 		FILE* fp = _wfopen( cache_path, L"w" ); if(!fp){ wprintf(L"Unable to write %s\n",cache_path.c_str()); return; }
 
 		// save the parser's id to reflect the revision of the parser and mesh's timestamp
-		fprintf( fp, "parserid = %llu\n", get_parser_id(file_path.mtimestamp()) );
+		fprintf( fp, "parserid = %llu\n", get_parser_id(file_path) );
 
 		// save mtl path
 		path mtl_path = file_path.dir()+p_mesh->mtl_path;
@@ -154,7 +157,7 @@ namespace obj::cache
 		// get parser id
 		uint64_t parserid;
 		char buff[8192]; fgets(buff,8192,fp); sscanf( buff, "parserid = %llu\n", &parserid );
-		if(parserid!=get_parser_id(file_path.mtimestamp())){ fclose(fp); return nullptr; }
+		if(parserid!=get_parser_id(file_path)){ fclose(fp); return nullptr; }
 
 		// get the mtl name
 		char mtl_name[1024]; fgets(buff,8192,fp); sscanf( buff, "mtllib = %s\n", mtl_name );
