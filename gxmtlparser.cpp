@@ -162,7 +162,7 @@ static path get_normal_path( const path& bump_path, nocase::map<path,path>& bton
 	path ext = bump_path.ext();
 	
 	// remove postfix for bump
-	if(base.size()>4&&_wcsistr(base,L"bump")) base=str_replace(base.c_str(),L"bump",L"norm");
+	if(base.size()>4&&_wcsistr(substr(base.c_str(),-4),L"bump")) base=path(substr(base.c_str(),0,-4))+L"norm";
 	else if(base.back()==L'b') base.back()=L'n';
 	else base+="n";
 	
@@ -278,7 +278,7 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 		printf( "[%s] deleting redundancy: %s\n", file_path.name(true).wtoa(), f.name().wtoa() );
 	}
 
-	return timer.end();
+	return float(timer.end());
 }
 
 std::vector<mtl_section_t> parse_mtl( path file_path, bool& b_dirty )

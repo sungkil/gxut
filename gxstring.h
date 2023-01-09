@@ -431,7 +431,16 @@ __noinline std::vector<const T*> explode_conservative( const T* _Src, T _Delim )
 }
 
 //***********************************************
-// 13. replace
+// 13. substring, replace
+
+template <class T>
+__noinline const T* substr( const T* _Src, int _Pos, int _Count=0 )
+{
+	static T *nullstr=(T*)L""; if(!_Src) return nullstr;
+	size_t l = strlen(_Src); if(_Pos<0) _Pos+=int(l); if(_Pos>=int(l)) return nullstr; if(_Count<=0) _Count+=int(l);
+	return __tstrdup(_Src+_Pos,_Pos+_Count<=l?_Count:l-_Pos);
+}
+
 template <class T>
 __noinline const T* str_replace( const T* _Src, const T* _Find, const T* _Replace )
 {
