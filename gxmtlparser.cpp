@@ -37,6 +37,9 @@ struct mtl_section_t
 	std::string					name;
 	std::vector<mtl_item_t>		items;
 
+	constexpr auto begin(){ return items.begin(); }
+	constexpr auto end(){ return items.end(); }
+
 	bool empty() const { return name.empty()||items.empty(); }
 	mtl_item_t* find( const char* key ) const { for(auto& t:items){ if(!items.empty()&&_stricmp(t.key.c_str(),key)==0) return (mtl_item_t*)&t; } return nullptr; }
 	int find_index( const char* key ) const	{ for( int k=0, kn=int(items.size()); k<kn; k++ ){ if(items[k].empty()) continue; if(_stricmp(items[k].key.c_str(),key)==0) return k; } return -1; }
@@ -183,7 +186,7 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 	// preliminary cleanup and scan crc
 	nocase::map<std::string,uint> crc_map; // sorted by path
 	for( auto& section : sections )
-	for( auto& t: section.items )
+	for( auto& t: section )
 	{
 		if(!t.is_map_type()) continue;
 		if(t.map_make_relative(dir)) b_dirty=true; // make absolute to relative path
@@ -215,7 +218,7 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 	// find valid images and delete non-existing images
 	nocase::set<path> used_images;
 	for( auto& section : sections )
-	for( auto& t : section.items )
+	for( auto& t : section )
 	{
 		if(!t.is_map_type()) continue;
 		path map_path = t.map_path(dir); if(map_path.exists()){ used_images.insert(map_path); continue; }
@@ -300,13 +303,15 @@ std::vector<mtl_section_t> parse_mtl( path file_path, bool& b_dirty )
 		if(is_empty_line(b)){ if(*b) v.back().items.emplace_back(mtl_item_t("",b)); continue; } // add blank lines
 		std::vector<std::string> vs = std::move(explode(b));
 		if(vs.size()<2){ b_dirty=true; continue; } // cull no-value lines
-		
 		const std::string& key = vs[0];
-		if(_stricmp(key.c_str(),"newmtl")==0) v.emplace_back(mtl_section_t(vs[1]));
-		else if(_stricmp(key.c_str(),"illum")==0){ b_dirty=true; continue; } // pre-skip redundancy
 
-		mtl_item_t t(key); for(size_t k=1;k<vs.size();k++) t.tokens.emplace_back(vs[k]);
-		v.back().items.emplace_back(t);		// add split tokens
+		if(_stricmp(vs[0].c_str(),"illum")==0){ b_dirty=true; continue; } // pre-skip redundancy
+		else if(_stricmp(key.c_str(),"newmtl")==0) v.emplace_back(mtl_section_t(vs[1]));
+		else
+		{
+			mtl_item_t t(key); for(size_t k=1;k<vs.size();k++) t.tokens.emplace_back(vs[k]);
+			v.back().items.emplace_back(std::move(t)); // add split tokens
+		}
 	}
 	fclose(fp);
 
@@ -330,6 +335,7 @@ static bool save_mtl( path file_path, const std::vector<mtl_section_t>& sections
 	{
 		auto& section = sections[k];
 		if(k>0) fprintf(fp,"\n");
+		fprintf(fp,"%snewmtl %s\n", k>0?"\n":"", section.name.c_str() );
 		for( auto& t : section.items )
 		{
 			auto r = std::move(t.str());
