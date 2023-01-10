@@ -94,14 +94,7 @@ static bool is_normal_map( path file_path )
 	cache[file_path]=false; if(!file_path.exists()) return false;
 
 	image* header=gx::load_image_header(file_path); if(!header){ printf("failed to load header of %s\n", file_path.wtoa() ); return false; }
-	bool early_exit = header->channels!=3||header->width<8||header->height<8; gx::release_image_header(&header);
-	
-	//if(file_path.name()==L"N_madera_barandal_esc_2_bump.png"||
-	//	file_path.name()==L"N_bark06mi.png")
-	//	printf( "%s = %d\n", file_path.name().wtoa(), bcount );
-
-
-	if(early_exit) return false;
+	bool early_exit = header->channels!=3||header->width<8||header->height<8; gx::release_image_header(&header); if(early_exit) return false;
 
 	// do not force rgb to bump; and use cache
 	image* i = gx::load_image(file_path,true,false,false); if(!i){ printf("failed to load the bump map %s\n", wtoa(file_path) ); return false; }
