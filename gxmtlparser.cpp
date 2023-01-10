@@ -39,7 +39,10 @@ struct mtl_item_t
 		return mtl_dir+tokens.back();
 	}
 	bool is_map_type() const { return b_map_type; }
-	bool make_relative_path(){ ::path p(tokens.back()); if(!p.is_absolute()) return false; tokens.back()=p.is_subdir(mtl_dir)?p.relative(false,mtl_dir).wtoa():p.name().wtoa(); return true; }
+	bool make_canonical_relative_path()
+	{
+		::path p(tokens.back()=path(tokens.back()).to_backslash().canonical().wtoa());
+		if(!p.is_absolute()) return false; tokens.back()=p.is_subdir(mtl_dir)?p.relative(false,mtl_dir).wtoa():p.name().wtoa(); return true; }
 };
 
 mtl_item_t::mtl_item_t( const std::string& _key, const char* first_token ):key(_key)
@@ -91,7 +94,13 @@ static bool is_normal_map( path file_path )
 	cache[file_path]=false; if(!file_path.exists()) return false;
 
 	image* header=gx::load_image_header(file_path); if(!header){ printf("failed to load header of %s\n", file_path.wtoa() ); return false; }
-	bool early_exit = header->channels!=3||header->width<64||header->height<64; gx::release_image_header(&header);
+	bool early_exit = header->channels!=3||header->width<8||header->height<8; gx::release_image_header(&header);
+	
+	//if(file_path.name()==L"N_madera_barandal_esc_2_bump.png"||
+	//	file_path.name()==L"N_bark06mi.png")
+	//	printf( "%s = %d\n", file_path.name().wtoa(), bcount );
+
+
 	if(early_exit) return false;
 
 	// do not force rgb to bump; and use cache
@@ -108,6 +117,7 @@ static bool is_normal_map( path file_path )
 		vec3 n = vec3(c.r,c.g,c.b)/127.5f-1.0f; if(fabs(n.length()-1.0f)>0.3f) continue;	// length around one
 		bcount++;
 	}
+
 
 	gx::release_image(&i);
 	return cache[file_path] = bcount<bcount_thresh ? false : true;
@@ -243,7 +253,7 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 	auto test_normal = [&]( mtl_item_t* t )->bool { path m=t->map(); if(auto it=valid_normals.find(m);it!=valid_normals.end()) return it->second; return valid_normals[m]=is_normal_map(m); };
 	for( auto& section : sections )
 	{
-		auto* n=section.find("norm"); if(n&&!test_normal(n)){ printf( "[%s] %s.%s: %s is not a normal map\n", file_path.name().wtoa(), section.name.c_str(), n->key.c_str(), n->map().name().wtoa() ); n->clear(); n=nullptr; b_dirty=true; }
+		auto* n=section.find("norm"); if(n&&!test_normal(n)){ printf( "[%s] %s: %s is not a normal map\n", file_path.name().wtoa(), section.name.c_str(), n->map().name().wtoa() ); n->clear(); n=nullptr; b_dirty=true; }
 		auto* b=section.find("bump"); if(!n&&b&&test_normal(b)){ n=section.add_norm(b->back()); b_dirty=true; }
 		if(b&&n){ auto it=bton.find(b->map()); if(it==bton.end()) bton[b->map()]=n->map(); }
 	}
@@ -329,7 +339,7 @@ std::vector<mtl_section_t> parse_mtl( path file_path )
 		else
 		{
 			mtl_item_t t(key); for(size_t k=1;k<vs.size();k++) t.tokens.emplace_back(vs[k]);
-			if(t.is_map_type()&&t.make_relative_path()) b_dirty=true;
+			if(t.is_map_type()&&t.make_canonical_relative_path()) b_dirty=true;
 			v.back().items.emplace_back(std::move(t)); // add split tokens
 		}
 	}
