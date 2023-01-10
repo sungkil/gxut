@@ -354,6 +354,10 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	};
 
 	//*********************************
+	// start logging in case that there is no material
+	if(file_path.dir().scan(false,L"mtl").empty()) log_begin(); 
+
+	//*********************************
 	// string buffers
 	char *buff;
 
@@ -421,14 +425,14 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 		}
 		else if(key0=='f')
 		{
+			// create default object/geometry if no geometry is given now
+			if(!g) g = get_or_create_geometry();
+			g->count += 3;
+
 			// counter-clockwise faces
 			uint i0 = get_or_create_vertex(buff);						indices.emplace_back(i0);
 			uint i1 = get_or_create_vertex(buff=obj::next_token(buff));	indices.emplace_back(i1);
 			uint i2 = get_or_create_vertex(buff=obj::next_token(buff)); indices.emplace_back(i2);
-
-			// create default object/geometry if no geometry is given now
-			if(!g) g = get_or_create_geometry();
-			g->count += 3;
 			
 			// process further to read quads
 			buff=obj::next_token(buff);
@@ -461,7 +465,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 				
 				// postprocessing
 				if(!p_mesh->materials.empty()) mat_index = p_mesh->materials.size()>1?1:0; // default material
-				log_begin(); // logging after loading materials
+				log_begin(); // start logging after loading materials
 			}
 		}
 		else if(strcmp(key,"cstype")==0);		// curve or surface type
@@ -522,6 +526,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 
 	// update bounding box
 	if(flush_messages) flush_messages( format("Updating bounds ...\n") );
+
 	p_mesh->update_bound(true);
 
 	// flush the counts
