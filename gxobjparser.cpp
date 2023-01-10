@@ -170,7 +170,7 @@ namespace obj::cache
 		wcscpy(p_mesh->mtl_path,mtl_path.exists()?atow(mtl_name):L"default");
 		
 		// load materials
-		if(mtl_path.exists()&&!load_mtl(mtl_path, p_mesh->materials, true )){ delete p_mesh; return nullptr; }
+		if(mtl_path.exists()&&!mtl::load_mtl(mtl_path, p_mesh->materials, true )){ delete p_mesh; return nullptr; }
 
 		// load counters
 		uint object_count=0;	fgets(buff,8192,fp); sscanf(buff,"object_count = %u\n", &object_count );
@@ -449,14 +449,14 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 		else if(strcmp(key,"usemtl")==0)
 		{
 			g = get_or_create_geometry();
-			g->material_index = mat_index = find_material(p_mesh->materials,trim(buff));
+			g->material_index = mat_index = mtl::find_material(p_mesh->materials,trim(buff));
 		}
 		else if(strcmp(key,"mtllib")==0)
 		{
 			if(!p_mesh->mtl_path[0]) // load material only once
 			{
 				path mtl_path = path(file_path).dir() + atow(trim(buff));
-				if(!load_mtl(mtl_path, p_mesh->materials)){ printf("unable to load material file: %s\n",wtoa(mtl_path)); return nullptr; }
+				if(!mtl::load_mtl(mtl_path, p_mesh->materials)){ printf("unable to load material file: %s\n",wtoa(mtl_path)); return nullptr; }
 				wcscpy( p_mesh->mtl_path, mtl_path.relative(false,path(file_path).dir()) );
 				
 				// postprocessing
@@ -503,7 +503,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	int k=0; for( auto it=mg.begin();it!=mg.end(); k++ )
 	{
 		if(it->count!=0){ it->ID=gid++; it++; continue; }
-		printf( "pruning geometry[%d] %s\n", k, it->name() );
+		printf( "\npruning geometry[%d] %s\n", k, it->name() );
 		it=mg.erase(it);
 	}
 
@@ -541,7 +541,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	// if no materials are present, then create default materials
 	if(p_mesh->materials.empty()) // at least, it's one due to light source material
 	{
-		create_default_material( p_mesh->materials );
+		mtl::create_default_material( p_mesh->materials );
 		for( auto& g: p_mesh->geometries ) g.material_index = 0;
 	}
 
@@ -560,7 +560,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	t.end();
 	if(pLoadingTime) *pLoadingTime += (float) t.delta();
 	printf( " completed in %.2f ms\n", t.delta() );
-	printf( "faces: %s, vertices: %s\n", itoasep(int(p_mesh->face_count())), itoasep(int(p_mesh->vertices.size())) );
+	//printf( "faces: %s, vertices: %s\n", itoasep(int(p_mesh->face_count())), itoasep(int(p_mesh->vertices.size())) );
 
 	return p_mesh;
 }

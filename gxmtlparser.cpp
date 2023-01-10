@@ -5,6 +5,7 @@
 #include <gxut/gxos.h>
 #include <gxut/gxobjparser.h>
 #include <gximage/gximage.h>
+#include <gxut/gxmemory.h> //@@
 
 // common local attributes
 const char* __GX_MTLPARSER_CPP_TIMESTAMP__ = __TIMESTAMP__;
@@ -200,6 +201,108 @@ static path get_normal_path( const path& bump_path, nocase::map<path,path>& bton
 	return L"";
 }
 
+static std::map<uint,std::string> build_crc_lut( std::vector<mtl_section_t>& sections )
+{
+	// scan crc
+	os::timer_t tt;
+	nocase::map<std::string,uint> crc_map; // sorted by path
+	for( auto& section : sections ) for( auto* t: section.maps() )
+	{
+		auto it = crc_map.find(t->back()); if(it!=crc_map.end()){ t->crc = it->second; continue; }
+		t->crc = crc_map[t->back()] = t->map().exists() ? t->map().crc32c() : 0;
+	}
+
+	// invert lookup table for crc-unique maps
+	std::map<uint,std::string> lut;
+	for( auto& [token,crc] : crc_map ) if(auto it=lut.find(crc); it==lut.end()) lut[crc] = token;
+
+	return lut;
+}
+
+static float optimize_textures( path file_path, std::vector<mtl_section_t>& sections )
+{
+	os::timer_t timer;
+
+	// replace redundant map path
+	auto crc_lut = build_crc_lut( sections );
+	for( auto& section : sections ) for( auto* t : section.maps() )
+	{
+		if(!t->map().exists()) continue;
+		auto &src=t->back(), dst=crc_lut[t->crc]; if(_stricmp(src.c_str(),dst.c_str())==0) continue;
+		printf( "[%s] replace: %s << %s\n", file_path.name().wtoa(), src.c_str(), dst.c_str() );
+		src = dst;
+		b_dirty = true;
+	}
+
+	// normal map tests
+	// 1. clear invalid normal maps
+	// 2. add norm entry, when bump-as-normal maps are found
+	// 3. find existing bump-to-normal mapping
+	nocase::map<path,bool> valid_normals;
+	nocase::map<path,path> bton;
+	auto test_normal = [&]( mtl_item_t* t )->bool { path m=t->map(); if(auto it=valid_normals.find(m);it!=valid_normals.end()) return it->second; return valid_normals[m]=is_normal_map(m); };
+	for( auto& section : sections )
+	{
+		auto* n=section.find("norm"); if(n&&!test_normal(n)){ printf( "[%s] %s.%s: %s is not a normal map\n", file_path.name().wtoa(), section.name.c_str(), n->key.c_str(), n->map().name().wtoa() ); n->clear(); n=nullptr; b_dirty=true; }
+		auto* b=section.find("bump"); if(!n&&b&&test_normal(b)){ n=section.add_norm(b->back()); b_dirty=true; }
+		if(b&&n){ auto it=bton.find(b->map()); if(it==bton.end()) bton[b->map()]=n->map(); }
+	}
+
+	// find valid existing images
+	nocase::set<path> used_images;
+	for( auto& section : sections ) for( auto* t : section.maps() )
+	{
+		path m=t->map(); if(m.exists()){ used_images.insert(m); continue; }
+		printf( "[%s] %s.%s: %s not exists\n", file_path.name().wtoa(), section.name.c_str(), t->key.c_str(), m.name().wtoa() );
+		t->clear(); b_dirty=true;
+	}
+
+	// auto-generate normal maps
+	for( auto& m: sections )
+	{
+		auto *n=m.find("norm"), *b=m.find("bump"); if(n||!b) continue;
+		path norm_path = get_normal_path( b->map(), bton, used_images ); if(norm_path.empty()) continue;
+		if(!norm_path.exists()&&!generate_normal_map( norm_path, b->map(), file_path )) continue;
+		n = m.add_norm( norm_path.relative(false,mtl_dir).wtoa() ); if(!n) continue;
+		
+		used_images.insert(norm_path);
+		bton[b->map()] = norm_path;
+		b_dirty=true;
+	}
+
+	// delete non-used images
+	for( auto& f : mtl_dir.scan( false, L"jpg;png" ) )
+	{
+		if(used_images.find(f)!=used_images.end()||!f.delete_file(true)) continue;
+		printf( "[%s] deleting %s\n", file_path.name(true).wtoa(), f.name().wtoa() );
+	}
+
+	return float(timer.end());
+}
+
+static bool save_mtl( path file_path, const std::vector<mtl_section_t>& sections, float opt_time )
+{
+	auto mfiletime0 = file_path.mfiletime();
+	FILE* fp = _wfopen( file_path, L"w" ); if(!fp){ printf("%s(): failed to open %s\n", __func__, file_path.to_slash().wtoa() ); return false; }
+	printf( "[%s] optimization ... ", file_path.name().wtoa() );
+
+	for( size_t k=0, kn=sections.size(); k<kn; k++ )
+	{
+		auto& section = sections[k];
+		if(!section.name.empty()) fprintf(fp,"\nnewmtl %s\n", section.name.c_str() );
+		for( auto& t : section.items )
+		{
+			auto r = std::move(t.str());
+			if(!r.empty()) fprintf( fp, "%s\n", r.c_str() );
+		}
+	}
+	fclose(fp);
+	file_path.set_filetime( nullptr, nullptr, &mfiletime0 ); // keep time stamp
+	printf( "completed in %.2f ms\n", opt_time );
+
+	return true;
+}
+
 std::vector<mtl_section_t> parse_mtl( path file_path )
 {
 	std::vector<mtl_section_t> v; v.reserve(1024);
@@ -226,6 +329,7 @@ std::vector<mtl_section_t> parse_mtl( path file_path )
 		else
 		{
 			mtl_item_t t(key); for(size_t k=1;k<vs.size();k++) t.tokens.emplace_back(vs[k]);
+			if(t.is_map_type()&&t.make_relative_path()) b_dirty=true;
 			v.back().items.emplace_back(std::move(t)); // add split tokens
 		}
 	}
@@ -241,33 +345,8 @@ std::vector<mtl_section_t> parse_mtl( path file_path )
 	return v;
 }
 
-static bool save_mtl( path file_path, const std::vector<mtl_section_t>& sections, float opt_time )
-{
-	auto mfiletime0 = file_path.mfiletime();
-	FILE* fp = _wfopen( file_path, L"w" ); if(!fp){ printf("%s(): failed to open %s\n", __func__, file_path.to_slash().wtoa() ); return false; }
-	printf( "[%s] optimization ... ", file_path.name().wtoa() );
-
-	for( size_t k=0, kn=sections.size(); k<kn; k++ )
-	{
-		auto& section = sections[k];
-		if(!section.name.empty()) fprintf(fp,"\nnewmtl %s\n", section.name.c_str() );
-		for( auto& t : section.items )
-		{
-			auto r = std::move(t.str());
-			if(!r.empty()) fprintf( fp, "%s\n", r.c_str() );
-		}
-	}
-	fclose(fp);
-	file_path.set_filetime( nullptr, nullptr, &mfiletime0 ); // keep time stamp
-	printf( "completed in %.2f ms\n", opt_time );
-
-	return true;
-}
-
-float optimize_textures( path file_path, std::vector<mtl_section_t>& sections );
-
 //*************************************
-namespace obj {
+namespace mtl {
 //*************************************
 
 uint find_material( std::vector<material_impl>& materials, const char* name )
@@ -408,87 +487,5 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 }
 
 //*************************************
-} // namespace obj
+} // namespace mtl
 //*************************************
-
-static float optimize_textures( path file_path, std::vector<mtl_section_t>& sections )
-{
-	os::timer_t timer;
-	path dir = file_path.dir();
-
-	// preliminary cleanup
-	for( auto& section : sections )
-	for( auto* t: section.maps() )
-		if(t->make_relative_path()) b_dirty=true;
-
-	// scan crc
-	nocase::map<std::string,uint> crc_map; // sorted by path
-	for( auto& section : sections )
-	for( auto* t: section.maps() )
-	{
-		path m = t->map();
-		auto it = crc_map.find(t->back()); if(it!=crc_map.end()){ t->crc = it->second; continue; }
-		t->crc = crc_map[t->back()] = m.exists() ? m.crc32c() : 0;
-	}
-
-	// invert lookup table for crc-unique maps
-	std::map<uint,std::string> crc_lut;
-	for( auto& [token,crc] : crc_map ) 
-		if(auto it=crc_lut.find(crc); it==crc_lut.end()) crc_lut[crc] = token;
-
-	// replace redundant map path
-	for( auto& section : sections )
-	for( auto* t : section.maps() )
-	{
-		if(!t->map().exists()) continue;
-		auto &src = t->back(), dst = crc_lut[t->crc]; if(_stricmp(src.c_str(),dst.c_str())==0) continue;
-		printf( "[%s] replace: %s << %s\n", file_path.name().wtoa(), src.c_str(), dst.c_str() );
-		src = dst;
-		b_dirty = true;
-	}
-
-	// normal map tests
-	// 1. clear invalid normal maps
-	// 2. add norm entry, when bump-as-normal maps are found
-	// 3. find existing bump-to-normal mapping
-	// 4. find valid existing images
-	nocase::map<path,bool> valid_normals;
-	nocase::map<path,path> bton;
-	nocase::set<path> used_images;
-	auto test_normal = [&]( mtl_item_t* t )->bool { path m=t->map(); if(auto it=valid_normals.find(m);it!=valid_normals.end()) return it->second; return valid_normals[m]=is_normal_map(m); };
-	for( auto& section : sections )
-	{
-		auto* n=section.find("norm"); if(n&&!test_normal(n)){ printf( "[%s] %s.%s: %s is not a normal map\n", file_path.name().wtoa(), section.name.c_str(), n->key.c_str(), n->map().name().wtoa() ); n->clear(); n=nullptr; b_dirty=true; }
-		auto* b=section.find("bump"); if(!n&&b&&test_normal(b)){ n=section.add_norm(b->back()); b_dirty=true; }
-		if(b&&n){ auto it=bton.find(b->map()); if(it==bton.end()) bton[b->map()]=n->map(); }
-		
-		for( auto* t : section.maps() )
-		{
-			path m=t->map(); if(m.exists()){ used_images.insert(m); continue; }
-			printf( "[%s] %s.%s: %s not exists\n", file_path.name().wtoa(), section.name.c_str(), t->key.c_str(), m.name().wtoa() );
-			t->clear(); b_dirty=true;
-		}
-	}
-
-	// auto-generate normal maps
-	for( auto& m: sections )
-	{
-		auto *n=m.find("norm"), *b=m.find("bump"); if(n||!b) continue;
-		path norm_path = get_normal_path( b->map(), bton, used_images ); if(norm_path.empty()) continue;
-		if(!norm_path.exists()&&!generate_normal_map( norm_path, b->map(), file_path )) continue;
-		n = m.add_norm( norm_path.relative(false,dir).wtoa() ); if(!n) continue;
-		
-		used_images.insert(norm_path);
-		bton[b->map()]=norm_path;
-		b_dirty=true;
-	}
-
-	// delete non-used images
-	for( auto& f : dir.scan( false, L"jpg;png" ) )
-	{
-		if(used_images.find(f)!=used_images.end()||!f.delete_file(true)) continue;
-		printf( "[%s] deleting %s\n", file_path.name(true).wtoa(), f.name().wtoa() );
-	}
-
-	return float(timer.end());
-}

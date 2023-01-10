@@ -8,8 +8,10 @@ namespace obj
 {
 	// mesh loader (with material)
 	mesh* load( path file_path, float* pLoadingTime=nullptr, void(*flush_messages)(const char*)=nullptr );
+}
 
-	// material loader
+namespace mtl
+{
 	void create_default_material( std::vector<material_impl>& materials );
 	bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_cache=false );
 	uint find_material( std::vector<material_impl>& materials, const char* name );
