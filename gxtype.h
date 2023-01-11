@@ -131,8 +131,9 @@ template <class T=void> struct sized_ptr_t
 template <class T> T*& safe_free( T*& p ){if(p) free(p); return p=nullptr; }
 template <class T> T*& safe_delete( T*& p ){if(p) delete p; return p=nullptr; }
 template <class T> T*& safe_release( T*& p ){if(p) p->Release(); return p=nullptr; }
-// nocase base template
+// nocase/logical base template
 namespace nocase { template <class T> struct less {}; template <class T> struct equal_to {}; template <class T> struct hash {}; };
+namespace logical { template <class T> struct less {}; };
 // user types
 #define __default_types(n)	static const int N=n; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+N; } constexpr size_t size() const { return N; }
 #define __default_index(T)	__forceinline T& operator[]( ptrdiff_t i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( ptrdiff_t i ) const { return ((T*)this)[i]; }

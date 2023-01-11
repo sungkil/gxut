@@ -24,7 +24,12 @@
 #include <io.h>			// low-level io functions
 #include <time.h>
 #include <deque>
-#include <shellapi.h>	// shell functions
+#if __has_include(<shellapi.h>)
+	#include <shellapi.h>
+#endif
+#if __has_include(<shlwapi.h>)
+	#include <shlwapi.h>
+#endif
 
 //***********************************************
 // Win32-like filetime utilities
@@ -648,10 +653,26 @@ namespace std
 
 namespace nocase
 {
-	template <> struct less<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())<0;}};
+	template <> struct less<path>{ bool operator()(const path& a,const path& b)const{return a<b;}};
 	template <> struct equal_to<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())==0;}};
 	template <> struct hash<path>{ size_t operator()(const path& p)const{ return std::hash<std::wstring>()(p.tolower().c_str());}};
 }
+
+#ifdef _INC_SHLWAPI // explorer-style logical comparison
+namespace logical
+{
+	template <> struct less<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b) const { return StrCmpLogicalW(a.c_str(),b.c_str())<0;} };
+	template <> struct less<std::string>{ bool operator()(const std::string& a,const std::string& b) const
+	{
+		int l=MultiByteToWideChar(0,0,a.c_str(),-1,0,0); static wchar_t* c=nullptr; c=(wchar_t*)realloc(c,sizeof(wchar_t)*l); MultiByteToWideChar(0,0,a.c_str(),-1,c,l);
+			l=MultiByteToWideChar(0,0,b.c_str(),-1,0,0); static wchar_t* d=nullptr; d=(wchar_t*)realloc(d,sizeof(wchar_t)*l); MultiByteToWideChar(0,0,b.c_str(),-1,d,l);
+		return StrCmpLogicalW(c,d)<0; }
+	};
+
+	template <class T> using			set = std::set<T,less<T>>;
+	template <class T, class V> using	map = std::map<T,V,less<T>>;
+}
+#endif
 
 //***********************************************
 // compiler utility
