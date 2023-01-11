@@ -300,15 +300,16 @@ static bool save_mtl( path file_path, const std::vector<mtl_section_t>& sections
 	FILE* fp = _wfopen( file_path, L"w" ); if(!fp){ printf("%s(): failed to open %s\n", __func__, file_path.to_slash().wtoa() ); return false; }
 	printf( "[%s] optimization ... ", file_path.name().wtoa() );
 
-	for( size_t k=0, kn=sections.size(); k<kn; k++ )
+	for( int k=0, kn=int(sections.size()); k<kn; k++ )
 	{
 		auto& section = sections[k];
-		if(!section.name.empty()) fprintf(fp,"\nnewmtl %s\n", section.name.c_str() );
+		if(!section.name.empty()) fprintf(fp,"newmtl %s\n", section.name.c_str() );
 		for( auto& t : section.items )
 		{
 			auto r = std::move(t.str());
 			if(!r.empty()) fprintf( fp, "%s\n", r.c_str() );
 		}
+		if(k==0||(!section.name.empty()&&k<kn-1)) fprintf(fp,"\n");
 	}
 	fclose(fp);
 	file_path.set_filetime( nullptr, nullptr, &mfiletime0 ); // keep time stamp
@@ -331,13 +332,21 @@ std::vector<mtl_section_t> parse_mtl( path file_path )
 	auto is_empty_line = []( const char* s )->bool { char c0=s[0]; if(!c0||c0=='#'||strncmp(s,"Wavefront",9)==0) return true; char c1=s[1]; return !c1; };
 	for( uint k=0; fgets(buff,4096,fp)&&k<65536; k++ )
 	{
-		const char* b = rtrim(buff);
+		const char* b = rtrim(buff); if(!b||!*b) continue;
+		if(is_empty_line(b)) // add comments
+		{
+			if(*b)
+			{
+				if(!v.back().name.empty()) v.emplace_back(mtl_section_t()); 
+				v.back().items.emplace_back(mtl_item_t("",b));
+			}
+			continue;
+		}
 
-		if(is_empty_line(b)){ if(*b) v.back().items.emplace_back(mtl_item_t("",b)); continue; } // add blank lines
 		std::vector<std::string> vs = std::move(explode(b));
 		if(vs.size()<2){ b_dirty=true; continue; } // cull no-value lines
 		const std::string& key = vs[0];
-
+		
 		if(_stricmp(key.c_str(),"newmtl")==0) v.emplace_back(mtl_section_t(vs[1]));
 		else
 		{
