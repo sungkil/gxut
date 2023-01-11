@@ -1,5 +1,6 @@
 #include <gxut/gxmath.h>
 #include <gxut/gxstring.h>
+#include <shlwapi.h>
 #include <gxut/gxfilesystem.h>
 #include <gxut/gxos.h>
 #include <gxut/gxobjparser.h>
@@ -283,7 +284,7 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 		if(used_images.find(f)!=used_images.end()) continue;
 		if(dups.find(f)==dups.end()) // do not delete other non-duplicate non-used images
 		{
-			printf( "[%s] potential redundancy: %s\n", file_path.name(true).wtoa(), f.name().wtoa() );
+			if(f.name(false)!=L"index") printf( "[%s] potential redundancy: %s\n", file_path.name(true).wtoa(), f.name().wtoa() );
 			continue;
 		}
 		if(!f.delete_file(true)) continue;
@@ -337,8 +338,7 @@ std::vector<mtl_section_t> parse_mtl( path file_path )
 		if(vs.size()<2){ b_dirty=true; continue; } // cull no-value lines
 		const std::string& key = vs[0];
 
-		if(_stricmp(vs[0].c_str(),"illum")==0){ b_dirty=true; continue; } // pre-skip redundancy
-		else if(_stricmp(key.c_str(),"newmtl")==0) v.emplace_back(mtl_section_t(vs[1]));
+		if(_stricmp(key.c_str(),"newmtl")==0) v.emplace_back(mtl_section_t(vs[1]));
 		else
 		{
 			mtl_item_t t(key); for(size_t k=1;k<vs.size();k++) t.tokens.emplace_back(vs[k]);
@@ -434,7 +434,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 		{
 			std::string key = tolower(t.key.c_str());
 
-			if(t.empty()) continue;
+			if(key.empty()||t.empty()) continue;
 			else if(key=="newmtl"); // already processed
 			else if(key=="kd")
 			{
@@ -484,7 +484,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 			// unrecognized keys
 			else if( passtags.find(key)==passtags.end() )
 			{
-				printf("[%s] unrecognized key: %s\n",file_path.name().wtoa(),key.c_str()); return false;
+				printf("[%s] %s: unrecognized key: '%s'\n",file_path.name().wtoa(),section.name.c_str(),key.c_str()); return false;
 			}
 		}
 

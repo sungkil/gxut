@@ -27,9 +27,6 @@
 #if __has_include(<shellapi.h>)
 	#include <shellapi.h>
 #endif
-#if __has_include(<shlwapi.h>)
-	#include <shlwapi.h>
-#endif
 
 //***********************************************
 // Win32-like filetime utilities
