@@ -48,9 +48,9 @@ nrm_vector_t	nrm;
 vtx_vector_t*	vertices = nullptr;
 
 __forceinline int rm_newline( char* str, int len ){ if(str[len-1]=='\n')str[--len]='\0'; if(str[len-1]=='\r')str[--len]='\0'; return len; } // CR never follows NL
-__forceinline char* next_token( char* buff ){while(*buff!=' '&&*buff)buff++;if(!*buff)return nullptr;*(buff++)=0;while(*buff==' ')buff++;return buff; }
 __forceinline char* tab_to_space( char* buff, int len ){ for(int j=0;j<len;j++,buff++)if(*buff=='\t')*buff=' '; return buff; }
 __forceinline char* rtrim( char* buff, int& len ){ int j;for(j=len-1;j>=0;j--)if(buff[j]!=' ')break;buff[len=j+1]='\0';return buff; }
+__forceinline char* next_token( char* buff ){while(*buff!=' '&&*buff)buff++;if(!*buff)return nullptr;*(buff++)=0;while(*buff==' ')buff++;return buff; }
 __forceinline char tolower( char c ){ uchar d=static_cast<uchar>(c-'A');return d<26?'a'+d:c;}
 __forceinline path decompress( const path& file_path );
 __forceinline bool is_extension_supported( path file_path )
@@ -58,6 +58,27 @@ __forceinline bool is_extension_supported( path file_path )
 	if(_wcsicmp(file_path.ext(),L"obj")==0) return true;
 	auto am = get_archive_extensions(); if(am.find(file_path.ext().c_str())!=am.end()) return true;
 	return false;
+}
+
+__forceinline int atoi( char*& str )
+{
+	while(*str==' ')str++; // skip leading white spaces
+	bool neg=false; if(*str=='-'){neg=true;str++;} else if(*str=='+')str++; // sign
+	int i=0;for(;;str++){uint d=static_cast<uint>(*str)-'0';if(d>9)break;i=i*10+d;} // integers
+	return neg?-i:i;
+}
+
+__forceinline float atof( char*& str )
+{
+	while(*str==' ')str++; // skip leading white spaces
+	bool neg=false; if(*str=='-'){neg=true;str++;} else if(*str=='+')str++; // sign
+	int i=0;for(;;str++){uint d=static_cast<uint>(*str)-'0';if(d>9)break;i=i*10+d;} double v=double(i); // integers
+	if(*str=='.'){double f=0.1;str++;for(;;str++,f*=0.1){uint d=static_cast<uint>(*str)-'0';if(d>9)break;v+=d*f;}} // fractions
+	if(*str!='e'&&*str!='E') return float(neg?-v:v); // early return for non-exponent float
+	bool eng=false; str++; if(*str=='-'){eng=true;str++;} else if(*str=='+') str++; // exponent sign
+	int e=0;for(;;str++){uint d=static_cast<uint>(*str)-'0';if(d>9)break;e=e*10+d;} if(e>308)e=308; // exponents
+	double scale=1;while(e>=8){scale*=1E8;e-=8;} while(e>0){scale*=10.0;e--;} v=eng?v/scale:v*scale; // apply exponents
+	return float(neg?-v:v);
 }
 
 //*************************************
@@ -202,7 +223,7 @@ namespace obj::cache
 			vec3 &m=g.box.m, &M=g.box.M;
 			fgets(buff,8192,fp); sscanf(buff,"g[%d] %d %d %d %d %f %f %f %f %f %f\n", &g.ID, &g.object_index, &g.material_index, &g.first_index, &g.count, &m[0],&m[1],&m[2],&M[0],&M[1],&M[2] );
 			p_mesh->geometries.emplace_back(g);
-			p_mesh->objects[g.object_index].children.push_back(g.ID);
+			p_mesh->objects[g.object_index].children.emplace_back(g.ID);
 		}
 
 		// meaningless empty line for sepration
@@ -250,9 +271,9 @@ path obj::decompress( const path& file_path )
 __forceinline uint get_or_create_vertex( char* str )
 {
 	ivec3 key;
-	key.x=fast::atoi(str); while(*str!='/'&&*str) str++;str++;
-	key.y=fast::atoi(str); while(*str!='/'&&*str) str++;str++;
-	key.z=fast::atoi(str);
+	key.x=obj::atoi(str); while(*str!='/'&&*str) str++;str++;
+	key.y=obj::atoi(str); while(*str!='/'&&*str) str++;str++;
+	key.z=obj::atoi(str);
 
 	if(key.x<0) key.x += int(obj::pos.size());
 	if(key.y<0) key.y += int(obj::tex.size());
@@ -268,9 +289,40 @@ __forceinline uint get_or_create_vertex( char* str )
 	return vertex_index;
 }
 
+static std::set<std::string> bypass_tags =
+{
+	"cstype",		// curve or surface type
+	"deg",			// skip degree
+	"bmat",			// basis matrix
+	"step",			// step size
+	"p",			// skip point elements
+	"l",			// skip line elements
+	"curv",			// skip curve elements
+	"curv2",		// skip 2D curve elements
+	"surf",			// skip surface elements
+	"s",			// skip smoothing
+	"con",			// skip connectivity
+	"parm",			// Free-form curve/surface body statements
+	"trim",			// Free-form curve/surface body statements
+	"trim",			// Free-form curve/surface body statements
+	"hole",			// Free-form curve/surface body statements
+	"scrv",			// Free-form curve/surface body statements
+	"sp",			// Free-form curve/surface body statements
+	"end",			// Free-form curve/surface body statements
+	"bevel",		// bevel interpolation
+	"c_interp",		// color interpolation
+	"d_interp",		// dissolve interpolation
+	"lod",			// level of detail
+	"shadow_obj",	// shadow casting
+	"trace_obj",	// ray tracing
+	"ctech",		// curve approximation technique
+	"stech",		// surface approximation technique
+};
+
 //*************************************
 namespace obj {
 //*************************************
+
 mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const char*) )
 {
 	os::timer_t t; t.begin();
@@ -303,15 +355,19 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 		else{ wprintf( L" failed in %.0f ms\n", t.end() ); return nullptr; }
 	}
 
-	t.begin();
-	bool b_log_begin = true;
-	auto log_begin = [&](){ if(!b_log_begin) return; b_log_begin=false; wprintf( L"Loading %s ", file_path.name().c_str() ); };
-
 	//*********************************
 	// 2. open file
-	path target_file_path = dec_path.exists()?dec_path:file_path;
+	path target_file_path = b_use_archive&&dec_path.exists()?dec_path:file_path;
 	size_t target_count = max(1ull<<16,size_t(target_file_path.file_size()*0.095)); // estimate vertex/face count
 	size_t flush_count = target_count/1000, dot_count = target_count/15;
+
+	t.begin();
+	bool b_log_begin = true;
+	auto log_begin = [&]()
+	{
+		if(!b_log_begin) return; b_log_begin=false;
+		wprintf( L"Loading %s ", target_file_path.name().c_str() );
+	};
 
 	FILE* fp = _wfopen( target_file_path, L"rb" ); if(fp==nullptr){ wprintf(L"Unable to open %s", file_path.c_str()); return nullptr; }
 	setvbuf( fp, nullptr, _IOFBF, 1<<26 ); // set the buffer size of iobuf to 64M
@@ -403,23 +459,19 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 		//*****************************
 		// tokenize key and next buff
 		char key0=*key;
-		if(key0!='v'&&key0!='f')
-		{
-			obj::rtrim(key,len); // rtrim only for rare attributes
-			if(len==0) continue; // early exit
-		}
-		obj::tab_to_space(key,len);
+		if(key0!='v'&&key0!='f'){ obj::rtrim(key,len); if(len==0) continue; } // rtrim only for rare attributes and early exit
+		obj::tab_to_space(key+1,len-1);
 		buff=obj::next_token(key+1);
 
 		//*****************************
 		if(key0=='v')
 		{
-			float x=float(fast::atof(buff));
-			float y=float(fast::atof(buff=obj::next_token(buff)));
+			float x=obj::atof(buff);
+			float y=obj::atof(buff=obj::next_token(buff));
 			char k1=key[1];
 
-			if(k1==0)		 pos.emplace_back(x,y,float(fast::atof(obj::next_token(buff))));
-			else if(k1=='n') nrm.emplace_back(x,y,float(fast::atof(obj::next_token(buff))));
+			if(k1==0)		 pos.emplace_back(x,y,obj::atof(buff=obj::next_token(buff)));
+			else if(k1=='n') nrm.emplace_back(x,y,obj::atof(buff=obj::next_token(buff)));
 			else if(k1=='t') tex.emplace_back(x,y);
 			//else if(k1=='p'){} // vp: parameter space vertices
 		}
@@ -431,7 +483,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 
 			// counter-clockwise faces
 			uint i0 = get_or_create_vertex(buff);						indices.emplace_back(i0);
-			uint i1 = get_or_create_vertex(buff=obj::next_token(buff));	indices.emplace_back(i1);
+			uint i1 = get_or_create_vertex(buff=obj::next_token(buff)); indices.emplace_back(i1);
 			uint i2 = get_or_create_vertex(buff=obj::next_token(buff)); indices.emplace_back(i2);
 			
 			// process further to read quads
@@ -439,7 +491,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 			if(buff&&*buff&&*buff!=' ')
 			{
 				uint i3 = get_or_create_vertex(buff);
-				indices.push_back(i0); indices.push_back(i2); indices.push_back(i3);
+				indices.emplace_back(i0); indices.emplace_back(i2); indices.emplace_back(i3);
 				g->count += 3;
 			}
 		}
@@ -468,33 +520,11 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 				log_begin(); // start logging after loading materials
 			}
 		}
-		else if(strcmp(key,"cstype")==0);		// curve or surface type
-		else if(strcmp(key,"deg")==0);			// skip degree
-		else if(strcmp(key,"bmat")==0);			// basis matrix
-		else if(strcmp(key,"step")==0);			// step size
-		else if(strcmp(key,"p")==0);			// skip point elements
-		else if(strcmp(key,"l")==0);			// skip line elements
-		else if(strcmp(key,"curv")==0);			// skip curve elements
-		else if(strcmp(key,"curv2")==0);		// skip 2D curve elements
-		else if(strcmp(key,"surf")==0);			// skip surface elements
-		else if(strcmp(key,"s")==0);			// skip smoothing
-		else if(strcmp(key,"con")==0);			// skip connectivity
-		else if(strcmp(key,"parm")==0);			// Free-form curve/surface body statements
-		else if(strcmp(key,"trim")==0);			// Free-form curve/surface body statements
-		else if(strcmp(key,"trim")==0);			// Free-form curve/surface body statements
-		else if(strcmp(key,"hole")==0);			// Free-form curve/surface body statements
-		else if(strcmp(key,"scrv")==0);			// Free-form curve/surface body statements
-		else if(strcmp(key,"sp")==0);			// Free-form curve/surface body statements
-		else if(strcmp(key,"end")==0);			// Free-form curve/surface body statements
-		else if(strcmp(key,"bevel")==0);		// bevel interpolation
-		else if(strcmp(key,"c_interp")==0);		// color interpolation
-		else if(strcmp(key,"d_interp")==0);		// dissolve interpolation
-		else if(strcmp(key,"lod")==0);			// level of detail
-		else if(strcmp(key,"shadow_obj")==0);	// shadow casting
-		else if(strcmp(key,"trace_obj")==0);	// ray tracing
-		else if(strcmp(key,"ctech")==0);		// curve approximation technique
-		else if(strcmp(key,"stech")==0);		// surface approximation technique
-		else { printf( "\nobj::%s(): '%s' at line %d - unrecognized command\n", __func__, key, k ); fclose(fp); return nullptr; }
+		else if(bypass_tags.find(key)==bypass_tags.end())
+		{
+			printf( "\nobj::%s(): '%s' at line %d - unrecognized command\n", __func__, key, k );
+			fclose(fp); return nullptr;
+		}
 
 		// flush window messages
 		if(k%dot_count==0) printf(".");
@@ -513,7 +543,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 
 	// update child geometries once again after removing empty geometries
 	for( auto& obj : p_mesh->objects )	obj.children.clear();
-	for( auto& g : p_mesh->geometries )	p_mesh->objects[g.object_index].children.push_back(g.ID);
+	for( auto& g : p_mesh->geometries )	p_mesh->objects[g.object_index].children.emplace_back(g.ID);
 
 	// clear all temporary large-memory buffers
 	obj::pos.clear();	obj::pos.shrink_to_fit();
@@ -530,7 +560,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	p_mesh->update_bound(true);
 
 	// flush the counts
-	if(flush_messages) flush_messages( format("%s/%s objects/geometries loaded in %.0fms\n", itoasep(int(p_mesh->objects.size())), itoasep(int(p_mesh->geometries.size())), t.end()) );
+	if(flush_messages) flush_messages( format("%s/%s objects/geometries loaded\n", itoasep(int(p_mesh->objects.size())), itoasep(int(p_mesh->geometries.size()))) );
 
 	// scale vertices by 1000 times for meter-unit scenes
 	if(p_mesh->box.radius()<100.0f)
