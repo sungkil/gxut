@@ -233,13 +233,13 @@ __noinline void md5::update( const void* data, size_t size )
 #ifdef __GX_FILESYSTEM_H__
 __noinline uint path::crc32c() const
 {
-	{ mmap<char> f(data); char* p=f.map(); if(p){ uint c=::crc32c(p,f.size ); f.unmap(p); return c; } } // try mmap
+	{ mmap<char> f(_data); char* p=f.map(); if(p){ uint c=::crc32c(p,f.size ); f.unmap(p); return c; } } // try mmap
 	auto p=read_file<void>(); if(!p.ptr) return 0; uint c=::crc32c(p); if(p.ptr) free(p.ptr); return c; // fallback to regular fread
 }
 
 __noinline uint4 path::md5() const
 {
-	{ mmap<char> f(data); char* p=f.map(); if(p){ ::md5 c(p); f.unmap(p); return c.digest; } } // try mmap
+	{ mmap<char> f(_data); char* p=f.map(); if(p){ ::md5 c(p); f.unmap(p); return c.digest; } } // try mmap
 	auto p=read_file<void>(); if(!p.ptr) return ::md5(nullptr,0); ::md5 c(p); if(p.ptr) free(p.ptr); return c.digest; // fallback to regular fread
 }
 #endif // __GX_FILESYSTEM_H__
