@@ -28,7 +28,7 @@
 namespace gx { namespace inet {
 //***********************************************
 
-inline bool is_online(){ DWORD s; return InternetGetConnectedState(&s,0)&&s!=INTERNET_CONNECTION_OFFLINE; }
+inline bool is_online(){ static int status=-1; if(status<0){ DWORD s; status=InternetGetConnectedState(&s,0)&&s!=INTERNET_CONNECTION_OFFLINE?1:0; } return status>0; }
 inline bool is_offline(){ return !is_online(); }
 
 struct file_t
@@ -65,8 +65,12 @@ __noinline bool file_t::open( HINTERNET session, const wchar_t* url )
 {
 	if(!session){ fprintf( stdout, "%s(%s): session==nullptr", __func__, wtoa(url) ); return false; }
 
-	static const DWORD flags = INTERNET_FLAG_TRANSFER_BINARY|INTERNET_FLAG_RELOAD|INTERNET_FLAG_NO_CACHE_WRITE|INTERNET_FLAG_EXISTING_CONNECT; // INTERNET_FLAG_PRAGMA_NOCACHE
-	release(); hfile=InternetOpenUrlW( session, url, 0, 0, flags, 0); if(!hfile){ release(); return false; }
+	wchar_t canonical_url[4096]; DWORD dwSize=4096;
+	InternetCanonicalizeUrlW( url, canonical_url, &dwSize, ICU_BROWSER_MODE );
+
+	static const DWORD flags = INTERNET_FLAG_TRANSFER_BINARY|INTERNET_FLAG_RELOAD|INTERNET_FLAG_NO_CACHE_WRITE; // INTERNET_FLAG_PRAGMA_NOCACHE
+	release(); hfile=InternetOpenUrlW( session, canonical_url, 0, 0, flags, 0); if(!hfile){ release(); return false; }
+	
 	// DWORD status, dw_size=sizeof(status); if(!HttpQueryInfoW(hfile,HTTP_QUERY_STATUS_CODE|HTTP_QUERY_FLAG_NUMBER,&status,&dw_size,NULL)||status!=HTTP_STATUS_OK){ fprintf( stdout, "%s(%s): https status != HTTP_STATUS_OK\n", __func__, wtoa(url) ); release(); return false; }
 	SYSTEMTIME msystemtime={}; DWORD dw_size=sizeof(msystemtime); if(!HttpQueryInfoW(hfile,HTTP_QUERY_LAST_MODIFIED|HTTP_QUERY_FLAG_SYSTEMTIME,&msystemtime,&dw_size,NULL)){ release(); return false; }
 	msystemtime.wMilliseconds=0; // discard ms; HTTP_QUERY_LAST_MODIFIED returns varying seconds
