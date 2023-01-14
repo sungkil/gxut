@@ -142,24 +142,28 @@ namespace gl {
 	}
 
 	//***********************************************
-	struct GLObject
+	struct Object
 	{
 		const GLuint	ID;
-		const char		name[256];
 		const GLenum	target;
-		const GLenum	target_binding;
-
-		GLObject( GLuint id, const char* _name, GLenum _target ):ID(id),name(""),target(_target),target_binding(gxGetTargetBinding(_target)){ size_t l=strlen(_name),c=sizeof(name); strncpy((char*)name,_name,l<c?l:c-1);((char*)name)[l]=0; }
-		virtual ~GLObject(){}
-		virtual const char* get_name() const { return name; }
-		__forceinline GLuint binding( GLenum target1=0 ){ return target1==0?gxGetIntegerv(target_binding):gxGetIntegerv(gxGetTargetBinding(target1)); }
+				
+		Object( GLuint id, const char* name, GLenum _target ):ID(id),_name(""),target(_target),_target_binding(gxGetTargetBinding(_target)){ size_t l=strlen(name),c=sizeof(_name); strncpy((char*)_name,name,l<c?l:c-1);((char*)_name)[l]=0; }
+		virtual ~Object(){}
+		virtual const char* name() const { return _name; }
+		__forceinline GLuint binding( GLenum _target=0 ){ return _target==0?gxGetIntegerv(_target_binding):gxGetIntegerv(gxGetTargetBinding(_target)); }
+		template <class T> T& metadata( uint index ){ return reinterpret_cast<T&>(_metadata[index]); } // typed accessor to metadata
+	
+	protected:
+		const char		_name[256];
+		const GLenum	_target_binding;
+		uint			_metadata[16]={}; // 64 bytes reserved for user-defined gxfx attributes
 	};
 
 	//***********************************************
-	struct Query : public GLObject
+	struct Query : public Object
 	{
 		GLuint64 result;
-		Query( GLuint ID, const char* name, GLenum target ):GLObject(ID,name,target){}
+		Query( GLuint ID, const char* name, GLenum target ):Object(ID,name,target){}
 		~Query() override { GLuint id=ID; glDeleteQueries(1,&id); }
 		bool	is_available(){ GLint available; glGetQueryObjectiv(ID,GL_QUERY_RESULT_AVAILABLE, &available); return available!=0; }
 		void	finish(){ glGetQueryObjectui64v(ID,GL_QUERY_RESULT,&result); } // use GL_QUERY_RESULT_NO_WAIT for async query download
@@ -175,41 +179,43 @@ namespace gl {
 
 	//***********************************************
 #ifdef __GX_OS_TIMER__
-	struct timer_t : public GLObject
+	struct timer_t : public Object
 	{
-		const GLuint	ID1=0;
 		union { double2 result; struct { double x, y; }; };	// Async OpenGL Timestamp: (begin,end)
-		os::timer_t&	qpc;	// synchronous QueryPerformance CPU counter: reference to external or internal counter
-		os::timer_t		qpc0;	// synchronous QueryPerformance CPU counter: internal counter instance
-		bool			complete=false;
-
+		
 		static double&	offset(){ static double f=0; return f; }
 		static void		sync_with_qpc(){ static int64_t e=epoch(); glFinish(); double i=0,j=0;uint k;for(k=0;k<16;k++){j+=(gxGetInteger64v(GL_TIMESTAMP)-e)/1000000.0;i+=os::timer_t::now();} offset()=(i-j)/double(k); glFinish(); }
 		static int64_t	epoch(){ static int64_t e=0; if(e) return e; auto* ef=(int64_t(*)()) GetProcAddress(GetModuleHandleW(nullptr),"rex_timer_epoch_GL"); if(ef) return e=ef(); else if(glGetInteger64v){ printf( "gl::Timer::epoch(): unable to get rex_timer_epoch_GL()\n" ); glGetInteger64v(GL_TIMESTAMP,&e); return e; } printf( "gl::epoch(): unable to get the epoch of OpenGL\n" ); return e=-1; }
 
 		// constructor: initialized with the internal qpc or an external qpc
-		timer_t():timer_t(qpc0){}
-		timer_t(os::timer_t& t):GLObject(gxCreateQuery(GL_TIMESTAMP),"",GL_TIMESTAMP),ID1(gxCreateQuery(target)),qpc(t){ result=qpc.result=dvec2(0.0); }
-		~timer_t() override { GLuint idx[2]={ID,ID1}; glDeleteQueries(2,idx); }
+		timer_t():timer_t(_qpc0){}
+		timer_t(os::timer_t& t):Object(gxCreateQuery(GL_TIMESTAMP),"",GL_TIMESTAMP),_ID1(gxCreateQuery(target)),_qpc(t){ result=_qpc.result=dvec2(0.0); }
+		~timer_t() override { GLuint idx[2]={ID,_ID1}; glDeleteQueries(2,idx); }
 
 		// gl::Timer specific implementations
-		inline bool		is_available(){ GLint available; glGetQueryObjectiv(ID1,GL_QUERY_RESULT_AVAILABLE, &available); return complete=(available!=GL_FALSE); }
-		inline void		finish(){ if(complete) return; static int64_t e=epoch(); static const GLenum q=GL_QUERY_RESULT; GLuint64 v; glGetQueryObjectui64v(ID,q,&v); x = double(v-e)/1000000.0+offset(); glGetQueryObjectui64v(ID1,q,&v); y=double(v-e)/1000000.0+offset(); complete=true; }
-		inline double	latency(){ if(!complete) finish(); return x-qpc.x; }	// difference between CPU time and the time for flushing preceding commands = result.x - qpc.x
+		inline bool		is_available(){ GLint available; glGetQueryObjectiv(_ID1,GL_QUERY_RESULT_AVAILABLE, &available); return _complete=(available!=GL_FALSE); }
+		inline void		finish(){ if(_complete) return; static int64_t e=epoch(); static const GLenum q=GL_QUERY_RESULT; GLuint64 v; glGetQueryObjectui64v(ID,q,&v); x = double(v-e)/1000000.0+offset(); glGetQueryObjectui64v(_ID1,q,&v); y=double(v-e)/1000000.0+offset(); _complete=true; }
+		inline double	latency(){ if(!_complete) finish(); return x-_qpc.x; }	// difference between CPU time and the time for flushing preceding commands = result.x - qpc.x
 
 		// consistent interface with gx::timer
-		inline void		begin(){ qpc.begin(); glQueryCounter(ID,target); complete=false; }
-		inline void		end(){ glQueryCounter(ID1,target); qpc.end(); complete=false; }
-		inline double	delta(){ if(!complete) finish(); return y-x; }
+		inline void		begin(){ _qpc.begin(); glQueryCounter(ID,target); _complete=false; }
+		inline void		end(){ glQueryCounter(_ID1,target); _qpc.end(); _complete=false; }
+		inline double	delta(){ if(!_complete) finish(); return y-x; }
 		inline double	now(){ return (gxGetInteger64v(GL_TIMESTAMP)-epoch())/1000000.0+offset(); }
-		inline void		clear(){ qpc.begin();qpc.end();result=qpc.result; complete=true; }
+		inline void		clear(){ _qpc.begin();_qpc.end();result=_qpc.result; _complete=true; }
+	
+	protected:
+		const GLuint	_ID1=0;
+		os::timer_t&	_qpc;	// synchronous QueryPerformance CPU counter: reference to external or internal counter
+		os::timer_t		_qpc0;	// synchronous QueryPerformance CPU counter: internal counter instance
+		bool			_complete=false;
 	};
 #endif // __GX_OS_TIMER__
 
 	//***********************************************
-	struct Buffer : public GLObject
+	struct Buffer : public Object
 	{
-		Buffer( GLuint ID, const char* name, GLenum target ):GLObject(ID,name,target){} // bind() and bind_back() should be called to actually create this buffer
+		Buffer( GLuint ID, const char* name, GLenum target ):Object(ID,name,target){} // bind() and bind_back() should be called to actually create this buffer
 		~Buffer() override { GLuint id=ID; if(id) glDeleteBuffers( 1, &id ); }
 		GLuint bind( bool b_bind=true ){ GLuint b0=binding(); if(!b_bind||b0!=ID) glBindBuffer( target, b_bind?ID:0 ); if(target==GL_TRANSFORM_FEEDBACK) glBindTransformFeedback(target, b_bind?ID:0 ); return b0; }
 		GLuint bind_as( GLenum target1, bool b_bind=true ){ GLuint b0=binding(target1); if(!b_bind||b0!=ID) glBindBuffer( target1, b_bind?ID:0 ); return b0; }
@@ -258,20 +264,20 @@ namespace gl {
 	struct DrawElementsIndirectCommand { uint count, instance_count=1, first_index=0, base_vertex=0, base_instance=0; uint pad0, pad1, pad2; }; // see https://www.opengl.org/wiki/GLAPI/glDrawElementsInstancedBaseVertexBaseInstance
 
 	//***********************************************
-	struct Texture : public GLObject
+	struct Texture : public Object
 	{
-		Texture( GLuint ID, const char* name, GLenum target, GLenum InternalFormat, GLenum Format, GLenum Type, uint64_t _crtheap=_get_heap_handle() ):GLObject(ID,name,target),_internal_format(InternalFormat),_type(Type),_format(Format),_channels(gxGetTextureChannels(InternalFormat)),_bpp(gxGetTextureBPP(InternalFormat)),_multisamples(1),key(0),next(nullptr),crtheap(_crtheap){}
-		~Texture() override { if(next){ next->~Texture(); HeapFree((void*)next->crtheap,0,next); } glDeleteTextures(1,(GLuint*)&ID); b_texture_deleted()=true; } // use HeapFree() for views
+		Texture( GLuint ID, const char* name, GLenum target, GLenum InternalFormat, GLenum Format, GLenum Type, uint64_t crtheap=_get_heap_handle() ):Object(ID,name,target),_internal_format(InternalFormat),_type(Type),_format(Format),_channels(gxGetTextureChannels(InternalFormat)),_bpp(gxGetTextureBPP(InternalFormat)),_crtheap(crtheap){}
+		~Texture() override { if(_next){ _next->~Texture(); HeapFree((void*)_next->_crtheap,0,_next); } glDeleteTextures(1,(GLuint*)&ID); b_texture_deleted()=true; } // use HeapFree() for views
 
-		GLuint bind( bool b_bind=true ){ GLuint b0=gxGetIntegerv(target_binding); if(!b_bind||ID!=b0) glBindTexture( target, b_bind?ID:0 ); return b0; }
+		GLuint bind( bool b_bind=true ){ GLuint b0=gxGetIntegerv(_target_binding); if(!b_bind||ID!=b0) glBindTexture( target, b_bind?ID:0 ); return b0; }
 		void bind_image_texture( GLuint unit, GLenum access=GL_READ_ONLY /* or GL_WRITE_ONLY or GL_READ_WRITE */ , GLint level=0, GLenum format=0, bool bLayered=false, GLint layer=0 ){ glBindImageTexture( unit, ID, level, bLayered?GL_TRUE:GL_FALSE, layer, access, format?format:internal_format() ); }
 
 		// query and bind back
-		inline GLint get_texture_parameteriv( GLenum pname ) const { GLint iv; if(glGetTextureParameteriv) glGetTextureParameteriv(ID,pname,&iv); else { GLuint b0=gxGetIntegerv(target_binding); glBindTexture(target,ID); glGetTexParameteriv(target,pname,&iv ); glBindTexture(target,b0); } return iv; }
-		inline GLint get_texture_level_parameteriv( GLenum pname, GLint level ) const { GLint iv; if(glGetTextureLevelParameteriv) glGetTextureLevelParameteriv(ID,level,pname,&iv); else { GLuint b0=gxGetIntegerv(target_binding); glBindTexture(target,ID); glGetTexLevelParameteriv(target,level,pname,&iv); glBindTexture(target,b0); } return iv; }
-		inline void texture_parameteri( GLenum pname, GLint param ) const { if(glTextureParameteri) glTextureParameteri(ID,pname,param); else { GLuint b0=gxGetIntegerv(target_binding); glBindTexture(target,ID); glTexParameteri(target,pname,param); glBindTexture(target,b0); } }
-		inline void texture_parameterf( GLenum pname, GLfloat param ) const { if(glTextureParameterf) glTextureParameterf(ID,pname,param); else { GLuint b0=gxGetIntegerv(target_binding); glBindTexture(target,ID); glTexParameterf(target,pname,param); glBindTexture(target,b0); } }
-		inline void texture_parameterfv( GLenum pname, const GLfloat* params ) const { if(glTextureParameterfv) glTextureParameterfv(ID, pname, params); else { GLuint b0=gxGetIntegerv(target_binding); glBindTexture(target,ID); glTexParameterfv(target,pname,params); glBindTexture(target,b0); } }
+		inline GLint get_texture_parameteriv( GLenum pname ) const { GLint iv; if(glGetTextureParameteriv) glGetTextureParameteriv(ID,pname,&iv); else { GLuint b0=gxGetIntegerv(_target_binding); glBindTexture(target,ID); glGetTexParameteriv(target,pname,&iv ); glBindTexture(target,b0); } return iv; }
+		inline GLint get_texture_level_parameteriv( GLenum pname, GLint level ) const { GLint iv; if(glGetTextureLevelParameteriv) glGetTextureLevelParameteriv(ID,level,pname,&iv); else { GLuint b0=gxGetIntegerv(_target_binding); glBindTexture(target,ID); glGetTexLevelParameteriv(target,level,pname,&iv); glBindTexture(target,b0); } return iv; }
+		inline void texture_parameteri( GLenum pname, GLint param ) const { if(glTextureParameteri) glTextureParameteri(ID,pname,param); else { GLuint b0=gxGetIntegerv(_target_binding); glBindTexture(target,ID); glTexParameteri(target,pname,param); glBindTexture(target,b0); } }
+		inline void texture_parameterf( GLenum pname, GLfloat param ) const { if(glTextureParameterf) glTextureParameterf(ID,pname,param); else { GLuint b0=gxGetIntegerv(_target_binding); glBindTexture(target,ID); glTexParameterf(target,pname,param); glBindTexture(target,b0); } }
+		inline void texture_parameterfv( GLenum pname, const GLfloat* params ) const { if(glTextureParameterfv) glTextureParameterfv(ID, pname, params); else { GLuint b0=gxGetIntegerv(_target_binding); glBindTexture(target,ID); glTexParameterfv(target,pname,params); glBindTexture(target,b0); } }
 
 		// texture dimension queries: pre-recorded when creating this
 		GLint mip_levels() const {				return _levels; } // on-demand query: is_immutable()?get_texture_parameteriv(GL_TEXTURE_VIEW_NUM_LEVELS):get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)-get_texture_parameteriv(GL_TEXTURE_BASE_LEVEL)+1; }
@@ -312,12 +318,12 @@ namespace gl {
 		inline GLint  bpp() const { return _bpp; } // bits per pixels
 		inline GLint  Bpp() const { return _bpp>>3; } // bytes per pixels
 		inline GLsizei multisamples() const { return target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY?_multisamples:1; }
-		size_t width_step( GLint level=0 ) const { return (((width(level)*Bpp()+3)>>2)<<2); } // 4byte-aligned size in a single row
+		size_t width_step( GLint level=0 ) const { return (((width(level)*Bpp()+3)>>2)<<2); } // 4-byte-aligned size in a single row
 		size_t mem_size( GLint level=0 ) const { return width_step(level)*size_t(height(level)); }
 
 		// set attributes
-		void set_filter( GLint min_filter, GLint mag_filter=0, bool b_sync_view=true ){ static const GLenum n=GL_NEAREST,l=GL_LINEAR,nn=GL_NEAREST_MIPMAP_NEAREST,nl=GL_NEAREST_MIPMAP_LINEAR,ln=GL_LINEAR_MIPMAP_NEAREST,ll=GL_LINEAR_MIPMAP_LINEAR; GLint i=min_filter,g=mag_filter?mag_filter:min_filter; texture_parameteri( GL_TEXTURE_MIN_FILTER, _levels==1?(i==nn||i==nl?n:i==ln||i==ll?l:i):i==n?nn:i==l?ll:i ); texture_parameteri( GL_TEXTURE_MAG_FILTER, g==nn||g==nl?n:g==ln||g==ll?l:g ); if(b_sync_view&&next) next->set_filter( min_filter, mag_filter ); }
-		void set_wrap( GLint wrap, bool b_sync_view=true ){ texture_parameteri( GL_TEXTURE_WRAP_S, wrap ); if(target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_RECTANGLE) texture_parameteri( GL_TEXTURE_WRAP_T, wrap ); if(target==GL_TEXTURE_3D||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY) texture_parameteri( GL_TEXTURE_WRAP_R, wrap ); if(b_sync_view&&next) next->set_wrap( wrap, b_sync_view ); }
+		void set_filter( GLint min_filter, GLint mag_filter=0, bool b_sync_view=true ){ static const GLenum n=GL_NEAREST,l=GL_LINEAR,nn=GL_NEAREST_MIPMAP_NEAREST,nl=GL_NEAREST_MIPMAP_LINEAR,ln=GL_LINEAR_MIPMAP_NEAREST,ll=GL_LINEAR_MIPMAP_LINEAR; GLint i=min_filter,g=mag_filter?mag_filter:min_filter; texture_parameteri( GL_TEXTURE_MIN_FILTER, _levels==1?(i==nn||i==nl?n:i==ln||i==ll?l:i):i==n?nn:i==l?ll:i ); texture_parameteri( GL_TEXTURE_MAG_FILTER, g==nn||g==nl?n:g==ln||g==ll?l:g ); if(b_sync_view&&_next) _next->set_filter( min_filter, mag_filter ); }
+		void set_wrap( GLint wrap, bool b_sync_view=true ){ texture_parameteri( GL_TEXTURE_WRAP_S, wrap ); if(target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_RECTANGLE) texture_parameteri( GL_TEXTURE_WRAP_T, wrap ); if(target==GL_TEXTURE_3D||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY) texture_parameteri( GL_TEXTURE_WRAP_R, wrap ); if(b_sync_view&&_next) _next->set_wrap( wrap, b_sync_view ); }
 		void set_mipmap_range( GLint base_level, GLint level_count ){ texture_parameteri(GL_TEXTURE_BASE_LEVEL,base_level); texture_parameteri(GL_TEXTURE_MAX_LEVEL,base_level+level_count-1); }
 		void set_min_LOD( GLfloat min_LOD ){ texture_parameterf(GL_TEXTURE_MIN_LOD,min_LOD); }
 		void set_max_LOD( GLfloat max_LOD ){ texture_parameterf(GL_TEXTURE_MAX_LOD,max_LOD); }
@@ -325,15 +331,15 @@ namespace gl {
 		void set_border_color( const vec4& color ){ texture_parameterfv(GL_TEXTURE_BORDER_COLOR, color); }
 
 		// clear colors
-		void clear( const vec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_HALF_FLOAT){ half4 h; ftoh(color,h,channels()); glClearTexImage(ID,level,f,t,h);} else if(t==GL_FLOAT) glClearTexImage(ID,level,format(),t,&color); else printf( "%s->clear(): texture is not one of float/half types\n", name ); }
-		void cleari( const ivec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_INT) glClearTexImage(ID,level,f,t,color); else if(t==GL_SHORT){ short4 i={short(color.x),short(color.y),short(color.z),short(color.w)}; glClearTexImage(ID,level,f,t,&i); } else if(t==GL_BYTE){ char4 i={char(color.x),char(color.y),char(color.z),char(color.w)}; glClearTexImage(ID,level,f,t,&i); } else printf( "%s->cleari(): texture is not one of byte/short/int types\n", name ); }
-		void clearui( const uvec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_UNSIGNED_INT) glClearTexImage(ID,level,f,t,color); else if(t==GL_UNSIGNED_SHORT){ ushort4 i={ushort(color.x),ushort(color.y),ushort(color.z),ushort(color.w)}; glClearTexImage(ID,level,f,t,&i); } else if(t==GL_UNSIGNED_BYTE){ uchar4 i={uchar(color.x),uchar(color.y),uchar(color.z),uchar(color.w)}; glClearTexImage(ID,level,f,t,&i); } else printf( "%s->clearui(): texture is not one of unsigned byte/short/int types\n", name ); }
+		void clear( const vec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_HALF_FLOAT){ half4 h; ftoh(color,h,channels()); glClearTexImage(ID,level,f,t,h);} else if(t==GL_FLOAT) glClearTexImage(ID,level,format(),t,&color); else printf( "%s->clear(): texture is not one of float/half types\n", _name ); }
+		void cleari( const ivec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_INT) glClearTexImage(ID,level,f,t,color); else if(t==GL_SHORT){ short4 i={short(color.x),short(color.y),short(color.z),short(color.w)}; glClearTexImage(ID,level,f,t,&i); } else if(t==GL_BYTE){ char4 i={char(color.x),char(color.y),char(color.z),char(color.w)}; glClearTexImage(ID,level,f,t,&i); } else printf( "%s->cleari(): texture is not one of byte/short/int types\n", _name ); }
+		void clearui( const uvec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_UNSIGNED_INT) glClearTexImage(ID,level,f,t,color); else if(t==GL_UNSIGNED_SHORT){ ushort4 i={ushort(color.x),ushort(color.y),ushort(color.z),ushort(color.w)}; glClearTexImage(ID,level,f,t,&i); } else if(t==GL_UNSIGNED_BYTE){ uchar4 i={uchar(color.x),uchar(color.y),uchar(color.z),uchar(color.w)}; glClearTexImage(ID,level,f,t,&i); } else printf( "%s->clearui(): texture is not one of unsigned byte/short/int types\n", _name ); }
 
 		// mipmap
-		void generate_mipmap(){ if(get_texture_parameteriv(GL_TEXTURE_IMMUTABLE_FORMAT)&&get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)<1){ printf( "Texture::generate_mipmap(%s): no mipmap generated for 1 level.\n", name ); return; } int w=get_texture_level_parameteriv(GL_TEXTURE_WIDTH,0), h=get_texture_level_parameteriv(GL_TEXTURE_HEIGHT,0), d=get_texture_level_parameteriv(GL_TEXTURE_DEPTH,0); texture_parameteri(GL_TEXTURE_BASE_LEVEL,0); texture_parameteri(GL_TEXTURE_MAX_LEVEL,0+gxGetMipLevels(w,h,d)-1); if(glGenerateTextureMipmap) glGenerateTextureMipmap(ID); else { GLuint b0=gxGetIntegerv(target_binding); glBindTexture(target,ID); glGenerateMipmap(target); glBindTexture(target,b0); }if(get_texture_parameteriv(GL_TEXTURE_MIN_FILTER)==GL_LINEAR) texture_parameteri( GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR ); else if(get_texture_parameteriv(GL_TEXTURE_MIN_FILTER)==GL_NEAREST) texture_parameteri(GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST ); }
+		void generate_mipmap(){ if(get_texture_parameteriv(GL_TEXTURE_IMMUTABLE_FORMAT)&&get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)<1){ printf( "Texture::generate_mipmap(%s): no mipmap generated for 1 level.\n", _name ); return; } int w=get_texture_level_parameteriv(GL_TEXTURE_WIDTH,0), h=get_texture_level_parameteriv(GL_TEXTURE_HEIGHT,0), d=get_texture_level_parameteriv(GL_TEXTURE_DEPTH,0); texture_parameteri(GL_TEXTURE_BASE_LEVEL,0); texture_parameteri(GL_TEXTURE_MAX_LEVEL,0+gxGetMipLevels(w,h,d)-1); if(glGenerateTextureMipmap) glGenerateTextureMipmap(ID); else { GLuint b0=gxGetIntegerv(_target_binding); glBindTexture(target,ID); glGenerateMipmap(target); glBindTexture(target,b0); }if(get_texture_parameteriv(GL_TEXTURE_MIN_FILTER)==GL_LINEAR) texture_parameteri( GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR ); else if(get_texture_parameteriv(GL_TEXTURE_MIN_FILTER)==GL_NEAREST) texture_parameteri(GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST ); }
 
 		// get_image/set_image
-		void get_image( GLvoid* pixels, GLint level=0 ){ if(target==GL_TEXTURE_BUFFER){ printf("[%s] read_pixels() not supports GL_TEXTURE_BUFFER\n", name ); return; } else if(glGetTextureImage){ glGetTextureImage( ID, level, format(), type(), GLsizei(mem_size()), pixels ); return; } GLuint b0=bind(); glGetTexImage( target, level, format(), type(), pixels ); glBindTexture( target, b0 ); }
+		void get_image( GLvoid* pixels, GLint level=0 ){ if(target==GL_TEXTURE_BUFFER){ printf("[%s] read_pixels() not supports GL_TEXTURE_BUFFER\n", _name ); return; } else if(glGetTextureImage){ glGetTextureImage( ID, level, format(), type(), GLsizei(mem_size()), pixels ); return; } GLuint b0=bind(); glGetTexImage( target, level, format(), type(), pixels ); glBindTexture( target, b0 ); }
 		void set_image( GLvoid* pixels, GLint level=0, GLsizei width=0, GLsizei height=0, GLsizei depth=0, GLint x=0, GLint y=0, GLint z=0 );
 
 		// instance-related
@@ -373,12 +379,12 @@ namespace gl {
 		GLenum		_format;
 		GLint		_channels;
 		GLint		_bpp;
-		GLsizei		_multisamples;
+		GLsizei		_multisamples=1;
 
 		// view-related
-		uint		key;		// key of the current view
-		Texture*	next;		// next view node: a node of linked list, starting from the parent node
-		uint64_t	crtheap;	// heap handle to the parent, require to allocate view across DLL boundaries
+		uint		_key=0;			// key of the current view
+		Texture*	_next=nullptr;	// next view node: a node of linked list, starting from the parent node
+		uint64_t	_crtheap=0;		// heap handle to the parent, require to allocate view across DLL boundaries
 	};
 
 	inline void Texture::set_image( GLvoid* pixels, GLint level, GLsizei width, GLsizei height, GLsizei depth, GLint x, GLint y, GLint z )
@@ -425,16 +431,16 @@ namespace gl {
 	inline bool Texture::copy( Texture* dst, GLint level )
 	{
 		if(dst==nullptr) return false; GLint w0=width(level),h0=height(level),d0=depth(level),w1=dst->width(level),h1=dst->height(level),d1=dst->depth(level);
-		if(w0!=w1||h0!=h1||d0!=d1){ printf("%s::copy(): Dimension (%dx%dx%d) is different from %s (%dx%dx%d)\n", name, w0, h0, d0, dst->name, w1, h1, d1 ); return false; }
-		if(mem_size()!=dst->mem_size()){ printf("%s::copy(): %s.mem_size(=%d) != %s.mem_size(=%d)\n", name, name, int(mem_size()), dst->name, int(dst->mem_size()) ); return false; }
+		if(w0!=w1||h0!=h1||d0!=d1){ printf("%s::copy(): Dimension (%dx%dx%d) is different from %s (%dx%dx%d)\n", _name, w0, h0, d0, dst->_name, w1, h1, d1 ); return false; }
+		if(mem_size()!=dst->mem_size()){ printf("%s::copy(): %s.mem_size(=%d) != %s.mem_size(=%d)\n", _name, _name, int(mem_size()), dst->_name, int(dst->mem_size()) ); return false; }
 		glCopyImageSubData( ID, target, level, 0, 0, 0, dst->ID, dst->target, level, 0, 0, 0, w0, h0, d0 ); return true;
 	}
 
 	//***********************************************
 	// this vertex array generates multiple instances of VAO to bind multiple programs
-	struct VertexArray : public GLObject
+	struct VertexArray : public Object
 	{
-		VertexArray( GLuint ID, const char* name ):GLObject(ID,name,GL_VERTEX_ARRAY),vertex_buffer(nullptr),index_buffer(nullptr),vertex_count(0),index_count(0){};
+		VertexArray( GLuint ID, const char* name ):Object(ID,name,GL_VERTEX_ARRAY),vertex_buffer(nullptr),index_buffer(nullptr),vertex_count(0),index_count(0){};
 		~VertexArray() override { if(vertex_buffer){ delete vertex_buffer; vertex_buffer=nullptr; } if(index_buffer){ delete index_buffer; index_buffer=nullptr; } GLuint id=ID; if(id) glDeleteVertexArrays( 1, &id ); }
 		GLuint bind( bool b_bind=true ){ GLuint b0=binding(); if(!b_bind||b0!=ID) glBindVertexArray( b_bind?ID:0 ); return b0; }
 
@@ -458,14 +464,13 @@ namespace gl {
 	};
 
 	//***********************************************
-	struct Framebuffer : public GLObject
+	struct Framebuffer : public Object
 	{
 		struct depth_key_t { union { struct {uint width:16, height:16, multisamples:8, layers:16, renderbuffer:1, dummy:7;}; uint64_t value; }; depth_key_t():value(0){} };
-		struct state_t { bool depth_test=true, cull_face=true, blend=false, wireframe[2]={false,false}; } _state_stack;
 		static const GLint MAX_COLOR_ATTACHMENTS=8;
 
-		Framebuffer( GLuint ID, const char* name ) : GLObject(ID,name,GL_FRAMEBUFFER),b_color_mask(true),b_depth_mask(true){ memset(active_targets,0,sizeof(active_targets)); glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA ); }
-		~Framebuffer() override { glBindFramebuffer(GL_FRAMEBUFFER,0); glBindRenderbuffer(GL_RENDERBUFFER,0);memset(active_targets,0,sizeof(active_targets)); GLuint id=ID; if(ID) glDeleteFramebuffers(1,&id); for(auto& it:depth_buffers){const depth_key_t& key=reinterpret_cast<const depth_key_t&>(it.first); if(key.renderbuffer) glDeleteRenderbuffers(1,&it.second); else glDeleteTextures(1,&it.second); } depth_buffers.clear(); }
+		Framebuffer( GLuint ID, const char* name ) : Object(ID,name,GL_FRAMEBUFFER){ memset(_active_targets,0,sizeof(_active_targets)); glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA ); }
+		~Framebuffer() override { glBindFramebuffer(GL_FRAMEBUFFER,0); glBindRenderbuffer(GL_RENDERBUFFER,0);memset(_active_targets,0,sizeof(_active_targets)); GLuint id=ID; if(ID) glDeleteFramebuffers(1,&id); for(auto& it:_depth_buffers){const depth_key_t& key=reinterpret_cast<const depth_key_t&>(it.first); if(key.renderbuffer) glDeleteRenderbuffers(1,&it.second); else glDeleteTextures(1,&it.second); } _depth_buffers.clear(); }
 		GLuint bind( bool b_bind=true ){ GLuint b0=binding(); if(!b_bind||ID!=b0) glBindFramebuffer( GL_FRAMEBUFFER, b_bind?ID:0 ); return b0; }
 
 		void bind( Texture* t0, Texture* t1=nullptr, Texture* t2=nullptr, Texture* t3=nullptr, Texture* t4=nullptr, Texture* t5=nullptr, Texture* t6=nullptr, Texture* t7=nullptr ){ if(ID) bind(t0,0,0,t1,0,0,t2,0,0,t3,0,0,t4,0,0,t5,0,0,t6,0,0,t7,0,0); }
@@ -476,15 +481,15 @@ namespace gl {
 		void bind_depth_buffer( GLint width, GLint height, GLint layers=1, bool multisample=false, GLsizei multisamples=1 );
 		static void unbind(){ glBindFramebuffer( GL_FRAMEBUFFER, 0 ); }
 		void unbind_depth_buffer();
-		void check_status(){ GLenum s=glCheckNamedFramebufferStatus?glCheckNamedFramebufferStatus(ID,GL_FRAMEBUFFER):glCheckFramebufferStatus(GL_FRAMEBUFFER); if(s==GL_FRAMEBUFFER_COMPLETE) return; if(s==GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT\n", name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT\n", name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER\n", name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER\n", name ); else if(s==GL_FRAMEBUFFER_UNSUPPORTED) printf( "[%s] GL_FRAMEBUFFER_UNSUPPORTED\n", name ); }
+		void check_status(){ GLenum s=glCheckNamedFramebufferStatus?glCheckNamedFramebufferStatus(ID,GL_FRAMEBUFFER):glCheckFramebufferStatus(GL_FRAMEBUFFER); if(s==GL_FRAMEBUFFER_COMPLETE) return; if(s==GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT\n", _name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT\n", _name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER\n", _name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER\n", _name ); else if(s==GL_FRAMEBUFFER_UNSUPPORTED) printf( "[%s] GL_FRAMEBUFFER_UNSUPPORTED\n", _name ); }
 		void read_pixels( GLenum attachment, GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLvoid* img ){ if(ID) glNamedFramebufferReadBuffer(ID,GL_COLOR_ATTACHMENT0+attachment); else glReadBuffer(GL_BACK); glReadPixels( x, y, width, height, format, type, img ); }
 		void set_viewport( GLint x, GLint y, GLsizei width, GLsizei height ){ glViewport( x, y, width, height ); }
 		void set_viewport( ivec4 origin_size ){ glViewport( origin_size.x, origin_size.y, origin_size.z, origin_size.w ); }
 		void set_viewport( ivec2 origin, ivec2 size ){ glViewport( origin.x, origin.y, size.x, size.y ); }
 		void set_viewport( ivec2 size ){ glViewport( 0, 0, size.x, size.y ); }
 		ivec4 get_viewport(){ ivec4 i; glGetIntegerv( GL_VIEWPORT, (int*)i); return i; }
-		void set_color_mask( bool mask, bool b_force_mask=false ){ if(!b_force_mask&&mask==b_color_mask) return; GLboolean b=(b_color_mask=mask)?GL_TRUE:GL_FALSE; glColorMask(b,b,b,b); }
-		void set_depth_mask( bool mask, bool b_force_mask=false ){ if(!b_force_mask&&mask==b_depth_mask) return; GLboolean b=(b_depth_mask=mask)?GL_TRUE:GL_FALSE; glDepthMask(b); }
+		void set_color_mask( bool mask, bool b_force_mask=false ){ if(!b_force_mask&&mask==_b_color_mask) return; GLboolean b=(_b_color_mask=mask)?GL_TRUE:GL_FALSE; glColorMask(b,b,b,b); }
+		void set_depth_mask( bool mask, bool b_force_mask=false ){ if(!b_force_mask&&mask==_b_depth_mask) return; GLboolean b=(_b_depth_mask=mask)?GL_TRUE:GL_FALSE; glDepthMask(b); }
 		void set_color_depth_mask( bool mask, bool b_force_mask=false ){ set_color_mask(mask,b_force_mask); set_depth_mask(mask,b_force_mask); }
 		void set_read_buffer( GLenum mode ){ if(glNamedFramebufferReadBuffer) glNamedFramebufferReadBuffer( ID, mode ); else glReadBuffer( mode ); }
 		void set_draw_buffer( GLenum mode ){ if(glNamedFramebufferDrawBuffer) glNamedFramebufferDrawBuffer( ID, mode ); else glDrawBuffer( mode ); }
@@ -498,15 +503,17 @@ namespace gl {
 		static void set_blend_func_separate( GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha ){ glBlendFuncSeparate( sfactorRGB, dfactorRGB, sfactorAlpha, dfactorAlpha ); }
 		static void set_multisample( bool b_multisample ){ b_multisample ? glEnable(GL_MULTISAMPLE):glDisable(GL_MULTISAMPLE); }
 		static const GLenum* draw_buffers( uint index=0 ){ static GLenum d[MAX_COLOR_ATTACHMENTS]={GL_COLOR_ATTACHMENT0,GL_COLOR_ATTACHMENT1,GL_COLOR_ATTACHMENT2,GL_COLOR_ATTACHMENT3,GL_COLOR_ATTACHMENT4,GL_COLOR_ATTACHMENT5,GL_COLOR_ATTACHMENT6,GL_COLOR_ATTACHMENT7}; return &d[index]; }
-		void clear( const vec4& color=vec4(.0f,.0f,.0f,.0f) ){ for( uint k=0;k<MAX_COLOR_ATTACHMENTS;k++) if(active_targets[k]) clear_color_buffer( k, color, false ); clear_depth_buffer(); }
+		void clear( const vec4& color=vec4(.0f,.0f,.0f,.0f) ){ for( uint k=0;k<MAX_COLOR_ATTACHMENTS;k++) if(_active_targets[k]) clear_color_buffer( k, color, false ); clear_depth_buffer(); }
 		void clear_depth_buffer( float depth=1.0f ){ if(glClearNamedFramebufferfv) glClearNamedFramebufferfv( ID, GL_DEPTH, 0, &depth ); else glClearBufferfv( GL_DEPTH, 0, &depth ); }
 		void clear_color_buffer( GLint draw_buffer, const vec4& color, bool b_clear_depth=false ){ if(draw_buffer>=GL_DRAW_BUFFER0) draw_buffer-=GL_DRAW_BUFFER0; if(glClearNamedFramebufferfv) glClearNamedFramebufferfv( ID, GL_COLOR, draw_buffer, color ); else glClearBufferfv( GL_COLOR, draw_buffer, color ); if(b_clear_depth) clear_depth_buffer(); }
 		void clear_color_bufferi( GLint draw_buffer, const ivec4& color, bool b_clear_depth=false ){ if(draw_buffer>=GL_DRAW_BUFFER0) draw_buffer-=GL_DRAW_BUFFER0; if(glClearNamedFramebufferiv) glClearNamedFramebufferiv( ID, GL_COLOR, draw_buffer, color ); else glClearBufferiv( GL_COLOR, draw_buffer, color ); if(b_clear_depth) clear_depth_buffer(); }
 		void clear_color_bufferui( GLint draw_buffer, const uvec4& color, bool b_clear_depth=false ){ if(draw_buffer>=GL_DRAW_BUFFER0) draw_buffer-=GL_DRAW_BUFFER0; if(glClearNamedFramebufferuiv) glClearNamedFramebufferuiv( ID, GL_COLOR, draw_buffer, color ); else glClearBufferuiv( GL_COLOR, draw_buffer, color ); if(b_clear_depth) clear_depth_buffer(); }
-
-		GLenum	active_targets[MAX_COLOR_ATTACHMENTS];
-		std::map<uint64_t,GLuint> depth_buffers;
-		bool b_color_mask, b_depth_mask;
+	
+	protected:
+		struct state_t { bool depth_test=true, cull_face=true, blend=false, wireframe[2]={false,false}; } _state_stack;
+		bool _b_color_mask=true, _b_depth_mask=true;
+		GLenum _active_targets[MAX_COLOR_ATTACHMENTS];
+		std::map<uint64_t,GLuint> _depth_buffers;
 	};
 
 	//***********************************************
@@ -525,10 +532,10 @@ namespace gl {
 		for( int k=0; k < MAX_COLOR_ATTACHMENTS; k++ )
 		{
 			gl::Texture* t = T[k];
-			GLenum target = t ? (active_targets[k]=t->target) : active_targets[k];
+			GLenum target = t ? (_active_targets[k]=t->target) : _active_targets[k];
 			if(target==GL_TEXTURE_3D||target==GL_TEXTURE_1D_ARRAY||target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY) glFramebufferTextureLayer( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0+k, t?t->ID:0, t?M[k]:0, t?L[k]:0 );
 			else if(target==GL_TEXTURE_1D||target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_BUFFER||target==GL_TEXTURE_RECTANGLE) glFramebufferTexture( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0+k, t?t->ID:0, t?M[k]:0 );
-			if(t) draw_buffer_count++; else active_targets[k]=0;
+			if(t) draw_buffer_count++; else _active_targets[k]=0;
 		}
 
 		// detach all depth buffers for no-attachments
@@ -539,7 +546,7 @@ namespace gl {
 		glViewport( 0, 0, width, height );
 		
 		// bind depth buffer, when depth test is enabled
-		bool b_multisample = active_targets[0]==GL_TEXTURE_2D_MULTISAMPLE||active_targets[0]==GL_TEXTURE_2D_MULTISAMPLE_ARRAY;
+		bool b_multisample = _active_targets[0]==GL_TEXTURE_2D_MULTISAMPLE||_active_targets[0]==GL_TEXTURE_2D_MULTISAMPLE_ARRAY;
 		bind_depth_buffer( width, height, 1, b_multisample, b_multisample&&T[0]?T[0]->multisamples():1 );
 		
 		// set the draw buffers, even without attachments; then check the status
@@ -552,7 +559,7 @@ namespace gl {
 	{
 		if(ID==0||t0==nullptr){ bind(false); return; }
 
-		if(t0->target!=GL_TEXTURE_1D_ARRAY&&t0->target!=GL_TEXTURE_2D_ARRAY&&t0->target!=GL_TEXTURE_2D_MULTISAMPLE_ARRAY&&t0->target!=GL_TEXTURE_3D&&t0->target!=GL_TEXTURE_CUBE_MAP&&t0->target!=GL_TEXTURE_CUBE_MAP_ARRAY){ printf("[%s] Framebuffer::bind_layers() supports only array textures\n", name ); return; }
+		if(t0->target!=GL_TEXTURE_1D_ARRAY&&t0->target!=GL_TEXTURE_2D_ARRAY&&t0->target!=GL_TEXTURE_2D_MULTISAMPLE_ARRAY&&t0->target!=GL_TEXTURE_3D&&t0->target!=GL_TEXTURE_CUBE_MAP&&t0->target!=GL_TEXTURE_CUBE_MAP_ARRAY){ printf("[%s] Framebuffer::bind_layers() supports only array textures\n", _name ); return; }
 
 		// regardless of direct_state_access, it is still necessary, because draw functions are not aware where they are drawn.
 		glBindFramebuffer( GL_FRAMEBUFFER, ID );
@@ -565,8 +572,8 @@ namespace gl {
 		{
 			gl::Texture* t = T[k];
 			glFramebufferTexture( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0+k, t?t->ID:0, t?M[k]:0 );
-			if(t){ num_draw_buffers++; active_targets[k] = t->target; }
-			else active_targets[k] = 0;
+			if(t){ num_draw_buffers++; _active_targets[k] = t->target; }
+			else _active_targets[k] = 0;
 		}
 
 		// if there are attachments, set viewport and bind depth buffer
@@ -591,16 +598,16 @@ namespace gl {
 		depth_key_t key; key.width=width; key.height=height; key.multisamples=multisample?multisamples:1; key.renderbuffer=layers==1?1:0; key.layers=layers; key.dummy=0;
 
 		GLuint idx;
-		auto it=depth_buffers.find(key.value); if(it!=depth_buffers.end()) idx=it->second;
+		auto it=_depth_buffers.find(key.value); if(it!=_depth_buffers.end()) idx=it->second;
 		else if(layers==1)
 		{
-			glBindRenderbuffer( GL_RENDERBUFFER, depth_buffers[key.value] = idx = gxCreateRenderBuffer() );
+			glBindRenderbuffer( GL_RENDERBUFFER, _depth_buffers[key.value] = idx = gxCreateRenderBuffer() );
 			if(multisample)	glNamedRenderbufferStorageMultisample?glNamedRenderbufferStorageMultisample( idx, multisamples, GL_DEPTH_COMPONENT32F, width, height ):glRenderbufferStorageMultisample( GL_RENDERBUFFER, multisamples, GL_DEPTH_COMPONENT32F, width, height );
 			else			glNamedRenderbufferStorage?glNamedRenderbufferStorage( idx, GL_DEPTH_COMPONENT32F, width, height ):glRenderbufferStorage( GL_RENDERBUFFER, GL_DEPTH_COMPONENT32F, width, height );
 		}
 		else
 		{
-			GLenum target=multisample?GL_TEXTURE_2D_MULTISAMPLE_ARRAY:GL_TEXTURE_2D_ARRAY; glBindTexture( target, depth_buffers[key.value] = idx = gxCreateTexture(target) );
+			GLenum target=multisample?GL_TEXTURE_2D_MULTISAMPLE_ARRAY:GL_TEXTURE_2D_ARRAY; glBindTexture( target, _depth_buffers[key.value] = idx = gxCreateTexture(target) );
 			if(multisample)	glTexStorage3DMultisample( target, multisamples, GL_DEPTH_COMPONENT32, width, height, layers, GL_TRUE );
 			else			glTexStorage3D( target, 1, GL_DEPTH_COMPONENT32, width, height, layers );
 		}
@@ -764,10 +771,10 @@ namespace gl {
 	};
 
 	//***********************************************
-	struct Program : public GLObject
+	struct Program : public Object
 	{
-		Program( GLuint ID, const char* name ) : GLObject(ID,name,GL_PROGRAM){ get_instances().emplace(this); }
-		~Program() override { if(!ID) return; glDeleteProgram(ID); uniform_cache.clear(); invalid_uniform_cache.clear(); get_instances().erase(this); }
+		Program( GLuint ID, const char* name ) : Object(ID,name,GL_PROGRAM){ get_instances().emplace(this); }
+		~Program() override { if(!ID) return; glDeleteProgram(ID); _uniform_cache.clear(); _invalid_uniform_cache.clear(); get_instances().erase(this); }
 		static void unbind(){ glUseProgram(0); }
 		GLuint bind( bool b_bind=true );
 
@@ -778,10 +785,10 @@ namespace gl {
 		// in-program uniform variables
 		Uniform* get_uniform( const char* name )
 		{
-			{auto it=uniform_cache.find(name);if(it!=uniform_cache.end()) return &it->second;}
+			{auto it=_uniform_cache.find(name);if(it!=_uniform_cache.end()) return &it->second;}
 #ifdef WARN_INVALID_UNIFORM
 			{auto it=invalid_uniform_cache.find(name);if(it!=invalid_uniform_cache.end()) return nullptr;}
-			printf( "[Warning] %s.get_uniform(%s) not exists\n",this->name, name );
+			printf( "[Warning] %s.get_uniform(%s) not exists\n",this->_name, name );
 			invalid_uniform_cache.emplace(name);
 #endif
 			return nullptr;
@@ -831,32 +838,37 @@ namespace gl {
 		};
 
 		// uniform/program block query
-		UniformBlock* get_uniform_block( const char* name ){ auto it=uniform_block_map.find(name); return it==uniform_block_map.end() ? nullptr : &it->second; }
+		UniformBlock* get_uniform_block( const char* name ){ auto it=_uniform_block_map.find(name); return it==_uniform_block_map.end() ? nullptr : &it->second; }
 		GLuint get_uniform_block_binding( const char* name ){ auto* ub=get_uniform_block(name); return ub?ub->get_binding():-1; }
-		GLuint get_shader_storage_block_binding( const char* name ){ auto it=shader_storage_block_binding_map.find(name); if(it!=shader_storage_block_binding_map.end()) return it->second; const GLenum prop=GL_BUFFER_BINDING; GLint binding;glGetProgramResourceiv(ID,GL_SHADER_STORAGE_BLOCK,glGetProgramResourceIndex(ID,GL_SHADER_STORAGE_BLOCK,name),1,&prop,1,nullptr,&binding); return shader_storage_block_binding_map[name]=binding; }
-		GLuint get_atomic_counter_buffer_binding( const char* name ){ auto it=atomic_counter_buffer_binding_map.find(name); return it==atomic_counter_buffer_binding_map.end()?-1:it->second; }
+		GLuint get_shader_storage_block_binding( const char* name ){ auto it=_shader_storage_block_binding_map.find(name); if(it!=_shader_storage_block_binding_map.end()) return it->second; const GLenum prop=GL_BUFFER_BINDING; GLint binding;glGetProgramResourceiv(ID,GL_SHADER_STORAGE_BLOCK,glGetProgramResourceIndex(ID,GL_SHADER_STORAGE_BLOCK,name),1,&prop,1,nullptr,&binding); return _shader_storage_block_binding_map[name]=binding; }
+		GLuint get_atomic_counter_buffer_binding( const char* name ){ auto it=_atomic_counter_buffer_binding_map.find(name); return it==_atomic_counter_buffer_binding_map.end()?-1:it->second; }
 
 		// query source
 		shader_source_t get_shader_source( GLuint shader_type ) const { auto it=source.find(shader_type); return it==source.end()?shader_source_t():it->second; }
 
-		// member variables
-		program_source_t					source;
-		std::map<std::string,Uniform>		uniform_cache;
-		std::set<std::string>				invalid_uniform_cache;
-		std::map<std::string,GLint>			shader_storage_block_binding_map;
-		std::map<std::string,GLint>			atomic_counter_buffer_binding_map;
-		std::map<std::string,UniformBlock>	uniform_block_map;
-
 		// instances
 		static std::set<Program*>& get_instances(){ static std::set<Program*> i; return i; }
+
+		// friend classes
+		friend struct Effect;
+
+		// public member variables
+		program_source_t					source;
+
+	protected:
+		std::map<std::string,Uniform>		_uniform_cache;
+		std::set<std::string>				_invalid_uniform_cache;
+		std::map<std::string,GLint>			_shader_storage_block_binding_map;
+		std::map<std::string,GLint>			_atomic_counter_buffer_binding_map;
+		std::map<std::string,UniformBlock>	_uniform_block_map;
 	};
 
 	// bind
 	inline GLuint Program::bind( bool b_bind )
 	{
 		GLuint b0=binding(); if(!b_bind||b0!=ID) glUseProgram(b_bind?ID:0); if(!b_bind) return b0;
-		if(uniform_cache.empty()) update_uniform_cache(); else if( Texture::b_texture_deleted() ){std::set<Program*>& s=get_instances();for(auto it:s)it->update_uniform_cache();Texture::b_texture_deleted()=false;}
-		for(auto& [n,u]:uniform_cache)
+		if(_uniform_cache.empty()) update_uniform_cache(); else if( Texture::b_texture_deleted() ){std::set<Program*>& s=get_instances();for(auto it:s)it->update_uniform_cache();Texture::b_texture_deleted()=false;}
+		for(auto& [n,u]:_uniform_cache)
 		{
 			if(u.ID<0||!u.texture||u.textureID<0) continue;
 			if(glBindTextureUnit) glBindTextureUnit(u.textureID,u.texture->ID); else { glActiveTexture(GL_TEXTURE0+u.textureID);glBindTexture(u.texture->target,u.texture->ID); }
@@ -880,7 +892,7 @@ namespace gl {
 			if(strstr(u.name,"gl_")) continue; // query name now, and skip for built-in gl variables
 			if(u.ID<0&&u.block_index<0) continue; // invalid variables
 			//if(u.block_index>=0) continue; // keep uniform-block variables as well
-			if(prop[GL_ATOMIC_COUNTER_BUFFER_INDEX]!=-1){ int b; glGetActiveAtomicCounterBufferiv(ID,prop[GL_ATOMIC_COUNTER_BUFFER_INDEX],GL_ATOMIC_COUNTER_BUFFER_BINDING,&b); atomic_counter_buffer_binding_map[u.name]=b; }
+			if(prop[GL_ATOMIC_COUNTER_BUFFER_INDEX]!=-1){ int b; glGetActiveAtomicCounterBufferiv(ID,prop[GL_ATOMIC_COUNTER_BUFFER_INDEX],GL_ATOMIC_COUNTER_BUFFER_BINDING,&b); _atomic_counter_buffer_binding_map[u.name]=b; }
 			v.emplace_back(u);
 		}
 		if(program0>=0) glUseProgram(program0); // restore the original program
@@ -896,20 +908,20 @@ namespace gl {
 		{
 			if(gxIsImageType(u.type)) glGetUniformiv(ID,u.ID,&u.binding);
 			bool b_texture = gxIsSamplerType(u.type); if(b_texture){ u.textureID=texture_id++; if(glProgramUniform1i)glProgramUniform1i(ID,u.ID,u.textureID);else glUniform1i(u.ID,u.textureID); } // setting sampler locations avoids validation error in Intel Compiler
-			uniform_cache[u.name]=u; if(u.array_size==1) continue;
+			_uniform_cache[u.name]=u; if(u.array_size==1) continue;
 			GLchar name[256]; strcpy(name,u.name); GLchar* bracket=strchr(name,'['); if(bracket) bracket[0]='\0';
-			for( GLint loc=bracket?1:0;loc<u.array_size;loc++){ Uniform u1=u;sprintf(u1.name,"%s[%d]",name,loc);u1.ID=glGetUniformLocation(ID,u1.name);if(u1.ID==-1)continue;u1.array_size=u.array_size-loc;if(b_texture)u1.textureID=texture_id++;uniform_cache[u1.name]=u1; }
+			for( GLint loc=bracket?1:0;loc<u.array_size;loc++){ Uniform u1=u;sprintf(u1.name,"%s[%d]",name,loc);u1.ID=glGetUniformLocation(ID,u1.name);if(u1.ID==-1)continue;u1.array_size=u.array_size-loc;if(b_texture)u1.textureID=texture_id++;_uniform_cache[u1.name]=u1; }
 		}
 
 		// update uniform blocks
-		uniform_block_map.clear();
+		_uniform_block_map.clear();
 		for(int k=0,kn=gxGetProgramiv(ID,GL_ACTIVE_UNIFORM_BLOCKS);k<kn;k++)
 		{
 			UniformBlock ub; ub.ID=k; ub.program=this; ub.size=gxGetActiveUniformBlockiv(ID,k,GL_UNIFORM_BLOCK_DATA_SIZE);
-			GLsizei l=gxGetActiveUniformBlockiv(ID,k,GL_UNIFORM_BLOCK_NAME_LENGTH); /* length includes NULL */ if(l>std::extent<decltype(UniformBlock::name)>::value) printf("[%s] uniform block name is too long\n",name);
+			GLsizei l=gxGetActiveUniformBlockiv(ID,k,GL_UNIFORM_BLOCK_NAME_LENGTH); /* length includes NULL */ if(l>std::extent<decltype(UniformBlock::name)>::value) printf("[%s] uniform block name is too long\n",_name);
 			glGetActiveUniformBlockName(ID,k,l,&l,ub.name);
-			uniform_block_map[ub.name] = ub;
-			for(auto& [n,u]:uniform_cache){ if(u.block_index==ub.ID) strcpy(u.block_name,ub.name); } // update uniform block in uniform cache
+			_uniform_block_map[ub.name] = ub;
+			for(auto& [n,u]:_uniform_cache){ if(u.block_index==ub.ID) strcpy(u.block_name,ub.name); } // update uniform block in uniform cache
 		}
 
 		if(program0!=ID&&program0>=0) glUseProgram(program0); // restore the original program
@@ -1002,9 +1014,9 @@ namespace gl {
 //***********************************************
 	
 	// effect: a list of programs
-	struct Effect : public GLObject
+	struct Effect : public Object
 	{
-		Effect( GLuint ID, const char* name ) : GLObject(ID,name,0){ if(!(quad=gxCreateQuadVertexArray())) printf("[%s] unable to create quad buffer\n",name); }
+		Effect( GLuint ID, const char* name ) : Object(ID,name,0){ if(!(quad=gxCreateQuadVertexArray())) printf("[%s] unable to create quad buffer\n",name); }
 		~Effect() override { active_program=nullptr; if(quad){ delete quad; quad=nullptr; } if(!pts.empty()){ for(auto it:pts) safe_delete(it.second); pts.clear(); } for(auto& it:uniform_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} uniform_buffer_map.clear(); for(auto* p:programs) delete p; programs.clear(); }
 		static void unbind(){ glUseProgram(0); }
 
@@ -1013,10 +1025,10 @@ namespace gl {
 
 		bool empty() const { return programs.empty(); }
 		size_t size() const { return programs.size(); }
-		Program* get_program( const char* name ) const { for(uint k=0;k<programs.size();k++)if(_stricmp(programs[k]->name,name)==0) return programs[k]; printf("Unable to find program \"%s\" in effect \"%s\"\n", name, this->name ); return nullptr; }
-		Program* get_program( uint index ) const { if(index<programs.size()) return programs[index]; else { printf("[%s] Out-of-bound program index\n", name ); return nullptr; } }
+		Program* get_program( const char* name ) const { for(uint k=0;k<programs.size();k++)if(_stricmp(programs[k]->name(),name)==0) return programs[k]; printf("Unable to find program \"%s\" in effect \"%s\"\n", name, this->_name ); return nullptr; }
+		Program* get_program( uint index ) const { if(index<programs.size()) return programs[index]; else { printf("[%s] Out-of-bound program index\n", _name ); return nullptr; } }
 		Program* create_program( const char* prefix, const char* name, const program_source_t& source );
-		Program* append_program( Program* program ){ if(!program) return nullptr; programs.emplace_back(program); auto& m=program->uniform_block_map;for(auto& it:m){gl::Program::UniformBlock& ub=it.second;ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size);} return program; }
+		Program* append_program( Program* program ){ if(!program) return nullptr; programs.emplace_back(program); auto& m=program->_uniform_block_map;for(auto& it:m){gl::Program::UniformBlock& ub=it.second;ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size);} return program; }
 		bool append( gl::effect_source_t source );
 		template <class... Ts> bool append( Ts... args ){ gl::effect_source_t source; source.append_r(args...); return append(source); }
 
@@ -1042,15 +1054,15 @@ namespace gl {
 		void bind_image_texture( const char* name, Texture* t, GLenum access=GL_READ_WRITE /* or GL_WRITE_ONLY or GL_READ_ONLY */, GLint level=0, GLenum format=0, bool bLayered=false, GLint layer=0 ){ if(active_program) active_program->bind_image_texture(name,t,access,level,format,bLayered,layer); }
 
 		// uniform buffer/block
-		gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name); if(b&&b->size()!=size){ static std::set<std::string> warns; auto it=warns.find(name); if(it==warns.end()){ warns.insert(name); printf("[%s] %s(): uniform_buffer(%s).size(=%d)!=%d\n",this->name,__func__,name,int(b->size()),int(size));} } if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr,GL_DYNAMIC_STORAGE_BIT|GL_MAP_WRITE_BIT); if(!b){ printf("[%s] unable to create uniform buffer [%s]\n", this->name, name); return nullptr; } return uniform_buffer_map[name]=b; }
+		gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name); if(b&&b->size()!=size){ static std::set<std::string> warns; auto it=warns.find(name); if(it==warns.end()){ warns.insert(name); printf("[%s] %s(): uniform_buffer(%s).size(=%d)!=%d\n",this->_name,__func__,name,int(b->size()),int(size));} } if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr,GL_DYNAMIC_STORAGE_BIT|GL_MAP_WRITE_BIT); if(!b){ printf("[%s] unable to create uniform buffer [%s]\n", this->_name, name); return nullptr; } return uniform_buffer_map[name]=b; }
 		gl::Buffer* get_uniform_buffer( const char* name ){ auto it=uniform_buffer_map.find(name); return it==uniform_buffer_map.end()?nullptr:it->second; }
 		GLint get_uniform_block_binding( const char* name ){ GLint binding=active_program?active_program->get_uniform_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_uniform_block_binding(name); if(b!=-1) return b; } return -1; }
-		gl::Buffer* bind_uniform_buffer( const char* name, gl::Buffer* ub=nullptr /* if nullptr, use default buffer */ ){ gl::Buffer* b=ub?ub:get_uniform_buffer(name); GLuint binding=get_uniform_block_binding(name); if(b&&binding!=-1){ b->bind_base(binding); return b; } else{ if(!b) printf( "[%s] %s(): unable to find uniform buffer %s\n", this->name, __func__, name ); else printf( "[%s] %s(): unable to find uniform buffer binding %s\n", this->name, __func__, name ); return nullptr; } }
+		gl::Buffer* bind_uniform_buffer( const char* name, gl::Buffer* ub=nullptr /* if nullptr, use default buffer */ ){ gl::Buffer* b=ub?ub:get_uniform_buffer(name); GLuint binding=get_uniform_block_binding(name); if(b&&binding!=-1){ b->bind_base(binding); return b; } else{ if(!b) printf( "[%s] %s(): unable to find uniform buffer %s\n", this->_name, __func__, name ); else printf( "[%s] %s(): unable to find uniform buffer binding %s\n", this->_name, __func__, name ); return nullptr; } }
 
 		// blocks: uniform, shader storage, and atomic counter
-		GLint get_shader_storage_block_binding( const char* name ){ GLint binding=active_program?active_program->get_shader_storage_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_shader_storage_block_binding(name); if(b!=-1) return b; } printf( "[%s] %s(): unable to find shader storage block binding %s\n", this->name, __func__, name ); return -1; }
+		GLint get_shader_storage_block_binding( const char* name ){ GLint binding=active_program?active_program->get_shader_storage_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_shader_storage_block_binding(name); if(b!=-1) return b; } printf( "[%s] %s(): unable to find shader storage block binding %s\n", this->_name, __func__, name ); return -1; }
 		gl::Buffer* bind_shader_storage_buffer( const char* name, Buffer* buffer ){ GLint binding=get_shader_storage_block_binding(name); if(binding<0) return nullptr; if(buffer->target==GL_SHADER_STORAGE_BUFFER) buffer->bind_base(binding); else buffer->bind_base_as(GL_SHADER_STORAGE_BUFFER,binding); return buffer; }
-		GLint get_atomic_counter_buffer_binding( const char* name ){ GLint binding=active_program?active_program->get_atomic_counter_buffer_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_atomic_counter_buffer_binding(name); if(b!=-1) return b; } printf( "[%s] %s(): unable to find atomic counter buffer binding %s\n", this->name, __func__, name ); return -1; }
+		GLint get_atomic_counter_buffer_binding( const char* name ){ GLint binding=active_program?active_program->get_atomic_counter_buffer_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_atomic_counter_buffer_binding(name); if(b!=-1) return b; } printf( "[%s] %s(): unable to find atomic counter buffer binding %s\n", this->_name, __func__, name ); return -1; }
 		gl::Buffer* bind_atomic_counter_buffer( const char* name, Buffer* buffer ){ GLint binding=get_atomic_counter_buffer_binding(name); if(binding<0) return nullptr; if(buffer->target==GL_ATOMIC_COUNTER_BUFFER) buffer->bind_base(binding); else buffer->bind_base_as(GL_ATOMIC_COUNTER_BUFFER,binding); return buffer; }
 
 		// draw or compute
@@ -1531,7 +1543,7 @@ template <class... Ts> inline gl::Effect* gxCreateEffect( const char* fxname, Ts
 
 inline bool gl::Effect::append( gl::effect_source_t source )
 {
-	return __gxCreateEffectImpl(this,this->name,source);
+	return __gxCreateEffectImpl(this,this->_name,source);
 }
 
 inline gl::Framebuffer* gxCreateFramebuffer( const char* name=nullptr )
@@ -1558,7 +1570,7 @@ inline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsizei w
 	GLenum type = gxGetTextureType( internal_format );
 
 	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type); if(width==0) return texture;
-	texture->key = gl::Texture::crc(0,levels,0,layers,target,false);
+	texture->_key = gl::Texture::crc(0,levels,0,layers,target,false);
 	glBindTexture( target, ID );
 
 	// allocate storage
@@ -1596,7 +1608,7 @@ inline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsizei w
 	GLenum type = gxGetTextureType( internal_format );
 
 	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type); if(width==0||height==0) return texture;
-	texture->key = gl::Texture::crc(0,levels,0,layers,target,false);
+	texture->_key = gl::Texture::crc(0,levels,0,layers,target,false);
 	glBindTexture( target, ID );
 
 	// multipsamples
@@ -1648,7 +1660,7 @@ inline gl::Texture* gxCreateTexture3D( const char* name, GLint levels, GLsizei w
 	GLenum type = gxGetTextureType( internal_format );
 
 	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type); if(width==0||height==0||depth==0) return texture;
-	texture->key = gl::Texture::crc(0,levels,0,depth,target,false);
+	texture->_key = gl::Texture::crc(0,levels,0,depth,target,false);
 	glBindTexture( target, ID );
 
 	// allocate storage
@@ -1688,7 +1700,7 @@ inline gl::Texture* gxCreateTextureCube( const char* name, GLint levels, GLsizei
 	GLenum type = gxGetTextureType( internal_format );
 
 	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type);
-	texture->key = gl::Texture::crc(0,levels,0,count,target,false);
+	texture->_key = gl::Texture::crc(0,levels,0,count,target,false);
 
 	glBindTexture( target, ID );
 	if( target==GL_TEXTURE_CUBE_MAP )
@@ -1738,7 +1750,7 @@ inline gl::Texture* gxCreateTextureBuffer( const char* name, gl::Buffer* buffer,
 
 	// create a texture
 	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type);
-	texture->key = gl::Texture::crc(0,1,0,1,target,false);
+	texture->_key = gl::Texture::crc(0,1,0,1,target,false);
 	glBindTexture( target, ID );
 
 	// create a buffer object and bind the storage using buffer object
@@ -1766,7 +1778,7 @@ inline gl::Texture* gxCreateTextureRectangle( const char* name, GLsizei width, G
 	GLenum type = gxGetTextureType( internal_format );
 
 	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type); if(width==0||height==0) return texture;
-	texture->key = gl::Texture::crc(0,1,0,1,target,false);
+	texture->_key = gl::Texture::crc(0,1,0,1,target,false);
 	glBindTexture( target, ID );
 
 	// allocate storage
@@ -1791,14 +1803,14 @@ inline gl::Texture* gxCreateTextureRectangle( const char* name, GLsizei width, G
 inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLuint levels, GLuint min_layer=0, GLuint layers=1, GLenum target=0, bool force_array=false )
 {
 	uint key = gl::Texture::crc(min_level,levels,min_layer,layers,target,force_array);
-	for(gl::Texture* t=src; t; t=t->next ) if(t->key==key) return t;
+	for(gl::Texture* t=src; t; t=t->_next ) if(t->_key==key) return t;
 
-	if(src->target==GL_TEXTURE_BUFFER){ printf( "%s(): texture buffer (%s) cannot have a view\n", __func__, src->name ); return nullptr; }
-	if(levels==0){ printf( "%s(): %s->view should have more than one levels\n", __func__, src->name ); return nullptr; }
-	if(layers==0){ printf( "%s(): %s->view should have more than one layers\n", __func__, src->name ); return nullptr; }
-	if((min_level+levels)>GLuint(src->mip_levels())){ printf( "%s(): %s->view should have less than %d levels\n", __func__, src->name, src->mip_levels() ); return nullptr; }
-	if((min_layer+layers)>GLuint(src->layers())){ printf( "%s(): %s->view should have less than %d layers\n", __func__, src->name, src->layers() ); return nullptr; }
-	if(!src->is_immutable()){ printf("%s(): !%s->is_immutable()\n", __func__, src->name ); return nullptr; }
+	if(src->target==GL_TEXTURE_BUFFER){ printf( "%s(): texture buffer (%s) cannot have a view\n", __func__, src->_name ); return nullptr; }
+	if(levels==0){ printf( "%s(): %s->view should have more than one levels\n", __func__, src->_name ); return nullptr; }
+	if(layers==0){ printf( "%s(): %s->view should have more than one layers\n", __func__, src->_name ); return nullptr; }
+	if((min_level+levels)>GLuint(src->mip_levels())){ printf( "%s(): %s->view should have less than %d levels\n", __func__, src->_name, src->mip_levels() ); return nullptr; }
+	if((min_layer+layers)>GLuint(src->layers())){ printf( "%s(): %s->view should have less than %d layers\n", __func__, src->_name, src->layers() ); return nullptr; }
+	if(!src->is_immutable()){ printf("%s(): !%s->is_immutable()\n", __func__, src->_name ); return nullptr; }
 
 	// correct the new target
 	if(target==0)
@@ -1821,7 +1833,7 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLu
 	// create a new texture; here, we must use glGenTextures() instead of glCreateTextures(), because texture view requires to have a created but uninitialized texture.
 	GLuint ID1; glGenTextures(1,&ID1); if(ID1==0) return nullptr;
 	bool b_slice0 = min_level==0&&levels==1&&layers==1;
-	const char* name1 = b_slice0?format("%s[%d]",src->name,min_layer):format("%s[%d:%d][%d:%d]",src->name,min_layer,layers-1,min_level,levels-1);
+	const char* name1 = b_slice0?format("%s[%d]",src->_name,min_layer):format("%s[%d:%d][%d:%d]",src->_name,min_layer,layers-1,min_level,levels-1);
 
 	// get attributes
 	GLint internal_format	= src->internal_format();
@@ -1830,9 +1842,9 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLu
 	GLint mag_filter		= src->get_texture_parameteriv( GL_TEXTURE_MAG_FILTER );
 
 	// allocate the new texture using the initial crt heap
-	gl::Texture* t1 = (gl::Texture*) HeapAlloc((void*)src->crtheap,0,sizeof(gl::Texture));
-	new(t1) gl::Texture(ID1,name1,target,internal_format,src->format(),src->type(),src->crtheap);
-	t1->key = key;
+	gl::Texture* t1 = (gl::Texture*) HeapAlloc((void*)src->_crtheap,0,sizeof(gl::Texture));
+	new(t1) gl::Texture(ID1,name1,target,internal_format,src->format(),src->type(),src->_crtheap);
+	t1->_key = key;
 
 	// correct min_filter, mag_filter
 	if(levels==1)
@@ -1856,7 +1868,7 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLu
 	t1->set_wrap( wrap );
 
 	// add to linked list for search
-	for( gl::Texture* t=src; t; t=t->next ) if(t->next==nullptr){ t->next=t1; break; }
+	for( gl::Texture* t=src; t; t=t->_next ) if(t->_next==nullptr){ t->_next=t1; break; }
 	return t1;
 }
 
