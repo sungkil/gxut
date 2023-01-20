@@ -114,11 +114,8 @@ inline bool		gxHasMultidraw(){ return GX_ARB_bindless_texture&&GX_ARB_shader_dra
 
 //***********************************************
 // forward declarations
-namespace gl
-{
-	unsigned int crc32c( const void* ptr, size_t size, unsigned int crc0=0 );
-	struct Texture; struct Buffer; struct Program; struct VertexArray;
-}
+namespace gl { struct Texture; struct Buffer; struct Program; struct VertexArray; }
+namespace fx { struct metadata_t; }
 
 gl::Texture*		gxCreateTexture1D(const char*,GLint,GLsizei,GLsizei,GLint,GLvoid*,bool);
 gl::Texture*		gxCreateTexture2D(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,GLvoid*,bool,bool,GLsizei);
@@ -146,17 +143,15 @@ namespace gl {
 	{
 		const GLuint	ID;
 		const GLenum	target;
-				
-		Object( GLuint id, const char* name, GLenum _target ):ID(id),_name(""),target(_target),_target_binding(gxGetTargetBinding(_target)){ size_t l=strlen(name),c=sizeof(_name); strncpy((char*)_name,name,l<c?l:c-1);((char*)_name)[l]=0; }
+	
 		virtual ~Object(){}
-		virtual const char* name() const { return _name; }
-		__forceinline GLuint binding( GLenum _target=0 ){ return _target==0?gxGetIntegerv(_target_binding):gxGetIntegerv(gxGetTargetBinding(_target)); }
-		template <class T> T& metadata( uint index ){ return reinterpret_cast<T&>(_metadata[index]); } // typed accessor to metadata
+		Object( GLuint id, const char* name, GLenum _target ):ID(id),target(_target),_target_binding(gxGetTargetBinding(_target)){ size_t l=strlen(name),c=sizeof(_name)-1,n=l<c?l:c;strncpy((char*)_name,name,n);((char*)_name)[n]=0; }
+		const char* name() const { return _name; }
+		__forceinline GLuint binding( GLenum _target=0 ) const { return _target==0?gxGetIntegerv(_target_binding):gxGetIntegerv(gxGetTargetBinding(_target)); }
 	
 	protected:
-		const char		_name[256];
-		const GLenum	_target_binding;
-		uint			_metadata[16]={}; // 64 bytes reserved for user-defined gxfx attributes
+		const char		_name[256]={};
+		const GLenum	_target_binding=0;
 	};
 
 	//***********************************************
@@ -264,10 +259,23 @@ namespace gl {
 	struct DrawElementsIndirectCommand { uint count, instance_count=1, first_index=0, base_vertex=0, base_instance=0; uint pad0, pad1, pad2; }; // see https://www.opengl.org/wiki/GLAPI/glDrawElementsInstancedBaseVertexBaseInstance
 
 	//***********************************************
+	// crc32c
+	inline unsigned int crc32c( const void* ptr, size_t size, unsigned int crc0=0 )
+	{
+		const unsigned char* buff= (unsigned char*) ptr;
+		static unsigned* t[4] = {nullptr}; if(!t[0]){ for(int k=0;k<4;k++) t[k]=(unsigned*) malloc(sizeof(unsigned)*256); for(int k=0;k<256;k++){ unsigned c=k; for( unsigned j=0;j<8;j++) c=c&1?0x82f63b78UL^(c>>1):c>>1; t[0][k]=c; } for(int k=0;k<256;k++){ unsigned c=t[0][k]; for(int j=1;j<4;j++) t[j][k]=c=t[0][c&0xff]^(c>>8); } }
+		if(buff==nullptr||size==0) return crc0; unsigned c = ~crc0;
+		for(;size&&(((ptrdiff_t)buff)&7);size--,buff++) c=t[0][(c^(*buff))&0xff]^(c>>8); // move forward to the 8-byte aligned boundary
+		for(;size>=4;size-=4,buff+=4){c^=*(unsigned*)buff;c=t[3][(c>>0)&0xff]^t[2][(c>>8)&0xff]^t[1][(c>>16)&0xff]^t[0][(c>>24)&0xff]; }
+		for(;size;size--,buff++) c=t[0][(c^(*buff))&0xff]^(c>>8);
+		return ~c;
+	}
+
+	//***********************************************
 	struct Texture : public Object
 	{
 		Texture( GLuint ID, const char* name, GLenum target, GLenum InternalFormat, GLenum Format, GLenum Type, uint64_t crtheap=_get_heap_handle() ):Object(ID,name,target),_internal_format(InternalFormat),_type(Type),_format(Format),_channels(gxGetTextureChannels(InternalFormat)),_bpp(gxGetTextureBPP(InternalFormat)),_crtheap(crtheap){}
-		~Texture() override { if(_next){ _next->~Texture(); HeapFree((void*)_next->_crtheap,0,_next); } glDeleteTextures(1,(GLuint*)&ID); b_texture_deleted()=true; } // use HeapFree() for views
+		~Texture() override { if(_next){ _next->~Texture(); HeapFree((void*)_next->_crtheap,0,_next); } make_resident(false); glDeleteTextures(1,(GLuint*)&ID); b_texture_deleted()=true; } // use HeapFree() for views
 
 		GLuint bind( bool b_bind=true ){ GLuint b0=gxGetIntegerv(_target_binding); if(!b_bind||ID!=b0) glBindTexture( target, b_bind?ID:0 ); return b0; }
 		void bind_image_texture( GLuint unit, GLenum access=GL_READ_ONLY /* or GL_WRITE_ONLY or GL_READ_WRITE */ , GLint level=0, GLenum format=0, bool bLayered=false, GLint layer=0 ){ glBindImageTexture( unit, ID, level, bLayered?GL_TRUE:GL_FALSE, layer, access, format?format:internal_format() ); }
@@ -364,6 +372,9 @@ namespace gl {
 		friend Texture* ::gxCreateTextureBuffer(const char*,Buffer*,GLint);
 		friend Texture* ::gxCreateTextureRectangle(const char*,GLsizei,GLsizei,GLint,GLvoid*);
 		friend Texture* ::gxCreateTextureView(Texture* src,GLuint,GLuint,GLuint,GLuint,GLenum,bool);
+
+		friend struct fx::metadata_t;
+		fx::metadata_t* metadata = nullptr;
 
 	protected: // protected data members
 
@@ -1194,17 +1205,6 @@ inline gl::VertexArray* gxCreatePointVertexArray( GLsizei width, GLsizei height 
 		va = gxCreateVertexArray( "PTS", &pts[0], pts.size() );
 	}
 	return va;
-}
-
-inline unsigned int gl::crc32c( const void* ptr, size_t size, unsigned int crc0 )
-{
-	const unsigned char* buff= (unsigned char*) ptr;
-	static unsigned* t[4] = {nullptr}; if(!t[0]){ for(int k=0;k<4;k++) t[k]=(unsigned*) malloc(sizeof(unsigned)*256); for(int k=0;k<256;k++){ unsigned c=k; for( unsigned j=0;j<8;j++) c=c&1?0x82f63b78UL^(c>>1):c>>1; t[0][k]=c; } for(int k=0;k<256;k++){ unsigned c=t[0][k]; for(int j=1;j<4;j++) t[j][k]=c=t[0][c&0xff]^(c>>8); } }
-	if(buff==nullptr||size==0) return crc0; unsigned c = ~crc0;
-	for(;size&&(((ptrdiff_t)buff)&7);size--,buff++) c=t[0][(c^(*buff))&0xff]^(c>>8); // move forward to the 8-byte aligned boundary
-	for(;size>=4;size-=4,buff+=4){c^=*(unsigned*)buff;c=t[3][(c>>0)&0xff]^t[2][(c>>8)&0xff]^t[1][(c>>16)&0xff]^t[0][(c>>24)&0xff]; }
-	for(;size;size--,buff++) c=t[0][(c^(*buff))&0xff]^(c>>8);
-	return ~c;
 }
 
 inline void gxSaveProgramBinary( const char* name, GLuint ID, uint crc )
