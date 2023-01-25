@@ -956,11 +956,16 @@ namespace gl {
 		shader_macro_t macro; // embedded macro
 
 		effect_source_t() = default;
-		effect_source_t( const std::vector<named_string_t>& v ){ reinterpret_cast<std::vector<named_string_t>&>(*this)=v; }
-		effect_source_t( const std::initializer_list<named_string_t>& v ){ reinterpret_cast<std::vector<named_string_t>&>(*this)=v; }
+		effect_source_t( const std::vector<value_type>& v ){ reinterpret_cast<std::vector<value_type>&>(*this)=v; }
+		effect_source_t( const std::initializer_list<value_type>& v ){ reinterpret_cast<std::vector<value_type>&>(*this)=v; }
 
-		void clear(){ __super::clear(); macro.clear(); }
-		void append( std::string name, std::string source ){ if(!name.empty()){for(auto& s:*this) if(_stricmp(s.name.c_str(),name.c_str())==0){ s.value=source; return; }} emplace_back( named_string_t{name,source} ); }
+		// override and extend members
+		void clear() noexcept { __super::clear(); macro.clear(); }
+		iterator find( std::string name ){ for( auto it=begin(); it!=end(); it++ ) if(_stricmp(it->name.c_str(),name.c_str())==0) return it; return end(); }
+		void append( std::string name, std::string source ){ if(!name.empty()){for(auto& s:*this) if(_stricmp(s.name.c_str(),name.c_str())==0){ s.value=source; return; }} emplace_back( value_type{name,source} ); }
+		bool replace( std::string _Where, std::string name, std::string source ){ auto it=find(_Where); if(it==end()) return false; it->name = name; it->value = source; return true; }
+		bool replace( iterator _Where, std::string name, std::string source ){ if(_Where==end()) return false; _Where->name = name; _Where->value = source; return true; }
+		
 		std::string get_name( int index ) const { if(!macro.empty()){ if(index==0) return "macro.fx"; index--; } return this->at(index).name; }
 		std::vector<std::string> names() const { std::vector<std::string> vs; if(!macro.empty()) vs.emplace_back("macro.fx"); for( auto& s:*this) vs.emplace_back(s.name); return vs; }
 		std::vector<std::string> sources() const { std::vector<std::string> vs; if(!macro.empty()) vs.emplace_back(macro.merge()); for( auto& s:*this) vs.emplace_back(s.value); return vs; }
