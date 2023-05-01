@@ -1,10 +1,12 @@
 #include <gxut/gxmath.h>
 #include <gxut/gxstring.h>
 #include <shlwapi.h>
-#include <gxut/gxfilesystem.h>
 #include <gxut/gxos.h>
+#include <gxut/gxfilesystem.h>
+#include <gxut/gxmemory.h>
 #include <gxut/gxobjparser.h>
 #include <gximage/gximage.h>
+#pragma comment( lib, "shlwapi.lib" )
 
 // common local attributes
 const char* __GX_MTLPARSER_CPP_TIMESTAMP__ = __TIMESTAMP__;
