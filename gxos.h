@@ -67,21 +67,23 @@ namespace os {
 //*************************************
 
 // win32 utilities
-__noinline const wchar_t* get_last_error(){ static wchar_t buff[4096]={};DWORD e=GetLastError();wchar_t *s;FormatMessageW( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,e,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPWSTR)&s,0,nullptr);wsprintf(buff,L"%s (code=%x)",s,uint(e));LocalFree(s);return buff; }
+__noinline const wchar_t* get_last_error(){ static wchar_t buff[4096]={};DWORD e=GetLastError();wchar_t *s=nullptr;FormatMessageW( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,e,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPWSTR)&s,0,nullptr);wsprintf(buff,L"%s (code=%x)",s,uint(e));LocalFree(s);return buff; }
 __noinline void flush_message( int sleepTime=1 ){MSG m;for(int k=0;k<100&&PeekMessageW(&m,nullptr,0,0,PM_REMOVE);k++)SendMessage(m.hwnd,m.message,m.wParam,m.lParam);if(sleepTime>=0) Sleep(sleepTime);}
 
-inline void exit( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fprintf( stdout, "[%s] %s", path::module_path().name(false).wtoa(), &buff[0] ); ::exit(EXIT_FAILURE); }
-inline void exit( const wchar_t* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<wchar_t> buff(_vscwprintf(fmt,a)+1); vswprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fwprintf( stdout, L"[%s] %s", path::module_path().name(false).c_str(), &buff[0] ); ::exit(EXIT_FAILURE); }
+inline void exit( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(size_t(_vscprintf(fmt,a))+1); vsprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fprintf( stdout, "[%s] %s", path::module_path().name(false).wtoa(), &buff[0] ); ::exit(EXIT_FAILURE); }
+inline void exit( const wchar_t* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<wchar_t> buff(size_t(_vscwprintf(fmt,a))+1); vswprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fwprintf( stdout, L"[%s] %s", path::module_path().name(false).c_str(), &buff[0] ); ::exit(EXIT_FAILURE); }
 #if !defined(__GNUC__)&&((__cplusplus>199711L)||(_MSC_VER>=1600/*VS2010*/))
 inline void usleep( int us ){ std::this_thread::sleep_for(std::chrono::microseconds(us)); }
 #endif
 inline bool shutdown()
 {
 	HANDLE hToken; if(!OpenProcessToken(GetCurrentProcess(),TOKEN_ADJUST_PRIVILEGES|TOKEN_QUERY,&hToken)) return false;
-	TOKEN_PRIVILEGES tkp; LookupPrivilegeValue(NULL, SE_SHUTDOWN_NAME, &tkp.Privileges[0].Luid);
+	TOKEN_PRIVILEGES tkp={}; LookupPrivilegeValue(NULL, SE_SHUTDOWN_NAME, &tkp.Privileges[0].Luid);
 	tkp.PrivilegeCount=1; tkp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
 	AdjustTokenPrivileges(hToken, FALSE, &tkp, 0, (PTOKEN_PRIVILEGES)NULL, 0); if(GetLastError()!=ERROR_SUCCESS) return false;
-	return ExitWindowsEx(EWX_POWEROFF|EWX_SHUTDOWN|EWX_FORCE,SHTDN_REASON_FLAG_PLANNED|SHTDN_REASON_MAJOR_APPLICATION|SHTDN_REASON_MINOR_OTHER);
+#pragma warning( disable: 28159 ) // Consider using 'a design alternative' instead of 'InitiateSystemShutdownExW'. Reason: Rearchitect to avoid Reboot
+	return InitiateSystemShutdownExW(nullptr,nullptr,0,TRUE,FALSE,SHTDN_REASON_FLAG_PLANNED|SHTDN_REASON_MAJOR_APPLICATION|SHTDN_REASON_MINOR_OTHER);
+#pragma warning( default: 28159 )
 }
 
 inline bool is_dos_cmd( const wchar_t* cmd )
@@ -126,7 +128,7 @@ inline const std::vector<path>& paths()
 {
 	static std::vector<path> v; v.reserve(64); if(!v.empty()) return v;
 	wchar_t* buff = (wchar_t*) var( L"PATH" ); if(!buff||!*buff) return v;
-	for(wchar_t *ctx,*token=wcstok_s(buff,L";",&ctx);token;token=wcstok_s(nullptr,L";",&ctx))
+	for(wchar_t *ctx=nullptr,*token=wcstok_s(buff,L";",&ctx);token;token=wcstok_s(nullptr,L";",&ctx))
 	{
 		if(!*token) continue;
 		path t=path(token).canonical().add_backslash();
@@ -268,7 +270,7 @@ struct dll_t
 
 inline std::vector<HWND> enum_windows( const wchar_t* filter=nullptr )
 {
-	struct params { std::vector<HWND> v; const wchar_t* filter; };
+	struct params { std::vector<HWND> v; const wchar_t* filter=nullptr; };
 	auto __enum_windows_proc = []( HWND hwnd , LPARAM pParams )->BOOL
 	{
 		params* p = ((params*)pParams);
@@ -301,7 +303,7 @@ __noinline bool create_process( const wchar_t* app=nullptr, const wchar_t* argum
 	// prioritize com against exe for no-extension apps
 	if(!app&&arguments&&*arguments!=L'\"')
 	{
-		wcscpy(buf,arguments); wchar_t *ctx, *token=wcstok_s(buf,L" \t\n",&ctx); path t=path(token).to_backslash(), e=env::where(t);
+		wcscpy(buf,arguments); wchar_t *ctx=nullptr, *token=wcstok_s(buf,L" \t\n",&ctx); path t=path(token).to_backslash(), e=env::where(t);
 		if(!t.exists()&&t.ext().empty()&&!e.empty()&&e.ext()==L"com") arguments=wcscpy(buf,wcscat(wcscat(wcscpy(cmd,token),L".com "),buf+wcslen(token)+1)); // use cmd as temp
 	}
 
@@ -334,7 +336,7 @@ inline const std::vector<DWORD>& enum_process_indices()
 	if(!EnumProcesses( &pids[0], DWORD(pids.size())*sizeof(DWORD), &cb_needed)){ pids.clear(); return pids; }
 	for( npids=cb_needed/sizeof(DWORD); npids>=pids.size(); npids=cb_needed/sizeof(DWORD) )
 	{
-		pids.resize(npids*2);
+		pids.resize(2llu*npids);
 		if(!EnumProcesses( &pids[0], DWORD(pids.size())*sizeof(DWORD), &cb_needed)){ pids.clear(); return pids; }
 	}
 	pids.resize(npids);
@@ -345,7 +347,7 @@ inline path get_process_path( DWORD pid )
 {
 	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ,FALSE,pid); if(!hProcess) return L"";
 	HMODULE hMod; DWORD cbNeeded; if(!EnumProcessModules(hProcess,&hMod,sizeof(hMod),&cbNeeded)){ CloseHandle(hProcess); return L""; }
-	std::array<wchar_t,4096> buff; GetModuleFileNameExW(hProcess,hMod,buff.data(),DWORD(buff.size()*sizeof(wchar_t))); CloseHandle(hProcess);
+	std::array<wchar_t,4096> buff={}; GetModuleFileNameExW(hProcess,hMod,buff.data(),DWORD(buff.size())); CloseHandle(hProcess);
 	return !buff.empty()&&buff[0]?path(buff.data()):path();
 }
 
@@ -353,7 +355,7 @@ inline path get_process_name( DWORD pid )
 {
 	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ,FALSE,pid); if(!hProcess) return L"";
 	HMODULE hMod; DWORD cbNeeded; if(!EnumProcessModules(hProcess,&hMod,sizeof(hMod),&cbNeeded)){ CloseHandle(hProcess); return L""; }
-	std::array<wchar_t,4096> buff; GetModuleBaseNameW(hProcess,hMod,buff.data(),DWORD(buff.size()*sizeof(wchar_t))); CloseHandle(hProcess);
+	std::array<wchar_t,4096> buff={}; GetModuleBaseNameW(hProcess,hMod,buff.data(),DWORD(buff.size())); CloseHandle(hProcess);
 	return !buff.empty()&&buff[0]?path(buff.data()):path();
 }
 
@@ -379,7 +381,7 @@ inline std::vector<DWORD> find_process( const wchar_t* name_or_path )
 inline bool process_exists( uint pid )
 {
 #ifdef _INC_TOOLHELP32
-	PROCESSENTRY32W entry; entry.dwSize =sizeof(decltype(entry));
+	PROCESSENTRY32W entry={}; entry.dwSize =sizeof(decltype(entry));
 	HANDLE hSnapShot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0); if(hSnapShot==INVALID_HANDLE_VALUE) return false;
 	BOOL hRes=Process32First( hSnapShot,&entry ); for(; hRes; hRes=Process32NextW(hSnapShot,&entry) ) if(entry.th32ProcessID==pid) break;
 	CloseHandle(hSnapShot);
@@ -394,7 +396,7 @@ inline bool process_exists( uint pid )
 inline bool process_exists( path file_path )
 {
 #ifdef _INC_TOOLHELP32
-	MODULEENTRY32W entry; entry.dwSize =sizeof(decltype(entry));
+	MODULEENTRY32W entry={}; entry.dwSize =sizeof(decltype(entry));
 	HANDLE hSnapShot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0); if(hSnapShot==INVALID_HANDLE_VALUE) return false;
 	BOOL hRes=Module32FirstW( hSnapShot,&entry ); for(; hRes; hRes=Module32NextW(hSnapShot,&entry) ) if(file_path==path(entry.szExePath)) break;
 	CloseHandle(hSnapShot);

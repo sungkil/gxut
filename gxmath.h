@@ -40,7 +40,6 @@ template <class T> using enable_float_t	 = typename std::enable_if_t<std::is_flo
 template <class T,template <class> class A=tarray2> struct tvec2
 {
 	__default_array_impl(2,T,tvec2);
-
 	union{struct{T x,y;};struct{T r,g;};A<T> xy,rg;};
 
 	// basic constructors
@@ -301,10 +300,10 @@ namespace std
 // half-precision float and conversion
 #ifndef __GXMATH_NO_HALF__
 struct half { unsigned short mantissa:10,exponent:5,sign:1; __forceinline operator float() const; };	// IEEE 754-2008 half-precision (16-bit) floating-point storage. // https://github.com/HeliumProject/Helium/blob/master/Math/Float16.cpp
-__forceinline float	htof( half value ){ struct _float32_t {uint mantissa:23,exponent:8,sign:1;}; _float32_t result;result.sign = value.sign;uint exponent=value.exponent,mantissa=value.mantissa; if(exponent==31){result.exponent=255;result.mantissa=0;} else if(exponent==0&&mantissa==0){result.exponent=0;result.mantissa=0;} else if(exponent==0){uint mantissa_shift=10-static_cast<uint>(log2(float(mantissa)));result.exponent=127-(15-1)-mantissa_shift;result.mantissa=mantissa<<(mantissa_shift+23-10);} else{result.exponent=127-15+exponent;result.mantissa=static_cast<uint>(value.mantissa)<<(23-10);} return reinterpret_cast<float&>(result); }
+__forceinline float	htof( half value ){ struct _float32_t {uint mantissa:23,exponent:8,sign:1;}; _float32_t result={};result.sign = value.sign;uint exponent=value.exponent,mantissa=value.mantissa; if(exponent==31){result.exponent=255;result.mantissa=0;} else if(exponent==0&&mantissa==0){result.exponent=0;result.mantissa=0;} else if(exponent==0){uint mantissa_shift=10-static_cast<uint>(log2(float(mantissa)));result.exponent=127-(15-1)-mantissa_shift;result.mantissa=mantissa<<(mantissa_shift+23-10);} else{result.exponent=127-15+exponent;result.mantissa=static_cast<uint>(value.mantissa)<<(23-10);} return reinterpret_cast<float&>(result); }
 __forceinline half::operator float() const {return htof(*this);}
 __forceinline float*htof( const half* ph, float* pf, size_t nElements, size_t float_stride=1 ){ if(pf==nullptr||ph==nullptr||nElements==0) return pf; float* pf0=pf; for( size_t k=0; k < nElements; k++, ph++, pf+=float_stride ) *pf=htof(*ph); return pf0; }
-__forceinline half ftoh( float f ){ struct _float32_t {uint mantissa:23,exponent:8,sign:1;}; _float32_t value=reinterpret_cast<_float32_t&>(f);half result;result.sign=value.sign;uint exponent=value.exponent; if(exponent==255){result.exponent=31;result.mantissa=0;} else if(exponent<127-15+1){uint mantissa=(1<<23)|value.mantissa;size_t mantissa_shift=(23-10)+(127-15+1)-exponent;result.exponent=0;result.mantissa=static_cast<ushort>(mantissa>>mantissa_shift);} else if(exponent>127+(31-15-1)){result.exponent=31-1;result.mantissa=1023;} else {result.exponent=static_cast<ushort>(127-15+exponent);result.mantissa=static_cast<ushort>(value.mantissa>>(23-10));} return result; }
+__forceinline half ftoh( float f ){ struct _float32_t {uint mantissa:23,exponent:8,sign:1;}; _float32_t value=reinterpret_cast<_float32_t&>(f);half result={};result.sign=value.sign; uint exponent=value.exponent; if(exponent==255){result.exponent=31;result.mantissa=0;} else if(exponent<127-15+1){uint mantissa=(1<<23)|value.mantissa; uint mantissa_shift=(23-10)+(127-15+1)-exponent;result.exponent=0;result.mantissa=static_cast<ushort>(mantissa>>mantissa_shift);} else if(exponent>127+(31-15-1)){result.exponent=31-1;result.mantissa=1023;} else {result.exponent=static_cast<ushort>(127-15+exponent);result.mantissa=static_cast<ushort>(value.mantissa>>(23-10));} return result; }
 using half2	= tarray2<half>;	using half3	= tarray3<half>;	using half4 = tarray4<half>;
 
 // half vector conversion
@@ -656,7 +655,7 @@ __forceinline vec2 lerp( const vec2& y1, const vec2& y2, const vec2& t ){ return
 __forceinline vec3 lerp( const vec3& y1, const vec3& y2, const vec3& t ){ return y1*(-t+1.0f)+y2*t; }
 __forceinline vec4 lerp( const vec4& y1, const vec4& y2, const vec4& t ){ return y1*(-t+1.0f)+y2*t; }
 __forceinline double lerp( double v1, double v2, double t ){ return v1*(1.0-t)+v2*t; }
-__forceinline double lerp( double v1, double v2, float t ){ return v1*(1.0f-t)+v2*t; }
+__forceinline double lerp( double v1, double v2, float t ){ return v1*(1.0-double(t))+v2*t; }
 __forceinline dvec2 lerp( const dvec2& y1, const dvec2& y2, double t ){ return y1*(-t+1.0)+y2*t; }
 __forceinline dvec3 lerp( const dvec3& y1, const dvec3& y2, double t ){ return y1*(-t+1.0)+y2*t; }
 __forceinline dvec4 lerp( const dvec4& y1, const dvec4& y2, double t ){ return y1*(-t+1.0)+y2*t; }
@@ -672,7 +671,7 @@ __forceinline vec2 mix( const vec2& y1, const vec2& y2, const vec2& t ){ return 
 __forceinline vec3 mix( const vec3& y1, const vec3& y2, const vec3& t ){ return y1*(-t+1.0f)+y2*t; }
 __forceinline vec4 mix( const vec4& y1, const vec4& y2, const vec4& t ){ return y1*(-t+1.0f)+y2*t; }
 __forceinline double mix( double v1, double v2, double t ){ return v1*(1.0-t)+v2*t; }
-__forceinline double mix( double v1, double v2, float t ){ return v1*(1.0f-t)+v2*t; }
+__forceinline double mix( double v1, double v2, float t ){ return v1*(1.0-double(t))+v2*t; }
 __forceinline dvec2 mix( const dvec2& y1, const dvec2& y2, double t ){ return y1*(-t+1.0)+y2*t; }
 __forceinline dvec3 mix( const dvec3& y1, const dvec3& y2, double t ){ return y1*(-t+1.0)+y2*t; }
 __forceinline dvec4 mix( const dvec4& y1, const dvec4& y2, double t ){ return y1*(-t+1.0)+y2*t; }
@@ -700,17 +699,17 @@ __forceinline vec2 smootherstep( const vec2& t ){ return vec2(smootherstep(t.x),
 __forceinline vec3 smootherstep( const vec3& t ){ return vec3(smootherstep(t.x),smootherstep(t.y),smootherstep(t.z)); }
 __forceinline vec4 smootherstep( const vec4& t ){ return vec4(smootherstep(t.x),smootherstep(t.y),smootherstep(t.z),smootherstep(t.w)); }
 // packing/unpacking/casting: https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_shading_language_packing.txt
-__forceinline uint packUnorm2x16( vec2 v ){ ushort2 u; for(int k=0;k<2;k++) u[k]=ushort(round(clamp(v[k],0.0f,1.0f)*65535.0f)); return reinterpret_cast<uint&>(u); }
-__forceinline uint packSnorm2x16( vec2 v ){ short2 s; for(int k=0;k<2;k++) s[k]=short(round(clamp(v[k],-1.0f,1.0f)*32767.0f)); return reinterpret_cast<uint&>(s); }
-__forceinline uint packUnorm4x8( vec4 v ){ uchar4 u; for(int k=0;k<4;k++) u[k]=uchar(round(clamp(v[k],0.0f,1.0f)*255.0f)); return reinterpret_cast<uint&>(u); }
-__forceinline uint packSnorm4x8( vec4 v ){ char4 s; for(int k=0;k<4;k++) s[k]=char(round(clamp(v[k],-1.0f,1.0f)*127.0f)); return reinterpret_cast<uint&>(s); }
+__forceinline uint packUnorm2x16( vec2 v ){ ushort2 u={}; for(int k=0;k<2;k++) u[k]=ushort(round(clamp(v[k],0.0f,1.0f)*65535.0f)); return reinterpret_cast<uint&>(u); }
+__forceinline uint packSnorm2x16( vec2 v ){ short2 s={}; for(int k=0;k<2;k++) s[k]=short(round(clamp(v[k],-1.0f,1.0f)*32767.0f)); return reinterpret_cast<uint&>(s); }
+__forceinline uint packUnorm4x8( vec4 v ){ uchar4 u={}; for(int k=0;k<4;k++) u[k]=uchar(round(clamp(v[k],0.0f,1.0f)*255.0f)); return reinterpret_cast<uint&>(u); }
+__forceinline uint packSnorm4x8( vec4 v ){ char4 s={}; for(int k=0;k<4;k++) s[k]=char(round(clamp(v[k],-1.0f,1.0f)*127.0f)); return reinterpret_cast<uint&>(s); }
 #ifndef __GXMATH_NO_HALF__
 __forceinline uint packHalf2x16( vec2 v ){ half2 h=ftoh(v); return reinterpret_cast<uint&>(h); }
 #endif
-__forceinline vec2 unpackUnorm2x16( uint u ){ vec2 v; for(int k=0;k<2;k++) v[k]=reinterpret_cast<ushort2&>(u)[k]/65535.0f; return v; }
-__forceinline vec2 unpackSnorm2x16( uint u ){ vec2 v; for(int k=0;k<2;k++) v[k]=clamp(reinterpret_cast<short2&>(u)[k]/32767.0f,-1.0f,1.0f); return v; }
-__forceinline vec4 unpackUnorm4x8( uint u ){ vec4 v; for(int k=0;k<4;k++) v[k]=reinterpret_cast<uchar4&>(u)[k]/255.0f; return v; }
-__forceinline vec4 unpackSnorm4x8( uint u ){ vec4 v; for(int k=0;k<4;k++) v[k]=clamp(reinterpret_cast<char4&>(u)[k]/127.0f,-1.0f,1.0f); return v; }
+__forceinline vec2 unpackUnorm2x16( uint u ){ vec2 v={}; for(int k=0;k<2;k++) v[k]=reinterpret_cast<ushort2&>(u)[k]/65535.0f; return v; }
+__forceinline vec2 unpackSnorm2x16( uint u ){ vec2 v={}; for(int k=0;k<2;k++) v[k]=clamp(reinterpret_cast<short2&>(u)[k]/32767.0f,-1.0f,1.0f); return v; }
+__forceinline vec4 unpackUnorm4x8( uint u ){ vec4 v={}; for(int k=0;k<4;k++) v[k]=reinterpret_cast<uchar4&>(u)[k]/255.0f; return v; }
+__forceinline vec4 unpackSnorm4x8( uint u ){ vec4 v={}; for(int k=0;k<4;k++) v[k]=clamp(reinterpret_cast<char4&>(u)[k]/127.0f,-1.0f,1.0f); return v; }
 #ifndef __GXMATH_NO_HALF__
 __forceinline vec2 unpackHalf2x16( uint u ){ return htof(reinterpret_cast<half2&>(u)); }
 #endif
@@ -774,6 +773,7 @@ __forceinline vec4 prand4( float fmin=0, float fmax=1.0f ){ return vec4(prand(fm
 
 //*************************************
 // CRC32 with 4-batch parallel construction (from zlib)
+#pragma warning( disable: 6011 )
 template <unsigned int poly=0x82f63b78UL> // defaulted to crc32c
 __noinline unsigned int tcrc32( const void* buff, size_t size, unsigned int crc0=0 )
 {
@@ -785,6 +785,7 @@ __noinline unsigned int tcrc32( const void* buff, size_t size, unsigned int crc0
 	for(;size;size--,b++)c=t[0][(c^(*b))&0xff]^(c>>8);
 	return ~c;
 }
+#pragma warning( default: 6011 )
 
 //*************************************
 #endif // __GX_MATH__

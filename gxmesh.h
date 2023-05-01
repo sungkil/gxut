@@ -124,13 +124,13 @@ using ray = tray<float>;
 // intersection
 struct isect
 {
-	vec3	pos;						// position at intersection
-	vec3	norm;						// face normal at intersection
+	vec3	pos={};						// position at intersection
+	vec3	norm={};					// face normal at intersection
 	float	t=FLT_MAX;					// nearest intersection: t<0 indicates inverted intersection on spherical surfaces
 	union{float tfar=FLT_MAX,theta;};	// farthest intersection (gxut) or incident angle (oxut)
 	uint	g=0xffffffff;				// index of the geometry at the intersection
-	vec3	vnorm;						// vertex normal at intersection
-	vec2	tc;							// texture coordinate
+	vec3	vnorm={};					// vertex normal at intersection
+	vec2	tc={};						// texture coordinate
 };
 
 //*************************************
@@ -142,7 +142,7 @@ struct bbox : public bbox_t
 {
 	bbox(){ clear(); }
 	bbox( const vec3& v0 ){ m=M=v0; }
-	bbox( bbox&& b ){ m=b.m; M=b.M; }
+	bbox( bbox&& b ) noexcept { m=b.m; M=b.M; }
 	bbox( const bbox& b ){ m=b.m; M=b.M; }
 	bbox( const vec3& v0, const vec3& v1 ){ m=vec3(min(v0.x, v1.x), min(v0.y, v1.y), min(v0.z, v1.z)); M=vec3(max(v0.x, v1.x), max(v0.y, v1.y), max(v0.z, v1.z)); }
 	bbox( const vec3& v0, const vec3& v1, const vec3& v2 ){ m=vec3(min(min(v0.x, v1.x), v2.x), min(min(v0.y, v1.y), v2.y), min(min(v0.z, v1.z), v2.z)); M=vec3(max(max(v0.x, v1.x), v2.x), max(max(v0.y, v1.y), v2.y), max(max(v0.z, v1.z), v2.z)); }
@@ -178,9 +178,9 @@ struct bbox : public bbox_t
 	inline vec3 lerp( const vec3& t ) const { return lerp(t.x,t.y,t.z); }
 	inline vec3 offset( const vec3& v ) const { return (v-m)/size(); }
 	inline uvec3 corner_index( uint index ) const { uint j=index%4; return uvec3((j>>1)^(j&1),j>>1,index>>2); }
-	inline std::array<uvec3,8> corner_indices() const { std::array<uvec3,8> v; for(uint k=0; k<8; k++) v[k]=corner_index(k); return v; }
+	inline std::array<uvec3,8> corner_indices() const { std::array<uvec3,8> v={}; for(uint k=0; k<8; k++) v[k]=corner_index(k); return v; }
 	inline vec3 corner( uint index ) const { uvec3 i=corner_index(index); return lerp(float(i.x), float(i.y), float(i.z)); }
-	inline std::array<vec3,8> corners() const { std::array<vec3,8> v; for(uint k=0; k<8; k++) v[k]=corner(k); return v; }	// returns 000 100 110 010 001 101 111 011
+	inline std::array<vec3,8> corners() const { std::array<vec3,8> v={}; for(uint k=0; k<8; k++) v[k]=corner(k); return v; }	// returns 000 100 110 010 001 101 111 011
 
 	// comparison
 	bool operator==( const bbox& b ) const { return m==b.m&&M==b.M; }
@@ -233,7 +233,7 @@ struct frustum_t : public std::array<vec4, 6> // left, right, top, bottom, near,
 	__forceinline frustum_t& update( const mat4& view_projection_matrix ){ auto* planes = data(); for(int k=0;k<6;k++){planes[k]=view_projection_matrix[k>>1]*float(1-(k&1)*2)+view_projection_matrix[3];planes[k]/=planes[k].xyz.length();} return *this; }
 	__forceinline frustum_t& update( camera_t& c );
 	__forceinline frustum_t& update( vpl_t& c ){ return update(c.projection_matrix*c.view_matrix); }
-	__forceinline bool cull( const bbox_t&  b) const { vec4 pv; pv.w=1.0f; for(int k=0;k<6;k++){ const vec4& plane=operator[](k); for(int j=0;j<3;j++)pv[j]=plane[j]>0?b.M[j]:b.m[j]; if(pv.dot(plane)<0)return true;} return false; }
+	__forceinline bool cull( const bbox_t&  b) const { vec4 pv={}; pv.w=1.0f; for(int k=0;k<6;k++){ const vec4& plane=operator[](k); for(int j=0;j<3;j++)pv[j]=plane[j]>0?b.M[j]:b.m[j]; if(pv.dot(plane)<0)return true;} return false; }
 };
 
 //*************************************
@@ -290,7 +290,7 @@ struct camera : public camera_t
 	
 	bool	cull( const bbox_t& b ) const { return frustum.cull(b); }
 	void	update_view_frustum(){ frustum.update(projection_matrix*view_matrix); }
-	void	update_stereo(){ if(!stereo.model) return; float s=0.5f*stereo.ipd, o=s*dnear/df, t=dnear*tanf(0.5f*fovy*(fovy<PI<float>?1.0f:PI<float>/180.0f)), R=t*aspect; vec3 stereo_dir = normalize(cross(dir,up))*s; auto& l=stereo.left=*this; l.eye-=stereo_dir; l.center-=stereo_dir; l.view_matrix=mat4::look_at(l.eye, l.center, l.up); l.projection_matrix=mat4::perspective_off_center(-R+o, R+o, t, -t, dnear, dfar); auto& r=stereo.right=*this; r.eye+=stereo_dir; r.center+=stereo_dir; r.view_matrix=mat4::look_at(r.eye,r.center,r.up); r.projection_matrix=mat4::perspective_off_center(-R-o, R-o, t, -t, dnear, dfar);}
+	void	update_stereo(){ if(!stereo.model) return; float s=0.5f*stereo.ipd, o=s*dnear/df, t=dnear*tanf(0.5f*fovy*(fovy<PI<float>?1.0f:PI<float>/180.0f)), R=t*aspect; vec3 stereo_dir = normalize(cross(dir,up))*s; auto& l=stereo.left; memcpy(&l,this,sizeof(l)); l.eye-=stereo_dir; l.center-=stereo_dir; l.view_matrix=mat4::look_at(l.eye, l.center, l.up); l.projection_matrix=mat4::perspective_off_center(-R+o, R+o, t, -t, dnear, dfar); auto& r=stereo.right; memcpy(&r,this,sizeof(r)); r.eye+=stereo_dir; r.center+=stereo_dir; r.view_matrix=mat4::look_at(r.eye,r.center,r.up); r.projection_matrix=mat4::perspective_off_center(-R-o, R-o, t, -t, dnear, dfar);}
 };
 
 __forceinline frustum_t& frustum_t::update( camera_t& c ){ return update(c.projection_matrix*c.view_matrix); }
@@ -302,7 +302,7 @@ struct material { vec4 color; float metal, rough, emissive, beta, specular, n; u
 #else
 struct material
 {
-	vec4		color;			// albedo or Blinn-Phong diffuse; color.a=opacity=1-transmittance
+	vec4		color={};		// albedo or Blinn-Phong diffuse; color.a=opacity=1-transmittance
 	float		metal=0.0f;		// metallic: mapped to specular intensity
 	float		rough=0.2f;		// roughness: mapped to specular power; zero means mirror-reflective (used for ray tracing)
 	float		emissive=0.0f;	// 1 only for light sources; if an object is named "light*", its material is forced to be emissive
@@ -445,7 +445,6 @@ struct geometry
 	inline bool			intersect( ray r, isect& h ) const; // linear intersection
 	inline bool			acc_empty() const { return acc_prim_count==0; }
 };
-
 static_assert(sizeof(geometry)%16==0,	"sizeof(geometry) should be multiple of 16-byte");
 static_assert(sizeof(geometry)==144,	"sizeof(geometry) should be 144, when aligned correctly");
 #endif
@@ -542,12 +541,12 @@ struct mesh
 	uint	crc = 0;
 
 	// constructor
-	mesh(){ vertices.reserve(1<<20); indices.reserve(1<<20); objects.reserve(1<<16); geometries.reserve(1<<16); }
+	mesh(){ vertices.reserve(size_t(1<<20)); indices.reserve(size_t(1<<20)); objects.reserve(size_t(1<<16)); geometries.reserve(size_t(1<<16)); }
 	virtual ~mesh(){ release(); }
 
 	// release/memory
 	void release(){ vertices.clear(); indices.clear(); geometries.clear(); objects.clear(); materials.clear(); shrink_to_fit(); }
-	mesh* shrink_to_fit(){ vertices.shrink_to_fit(); indices.shrink_to_fit(); geometries.shrink_to_fit(); objects.shrink_to_fit(); if(materials.capacity()>materials.size()){ auto t=materials; materials.swap(t); } return this; }
+	mesh* shrink_to_fit(){ vertices.shrink_to_fit(); indices.shrink_to_fit(); geometries.shrink_to_fit(); objects.shrink_to_fit(); if(materials.capacity()>materials.size()){ decltype(materials) t=materials; materials.swap(t); } return this; }
 
 	// face/object/geometry/proxy/material helpers
 	uint face_count() const { uint f=0; for(const auto& g:geometries) f+=g.count; return f/3; }
@@ -699,12 +698,12 @@ __noinline mesh* create_box_mesh( bbox box=bbox{vec3(-1.0f),vec3(1.0f)}, const c
 	for( auto& c : box.corners() ) m->vertices.emplace_back(vertex{c,vec3(0.0f),vec2(0.0f)});
 
 	// create box triangle/quad elements
-	auto indices = std::move(get_box_indices( double_sided, quads ));
+	std::vector<uint> indices = std::move(get_box_indices( double_sided, quads ));
 	m->indices.insert(m->indices.end(),indices.begin(),indices.end());
 	m->create_object(name)->create_geometry(0,uint(m->indices.size()),(bbox*)&box,size_t(-1));
 
 	// create box line elements
-	auto line_indices = std::move(get_box_line_indices());
+	std::vector<uint> line_indices = std::move(get_box_line_indices());
 	m->indices.insert(m->indices.end(),line_indices.begin(),line_indices.end());
 	char buff[4096]; sprintf(buff,"%s.lines",name);
 	m->create_object(buff)->create_geometry(uint(indices.size()),uint(line_indices.size()),(bbox*)&box, size_t(-1));
@@ -759,7 +758,7 @@ __noinline void mesh::update_proxy()
 	{
 		proxy->geometries[g.ID].mtx = g.mtx;
 		mat4 m = mat4::translate(g.box.center())*mat4::scale(g.box.size()*0.5f);
-		for( uint k=0; k<8; k++ ){ auto& v = proxy->vertices[g.ID*8+k]; v.pos = (m*vec4(v.norm,1.0f)).xyz; }
+		for( uint k=0; k<8; k++ ){ auto& v = proxy->vertices[size_t(8llu*g.ID+k)]; v.pos = (m*vec4(v.norm,1.0f)).xyz; }
 	}
 }
 
@@ -817,7 +816,7 @@ __noinline void bvh_t::update_proxy()
 	{
 		auto& n = nodes[g.ID];
 		mat4 m = mat4::translate(n.box().center())*mat4::scale(n.box().size()*0.5f);
-		for(uint k=0; k<8; k++){ auto& v = proxy->vertices[g.ID*8+k]; v.pos = (m*vec4(v.norm,1.0f)).xyz; }
+		for(uint k=0; k<8; k++){ auto& v = proxy->vertices[size_t(8llu*g.ID+k)]; v.pos = (m*vec4(v.norm,1.0f)).xyz; }
 	}
 }
 

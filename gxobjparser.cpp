@@ -56,7 +56,7 @@ __forceinline path decompress( const path& file_path );
 __forceinline bool is_extension_supported( path file_path )
 {
 	if(_wcsicmp(file_path.ext(),L"obj")==0) return true;
-	auto am = get_archive_extensions(); if(am.find(file_path.ext().c_str())!=am.end()) return true;
+	const auto& am = get_archive_extensions(); if(am.find(file_path.ext().c_str())!=am.end()) return true;
 	return false;
 }
 
@@ -270,7 +270,7 @@ path obj::decompress( const path& file_path )
 //*************************************
 __forceinline uint get_or_create_vertex( char* str )
 {
-	ivec3 key;
+	ivec3 key={};
 	key.x=obj::atoi(str); while(*str!='/'&&*str) str++;str++;
 	key.y=obj::atoi(str); while(*str!='/'&&*str) str++;str++;
 	key.z=obj::atoi(str);
@@ -342,7 +342,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	//*********************************
 	// 1.1 decompress zip file and remove it later after saving the cache
 	path dec_path;
-	auto archive_extensions = get_archive_extensions();
+	const auto& archive_extensions = get_archive_extensions();
 	bool b_use_archive = archive_extensions.find(file_path.ext().c_str())!=archive_extensions.end();
 	if(b_use_archive)
 	{
@@ -370,7 +370,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	};
 
 	FILE* fp = _wfopen( target_file_path, L"rb" ); if(fp==nullptr){ wprintf(L"Unable to open %s", file_path.c_str()); return nullptr; }
-	setvbuf( fp, nullptr, _IOFBF, 1<<26 ); // set the buffer size of iobuf to 64M
+	setvbuf( fp, nullptr, _IOFBF, 1llu<<26 ); // set the buffer size of iobuf to 64M
 
 	p_mesh = new mesh();
 	wcscpy(p_mesh->file_path,file_path);
@@ -389,10 +389,10 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	auto* vtx = obj::vtx=new obj::vtx_map_t();	// do not use vtx->reserve(target_count); from some point of VC update, this makes very slow loading
 	auto& vertices = p_mesh->vertices;			vertices.reserve(target_count*3/4);		obj::vertices=&p_mesh->vertices;
 	auto& indices = p_mesh->indices;			indices.reserve(target_count*3);	// index should be 3 times
-	auto& geometries = p_mesh->geometries;		geometries.reserve(1<<16);
+	auto& geometries = p_mesh->geometries;		geometries.reserve(1llu<<16);
 
-	p_mesh->materials.reserve(1<<8);
-	p_mesh->objects.reserve(1<<12);
+	p_mesh->materials.reserve(1llu<<8);
+	p_mesh->objects.reserve(1llu<<12);
 
 	//*********************************
 	auto get_or_create_object = [&]( const char* name )->object*

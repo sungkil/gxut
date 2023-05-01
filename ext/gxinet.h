@@ -83,7 +83,7 @@ __noinline bool file_t::open( HINTERNET session, const wchar_t* url )
 __noinline bool file_t::get_file_size( HINTERNET session )
 {
 	if(!hfile) return false;
-	DWORD content_length, dw_size=sizeof(content_length); if(!HttpQueryInfoW(hfile,HTTP_QUERY_CONTENT_LENGTH|HTTP_QUERY_FLAG_NUMBER,&content_length,&dw_size,NULL)){ release(); return false; }
+	DWORD content_length=0, dw_size=sizeof(content_length); if(!HttpQueryInfoW(hfile,HTTP_QUERY_CONTENT_LENGTH|HTTP_QUERY_FLAG_NUMBER,&content_length,&dw_size,NULL)){ release(); return false; }
 	file_size = content_length;
 	return true;
 }
@@ -96,7 +96,7 @@ __noinline bool session_t::download_thread_func( std::vector<std::wstring> urls,
 	bool b_dst_exists = dst.exists();
 	FILETIME f0={}; if(b_dst_exists) f0=dst.mfiletime();
 	
-	for( auto url : urls )
+	for( const auto& url : urls )
 	{
 		file_t f; if(!f.open(handle,url.c_str())) continue; // url not exists
 		// auto s = FileTimeToSystemTime(f.mfiletime); fprintf( stdout, "%d-%d-%d-%d-%d-%d-%d", s.wYear, s.wMonth, s.wDay, s.wHour, s.wMinute, s.wSecond, s.wMilliseconds );

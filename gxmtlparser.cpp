@@ -45,8 +45,8 @@ struct mtl_section_t
 	mtl_section_t( const std::string& _name ):name(_name){ items.reserve(64); }
 
 	bool empty() const { return name.empty()||items.empty(); }
-	constexpr auto begin(){ return items.begin(); }
-	constexpr auto end(){ return items.end(); }
+	auto begin(){ return items.begin(); }
+	auto end(){ return items.end(); }
 	auto maps(){ std::vector<mtl_item_t*> v;for(auto& t:items){if(t.is_map_type())v.emplace_back(&t);} return v; }
 
 	mtl_item_t* find( const char* key ) const { for(auto& t:items){ if(!items.empty()&&_stricmp(t.key.c_str(),key)==0) return (mtl_item_t*)&t; } return nullptr; }
@@ -235,7 +235,7 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 	for( auto& section : sections ) for( auto* t : section.maps() )
 	{
 		if(!t->map_path().exists()) continue;
-		auto &src=t->back(), dst=crc_lut[t->crc]; if(_stricmp(src.c_str(),dst.c_str())==0) continue;
+		auto &src=t->back(), &dst=crc_lut[t->crc]; if(_stricmp(src.c_str(),dst.c_str())==0) continue;
 		printf( "[%s] replace: %s << %s\n", file_path.name().wtoa(), src.c_str(), dst.c_str() );
 		dups.emplace(t->map_path());
 		src = dst;
@@ -306,7 +306,7 @@ static bool save_mtl( path file_path, const std::vector<mtl_section_t>& sections
 		if(!section.name.empty()) fprintf(fp,"newmtl %s\n", section.name.c_str() );
 		for( auto& t : section.items )
 		{
-			auto r = std::move(t.str());
+			std::string r = std::move(t.str());
 			if(!r.empty()) fprintf( fp, "%s\n", r.c_str() );
 		}
 		if(k==0||(!section.name.empty()&&k<kn-1)) fprintf(fp,"\n");
@@ -405,7 +405,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 	b_dirty = false; // something changed?
 
 	// pre-parse raw lines
-	auto sections = std::move(parse_mtl(file_path)); if(sections.empty()) return false;
+	std::vector<mtl_section_t> sections = std::move(parse_mtl(file_path)); if(sections.empty()) return false;
 
 	// default material for light source (mat_index==0 or emissive>0)
 	materials.clear();

@@ -98,8 +98,8 @@ struct parser_t
 	// attributes
 	inline const char* name() const { return attrib.name.c_str(); }
 	inline const wchar_t* wname() const { return atow(attrib.name.c_str()); }
-	inline void add_header( const char* fmt, ... ){ va_list a; va_start(a,fmt); int l=_vscprintf(fmt,a); std::vector<char> buff(l+1); vsprintf_s(&buff[0],l+1,fmt,a); attrib.header=trim(&buff[0]); va_end(a); }
-	inline void add_footer( const char* fmt, ... ){ va_list a; va_start(a,fmt); int l=_vscprintf(fmt,a); std::vector<char> buff(l+1); vsprintf_s(&buff[0],l+1,fmt,a); attrib.footer=trim(&buff[0]); va_end(a); }
+	inline void add_header( const char* fmt, ... ){ va_list a; va_start(a,fmt); int l=_vscprintf(fmt,a); std::vector<char> buff(l+1); vsprintf_s(&buff[0],l+1llu,fmt,a); attrib.header=trim(&buff[0]); va_end(a); }
+	inline void add_footer( const char* fmt, ... ){ va_list a; va_start(a,fmt); int l=_vscprintf(fmt,a); std::vector<char> buff(l+1); vsprintf_s(&buff[0],l+1llu,fmt,a); attrib.footer=trim(&buff[0]); va_end(a); }
 	inline void add_copyright( const char* author, int since_year ){ attrib.copyright = format( "copyright (c) %d-%d by %s\n", since_year, gx::compiler::year()+1, author ); }
 	inline parser_t& add_help( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); attrib.help=trim(&buff[0],"\n"); va_end(a); return *this; }
 	

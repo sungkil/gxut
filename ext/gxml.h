@@ -104,12 +104,12 @@ public:
 	template<> inline int	 value_cast<int>() const { return _wtoi(_value.c_str()); }
 	template<> inline uint	 value_cast<uint>() const { return uint(_wtoi(_value.c_str())); }
 	template<> inline float	 value_cast<float>() const { return float(_wtof(_value.c_str())); }
-	template<> inline float2 value_cast<float2>() const { float2 v; swscanf( _value.c_str(), L"%f %f", &v[0], &v[1] ); return v; }
-	template<> inline float3 value_cast<float3>() const { float3 v; swscanf( _value.c_str(), L"%f %f %f", &v[0], &v[1], &v[2] ); return v; }
-	template<> inline float4 value_cast<float4>() const { float4 v; swscanf( _value.c_str(), L"%f %f %f %f", &v[0], &v[1], &v[2], &v[3] ); return v; }
-	template<> inline mat2	 value_cast<mat2>() const {		mat2 m; swscanf( _value.c_str(), L"%f %f %f %f", &m._11, &m._12, &m._21, &m._22 ); return m; }
-	template<> inline mat3	 value_cast<mat3>() const {		mat3 m; swscanf( _value.c_str(), L"%f %f %f %f %f %f %f %f %f", &m._11, &m._12, &m._13, &m._21, &m._22, &m._23, &m._31, &m._32, &m._33 ); return m; }
-	template<> inline mat4	 value_cast<mat4>() const {		mat4 m; swscanf( _value.c_str(), L"%f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f", &m._11, &m._12, &m._13, &m._14, &m._21, &m._22, &m._23, &m._24, &m._31, &m._32, &m._33, &m._34, &m._41, &m._42, &m._43, &m._44 ); return m; }
+	template<> inline float2 value_cast<float2>() const { float2 v={}; swscanf( _value.c_str(), L"%f %f", &v[0], &v[1] ); return v; }
+	template<> inline float3 value_cast<float3>() const { float3 v={}; swscanf( _value.c_str(), L"%f %f %f", &v[0], &v[1], &v[2] ); return v; }
+	template<> inline float4 value_cast<float4>() const { float4 v={}; swscanf( _value.c_str(), L"%f %f %f %f", &v[0], &v[1], &v[2], &v[3] ); return v; }
+	template<> inline mat2	 value_cast<mat2>() const {		mat2 m={}; swscanf( _value.c_str(), L"%f %f %f %f", &m._11, &m._12, &m._21, &m._22 ); return m; }
+	template<> inline mat3	 value_cast<mat3>() const {		mat3 m={}; swscanf( _value.c_str(), L"%f %f %f %f %f %f %f %f %f", &m._11, &m._12, &m._13, &m._21, &m._22, &m._23, &m._31, &m._32, &m._33 ); return m; }
+	template<> inline mat4	 value_cast<mat4>() const {		mat4 m={}; swscanf( _value.c_str(), L"%f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f", &m._11, &m._12, &m._13, &m._14, &m._21, &m._22, &m._23, &m._24, &m._31, &m._32, &m._33, &m._34, &m._41, &m._42, &m._43, &m._44 ); return m; }
 
 	// print
 	void begin_print( FILE* fp, int depth, const wchar_t* indent );

@@ -157,7 +157,7 @@ namespace gl {
 	//***********************************************
 	struct Query : public Object
 	{
-		GLuint64 result;
+		GLuint64 result=0;
 		Query( GLuint ID, const char* name, GLenum target ):Object(ID,name,target){}
 		~Query() override { GLuint id=ID; glDeleteQueries(1,&id); }
 		bool	is_available(){ GLint available; glGetQueryObjectiv(ID,GL_QUERY_RESULT_AVAILABLE, &available); return available!=0; }
@@ -225,7 +225,7 @@ namespace gl {
 		template <class T> void set_data( const std::vector<T>& data, GLintptr offset=0 ){ set_sub_data( data.data(), GLsizeiptr(sizeof(T)*data.size()), offset ); }
 		template <class T, size_t N> void set_data( const std::array<T,N>& data ){ set_sub_data( data.data(), GLsizeiptr(sizeof(T)*N), 0 ); }
 		void get_sub_data( GLvoid* data, GLsizeiptr size, GLintptr offset=0 ){ if(glGetNamedBufferSubData) glGetNamedBufferSubData(ID,offset,size?size:this->size(),data); else if(glGetBufferSubData){ GLuint b0=bind(); glGetBufferSubData(target,offset,size?size:this->size(),data); glBindBuffer(target,b0); } }
-		template <class T> T get_data(){ T v; get_sub_data(&v,sizeof(T),0); return v; }
+		template <class T> T get_data(){ T v=0; get_sub_data(&v,sizeof(T),0); return v; }
 		template <class T> std::vector<T> get_data( GLsizeiptr count ){ std::vector<T> v; v.resize(count); get_sub_data(v.data(),sizeof(T)*count,0); return v; }
 		void copy_data( Buffer* write_buffer, GLsizei size=0 ){ copy_sub_data( write_buffer, size?size:this->size() ); }
 		void copy_sub_data( Buffer* write_buffer, GLsizei size, GLintptr read_offset=0, GLintptr write_offset=0 ){ if(glCopyNamedBufferSubData) glCopyNamedBufferSubData(ID,write_buffer->ID,read_offset,write_offset,size); else printf("Buffer::copySubData(): glCopyNamedBufferSubData==nullptr (only supports named mode)\n" ); }
@@ -260,6 +260,7 @@ namespace gl {
 
 	//***********************************************
 	// crc32c
+	#pragma warning( disable: 6011 )
 	inline unsigned int crc32c( const void* ptr, size_t size, unsigned int crc0=0 )
 	{
 		const unsigned char* buff= (unsigned char*) ptr;
@@ -270,6 +271,7 @@ namespace gl {
 		for(;size;size--,buff++) c=t[0][(c^(*buff))&0xff]^(c>>8);
 		return ~c;
 	}
+	#pragma warning( default: 6011 )
 
 	//***********************************************
 	struct Texture : public Object
@@ -324,9 +326,9 @@ namespace gl {
 		inline GLint  channels() const { return _channels; }
 		inline GLint  bpc() const { return _bpp/_channels; } // bits per channel
 		inline GLint  bpp() const { return _bpp; } // bits per pixels
-		inline GLint  Bpp() const { return _bpp>>3; } // bytes per pixels
+		inline GLint  Bpp() const { return GLint(_bpp>>3); } // bytes per pixels
 		inline GLsizei multisamples() const { return target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY?_multisamples:1; }
-		size_t width_step( GLint level=0 ) const { return (((width(level)*Bpp()+3)>>2)<<2); } // 4-byte-aligned size in a single row
+		size_t width_step( GLint level=0 ) const { int s=((width(level)*Bpp()+3)>>2)<<2; return size_t(s); } // 4-byte-aligned size in a single row
 		size_t mem_size( GLint level=0 ) const { return width_step(level)*size_t(height(level)); }
 
 		// set attributes
@@ -339,7 +341,7 @@ namespace gl {
 		void set_border_color( const vec4& color ){ texture_parameterfv(GL_TEXTURE_BORDER_COLOR, color); }
 
 		// clear colors
-		void clear( const vec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_HALF_FLOAT){ half4 h; ftoh(color,h,channels()); glClearTexImage(ID,level,f,t,h);} else if(t==GL_FLOAT) glClearTexImage(ID,level,format(),t,&color); else printf( "%s->clear(): texture is not one of float/half types\n", _name ); }
+		void clear( const vec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_HALF_FLOAT){ half4 h={}; ftoh(color,h,channels()); glClearTexImage(ID,level,f,t,h);} else if(t==GL_FLOAT) glClearTexImage(ID,level,format(),t,&color); else printf( "%s->clear(): texture is not one of float/half types\n", _name ); }
 		void cleari( const ivec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_INT) glClearTexImage(ID,level,f,t,color); else if(t==GL_SHORT){ short4 i={short(color.x),short(color.y),short(color.z),short(color.w)}; glClearTexImage(ID,level,f,t,&i); } else if(t==GL_BYTE){ char4 i={char(color.x),char(color.y),char(color.z),char(color.w)}; glClearTexImage(ID,level,f,t,&i); } else printf( "%s->cleari(): texture is not one of byte/short/int types\n", _name ); }
 		void clearui( const uvec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_UNSIGNED_INT) glClearTexImage(ID,level,f,t,color); else if(t==GL_UNSIGNED_SHORT){ ushort4 i={ushort(color.x),ushort(color.y),ushort(color.z),ushort(color.w)}; glClearTexImage(ID,level,f,t,&i); } else if(t==GL_UNSIGNED_BYTE){ uchar4 i={uchar(color.x),uchar(color.y),uchar(color.z),uchar(color.w)}; glClearTexImage(ID,level,f,t,&i); } else printf( "%s->clearui(): texture is not one of unsigned byte/short/int types\n", _name ); }
 
@@ -422,7 +424,7 @@ namespace gl {
 			(target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY) ? gxCreateTexture1D( name, m, w, l, f, nullptr, false ):
 			(target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY) ? gxCreateTexture2D( name, m, w, h, l, f, nullptr, false, b_multisample, multisamples() ):
 			(target==GL_TEXTURE_3D) ? gxCreateTexture3D( name, m, w, h, d, f, nullptr ):
-			(target==GL_TEXTURE_CUBE_MAP||GL_TEXTURE_CUBE_MAP_ARRAY) ? gxCreateTextureCube( name, m, w, h, l, f, nullptr, false ):
+			(target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY) ? gxCreateTextureCube( name, m, w, h, l, f, nullptr, false ):
 			(target==GL_TEXTURE_RECTANGLE) ? gxCreateTextureRectangle( name, w, h, f, nullptr ):nullptr;
 
 		if(t==nullptr){ printf( "Texture[\"%s\"]::clone() == nullptr\n", name ); return nullptr; }
@@ -498,7 +500,7 @@ namespace gl {
 		void set_viewport( ivec4 origin_size ){ glViewport( origin_size.x, origin_size.y, origin_size.z, origin_size.w ); }
 		void set_viewport( ivec2 origin, ivec2 size ){ glViewport( origin.x, origin.y, size.x, size.y ); }
 		void set_viewport( ivec2 size ){ glViewport( 0, 0, size.x, size.y ); }
-		ivec4 get_viewport(){ ivec4 i; glGetIntegerv( GL_VIEWPORT, (int*)i); return i; }
+		ivec4 get_viewport(){ ivec4 i={}; glGetIntegerv( GL_VIEWPORT, (int*)i); return i; }
 		void set_color_mask( bool mask, bool b_force_mask=false ){ if(!b_force_mask&&mask==_b_color_mask) return; GLboolean b=(_b_color_mask=mask)?GL_TRUE:GL_FALSE; glColorMask(b,b,b,b); }
 		void set_depth_mask( bool mask, bool b_force_mask=false ){ if(!b_force_mask&&mask==_b_depth_mask) return; GLboolean b=(_b_depth_mask=mask)?GL_TRUE:GL_FALSE; glDepthMask(b); }
 		void set_color_depth_mask( bool mask, bool b_force_mask=false ){ set_color_mask(mask,b_force_mask); set_depth_mask(mask,b_force_mask); }
@@ -683,7 +685,7 @@ namespace gl {
 		GLint		ID=-1;
 		GLchar		name[256]={};
 		GLint		array_size=1;
-		GLenum		type;
+		GLenum		type=0;
 		GLint		block_index=-1;		// uniform block index to which this belongs
 		GLint		block_offset=-1;	// only for uniform-block variables
 		GLchar		block_name[256]={};
@@ -843,7 +845,7 @@ namespace gl {
 		// uniform block, used with uniform buffer: uniform buffer is assigned from effect to share it with other programs
 		struct UniformBlock
 		{
-			GLuint ID; GLchar name[256]; GLint size=0; Program* program=nullptr; gl::Buffer* buffer=nullptr;
+			GLuint ID=-1; GLchar name[256]={}; GLint size=0; Program* program=nullptr; gl::Buffer* buffer=nullptr;
 			GLuint get_binding() const { return gxGetActiveUniformBlockiv(program->ID,ID, GL_UNIFORM_BLOCK_BINDING ); }
 			void set_binding( GLuint binding_point ){ glUniformBlockBinding(program->ID,ID,binding_point); if(buffer&&buffer->target==GL_UNIFORM_BUFFER) buffer->bind_base(binding_point); }
 		};
@@ -992,7 +994,7 @@ inline std::vector<gl::indexed_string_t> gxExplodeShaderSource( const char* sour
 	{
 		const char* s = ltrim(vs[k]);
 		bool b_line = strncmp(s,"#line",5)==0;
-		if(b_line) sscanf( s+6, "%d", &idx );
+		int r = b_line?sscanf( s+6, "%d", &idx ):0;
 		gl::indexed_string_t i; reinterpret_cast<std::string&>(i)=vs[k]; i.index=idx;
 		v.emplace_back(i);
 		if(!b_line) idx++;
@@ -1003,7 +1005,7 @@ inline std::vector<gl::indexed_string_t> gxExplodeShaderSource( const char* sour
 inline std::map<int,std::string> gxExplodeShaderSourceMap( const char* source, int first_index=1 )
 {
 	std::map<int,std::string> m;
-	for( auto s : gxExplodeShaderSource(source,first_index) )
+	for( const auto& s : gxExplodeShaderSource(source,first_index) )
 		if(!strstr(s.c_str(),"#line")) m.emplace(s.index,s);//reinterpret_cast<std::string&>(s));
 	return m;
 }
@@ -1033,7 +1035,7 @@ namespace gl {
 	struct Effect : public Object
 	{
 		Effect( GLuint ID, const char* name ) : Object(ID,name,0){ if(!(quad=gxCreateQuadVertexArray())) printf("[%s] unable to create quad buffer\n",name); }
-		~Effect() override { active_program=nullptr; if(quad){ delete quad; quad=nullptr; } if(!pts.empty()){ for(auto it:pts) safe_delete(it.second); pts.clear(); } for(auto& it:uniform_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} uniform_buffer_map.clear(); for(auto* p:programs) delete p; programs.clear(); }
+		~Effect() override { active_program=nullptr; if(quad){ delete quad; quad=nullptr; } if(!pts.empty()){ for(auto& it:pts) safe_delete(it.second); pts.clear(); } for(auto& it:uniform_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} uniform_buffer_map.clear(); for(auto* p:programs) delete p; programs.clear(); }
 		static void unbind(){ glUseProgram(0); }
 
 		Program* bind( const char* program_name, ... ){ char buff[1024]; va_list a;va_start(a,program_name);vsprintf_s(buff,1024,program_name,a);va_end(a); active_program=get_program(buff); if(active_program) active_program->bind(); else{ active_program=nullptr; glUseProgram(0); } return active_program; }
@@ -1206,7 +1208,10 @@ inline gl::VertexArray* gxCreatePointVertexArray( GLsizei width, GLsizei height 
 	if(width==0||height==0) va = gxCreateVertexArray( "PTS", (vertex*)nullptr,0 );
 	else
 	{
-		std::vector<vertex> pts(size_t(width*height)); for(int y=0,k=0;y<height;y++)for(int x=0;x<width;x++,k++) pts[k]={vec3(float(x),float(y),0.0f),vec3(0.0f,0.0f,1.0f),vec2(x/float(width-1),y/float(height-1))};
+		std::vector<vertex> pts(size_t(width)*size_t(height));
+		for(size_t y=0,k=0;y<height;y++)
+			for(int x=0;x<width;x++,k++)
+				pts[k] = {vec3(float(x),float(y),0.0f),vec3(0.0f,0.0f,1.0f),vec2(x/float(width-1),y/float(height-1))};
 		va = gxCreateVertexArray( "PTS", &pts[0], pts.size() );
 	}
 	return va;
@@ -1391,8 +1396,8 @@ inline gl::Program* gxCreateProgram( std::string prefix, std::string name, const
 	program->source = source;
 
 	// 6. compile and attach shaders
-	__int64 freq;	QueryPerformanceFrequency((LARGE_INTEGER*)&freq);
-	__int64 tbegin;	QueryPerformanceCounter((LARGE_INTEGER*)&tbegin);
+	__int64 freq=0;		QueryPerformanceFrequency((LARGE_INTEGER*)&freq);
+	__int64 tbegin=0;	QueryPerformanceCounter((LARGE_INTEGER*)&tbegin);
 	printf( "compiling %s ... ", pname );
 
 	std::vector<GLuint> attached_shaders;
@@ -1451,7 +1456,7 @@ inline gl::Program* gxCreateProgram( std::string prefix, std::string name, const
 	for(GLsizei k=0;k<shader_count;k++){ glDetachShader(program->ID,shaders[k]); glDeleteShader(shaders[k]); }
 
 	// 13. logging
-	__int64 tend; QueryPerformanceCounter((LARGE_INTEGER*)&tend);
+	__int64 tend=0; QueryPerformanceCounter((LARGE_INTEGER*)&tend);
 	printf( "completed in %.1f ms\n", (float)(double(tend-tbegin)/double(freq)*1000.0) );
 
 	return program;
@@ -1807,6 +1812,7 @@ inline gl::Texture* gxCreateTextureRectangle( const char* name, GLsizei width, G
 
 inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLuint levels, GLuint min_layer=0, GLuint layers=1, GLenum target=0, bool force_array=false )
 {
+	if(!src) return nullptr;
 	uint key = gl::Texture::crc(min_level,levels,min_layer,layers,target,force_array);
 	for(gl::Texture* t=src; t; t=t->_next ) if(t->_key==key) return t;
 

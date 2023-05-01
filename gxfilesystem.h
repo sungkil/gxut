@@ -30,12 +30,12 @@
 
 //***********************************************
 // Win32-like filetime utilities
-inline int64_t FileTimeOffset( int days, int hours=0, int mins=0, int secs=0, int mss=0 ){ return 10000ll*(mss+1000ll*secs+60*1000ll*mins+60*60*1000ll*hours+24*60*60*1000ll*days); } // FILETIME in 100 ns scale
+inline int64_t FileTimeOffset( int days, int hours=0, int mins=0, int secs=0, int mss=0 ){ return 10000ll*(mss+1000ll*secs+60ll*1000*mins+60ll*60*1000*hours+24ll*60*60*1000*days); } // FILETIME in 100 ns scale
 inline FILETIME DiscardFileTimeMilliseconds( FILETIME f ){uint64_t u=((uint64_t(f.dwHighDateTime)<<32|uint64_t(f.dwLowDateTime))/10000000)*10000000;return FILETIME{DWORD(u&0xffffffff),DWORD(u>>32)};} // 1ms = 10000 in FILETIME
 inline SYSTEMTIME FileTimeToSystemTime( const FILETIME& f ){ SYSTEMTIME s; FileTimeToSystemTime(&f,&s); return s; }
 inline FILETIME SystemTimeToFileTime( const SYSTEMTIME& s ){ FILETIME f; SystemTimeToFileTime(&s,&f); return f; }
 inline uint64_t FileTimeToUint64( const FILETIME& f ){ return (uint64_t(f.dwHighDateTime)<<32|uint64_t(f.dwLowDateTime)); }
-inline FILETIME	Uint64ToFileTime( uint64_t u ){ FILETIME f; f.dwHighDateTime=DWORD(u>>32); f.dwLowDateTime=u&0xffffffff; return f; }
+inline FILETIME	Uint64ToFileTime( uint64_t u ){ FILETIME f={}; f.dwHighDateTime=DWORD(u>>32); f.dwLowDateTime=u&0xffffffff; return f; }
 inline uint64_t SystemTimeToUint64( const SYSTEMTIME& s ){ FILETIME f; SystemTimeToFileTime( &s, &f ); return FileTimeToUint64(f); }
 inline FILETIME now(){ FILETIME f; GetSystemTimeAsFileTime(&f); return f; } // current time
 
@@ -106,7 +106,7 @@ struct path
 	};
 
 	// destructor/constuctors
-	__forceinline wchar_t* alloc(){ static constexpr size_t s=sizeof(wchar_t)*capacity+sizeof(attrib_t); _data=(wchar_t*)malloc(s); _data[0]=0; return _data; }
+	__forceinline wchar_t* alloc(){ static constexpr size_t s=sizeof(wchar_t)*capacity+sizeof(attrib_t); _data=(wchar_t*)malloc(s); if(_data)_data[0]=0; return _data; }
 	~path() noexcept { if(_data) free(_data); }
 	path() noexcept { alloc(); clear_cache(); }
 	path( const path& p ) noexcept { wcscpy(alloc(),p); cache()=p.cache(); } // do not canonicalize for copy constructor
@@ -241,7 +241,7 @@ struct path
 	path junction() const { path t; if(empty()) return t; auto& a=attributes(); if(a==INVALID_FILE_ATTRIBUTES||(a&FILE_ATTRIBUTE_DIRECTORY)==0||(a&FILE_ATTRIBUTE_REPARSE_POINT)==0) return t; HANDLE h=CreateFileW(_data,GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,0); if(h==INVALID_HANDLE_VALUE) return t; GetFinalPathNameByHandleW(h,t._data,t.capacity,FILE_NAME_NORMALIZED); CloseHandle(h); if(wcsncmp(t._data,L"\\\\?\\",4)==0) t=path(t._data+4).add_backslash(); return t; }
 	path remove_first_dot()	const { return (wcslen(_data)>2&&_data[0]==L'.'&&_data[1]==L'\\') ? path(_data+2) : *this; }
 	path remove_ext() const { split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
-	std::vector<path> explode( const wchar_t* delim=L"\\") const { std::vector<path> L; if(!delim||!*delim) return L; path s=delim[0]==L'/'&&delim[1]==0?to_slash():*this; L.reserve(16); wchar_t* ctx; for(wchar_t* t=wcstok_s(s._data,delim,&ctx);t;t=wcstok_s(0,delim,&ctx)) L.emplace_back(t); return L; }
+	std::vector<path> explode( const wchar_t* delim=L"\\") const { std::vector<path> L; if(!delim||!*delim) return L; path s=delim[0]==L'/'&&delim[1]==0?to_slash():*this; L.reserve(16); wchar_t* ctx=nullptr; for(wchar_t* t=wcstok_s(s._data,delim,&ctx);t;t=wcstok_s(0,delim,&ctx)) L.emplace_back(t); return L; }
 
 	// content manipulations
 	path replace_ext( const wchar_t* ext ) const { if(!ext||!ext[0])return *this;split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf(),__wcsbuf());path p;swprintf_s(p._data,capacity,L"%s%s%s%s%s",si.drive,si.dir,si.fname,ext[0]==L'.'?L"":L".",ext );return p; }
@@ -277,7 +277,7 @@ struct path
 	bool has_file( const path& file_name ) const { return is_dir()&&cat(file_name).exists(); }
 
 	// chdir/make/copy/delete file/dir operations
-	path chdir() const { path old=cwd(); if(is_dir()) _wchdir(_data); return old; } // return old working directory
+	path chdir() const { path old=cwd(); int r=is_dir()?_wchdir(_data):0; return old; } // return old working directory
 	bool mkdir() const; // make all super directories
 	bool copy_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()||dst.empty()) return false; if(dst.is_dir()||dst.back()==L'\\') dst=dst.add_backslash()+name(); dst.dir().mkdir(); if(dst.exists()&&overwrite){ if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } return bool(CopyFileW( _data, dst, overwrite?FALSE:TRUE )); }
 	bool move_file( path dst ) const { return is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(_data,dst.c_str())!=0 : !copy_file(dst,true) ? false: rmfile(); }
@@ -328,7 +328,7 @@ struct path
 	static inline path module_path( HMODULE h_module=nullptr ){ static path m; if(!m.empty()&&!h_module) return m; path p;GetModuleFileNameW(h_module,p,path::capacity);p[0]=::toupper(p[0]); p=p.canonical(); return h_module?p:(m=p); } // 'module' conflicts with C++ modules
 	static inline path module_name( bool with_ext=true, HMODULE h_module=nullptr ){ return module_path(h_module).name(with_ext); }
 	static inline path module_dir( HMODULE h_module=nullptr ){ static path d=module_path().dir(); return h_module?module_path(h_module).dir():d; }
-	static inline path cwd(){ path p; _wgetcwd(p._data,path::capacity); return p.absolute().add_backslash(); }	// current working dir
+	static inline path cwd(){ path p; auto* r=_wgetcwd(p._data,path::capacity); return p.absolute().add_backslash(); }	// current working dir
 	static inline path chdir( path dir ){ return dir.chdir(); }
 
 	// file content access: void (rb/wb), char (r/w), wchar_t (r/w,ccs=UTF-8)
@@ -399,7 +399,7 @@ template<> __noinline sized_ptr_t<void> path::read_file<void>() const
 	sized_ptr_t<void> p={nullptr,0};
 	FILE* fp=fopen(L"rb"); if(!fp) return {nullptr,0};
 	fseek(fp,0,SEEK_END); p.size=ftell(fp); fseek(fp,0,SEEK_SET);
-	if(p.size){ fread(p.ptr=malloc(p.size+1),1,p.size,fp); ((char*)p.ptr)[p.size]=0; }
+	if(p.size){ p.ptr=malloc(p.size+1); if(p.ptr) fread(p.ptr,1,p.size,fp); ((char*)p.ptr)[p.size]=0; }
 	fclose(fp);
 	return p;
 }
@@ -419,7 +419,8 @@ template<> __noinline sized_ptr_t<wchar_t> path::read_file<wchar_t>() const
 	std::wstring buffer; buffer.reserve(size0*2);
 	wchar_t buff[4096]; while(fgetws(buff,4096,fp)) buffer+=buff; fclose(fp);
 	p.size = buffer.size();
-	p.ptr = (wchar_t*)memcpy(malloc((p.size+1)*sizeof(wchar_t)),buffer.c_str(),p.size*sizeof(wchar_t));
+	p.ptr = (wchar_t*) malloc((p.size+1)*sizeof(wchar_t));
+	if(p.ptr) memcpy(p.ptr,buffer.c_str(),p.size*sizeof(wchar_t));
 	p.ptr[p.size]=0;
 	return p;
 }
@@ -439,7 +440,8 @@ template<> __noinline sized_ptr_t<char> path::read_file<char>() const
 	std::string buffer; buffer.reserve(size0*2);
 	char buff[4096]; while(fgets(buff,4096,fp)) buffer+=buff; fclose(fp);
 	p.size = buffer.size();
-	p.ptr = (char*)memcpy(malloc((p.size+2)*sizeof(char)),buffer.c_str(),p.size*sizeof(char));
+	p.ptr = (char*) malloc((p.size+2)*sizeof(char));
+	if(p.ptr) memcpy(p.ptr,buffer.c_str(),p.size*sizeof(char));
 	p.ptr[p.size]=p.ptr[p.size+1]=0; // two more bytes for null-ended wchar_t string
 	return p;
 }
@@ -512,12 +514,12 @@ __noinline std::vector<path> path::scan( char recursive, const wchar_t* ext_filt
 	std::vector<sized_ptr_t<wchar_t>> eptr; for( auto& e:exts ) eptr.emplace_back(sized_ptr_t<wchar_t>{(wchar_t*)e.c_str(),e.size()});
 	scan_t si={{},recursive!=0,eptr.size()>0?&eptr[0]:nullptr,eptr.size(),pattern,pattern?wcslen(pattern):0,pattern&&(wcschr(pattern,L'*')||wcschr(pattern,L'?')) };
 	if(!is_dir()) return si.result; path src=(is_relative()?absolute(L".\\"):*this).add_backslash();
-	si.result.reserve(1<<16);scan_recursive(src,si);si.result.shrink_to_fit();return si.result;
+	si.result.reserve(1ull<<16);scan_recursive(src,si);si.result.shrink_to_fit();return si.result;
 }
 
 __noinline void path::scan_recursive( path dir, path::scan_t& si ) const
 {
-	WIN32_FIND_DATAW fd; HANDLE h=FindFirstFileExW(dir+L"*.*",FindExInfoBasic/*minimal(faster)*/,&fd,FindExSearchNameMatch,0,FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
+	WIN32_FIND_DATAW fd={}; HANDLE h=FindFirstFileExW(dir+L"*.*",FindExInfoBasic/*minimal(faster)*/,&fd,FindExSearchNameMatch,0,FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
 	size_t dl=wcslen(dir._data); wchar_t *f=fd.cFileName, *p=dir._data+dl;
 	std::vector<path> sdir; if(si.recursive) sdir.reserve(16);
 
@@ -544,12 +546,12 @@ __noinline std::vector<path> path::subdirs( char recursive, const wchar_t* patte
 {
 	scan_t si={{},recursive!=0,0,0,pattern,pattern?wcslen(pattern):0,pattern&&(wcschr(pattern,L'*')||wcschr(pattern,L'?'))};
 	if(!is_dir()) return si.result; path src=(is_relative()?absolute(L".\\"):*this).add_backslash();
-	si.result.reserve(1<<12);subdirs_recursive(src,si);si.result.shrink_to_fit();return si.result;
+	si.result.reserve(1ull<<12);subdirs_recursive(src,si);si.result.shrink_to_fit();return si.result;
 }
 
 __noinline void path::subdirs_recursive( path dir, path::scan_t& si ) const
 {
-	WIN32_FIND_DATAW fd; HANDLE h=FindFirstFileExW(dir+L"*.*",FindExInfoBasic/*minimal(faster)*/,&fd,FindExSearchNameMatch,0,FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
+	WIN32_FIND_DATAW fd={}; HANDLE h=FindFirstFileExW(dir+L"*.*",FindExInfoBasic/*minimal(faster)*/,&fd,FindExSearchNameMatch,0,FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
 	size_t dl=wcslen(dir._data); wchar_t *f=fd.cFileName, *p=dir._data+dl;
 	std::vector<path> sdir; if(si.recursive) sdir.reserve(16);
 
@@ -620,14 +622,14 @@ __noinline void path::canonicalize()
 	if(len==2&&_data[1]==L':'){ _data[len++]=L'\\'; _data[len]=L'\0'; } // root correction
 	if(!wcsstr(_data,L"\\.\\")&&!wcsstr(_data,L"\\..\\")) return; // trivial return
 	wchar_t* ds; while((ds=wcsstr(_data+1,L"\\\\"))) memmove(ds+1,ds+2,((len--)-(ds-_data)-1)*sizeof(wchar_t)); // correct multiple backslashes, except the beginning of unc path
-	if(is_absolute()){ _wfullpath(_data,(const wchar_t*)memcpy(__wcsbuf(),_data,sizeof(wchar_t)*(len+1)),capacity); return; }
+	if(is_absolute()){ auto* r=_wfullpath(_data,(const wchar_t*)memcpy(__wcsbuf(),_data,sizeof(wchar_t)*(len+1)),capacity); return; }
 
 	// flags to check
 	bool b_trailing_backslash = (_data[len-1]==L'\\');
 	bool b_single_dot_begin = _data[0]==L'.'&&_data[1]==L'\\';
 
 	// perform canonicalization
-	std::deque<wchar_t*> L;wchar_t* ctx;
+	std::deque<wchar_t*> L;wchar_t* ctx=nullptr;
 	for(wchar_t* t=wcstok_s(wcscpy(__wcsbuf(),_data),L"\\",&ctx);t;t=wcstok_s(nullptr,L"\\",&ctx))
 	{
 		if(t[0]==L'.'&&t[1]==L'.'&&!L.empty()&&memcmp(L.back(),L"..",sizeof(wchar_t)*2)!=0) L.pop_back();
@@ -677,9 +679,9 @@ namespace logical
 namespace gx { namespace compiler
 {
 	inline int mtoi( const char* month ){ if(!month||!month[0]||!month[1]||!month[2]) return 0; char a=tolower(month[0]), b=tolower(month[1]), c=tolower(month[2]); if(a=='j'){ if(b=='a') return 1; if(c=='n') return 6; return 7; } if(a=='f') return 2; if(a=='m'){ if(c=='r') return 3; return 5; } if(a=='a'){ if(b=='p') return 4; return 8; } if(a=='s') return 9; if(a=='o') return 10; if(a=='n') return 11; return 12; }
-	inline int year(){ static int y=0; if(y) return y; char buff[64]; sscanf(__DATE__,"%*s %*s %s", buff); return y=atoi(buff); }
-	inline int month(){ static int m=0; if(m) return m; char buff[64]={}; sscanf(__DATE__,"%s", buff); return m=mtoi(buff); }
-	inline int day(){ static int d=0; if(d) return d; char buff[64]; sscanf(__DATE__,"%*s %s %*s", buff); return d=atoi(buff); }
+	inline int year(){ static int y=0; if(y) return y; char buff[64]={}; int r=sscanf(__DATE__,"%*s %*s %s", buff); return y=atoi(buff); }
+	inline int month(){ static int m=0; if(m) return m; char buff[64]={}; int r=sscanf(__DATE__,"%s", buff); return m=mtoi(buff); }
+	inline int day(){ static int d=0; if(d) return d; char buff[64]={}; int r=sscanf(__DATE__,"%*s %s %*s", buff); return d=atoi(buff); }
 }}
 
 //***********************************************

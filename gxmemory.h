@@ -40,7 +40,7 @@ struct mem_t : sized_ptr_t<void>
 	__forceinline void* alloc( size_t _size, ptrdiff_t elems=1 ){ return ptr=malloc(size=_size*elems); }
 	__forceinline void free(){ if(ptr) ::free(ptr); size=0; }
 	__forceinline void* cpy( void* src, size_t _size ){ return memcpy(ptr,src,_size); }
-	__forceinline void* dup( void* src, size_t _size ){ return ptr=memcpy(malloc(size=_size),src,_size); }
+	__forceinline void* dup( void* src, size_t _size ){ ptr=malloc(size=_size); if(ptr) memcpy(ptr,src,_size); return ptr; }
 	__forceinline int cmp( void* src, size_t _size ){ return memcmp(ptr,src,_size); }
 	__forceinline int strcmp( const char* src ){ return ::memcmp((char*)ptr,src,::strlen(src)); }
 	__forceinline int wcscmp( const wchar_t* src ){ return ::memcmp((wchar_t*)ptr,src,::wcslen(src)*sizeof(wchar_t)); }
@@ -222,7 +222,7 @@ __noinline void md5::update( const void* data, size_t size )
 	// finalize
 	used=lo&0x3f; buffer[used++]=0x80; available=64-used;
 	if(available<8){memset(&buffer[used],0,available);body(buffer,64);used=0;available=64;}
-	memset(&buffer[used],0,available-8);
+	memset(&buffer[used],0,size_t(available-8));
 	buffer[56]=(lo<<=3);buffer[57]=lo>>8;buffer[58]=lo>>16;buffer[59]=lo>>24;buffer[60]=hi;buffer[61]=hi>>8;buffer[62]=hi>>16;buffer[63]=hi>>24;
 	body(buffer,64);
 	digest.x=a; digest.y=b; digest.z=c; digest.w=d; // copy back to digest

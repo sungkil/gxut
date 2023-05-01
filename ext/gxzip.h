@@ -153,13 +153,13 @@ struct szip_t : public izip_t
 	ISzAlloc		alloc_temp = {SzAllocTemp,SzFreeTemp};
 
 	~szip_t(){ release(); }
-	szip_t( const path& _file_path ){file_path=_file_path;file_stream=new CFileInStream();if(InFile_OpenW(&file_stream->file,file_path.absolute())!=0){printf("unable to InFile_OpenW(%s)\n",wtoa(file_path.c_str()));return;} FileInStream_CreateVTable(file_stream);LookToRead2_CreateVTable(look_stream=new CLookToRead2(),0);look_stream->buf=(Byte*)alloc_impl.Alloc(&alloc_impl,1<<18);look_stream->bufSize=1<<18;look_stream->pos=look_stream->size=0;look_stream->realStream=&file_stream->vt;crc_generate_table();}
+	szip_t( const path& _file_path ){file_path=_file_path;file_stream=new CFileInStream();if(InFile_OpenW(&file_stream->file,file_path.absolute())!=0){printf("unable to InFile_OpenW(%s)\n",wtoa(file_path.c_str()));return;} FileInStream_CreateVTable(file_stream);LookToRead2_CreateVTable(look_stream=new CLookToRead2(),0);look_stream->buf=(Byte*)alloc_impl.Alloc(&alloc_impl,1ull<<18);look_stream->bufSize=1ull<<18;look_stream->pos=look_stream->size=0;look_stream->realStream=&file_stream->vt;crc_generate_table();}
 	szip_t( void* ptr, size_t size ){ if(!ptr||!size) return; crc_generate_table(); MemInStream_Init(mem_stream = new CMemInStream(),ptr,size); }
 
 	virtual void release(){for(auto& e:entries){if(e.ptr){free(e.ptr);e.ptr=nullptr;}}entries.clear();SzArEx_Free(&db,&alloc_impl);if(look_stream){delete look_stream;look_stream=nullptr;} if(file_stream){File_Close(&file_stream->file);delete file_stream;file_stream=nullptr;} if(mem_stream){delete mem_stream;mem_stream=nullptr;} }
 	virtual bool load(){if(!look_in_stream()) return false; SzArEx_Init(&db);if(SzArEx_Open(&db,look_in_stream(),&alloc_impl,&alloc_temp)!=SZ_OK){printf("unable to SzArEx_Open(%s)\n",wtoa(file_path.c_str()));release();return false;}for( uint k=0, kn=db.NumFiles; k<kn; k++ ){if(SzArEx_IsDir(&db,k)) continue;entry e;memset(&e,0,sizeof(e));e.index=k;e.attr=SzBitWithVals_Check(&db.Attribs,k)?db.Attribs.Vals[k]:0;if(SzBitWithVals_Check(&db.MTime,k)) memcpy(&e.mtime,db.MTime.Vals+k,sizeof(FILETIME));SzArEx_GetFileNameUtf16(&db,k,(ushort*)e.name);entries.emplace_back(e);}return true;}
 	virtual bool extract_to_files( path dir, const wchar_t* name=nullptr ){uchar* ob=nullptr;uint bl=-1;for(size_t k=0,kn=entries.size(),of=0,obs=0,os=0;k<kn;k++){auto& e=entries[k];if(e.is_dir()||(name&&_wcsicmp(name,e.name)!=0)) continue; path p=dir+e.name; if(!p.dir().exists()) p.dir().mkdir(); if(SZ_OK!=SzArEx_Extract(&db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){wprintf(L"unable to SzArEx_Extract(%s)\n",e.name);return false;} FILE* fp=_wfopen(p,L"wb"); if(!fp){wprintf( L"unable to fopen(%s)\n",p.c_str()); return false; } fwrite(ob+of,os,1,fp );fclose(fp); if(e.attr) SetFileAttributesW(p,e.attr); p.set_filetime(nullptr,nullptr,&e.mtime); } if(ob) alloc_impl.Free(&alloc_impl,ob); return true; }
-	virtual bool extract_to_memory( const wchar_t* name=nullptr ){if(!look_in_stream())return false;uchar* ob=nullptr;uint bl=-1;for(size_t k=0,kn=entries.size(),of=0,obs=0,os=0;k<kn;k++){auto& e=entries[k];if(e.is_dir()||e.ptr||(name&&_wcsicmp(name,e.name)!=0)) continue;if(SZ_OK!=SzArEx_Extract(&db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){wprintf(L"unable to SzArEx_Extract(%s)\n",e.name);return false;} memcpy(e.ptr=malloc(os),ob+of,e.size=os); } if(ob) alloc_impl.Free(&alloc_impl,ob); return true; }
+	virtual bool extract_to_memory( const wchar_t* name=nullptr ){if(!look_in_stream())return false;uchar* ob=nullptr;uint bl=-1;for(size_t k=0,kn=entries.size(),of=0,obs=0,os=0;k<kn;k++){auto& e=entries[k];if(e.is_dir()||e.ptr||(name&&_wcsicmp(name,e.name)!=0)) continue;if(SZ_OK!=SzArEx_Extract(&db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){wprintf(L"unable to SzArEx_Extract(%s)\n",e.name);return false;} e.ptr=malloc(os); if(e.ptr) memcpy(e.ptr,ob+of,e.size=os); } if(ob) alloc_impl.Free(&alloc_impl,ob); return true; }
 
 	static bool cmp_signature( void* ptr ){ static uchar s[6]={'7','z',0xBC,0xAF,0x27,0x1C}; return memcmp(ptr,s,6)==0; }
 	static void crc_generate_table(){ static bool b=false; if(b) return; CrcGenerateTable(); b=true; }
@@ -243,7 +243,7 @@ __noinline std::vector<uchar> compress( void* ptr, size_t size, bool b_gzip )
 		s.avail_in = uint(todo<chunk?todo:chunk);
 		s.avail_out = chunk;
 		ret = deflate( &s,(s.avail_in==todo) ? 4 : 2 ); // Z_FINISH : Z_SYNC_FLUSH
-		todo -= (s.total_in-total_in0);
+		todo -= (size_t(s.total_in)-total_in0);
 	}
 	buff.resize(s.total_out);
 	buff.shrink_to_fit();
@@ -274,7 +274,7 @@ __noinline std::vector<uchar> decompress( void* ptr, size_t size )
 		s.avail_out = chunk;
 		s.next_out = &temp[0];
 		ret = inflate(&s,2); // 2: Z_SYNC_FLUSH
-		todo -= s.total_in-total_in0;
+		todo -= size_t(s.total_in)-total_in0;
 		buff.insert(buff.end(),temp.begin(),temp.begin()+s.total_out-total_out0);
 	}
 	inflateEnd(&s);
@@ -322,8 +322,8 @@ struct binary_cache
 			if(zpath.exists()&&!decompress()) return false;
 			if(!cpath.exists()) return false;
 			fp = _wfopen( cpath, L"rb" );
-			uint64_t s=0; if(fp) fscanf( fp, "%*s = %llu\n", &s );
-			if(!fp||sig!=s){ fclose(fp); if(zpath.exists()) cpath.rmfile(); return false; }
+			uint64_t s=0; fscanf( fp, "%*s = %llu\n", &s );
+			if(!fp||sig!=s){ if(fp) fclose(fp); if(zpath.exists()) cpath.rmfile(); return false; }
 		}
 		else
 		{

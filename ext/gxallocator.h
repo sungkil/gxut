@@ -49,10 +49,10 @@ template <class T, size_t N> struct block_allocator
 		if( cfm==nullptr || (cfm->allocated+sizeof(T)*n) > cfm->capacity )
 		{
 			// otherwise create a new file
-			SYSTEMTIME s; GetSystemTime( &s ); wchar_t fileName[1024]; wsprintf( fileName, L"fa%p%02d%02d%02d%02d%04d%05d", GetCurrentThreadId(), s.wDay, s.wHour, s.wMinute, s.wSecond, s.wMilliseconds, rand() ); // make unique file name
+			SYSTEMTIME s={}; GetSystemTime(&s); wchar_t fileName[1024]={}; wsprintf( fileName, L"fa%p%02d%02d%02d%02d%04d%05d", GetCurrentThreadId(), s.wDay, s.wHour, s.wMinute, s.wSecond, s.wMilliseconds, rand() ); // make unique file name
 			path filePath=path::temp_dir()+L"gxallocator\\"+fileName; if(!filePath.dir().exists()) filePath.dir().mkdir();
 
-			file_map fm;
+			file_map fm={};
 			fm.capacity = n>block_allocator_thresh ? n*sizeof(T) : N*n*sizeof(T);	// use block allocation only for small allocation
 			fm.hFile = CreateFileW( filePath, GENERIC_READ|GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_FLAG_RANDOM_ACCESS|FILE_FLAG_DELETE_ON_CLOSE, nullptr ); if( fm.hFile==INVALID_HANDLE_VALUE ) return nullptr;
 			fm.hFileMap = CreateFileMappingW( fm.hFile, nullptr, PAGE_READWRITE, 0, fm.capacity, fileName ); if( fm.hFileMap==INVALID_HANDLE_VALUE ) return nullptr;

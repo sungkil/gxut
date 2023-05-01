@@ -201,7 +201,7 @@ struct explorer_t
 	void refresh( HWND hExplorerWnd )
 	{
 		clear();
-		bool bFound=false; VARIANT v; V_VT(&v)=VT_I4;
+		bool bFound=false; VARIANT v={}; V_VT(&v)=VT_I4;
 		if(!SUCCEEDED(CoCreateInstance(CLSID_ShellWindows,nullptr,CLSCTX_ALL,IID_IShellWindows,(void**)&psw))){ clear(); return; }
 		for( V_I4(&v)=0; !bFound && psw->Item(v,&pd)==S_OK; V_I4(&v)++ )
 		{
@@ -221,7 +221,7 @@ struct explorer_t
 	path get_folder_path( HWND hExplorerWnd )
 	{
 		clear();
-		path folder_path; bool bFound=false; VARIANT v; V_VT(&v)=VT_I4;
+		path folder_path; bool bFound=false; VARIANT v={}; V_VT(&v)=VT_I4;
 		if(!SUCCEEDED(CoCreateInstance(CLSID_ShellWindows,nullptr,CLSCTX_ALL,IID_IShellWindows,(void**)&psw))){ clear(); return L""; }
 		for( V_I4(&v)=0; !bFound && psw->Item(v,&pd)==S_OK; V_I4(&v)++ )
 		{
@@ -243,7 +243,7 @@ struct explorer_t
 	void goto_folder( HWND hExplorerWnd, const path& folder_path )
 	{
 		clear();
-		bool bFound=false; VARIANT v; V_VT(&v)=VT_I4;
+		bool bFound=false; VARIANT v={}; V_VT(&v)=VT_I4;
 		if(!SUCCEEDED(CoCreateInstance(CLSID_ShellWindows,nullptr,CLSCTX_ALL,IID_IShellWindows,(void**)&psw))){ clear(); return; }
 		for( V_I4(&v)=0; !bFound && psw->Item(v,&pd)==S_OK; V_I4(&v)++ )
 		{

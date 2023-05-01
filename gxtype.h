@@ -99,11 +99,14 @@ using namespace std::string_literals; // enables s-suffix for std::string litera
 	#ifndef __noinline
 		#define __noinline __declspec(noinline) inline
 	#endif
-	#pragma warning( disable: 4201 ) // nameless struct/union
-	#pragma warning( disable: 4100 ) // unreferenced formal parameter
-	#pragma warning( disable: 4244 ) // int to wchar_t, possible loss of data
-	#pragma warning( disable: 4324 ) // alignment padding
-	#pragma warning( disable: 4458 ) // hiding class member
+	#pragma warning( disable: 4201 )	// nameless struct/union
+	#pragma warning( disable: 4100 )	// unreferenced formal parameter
+	#pragma warning( disable: 4244 )	// int to wchar_t, possible loss of data
+	#pragma warning( disable: 4324 )	// alignment padding
+	#pragma warning( disable: 4458 )	// hiding class member
+	#pragma warning( disable: 6031 )	// return value ignored
+	#pragma warning( disable: 26451 )	// arithmetic overflow: operator* on a 4 byte value
+	#pragma warning( disable: 26495 )	// always initialize a member variable: not applicable to an anonymous struct in a union
 #else // GCC or Clang
 	#ifndef __noinline
 		#define __noinline __attribute__((noinline)) inline

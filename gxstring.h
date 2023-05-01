@@ -58,7 +58,7 @@ inline const wchar_t* _stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ re
 
 //***********************************************
 // 1. shared circular buffers
-template <class T> __forceinline T* __tstrbuf( size_t len ){ static T* C[SHARED_CIRCULAR_BUFFER_SIZE]={}; static uint cid=0; cid=(++cid)%(sizeof(C)/sizeof(T*));C[cid]=(T*)realloc(C[cid],sizeof(T)*(len+1)); C[cid][len]=0; return C[cid]; }
+template <class T> __forceinline T* __tstrbuf( size_t len ){ static T* C[SHARED_CIRCULAR_BUFFER_SIZE]={}; static uint cid=0; cid=(++cid)%(sizeof(C)/sizeof(T*)); C[cid] = (T*)(C[cid]?realloc(C[cid],sizeof(T)*(len+1)):malloc(sizeof(T)*(len+1))); if(C[cid]) C[cid][len]=0; return C[cid]; }
 template <class T> __forceinline T* __tstrdup( const T* s,size_t len=-1 ){ if(len==-1){const T* t=s; while(*t)t++;len=t-s;} T* d=__tstrbuf<T>(len); return len?(T*)memcpy(d,s,sizeof(T)*len):d; }
 __forceinline char* _strbuf( size_t len ){ return __tstrbuf<char>(len); }
 __forceinline wchar_t* _wcsbuf( size_t len ){ return __tstrbuf<wchar_t>(len); }
@@ -229,18 +229,18 @@ inline uint atou( const char* a ){		char* e=nullptr;uint v=(uint)strtoul(a,&e,10
 inline uint atou( const wchar_t* w ){	wchar_t* e=nullptr;uint v=(uint)wcstoul(w,&e,10); return v; }
 inline int64_t atoill( const char* a ){	char* e=nullptr;int64_t v=strtoll(a,&e,10); return v; }
 inline uint64_t atoull( const char* a ){char* e=nullptr;uint64_t v=strtoull(a,&e,10); return v; }
-inline int2 atoi2( const char* a ){		int2 v;char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=(int)strtol(a,&e,10); return v; }
-inline int3 atoi3( const char* a ){		int3 v;char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=(int)strtol(a,&e,10); return v; }
-inline int4 atoi4( const char* a ){		int4 v;char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=(int)strtol(a,&e,10); return v; }
-inline uint2 atou2( const char* a ){	uint2 v;char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=strtoul(a,&e,10); return v; }
-inline uint3 atou3( const char* a ){	uint3 v;char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=strtoul(a,&e,10); return v; }
-inline uint4 atou4( const char* a ){	uint4 v;char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=strtoul(a,&e,10); return v; }
-inline float2 atof2( const char* a ){	float2 v;char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=strtof(a,&e); return v; }
-inline float3 atof3( const char* a ){	float3 v;char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=strtof(a,&e); return v; }
-inline float4 atof4( const char* a ){	float4 v;char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=strtof(a,&e); return v; }
-inline double2 atod2( const char* a ){	double2 v;char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=strtod(a,&e); return v; }
-inline double3 atod3( const char* a ){	double3 v;char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=strtod(a,&e); return v; }
-inline double4 atod4( const char* a ){	double4 v;char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=strtod(a,&e); return v; }
+inline int2 atoi2( const char* a ){		int2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=(int)strtol(a,&e,10); return v; }
+inline int3 atoi3( const char* a ){		int3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=(int)strtol(a,&e,10); return v; }
+inline int4 atoi4( const char* a ){		int4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=(int)strtol(a,&e,10); return v; }
+inline uint2 atou2( const char* a ){	uint2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=strtoul(a,&e,10); return v; }
+inline uint3 atou3( const char* a ){	uint3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=strtoul(a,&e,10); return v; }
+inline uint4 atou4( const char* a ){	uint4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=strtoul(a,&e,10); return v; }
+inline float2 atof2( const char* a ){	float2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=strtof(a,&e); return v; }
+inline float3 atof3( const char* a ){	float3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=strtof(a,&e); return v; }
+inline float4 atof4( const char* a ){	float4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=strtof(a,&e); return v; }
+inline double2 atod2( const char* a ){	double2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) v[k]=strtod(a,&e); return v; }
+inline double3 atod3( const char* a ){	double3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) v[k]=strtod(a,&e); return v; }
+inline double4 atod4( const char* a ){	double4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) v[k]=strtod(a,&e); return v; }
 
 //***********************************************
 // 10. conversion from wstring to user types
@@ -371,7 +371,7 @@ __noinline std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T>
 explode( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T> > > vs; vs.reserve(32);
-	T *ctx, *token = strtok_s(__tstrdup(src),seps,&ctx);
+	T *ctx=nullptr, *token = strtok_s(__tstrdup(src),seps,&ctx);
 	while(token!=nullptr){ vs.emplace_back(token); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }
@@ -381,7 +381,7 @@ __noinline std::set<std::basic_string<T,std::char_traits<T>,std::allocator<T> > 
 explode_set( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::set<std::basic_string<T,std::char_traits<T>,std::allocator<T> > > vs;
-	T *ctx, *token = strtok_s(__tstrdup(src), seps, &ctx);
+	T *ctx=nullptr, *token = strtok_s(__tstrdup(src), seps, &ctx);
 	while(token!=nullptr){ vs.emplace(token); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }
@@ -390,7 +390,7 @@ template <class T>
 __noinline std::vector<int> explodei( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<int> vs; vs.reserve(32);
-	T *ctx, *token = strtok_s(__tstrdup(src), seps, &ctx);
+	T *ctx=nullptr, *token = strtok_s(__tstrdup(src), seps, &ctx);
 	while(token!=nullptr){ vs.emplace_back(atoi(token)); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }
@@ -399,7 +399,7 @@ template <class T>
 __noinline std::vector<unsigned int> explodeu( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<unsigned int> vs; vs.reserve(32);
-	T *ctx, *token = strtok_s(__tstrdup(src), seps, &ctx);
+	T *ctx=nullptr, *token = strtok_s(__tstrdup(src), seps, &ctx);
 	while(token!=nullptr){ vs.emplace_back(atou(token)); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }
@@ -408,7 +408,7 @@ template <class T>
 __noinline std::vector<float> explodef( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<float>  vs; vs.reserve(32);
-	T *ctx, *token = strtok_s(__tstrdup(src), seps, &ctx);
+	T *ctx=nullptr, *token = strtok_s(__tstrdup(src), seps, &ctx);
 	while(token!=nullptr){ vs.emplace_back(float(fast::atof(token))); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }
@@ -417,7 +417,7 @@ template <class T>
 __noinline std::vector<double> exploded( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 {
 	std::vector<double>  vs; vs.reserve(32);
-	T *ctx, *token = strtok_s(__tstrdup(src), seps, &ctx);
+	T *ctx=nullptr, *token = strtok_s(__tstrdup(src), seps, &ctx);
 	while(token!=nullptr){ vs.emplace_back(double(fast::atof(token))); token=strtok_s(nullptr,seps,&ctx); }
 	return vs;
 }
@@ -438,7 +438,7 @@ __noinline const T* substr( const T* _Src, int _Pos, int _Count=0 )
 {
 	static T *nullstr=(T*)L""; if(!_Src) return nullstr;
 	size_t l = strlen(_Src); if(_Pos<0) _Pos+=int(l); if(_Pos>=int(l)) return nullstr; if(_Count<=0) _Count+=int(l);
-	return __tstrdup(_Src+_Pos,_Pos+_Count<=l?_Count:l-_Pos);
+	return __tstrdup(_Src+_Pos,size_t(_Pos)+_Count<=l?size_t(_Count):size_t(l-_Pos));
 }
 
 template <class T>
@@ -448,7 +448,7 @@ __noinline const T* str_replace( const T* _Src, const T* _Find, const T* _Replac
 	int sl=int(strlen(_Src)), fl=int(strlen(_Find)); if(sl<fl) return __tstrdup(_Src);
 	int rl=int(strlen(_Replace));
 	T *s=(T*)_Src, *p=nullptr;
-	std::vector<T> buff; buff.reserve(sl*2); while( nullptr!=(p=(T*)strstr(s,_Find)) ){ buff.insert(buff.end(),s,p); if(rl>0) buff.insert(buff.end(),_Replace,_Replace+rl); s=p+fl; }
+	std::vector<T> buff; buff.reserve(2llu*sl); while( nullptr!=(p=(T*)strstr(s,_Find)) ){ buff.insert(buff.end(),s,p); if(rl>0) buff.insert(buff.end(),_Replace,_Replace+rl); s=p+fl; }
 	buff.insert(buff.end(),s,(T*)(_Src+sl));buff.emplace_back(0);
 	return __tstrdup(&buff[0],buff.size());
 }

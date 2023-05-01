@@ -214,7 +214,7 @@ inline ivec4 font_engine::char_pos( wchar_t c )
 {
 	auto it=char_map.find(c); if(it==char_map.end()) return ivec4(-1,-1,-1,-1);
 	int t=it->second.index;
-	ivec4 p; p.xy=ivec2(t%NX,t/NX)*TY; p.zw=(it->second.wide)?ivec2(p.x+TX,p.y):ivec2(-1,-1);
+	ivec4 p={}; p.xy=ivec2(t%NX,t/NX)*TY; p.zw=(it->second.wide)?ivec2(p.x+TX,p.y):ivec2(-1,-1);
 	return p;
 }
 

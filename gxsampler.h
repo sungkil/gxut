@@ -186,14 +186,14 @@ struct bridson_t
 	std::deque<sample>	active_queue;
 	
 	bridson_t( bool circ ):circular(circ){};
-	void reset( const int count, float radius ){ r=radius; grid_size=int(ceil(1.0f/cell_size())); grid.resize(grid_size*grid_size); for(auto& c:grid) c.clear(); active_queue.clear(); samples.clear(); samples.reserve(count*3); } /* 3 times more samples */
+	void reset( const int count, float radius ){ r=radius; grid_size=int(ceil(1.0f/cell_size())); grid.resize(size_t(grid_size)*grid_size); for(auto& c:grid) c.clear(); active_queue.clear(); samples.clear(); samples.reserve(size_t(count)*3); } /* 3 times more samples */
 	float cell_size(){ return r/1.4142135623730950488f; }
 	bool in_bound( vec2 v ){ return (!circular&&v.x>=0&&v.x<1.0f&&v.y>=0&&v.y<1.0f)||(circular&&((v.x-0.5f)*(v.x-0.5f)+(v.y-0.5f)*(v.y-0.5f))<0.25f); }
 	bool in_grid( ivec2 v ){ return v.x>=0&&v.x<grid_size&&v.y>=0&&v.y<grid_size; }
 	ivec2 to_grid( vec2& v ){ return ivec2(int((v.x/cell_size())), int((v.y/cell_size()))); }
-	sample gen_intial_sample(){ sample s; s.pos=vec2(0.5f,0.5f); s.tc = to_grid(s.pos); return s; }
-	sample gen_annulus( vec2 p ){ sample s; float t = prand()*PI<float>*2.0f; s.pos = p + vec2(cosf(t),sinf(t))*(prand()+1.0f)*r; s.tc = to_grid(s.pos); return s; } 
-	static std::array<ivec2,20> gen_neighbors(){ std::array<ivec2,20> n; for(int k=0,y=-2;y<3;y++)for(int x=-2;x<3;x++){ if((x==0&&y==0)||(abs(x)==2&&abs(y)==2)) continue; n[k++]=ivec2(x,y); } return n; }
+	sample gen_intial_sample(){ sample s={}; s.pos=vec2(0.5f,0.5f); s.tc = to_grid(s.pos); return s; }
+	sample gen_annulus( vec2 p ){ sample s={}; float t = prand()*PI<float>*2.0f; s.pos = p + vec2(cosf(t),sinf(t))*(prand()+1.0f)*r; s.tc = to_grid(s.pos); return s; } 
+	static std::array<ivec2,20> gen_neighbors(){ std::array<ivec2,20> n={}; for(int k=0,y=-2;y<3;y++)for(int x=-2;x<3;x++){ if((x==0&&y==0)||(abs(x)==2&&abs(y)==2)) continue; n[k++]=ivec2(x,y); } return n; }
 
 	int generate( const int count, float radius );
 };
@@ -261,7 +261,7 @@ __noinline int bridson_t::generate( const int count, float radius )
 			for(size_t x=0, xn=neighbors.size(); x<xn; x++)
 			{
 				ivec2 n=q.tc+neighbors[x]; if(!in_grid(n)) continue;
-				cell& sn = grid[n.y*grid_size+n.x]; if(sn.empty()) continue;
+				cell& sn = grid[size_t(n.y)*grid_size+n.x]; if(sn.empty()) continue;
 				if((q.pos-sn.pos).length2()>r2) continue;
 				bfar = false; break;
 			}
