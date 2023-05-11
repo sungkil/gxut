@@ -1115,23 +1115,6 @@ inline void mesh::multi_draw_elements_indirect( GLsizei draw_count, GLsizei stri
 inline void mesh::multi_draw_elements_indirect_count( GLsizei max_draw_count, GLsizei stride, const void* indirect, GLintptr draw_count, GLenum mode, bool b_bind ){ buffer.vertex->multi_draw_elements_indirect_count( max_draw_count, stride, indirect, draw_count, mode, b_bind ); }
 #endif
 
-//***********************************************
-namespace glfx {
-//***********************************************
-	struct IParser
-	{
-		virtual bool parse( const char* src ) = 0;
-		virtual const char* parse_log() = 0;
-		virtual int program_count() = 0;
-		virtual const char* program_name( int program_id ) = 0;
-		virtual int shader_count( int program_id ) = 0;
-		virtual unsigned shader_type( int program_id, int shader_id ) = 0;
-		virtual const char* shader_source( int program_id, int shader_id ) = 0;
-	};
-//***********************************************
-} // end namespace gl
-//***********************************************
-
 inline gl::Query* gxCreateQuery( const char* name, GLenum target=GL_TIME_ELAPSED )
 {
 	GLuint ID; if(glCreateQueries) glCreateQueries( target, 1, &ID ); else glGenQueries(1,&ID); if(ID==0){ printf( "%s(): unable to create query %s\n", __func__, name ); return nullptr; }
@@ -1473,49 +1456,40 @@ inline gl::Effect* gxCreateEffect( const char* name )
 }
 
 //***********************************************
-#ifdef GLFX_PARSER_IMPL
-#pragma comment( lib, "glfx.lib" )
-struct glfxParserImpl : public glfx::IParser
+#ifndef GLFXAPI // when <glfx.h> is not included
+//***********************************************
+namespace glfx {
+//***********************************************
+struct IParser
 {
-	struct program_t{std::string name;struct shader_t{uint type;std::string source;};std::vector<shader_t> shaders;};
-	std::string				log;
-	std::vector<program_t>	programs;
-
-	virtual const char* parse_log(){ return log.c_str(); }
-	virtual int program_count(){ return int(programs.size()); }
-	virtual const char* program_name( int program_id ){ return program_id>=program_count()?"":programs[program_id].name.c_str(); }
-	virtual int shader_count( int program_id ){ return program_id>=program_count()?0:int(programs[program_id].shaders.size()); }
-	virtual unsigned shader_type( int program_id, int shader_id ){ return program_id>=program_count()?0:shader_id>=shader_count(program_id)?0:programs[program_id].shaders[shader_id].type; }
-	virtual const char* shader_source( int program_id, int shader_id ){ return program_id>=program_count()?0:shader_id>=shader_count(program_id)?0:programs[program_id].shaders[shader_id].source.c_str(); }
-	virtual bool parse( const char* str )
-	{
-		std::string src;for(auto* v:explode_conservative(str,'\n')){if(*v)src+=trim_comment(v,"//");src+='\n';} // bug fix for glfxfindblock with blockmarks inside the comments
-		int id=glfxGenEffect();if(!glfxParseEffectFromMemory(id,src.c_str())){log=glfxGetEffectLog(id);return false;}
-		for(int k=0,kn=glfxGetProgramCount(id);k<kn;k++)
-		{
-			programs.emplace_back(program_t());program_t& p=programs.back();p.name=glfxGetProgramName(id,k);
-			std::map<unsigned int,std::string> glfxGetProgramSource(int,const char*);
-			for(auto& it:glfxGetProgramSource(id,p.name.c_str()))p.shaders.emplace_back(program_t::shader_t{it.first,it.second});
-		}
-		glfxDeleteEffect(id);
-		return true;
-	}
+	virtual bool parse( const char* src ) = 0;
+	virtual const char* parse_log() = 0;
+	virtual int program_count() = 0;
+	virtual const char* program_name( int program_id ) = 0;
+	virtual int shader_count( int program_id ) = 0;
+	virtual unsigned shader_type( int program_id, int shader_id ) = 0;
+	virtual const char* shader_source( int program_id, int shader_id ) = 0;
 };
+//***********************************************
+} // end namespace glfx
+//***********************************************
 
-inline glfx::IParser* glfxCreateParser(){ return new glfxParserImpl; }
-inline void glfxDeleteParser( glfx::IParser** pp_parser ){ if(!pp_parser||!(*pp_parser)) return; delete *((glfxParserImpl**)pp_parser); *(pp_parser)=nullptr; }
+inline glfx::IParser* glfxCreateParser()
+{
+	static glfx::IParser*(*f)()=(glfx::IParser*(*)())GetProcAddress(GetModuleHandleW(nullptr),"__glfxCreateParser");
+	if(!f){ printf( "unable to link to %s()\n", __func__ ); return nullptr; } return f();
+}
+inline void glfxDeleteParser( glfx::IParser** pp_parser )
+{
+	static void(*f)(glfx::IParser**)=(void(*)(glfx::IParser**))GetProcAddress(GetModuleHandleW(nullptr),"__glfxDeleteParser");
+	if(!f){ printf( "unable to link to %s()\n", __func__ ); return; } f(pp_parser);
+}
 
-#endif // GLFX_PARSER_IMPL
+#endif // GLFXAPI
 
 //***********************************************
 inline gl::Effect* __gxCreateEffectImpl( gl::Effect* parent, const char* fxname, gl::effect_source_t source )
 {
-#ifndef GLFX_PARSER_IMPL
-	static glfx::IParser*(*glfxCreateParser)() = (glfx::IParser*(*)()) GetProcAddress(GetModuleHandleW(nullptr),"glfxCreateParser"); if(!glfxCreateParser){ printf( "%s(): unable to link to glfxCreateParser()\n", __func__ ); return nullptr; }
-	static void(*glfxDeleteParser)(glfx::IParser**) = (void(*)(glfx::IParser**)) GetProcAddress(GetModuleHandleW(nullptr),"glfxDeleteParser"); if(!glfxDeleteParser){ printf( "%s(): unable to link to glfxDeleteParser()\n", __func__ ); return nullptr; }
-#endif
-
-	// load shaders from effect
 	glfx::IParser* parser = glfxCreateParser(); if(!parser){ printf( "%s(): unable to create parser\n", __func__ ); return nullptr; }
 	if(!parser->parse(source.merge().c_str())){ printf( "%s(): failed to parse %s\n%s\n", __func__, fxname, parser->parse_log() ); return nullptr; }
 
