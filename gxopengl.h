@@ -669,17 +669,6 @@ namespace gl {
 		glViewport( 0, 0, width, height ); // set viewport
 	}
 
-	//***********************************************
-	// shader/program/effect source structures
-	struct named_string_t { std::string name, value; };
-	using  shader_source_t	= std::vector<named_string_t>;			// a list of source strings
-	using  program_source_t	= std::map<GLuint,shader_source_t>;		// <shader_type,shader_source_t>
-	struct shader_macro_t : std::vector<std::string>
-	{
-		void append( const char* m, ... ){char b[4096];va_list a;va_start(a,m);size_t len=size_t(_vscprintf(m,a));vsprintf_s(b,len+1,m,a);va_end(a); for(auto& s:*this) if(strcmp(s.c_str(),b)==0) return; emplace_back(b); }
-		std::string merge() const { std::string m; for(auto& s:*this){ m+=s; if(s.back()!='\n') m+='\n'; } if(!m.empty()) m+='\n'; return m; }
-	};
-
 	struct Uniform
 	{
 		GLint		ID=-1;
@@ -784,6 +773,67 @@ namespace gl {
 	};
 
 	//***********************************************
+	// shader/program/effect source structures
+	struct shader_macro_t : public std::vector<std::string>
+	{
+		void append( const char* m, ... ){char b[4096];va_list a;va_start(a,m);size_t len=size_t(_vscprintf(m,a));vsprintf_s(b,len+1,m,a);va_end(a); for(auto& s:*this) if(strcmp(s.c_str(),b)==0) return; emplace_back(b); }
+		std::string merge() const { std::string m; for(auto& s:*this){ m+=s; if(s.back()!='\n') m+='\n'; } if(!m.empty()) m+='\n'; return m; }
+	};
+	struct named_string_t { std::string name, value; };
+	struct shader_source_t : public std::vector<named_string_t> // a list of source strings
+	{
+		using std::vector<named_string_t>::vector;		// inherit ctors
+		using std::vector<named_string_t>::operator=;	// inherit operator=
+		std::string flatten() const
+		{
+			static const bool TRIM_LINE_DIRECTIVE=true;
+			std::string f;
+			for( size_t k=0; k < size(); k++ )
+			{
+				for( auto* l : explode_conservative(at(k).value.c_str(),'\n') )
+				{
+					if(TRIM_LINE_DIRECTIVE&&strncmp(l,"#line",strlen("#line"))==0) continue;
+					if(strncmp(l," in ",strlen(" in "))==0||strncmp(l," out ",strlen(" out "))==0) l++;
+					f += l; f+="\n";
+				}
+			}
+			for( int k=0; k<16&&strstr(f.c_str(),"\n\n\n"); k++ )
+				f = str_replace(f.c_str(),"\n\n\n", "\n\n" );
+			f = str_replace(f.c_str(),";\nvoid main()\n\n{", ";\n\nvoid main()\n{" );
+			
+			return f;
+		}
+		
+		void flatten( path file_path ) const
+		{
+			if(!file_path.dir().exists()) file_path.dir().mkdir();
+			file_path.write_file(flatten().c_str());
+		}
+	};
+
+	struct program_source_t : public std::map<GLuint,shader_source_t> // <shader_type,shader_source_t>
+	{
+		using std::map<GLuint,shader_source_t>::map;		// inherit ctors
+		using std::map<GLuint,shader_source_t>::operator=;	// inherit operator=
+
+		shader_source_t get_shader_source( GLuint shader_type ) const { auto it=find(shader_type); return it==end()?shader_source_t():it->second; }
+		void export_shader_sources( path dir, path name ){ for( auto it : *this ) export_shader_source( it.first, dir, name ); }
+		void export_shader_source( GLuint shader_type, path dir, path name, bool b_print_log=true )
+		{
+			path ext = get_shader_extension_name( shader_type ); if(ext.empty()){ printf( "unable to find shader_type %d\n", shader_type ); return; }
+			path file_path = dir+name+"."+ext;
+			if(b_print_log) wprintf( L"%s\n", file_path.relative().to_slash().c_str() );
+			get_shader_source(shader_type).flatten( file_path );
+		}
+		path get_shader_extension_name( GLuint shader_type ) const
+		{
+			// extension names: https://www.khronos.org/opengles/sdk/tools/Reference-Compiler/
+			static const std::map<GLuint,path> m = { {GL_VERTEX_SHADER, L"vert"}, {GL_FRAGMENT_SHADER, L"frag"}, {GL_GEOMETRY_SHADER, L"geom"}, {GL_TESS_EVALUATION_SHADER, L"tesc"}, {GL_TESS_CONTROL_SHADER, L"tese"}, {GL_COMPUTE_SHADER, L"comp"}, };
+			auto it=m.find(shader_type); return it==m.end() ? path():it->second;
+		}
+	};
+
+	//***********************************************
 	struct Program : public Object
 	{
 		Program( GLuint ID, const char* name ) : Object(ID,name,GL_PROGRAM){ get_instances().emplace(this); }
@@ -855,9 +905,6 @@ namespace gl {
 		GLuint get_uniform_block_binding( const char* name ){ auto* ub=get_uniform_block(name); return ub?ub->get_binding():-1; }
 		GLuint get_shader_storage_block_binding( const char* name ){ auto it=_shader_storage_block_binding_map.find(name); if(it!=_shader_storage_block_binding_map.end()) return it->second; const GLenum prop=GL_BUFFER_BINDING; GLint binding;glGetProgramResourceiv(ID,GL_SHADER_STORAGE_BLOCK,glGetProgramResourceIndex(ID,GL_SHADER_STORAGE_BLOCK,name),1,&prop,1,nullptr,&binding); return _shader_storage_block_binding_map[name]=binding; }
 		GLuint get_atomic_counter_buffer_binding( const char* name ){ auto it=_atomic_counter_buffer_binding_map.find(name); return it==_atomic_counter_buffer_binding_map.end()?-1:it->second; }
-
-		// query source
-		shader_source_t get_shader_source( GLuint shader_type ) const { auto it=source.find(shader_type); return it==source.end()?shader_source_t():it->second; }
 
 		// instances
 		static std::set<Program*>& get_instances(){ static std::set<Program*> i; return i; }
@@ -1090,6 +1137,14 @@ namespace gl {
 		inline void dispatch_compute( GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z=1 ){ glDispatchCompute( num_groups_x?num_groups_x:1, num_groups_y?num_groups_y:1, num_groups_z?num_groups_z:1 ); }
 		inline void dispatch_compute( GLuint num_threads_x, double local_size_x, GLuint num_threads_y, double local_size_y, GLuint num_threads_z=1, double local_size_z=1 )	{ GLuint num_groups_x = max(GLuint(ceil(num_threads_x/float(local_size_x))),1u), num_groups_y = max(GLuint(ceil(num_threads_y/float(local_size_y))),1u), num_groups_z = max(GLuint(ceil(num_threads_z/float(local_size_z))),1u); dispatch_compute(num_groups_x, num_groups_y, num_groups_z ); }
 		inline void dispatch_compute_indirect( GLintptr indirect ){ glDispatchComputeIndirect( indirect ); }
+
+		// shader source files
+		void export_shader_sources( path dir, path fxname=L"" )
+		{
+			dir = dir.to_backslash(); if(!dir.empty()&&dir.back()!=L'\\') dir=dir.dir(); dir += L".glsl\\";
+			fxname = fxname.empty() ? _name : fxname.remove_ext();
+			for( auto* p : programs ) p->source.export_shader_sources( dir, fxname+L"."+p->name() );
+		}
 
 		// internal members
 		Program*						active_program=nullptr;
@@ -1506,7 +1561,6 @@ inline gl::Effect* __gxCreateEffectImpl( gl::Effect* parent, const char* fxname,
 		}
 		
 		gl::Program* program = gxCreateProgram(fxname?fxname:"",parser->program_name(k),ss); if(!program){ glfxDeleteParser(&parser); if(e!=parent) delete e; return nullptr; }
-		
 		e->append_program(program);
 	}
 
