@@ -4994,18 +4994,23 @@ e(NV_conservative_raster_underestimation)
 	// release dll
 	if(__hOpenGL32&&!hOpenGL32) FreeLibrary(__hOpenGL32);
 
+	// return if unsupported exists or logging is disabled
+	if(unsupported_functions.empty()&&unsupported_extensions.empty()) return;
+
+#ifdef GXCOREARB_LOG
+
 	// get a lower-case computer name
 	wchar_t cname[1024]={0}; DWORD cl=sizeof(cname)/sizeof(cname[0]);
 	GetComputerNameW( cname, &cl ); for(size_t k=0,kn=wcslen(cname);k<kn;k++) cname[k]=tolower(cname[k]);
 
-	// find a log directory
+	// build a log path
 	wchar_t log_dir[_MAX_PATH] = {};
-	const wchar_t*(*rexGetTempDir)() = (const wchar_t*(*)()) GetProcAddress(GetModuleHandleW(nullptr),"rexGetTempDir");
-	if(rexGetTempDir){ swprintf(log_dir,_MAX_PATH,L"%slog\\",rexGetTempDir()); if(_waccess(log_dir,0)!=0)_wmkdir(log_dir); }
+	const wchar_t*(*rex_temp_dir)() = (const wchar_t*(*)()) GetProcAddress(GetModuleHandleW(nullptr),"rex_temp_dir");
+	if(rex_temp_dir){ swprintf(log_dir,_MAX_PATH,L"%slog\\",rex_temp_dir()); if(_waccess(log_dir,0)!=0)_wmkdir(log_dir); }
+	wchar_t log_path[_MAX_PATH]={0}; swprintf( log_path, _MAX_PATH, L"%sgxcorearb.%s.log", log_dir, cname );
 
-	// check if unsupported exists
-	wchar_t log_path[_MAX_PATH]={0}; swprintf( log_path, _MAX_PATH, L"%sgxcorearb.%s.log", log_dir, cname ); if(_waccess(log_path,0)==0) return;
-	if(unsupported_functions.empty()&&unsupported_extensions.empty()) return;
+	// bypass when a log already exists
+	if(_waccess(log_path,0)==0) return;
 
 	// leave a log for unsupported
 	FILE* fp = _wfopen( log_path, L"w" ); if(!fp) return;
@@ -5014,6 +5019,8 @@ e(NV_conservative_raster_underestimation)
 	fclose(fp);
 
 	wprintf( L"[gxcorearb] see %s for unavailable OpenGL extensions\n", log_path );
+
+#endif
 }
 
 #endif /* GXCOREARB_IMPL */
