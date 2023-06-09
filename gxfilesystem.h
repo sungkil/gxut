@@ -221,7 +221,7 @@ struct path
 	path remove_backslash()	const { path p(*this); size_t l=wcslen(p._data); if(l&&(p._data[l-1]=='\\'||p._data[l-1]=='/')) p._data[l-1]=L'\0'; return p; }
 	path remove_slash()		const { path p(*this); size_t l=wcslen(p._data); if(l&&(p._data[l-1]=='\\'||p._data[l-1]=='/')) p._data[l-1]=L'\0'; return p; }
 	path auto_quote()		const { if(!*_data||!wcschr(_data,L' ')||(_data[0]==L'\"'&&_data[wcslen(_data)-1]==L'\"')) return *this; path p; p[0]=L'\"'; size_t l=wcslen(_data); memcpy(p._data+1,_data,l*sizeof(wchar_t)); p[l+1]=L'\"'; p[l+2]=0; return p; }
-	path unix()				const {	path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; p._data[1]=wchar_t(::tolower(p._data[0])); p._data[0]=L'/'; return p; }
+	path unix()				const {	path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; if(p._data[1]==L':'){ p._data[1]=wchar_t(::tolower(p._data[0])); p._data[0]=L'/'; } return p; }
 	path cygwin()			const { path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; path p2; swprintf_s( p2, capacity, L"/cygdrive/%c%s", ::tolower(p[0]), p._data+2 ); return p2; }
 
 	// split path
