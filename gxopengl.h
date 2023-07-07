@@ -1,4 +1,4 @@
-//*******************************************************************
+//*************************************
 // Copyright 2011-2040 Sungkil Lee
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,7 +12,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//*******************************************************************
+//*************************************
 
 #pragma once
 #ifndef __GX_OPENGL_H__
@@ -24,11 +24,50 @@
 #include "gxfilesystem.h"
 #include <malloc.h>
 
-#if !defined(__gxcorearb_h_) && defined(__has_include)
-	#if __has_include( "gxcorearb.h" )
-		#include "gxcorearb.h"
-	#elif __has_include( <gxut/gxcorearb.h> )
-		#include <gxut/gxcorearb.h>
+#ifdef __has_include
+	#if defined(GX_OPENGL_GLEW)
+		#ifdef GX_OPENGL_GLAD
+			#error do not define GX_OPENGL_GLAD and GX_OPENGL_GLEW simultaneously
+		#endif
+		#ifndef GLEW_STATIC
+			#define GLEW_STATIC
+		#endif
+		#if __has_include( <GL/glew.h> )
+			#include <GL/glew.h>
+		#elif __has_include( "glew.h" )
+			#include "glew.h"
+		#endif
+		#pragma comment( lib, "glew32s.lib" )	// explicit linking to static glew32 x64
+		#pragma comment( lib, "OpenGL32.lib" )	// explicit linking to system OpenGL
+		#define gxHasExtension(name)	GLEW_ARB_##name
+	#elif defined(GX_OPENGL_GLAD)
+		#if __has_include( <GL/glad/gl.h> )
+			#include <GL/glad/gl.h>
+		#elif __has_include( <GL/glad.h> )
+			#include <GL/glad.h>
+		#elif __has_include( "glad.h" )
+			#include "glad.h"
+		#endif
+		#define gxHasExtension(name)	GLAD_GL_ARB_##name
+	#else
+		#if __has_include( <gxut/gxcorearb.h> )
+			#include <gxut/gxcorearb.h>
+		#elif __has_include( <GL/gxcorearb.h> )
+			#include <GL/gxcorearb.h>
+		#elif __has_include( "gxcorearb.h" )
+			#include "gxcorearb.h"
+		#endif
+		#define gxHasExtension(name)	GX_ARB_##name
+	#endif
+	
+	#ifdef GX_OPENGL_GLFX
+		#if __has_include( <GL/glfx.h> )
+			#include <GL/glfx.h>
+		#elif __has_include( <glfx/glfx.h> )
+			#include <glfx/glfx.h>
+		#elif __has_include( "glfx.h" )
+			#include "glfx.h"
+		#endif
 	#endif
 #endif
 
@@ -51,7 +90,7 @@ inline GLenum gxGetTargetBinding( GLenum target )
 		{GL_TRANSFORM_FEEDBACK_BUFFER,GL_TRANSFORM_FEEDBACK_BUFFER_BINDING},
 		{GL_COPY_READ_BUFFER,GL_COPY_READ_BUFFER_BINDING},
 		{GL_COPY_WRITE_BUFFER,GL_COPY_WRITE_BUFFER_BINDING},
-		{GL_PARAMETER_BUFFER_ARB,GL_PARAMETER_BUFFER_BINDING_ARB},
+		{GL_PARAMETER_BUFFER,GL_PARAMETER_BUFFER_BINDING},
 		{GL_TEXTURE_BUFFER,GL_TEXTURE_BUFFER_BINDING},
 		{GL_TEXTURE_1D,GL_TEXTURE_BINDING_1D},
 		{GL_TEXTURE_2D,GL_TEXTURE_BINDING_2D},
@@ -110,7 +149,7 @@ inline GLuint	gxCreateTexture( GLenum target ){ GLuint idx; if(glCreateTextures)
 inline GLuint	gxCreateRenderBuffer(){ GLuint idx; if(glCreateRenderbuffers) glCreateRenderbuffers(1,&idx); else { GLuint b0=gxGetBinding(GL_RENDERBUFFER); glGenRenderbuffers(1,&idx); glBindRenderbuffer(GL_RENDERBUFFER,idx); glBindRenderbuffer(GL_RENDERBUFFER,b0); } return idx; }
 inline GLuint	gxCreateVertexArray(){ GLuint idx; if(glCreateVertexArrays) glCreateVertexArrays(1, &idx); else glGenVertexArrays(1,&idx); return idx; }
 inline const char* gxGetErrorString( GLenum e ){ if(e==GL_NO_ERROR) return ""; if(e==GL_INVALID_ENUM) return "GL_INVALID_ENUM"; if(e==GL_INVALID_VALUE) return "GL_INVALID_VALUE"; if(e==GL_INVALID_OPERATION) return "GL_INVALID_OPERATION"; if(e==GL_INVALID_FRAMEBUFFER_OPERATION) return "GL_INVALID_FRAMEBUFFER_OPERATION"; if(e==GL_OUT_OF_MEMORY) return "GL_OUT_OF_MEMORY"; if(e==GL_STACK_UNDERFLOW) return "GL_STACK_UNDERFLOW"; if(e==GL_STACK_OVERFLOW) return "GL_STACK_OVERFLOW"; return "UNKNOWN"; }
-inline bool		gxHasMultidraw(){ return GX_ARB_bindless_texture&&GX_ARB_shader_draw_parameters; }
+inline bool		gxHasMultidraw(){ return gxHasExtension(bindless_texture)&&gxHasExtension(shader_draw_parameters); }
 
 //***********************************************
 // forward declarations
@@ -518,7 +557,7 @@ namespace gl {
 		static const GLenum* draw_buffers( uint index=0 ){ static GLenum d[MAX_COLOR_ATTACHMENTS]={GL_COLOR_ATTACHMENT0,GL_COLOR_ATTACHMENT1,GL_COLOR_ATTACHMENT2,GL_COLOR_ATTACHMENT3,GL_COLOR_ATTACHMENT4,GL_COLOR_ATTACHMENT5,GL_COLOR_ATTACHMENT6,GL_COLOR_ATTACHMENT7}; return &d[index]; }
 		void clear( const vec4& color=vec4(.0f,.0f,.0f,.0f) ){ for( uint k=0;k<MAX_COLOR_ATTACHMENTS;k++) if(_active_targets[k]) clear_color_buffer( k, color, false ); clear_depth_buffer(); }
 		void clear_depth_buffer( float depth=1.0f ){ if(glClearNamedFramebufferfv) glClearNamedFramebufferfv( ID, GL_DEPTH, 0, &depth ); else glClearBufferfv( GL_DEPTH, 0, &depth ); }
-		void clear_color_buffer( GLint draw_buffer, const vec4& color, bool b_clear_depth=false ){ if(draw_buffer>=GL_DRAW_BUFFER0) draw_buffer-=GL_DRAW_BUFFER0; if(glClearNamedFramebufferfv) glClearNamedFramebufferfv( ID, GL_COLOR, draw_buffer, color ); else glClearBufferfv( GL_COLOR, draw_buffer, color ); if(b_clear_depth) clear_depth_buffer(); }
+		void clear_color_buffer( GLint draw_buffer, const vec4& color, bool b_clear_depth=false ){ if(draw_buffer>=GL_DRAW_BUFFER0) draw_buffer-=GL_DRAW_BUFFER0; if(glClearNamedFramebufferfv) glClearNamedFramebufferfv( ID, GL_COLOR, draw_buffer, (GLfloat*)&color ); else glClearBufferfv( GL_COLOR, draw_buffer, color ); if(b_clear_depth) clear_depth_buffer(); }
 		void clear_color_bufferi( GLint draw_buffer, const ivec4& color, bool b_clear_depth=false ){ if(draw_buffer>=GL_DRAW_BUFFER0) draw_buffer-=GL_DRAW_BUFFER0; if(glClearNamedFramebufferiv) glClearNamedFramebufferiv( ID, GL_COLOR, draw_buffer, color ); else glClearBufferiv( GL_COLOR, draw_buffer, color ); if(b_clear_depth) clear_depth_buffer(); }
 		void clear_color_bufferui( GLint draw_buffer, const uvec4& color, bool b_clear_depth=false ){ if(draw_buffer>=GL_DRAW_BUFFER0) draw_buffer-=GL_DRAW_BUFFER0; if(glClearNamedFramebufferuiv) glClearNamedFramebufferuiv( ID, GL_COLOR, draw_buffer, color ); else glClearBufferuiv( GL_COLOR, draw_buffer, color ); if(b_clear_depth) clear_depth_buffer(); }
 	
