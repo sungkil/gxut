@@ -124,6 +124,7 @@ inline GLenum gxGetTargetBinding( GLenum target )
 // query utitlities
 inline GLuint	gxGetBinding( GLenum target ){ GLint iv; glGetIntegerv(gxGetTargetBinding(target),&iv); return iv; }
 inline GLint	gxGetProgramiv( GLuint program, GLenum pname ){ GLint iv; glGetProgramiv( program, pname, &iv); return iv; }
+inline ivec3	gxGetProgramiv3( GLuint program, GLenum pname ){ ivec3 iv; glGetProgramiv( program, pname, &iv.x); return iv; }
 inline GLint	gxGetActiveUniformBlockiv( GLuint program, GLuint uniformBlockIndex, GLenum pname ){ GLint i; glGetActiveUniformBlockiv( program, uniformBlockIndex, pname, &i ); return i; }
 inline GLint	gxGetShaderiv( GLuint shader, GLenum pname ){ GLint iv; glGetShaderiv( shader, pname, &iv); return iv; }
 inline GLint	gxGetIntegerv( GLenum pname ){ GLint iv; glGetIntegerv( pname, &iv ); return iv; }
@@ -880,10 +881,6 @@ namespace gl {
 		static void unbind(){ glUseProgram(0); }
 		GLuint bind( bool b_bind=true );
 
-		// uniform attributes
-		GLint get_active_uniform_count(){ GLint count=0; if(glGetProgramInterfaceiv) glGetProgramInterfaceiv( ID, GL_UNIFORM, GL_ACTIVE_RESOURCES, &count ); else if(glGetProgramiv) glGetProgramiv( ID, GL_ACTIVE_UNIFORMS, &count ); return count; }
-		std::vector<Uniform> get_active_uniforms( bool b_bind=true );
-
 		// in-program uniform variables
 		Uniform* get_uniform( const char* name )
 		{
@@ -939,17 +936,22 @@ namespace gl {
 			void set_binding( GLuint binding_point ){ glUniformBlockBinding(program->ID,ID,binding_point); if(buffer&&buffer->target==GL_UNIFORM_BUFFER) buffer->bind_base(binding_point); }
 		};
 
-		// uniform/program block query
+		// query for uniform, program, and compute
+		GLint get_active_uniform_count(){ GLint count=0; if(glGetProgramInterfaceiv) glGetProgramInterfaceiv( ID, GL_UNIFORM, GL_ACTIVE_RESOURCES, &count ); else if(glGetProgramiv) glGetProgramiv( ID, GL_ACTIVE_UNIFORMS, &count ); return count; }
+		std::vector<Uniform> get_active_uniforms( bool b_bind=true );
 		UniformBlock* get_uniform_block( const char* name ){ auto it=_uniform_block_map.find(name); return it==_uniform_block_map.end() ? nullptr : &it->second; }
 		GLuint get_uniform_block_binding( const char* name ){ auto* ub=get_uniform_block(name); return ub?ub->get_binding():-1; }
 		GLuint get_shader_storage_block_binding( const char* name ){ auto it=_shader_storage_block_binding_map.find(name); if(it!=_shader_storage_block_binding_map.end()) return it->second; const GLenum prop=GL_BUFFER_BINDING; GLint binding;glGetProgramResourceiv(ID,GL_SHADER_STORAGE_BLOCK,glGetProgramResourceIndex(ID,GL_SHADER_STORAGE_BLOCK,name),1,&prop,1,nullptr,&binding); return _shader_storage_block_binding_map[name]=binding; }
 		GLuint get_atomic_counter_buffer_binding( const char* name ){ auto it=_atomic_counter_buffer_binding_map.find(name); return it==_atomic_counter_buffer_binding_map.end()?-1:it->second; }
+		ivec3 get_compute_work_group_size(){ return _compute_work_group_size.x?_compute_work_group_size:(_compute_work_group_size=gxGetProgramiv3(ID,GL_COMPUTE_WORK_GROUP_SIZE)); }
+		bool assert_compute_work_group_size( int work_group_size_x, int work_group_size_y, int work_group_size_z=1 ){ auto d=get_compute_work_group_size(); if(work_group_size_x==d.x&&work_group_size_y==d.y&&work_group_size_z==d.z) return true; printf( "program[%s]: work_group_size (%d,%d,%d) != (%d,%d,%d)\n", name(), d.x, d.y, d.z, work_group_size_x, work_group_size_y, work_group_size_z ); return false; }
 
 		// instances
 		static std::set<Program*>& get_instances(){ static std::set<Program*> i; return i; }
 
-		// friend classes
+		// friend classes/functions
 		friend struct Effect;
+		friend Program* gxCreateProgram(std::string,std::string,const gl::program_source_t&);
 
 		// public member variables
 		program_source_t					source;
@@ -960,6 +962,7 @@ namespace gl {
 		std::map<std::string,GLint>			_shader_storage_block_binding_map;
 		std::map<std::string,GLint>			_atomic_counter_buffer_binding_map;
 		std::map<std::string,UniformBlock>	_uniform_block_map;
+		ivec3								_compute_work_group_size={}; // cache for get_compute_work_group_size()
 	};
 
 	// bind
@@ -1125,12 +1128,13 @@ namespace gl {
 		static void unbind(){ glUseProgram(0); }
 
 		Program* bind( const char* program_name, ... ){ char buff[1024]; va_list a;va_start(a,program_name);vsprintf_s(buff,1024,program_name,a);va_end(a); active_program=get_program(buff); if(active_program) active_program->bind(); else{ active_program=nullptr; glUseProgram(0); } return active_program; }
-		Program* bind( uint index ){ active_program=get_program(index); if(active_program) active_program->bind(); else { active_program=nullptr; glUseProgram(0); } return active_program; }
+		Program* bind( uint index ){ active_program=get_program_by_index(index); if(active_program) active_program->bind(); else { active_program=nullptr; glUseProgram(0); } return active_program; }
 
 		bool empty() const { return programs.empty(); }
 		size_t size() const { return programs.size(); }
-		Program* get_program( const char* name ) const { for(uint k=0;k<programs.size();k++)if(_stricmp(programs[k]->name(),name)==0) return programs[k]; printf("Unable to find program \"%s\" in effect \"%s\"\n", name, this->_name ); return nullptr; }
-		Program* get_program( uint index ) const { if(index<programs.size()) return programs[index]; else { printf("[%s] Out-of-bound program index\n", _name ); return nullptr; } }
+		Program* get_program( const char* name ) const { for(auto* p:programs)if(_stricmp(p->name(),name)==0) return p; printf("Unable to find program \"%s\" in effect \"%s\"\n", name, this->_name ); return nullptr; }
+		Program* get_program_by_index( uint index ) const { if(index<programs.size()) return programs[index]; else { printf("[%s] Out-of-bound program index\n", _name ); return nullptr; } }
+		Program* get_program_by_id( uint program_ID ) const { for(auto* p:programs)if(p->ID==program_ID) return p; printf("Unable to find program \"%d\" in effect \"%s\"\n", program_ID, this->_name ); return nullptr; }
 		Program* create_program( const char* name, const program_source_t& source );
 		Program* append_program( Program* program ){ if(!program) return nullptr; programs.emplace_back(program); auto& m=program->_uniform_block_map;for(auto& it:m){gl::Program::UniformBlock& ub=it.second;ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size);} return program; }
 		bool append( gl::effect_source_t source );
@@ -1173,9 +1177,9 @@ namespace gl {
 		inline void draw_quads(){ if(!quad) return; if(quad->index_buffer) quad->draw_elements(0,4,GL_TRIANGLE_STRIP); else quad->draw_arrays(0,4,GL_TRIANGLE_STRIP); }
 		inline void draw_points( GLsizei width, GLsizei height, bool no_attrib=false ){ if(no_attrib) return draw_points_no_attrib( width*height ); uint64_t key=uint64_t(width)|(uint64_t(height)<<32); auto it=pts.find(key); VertexArray* va=it!=pts.end()?it->second:(pts[key]=gxCreatePointVertexArray(width,height)); if(va) va->draw_arrays(0,width*height,GL_POINTS); }
 		inline void draw_points_no_attrib( GLsizei count ){ GLuint v=0; if(context::is_core_profile()){ auto it=pts.find(0);VertexArray* va=it!=pts.end()?it->second:(pts[0]=gxCreatePointVertexArray(0,0)); if(va)v=va->ID; } glBindVertexArray(v); glDrawArrays( GL_POINTS, 0, count ); } // core profile should bind non-empty VAO; attribute-less rendering without binding any vertex array: simply using gl_VertexID in vertex shaders
-		inline void dispatch_compute( GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z=1 ){ glDispatchCompute( num_groups_x?num_groups_x:1, num_groups_y?num_groups_y:1, num_groups_z?num_groups_z:1 ); }
-		inline void dispatch_compute( GLuint num_threads_x, double local_size_x, GLuint num_threads_y, double local_size_y, GLuint num_threads_z=1, double local_size_z=1 )	{ GLuint num_groups_x = max(GLuint(ceil(num_threads_x/float(local_size_x))),1u), num_groups_y = max(GLuint(ceil(num_threads_y/float(local_size_y))),1u), num_groups_z = max(GLuint(ceil(num_threads_z/float(local_size_z))),1u); dispatch_compute(num_groups_x, num_groups_y, num_groups_z ); }
 		inline void dispatch_compute_indirect( GLintptr indirect ){ glDispatchComputeIndirect( indirect ); }
+		inline void dispatch_compute_groups( GLuint gx, GLuint gy=1, GLuint gz=1 ){ glDispatchCompute( gx,gy,gz ); }
+		inline void dispatch_compute_threads( GLuint tx, GLuint ty=1, GLuint tz=1 ){ auto* p=get_program_by_id(gxGetIntegerv(GL_CURRENT_PROGRAM)); if(!p){ printf("%s(): no program is bound\n",__func__); return; } uvec3 s=p->get_compute_work_group_size(); glDispatchCompute(max((tx+s.x-1)/s.x,1u),max((ty+s.y-1)/s.y,1u),max((tz+s.z-1)/s.z,1u)); }
 
 		// shader source files
 		void export_shader_sources( path dir, path fxname=L"" )
