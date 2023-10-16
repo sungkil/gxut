@@ -45,31 +45,34 @@ struct isampler_t
 template <size_t _capacity=4096> // up to 4K samples by default
 struct tsampler_t : public isampler_t
 {
+	typedef vec4	value_type;
+
 	uint			crc;		// crc32c to detect the change of samples
 	uint			index=0;	// index for sequential sampling
 
 	tsampler_t()	= default;
 	tsampler_t( size_t size, bool b_resample=true ){ resize(size,b_resample); }
 
-	constexpr uint	capacity() { return _capacity; }
-	bool			empty() const { return n==0; }
-	bool			dirty() const { return crc!=tcrc32<>(&model,sizeof(isampler_t)); }
-	uint			size() const { return n; }
-	const vec4*		begin() const { return &_data[0]; }
-	const vec4*		end() const { return begin() + n; }
-	const vec4&		operator[]( ptrdiff_t i ) const { return _data[i]; }
-	const vec4&		at( ptrdiff_t i ) const { return _data[i]; }
-	void			resize( size_t size, bool b_resample=false ){ const_cast<uint&>(n)=uint(size<_capacity?size:_capacity); if(b_resample) resample(); }
-	void			rewind(){ index=0; }
-	const vec4&		next(){ index=(++index)%n; return _data[index]; } // only for fixed sequence; needs to be improved for sequential sampling
-	uint			resample(); // return the number of generated samples
+	constexpr uint		capacity() { return _capacity; }
+	bool				empty() const { return n==0; }
+	bool				dirty() const { return crc!=tcrc32<>(&model,sizeof(isampler_t)); }
+	uint				size() const { return n; }
+	const value_type*	data() const { return _data.data(); }
+	const value_type*	begin() const { return &_data[0]; }
+	const value_type*	end() const { return begin() + n; }
+	const value_type&	operator[]( ptrdiff_t i ) const { return _data[i]; }
+	const value_type&	at( ptrdiff_t i ) const { return _data[i]; }
+	void				resize( size_t size, bool b_resample=false ){ const_cast<uint&>(n)=uint(size<_capacity?size:_capacity); if(b_resample) resample(); }
+	void				rewind(){ index=0; }
+	const value_type&	next(){ index=(++index)%n; return _data[index]; } // only for fixed sequence; needs to be improved for sequential sampling
+	uint				resample(); // return the number of generated samples
 	
 protected:
 	virtual void	generate( vec4* v, uint n );
 	void			normalize();
 	void			reshape( surface_t dst );
 
-	std::vector<vec4> _data = std::move(std::vector<vec4>(_capacity));
+	std::vector<value_type> _data = std::move(std::vector<value_type>(_capacity));
 };
 
 using sampler_t = tsampler_t<>;
@@ -127,7 +130,7 @@ inline void tsampler_t<_capacity>::reshape( surface_t dst )
 uint hammersley_square(vec4*,uint);
 uint halton_cube(vec4*,uint);
 uint simple_square(vec4*,uint);
-uint poisson_disk( vec4* v, uint _count, bool circular, uint seed );
+uint poisson_disk(vec4*,uint,bool,uint);
 
 template <size_t _capacity>
 __noinline void tsampler_t<_capacity>::generate( vec4* v, uint n )
