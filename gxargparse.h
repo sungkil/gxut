@@ -63,10 +63,10 @@ protected:
 
 struct option_t
 {
-	struct size_less{ bool operator()(const std::string& a,const std::string& b)const{ if(a.length()!=b.length()) return a.length()<b.length(); else return _stricmp(a.c_str(),b.c_str())<0;}};
-
+	bool empty() const { return names.empty(); }
 	option_t& subarg( const char* subarg_name ){ use_subarg=true; this->subarg_name=subarg_name; return *this; }
 	option_t& add_help( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); shelp=trim(&buff[0],"\n"); va_end(a); return *this; }
+	option_t& add_break( int count=1 ){ break_count+=count; return* this; }
 	option_t& set_default( const char* arg ){ value=atow(arg); return *this; }
 	option_t& set_default( const wchar_t* arg ){ value=arg; return *this; }
 
@@ -79,13 +79,14 @@ protected:
 	const char* short_name() const { for( auto& n : names ) if(n.size()==1) return n.c_str(); return ""; }
 	std::vector<const char*> long_names() const { std::vector<const char*> v; for( auto& n : names ) if(n.size()>1) v.push_back(n.c_str()); return v; }
 
-	std::set<std::string,size_less>	names;				// multiple names allowed for a single option
-	std::wstring					value;				// found values
-	std::vector<std::wstring>		others;				// additional excessive multiple options
-	std::string						shelp;				// help string
-	std::string						subarg_name;		// name of sub-argument
-	bool							use_subarg=false;	// use a sub-argument
-	int								instance=0;			// allow multiple instances of an option
+	std::set<std::string>		names;				// multiple names allowed for a single option
+	std::wstring				value;				// found values
+	std::vector<std::wstring>	others;				// additional excessive multiple options
+	std::string					shelp;				// help string
+	std::string					subarg_name;		// name of sub-argument
+	bool						use_subarg=false;	// use a sub-argument
+	int							instance=0;			// allow multiple instances of an option
+	int							break_count=0;		// post-line breaks
 };
 
 struct parser_t
@@ -159,14 +160,14 @@ protected:
 	std::vector<argument_t*>	arguments;
 	std::vector<option_t*>		options;
 
-	option_t* find_option( const char* name ) const	{ if(!name||!name[0]) return nullptr; for( auto* o : options ) for( auto& n : o->names ) if(_stricmp(name,n.c_str())==0) return o; return nullptr; }
+	option_t* find_option( const char* name ) const	{ if(!name||!name[0]) return nullptr; for( auto* o : options ) for( auto& n : o->names ) if(strcmp(name,n.c_str())==0) return o; return nullptr; }
 	void select_parser_impl( parser_t*& p, int argc, wchar_t** argv );
 	bool parse_impl( int argc, const wchar_t** argv );
 };
 
 inline bool parser_t::option_exists() const
 {
-	for( auto* o : options ) if(o->instance>0) return true;
+	for( auto* o : options ) if(!o->empty()&&o->instance>0) return true;
 	return false;
 }
 
@@ -174,7 +175,7 @@ inline bool parser_t::exists( const std::string& name ) const
 {
 	if(name=="h"||name=="help") return attrib.b.help_exists;
 	auto* o = find_option(name.c_str()); if(o) return o->instance>0;
-	for( auto* a : arguments ){ if(_stricmp(a->name.c_str(),name.c_str())==0) return a->value_exists(); }
+	for( auto* a : arguments ){ if(strcmp(a->name.c_str(),name.c_str())==0) return a->value_exists(); }
 	return false;
 }
 
@@ -182,7 +183,7 @@ inline bool parser_t::command_exists( const std::string& name ) const
 {
 	for(auto* c:commands)
 	{
-		if(_stricmp(c->attrib.name.c_str(),name.c_str())!=0) continue;
+		if(strcmp(c->attrib.name.c_str(),name.c_str())!=0) continue;
 		if(c->attrib.instance) return true;
 	}
 	return false;
@@ -190,7 +191,7 @@ inline bool parser_t::command_exists( const std::string& name ) const
 
 template<> inline std::wstring parser_t::get<std::wstring>( const std::string& name ) const
 {
-	for( auto* a : arguments ){ if(_stricmp(a->name.c_str(),name.c_str())==0) return a->value; }
+	for( auto* a : arguments ){ if(strcmp(a->name.c_str(),name.c_str())==0) return a->value; }
 	auto* o = find_option(name.c_str()); return o&&o->instance>0?o->value:L"";
 }
 
@@ -286,7 +287,7 @@ inline bool parser_t::parse_impl( int argc, const wchar_t** argv )
 	// check the value provided for subargument
 	for( auto* o : options )
 	{
-		if(!o->use_subarg) continue;
+		if(o->empty()||!o->use_subarg) continue;
 		if(o->instance==0&&!o->value.empty()) o->instance=1; // apply default argument
 		if(o->instance>0&&o->value.empty()) return exit( "option [%s]: subarg not exists.", o->name() );
 	}
@@ -322,12 +323,17 @@ inline bool parser_t::usage( const char* alt_name )
 
 	for( auto* o : options )
 	{
+		if(o->empty()){ opts.emplace_back( "", "" ); continue; } // simple line break
+
 		auto* short_name = o->short_name();
 		std::string front = short_name&&short_name[0]?format("-%s ",short_name):"   ";
 		auto lv=o->long_names();
 		for( size_t j=0, jn=lv.size(); j<jn; j++ ) front+=format("%s%s",j==0?"--":"|",lv[j]);
 		if(o->use_subarg) front += format( "=%s", o->subarg_name.c_str() );
 		opts.emplace_back( front, o->shelp );
+
+		// add line breaks
+		for( int k=0;k<o->break_count;k++ ) opts.emplace_back( "", "" );
 	}
 
 	// find the longest front length
