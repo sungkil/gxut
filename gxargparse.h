@@ -230,55 +230,75 @@ inline bool parser_t::parse_impl( int argc, const wchar_t** argv )
 	}
 
 	// start parsing
+	option_t* option_needs_subarg=nullptr;
 	int r=0; for( int k=arg_begin; k < argc; k++ )
 	{
-		const wchar_t* a = argv[k]; if(!a[0]) continue;
-		if(_wcsicmp(a,L"help")==0){ attrib.b.help_exists=true; continue; } // test whether help exists
-		if(a[0]!=L'-')
+		const wchar_t* a = argv[k];
+		
+		if(!a[0]) continue;
+		else if(option_needs_subarg) // a[0]!=L'-'
+		{
+			if(a[0]==L'-') return exit( "sub-argument for option '%s' is missing", option_needs_subarg->name() );
+
+			auto* p = option_needs_subarg;
+			if(p->instance==0||p->value.empty())	p->value = a;
+			else									p->others.push_back(a);
+			option_needs_subarg = nullptr; // clear subgarg requirement
+		}
+		else if(_wcsicmp(a,L"help")==0||_wcsicmp(a,L"-h")==0||_wcsicmp(a,L"--help")==0) // test whether help exists
+		{
+			attrib.b.help_exists=true;
+		}
+		else if(a[0]!=L'-')
 		{
 			if(r>=int(arguments.size())) arguments.push_back(new argument_t()); // increase array to accept excessive arguments
 			arguments[r++]->value = a;
-			continue;
 		}
-		if(!a[1]) continue;	// skip too short options
-
-		bool b_short = a[1]!=L'-';
-		std::string name = wtoa(b_short?a+1:a+2); // strip hyphens
-		if(name.empty()||!isalpha(name[0])) continue;
-
-		// split by equal
-		std::wstring new_value;
-		const char* eq=strchr(name.c_str(),'=');
-		if(name.length()>=2&&eq)
+		else if(a[1]) // in case of (not too short) option
 		{
-			new_value = atow(trim(eq+1,"'")); // ignored in combination mode; allows additional '='
-			name = name.substr(0,size_t(eq-name.c_str()));
-		}
+			bool b_short = a[1]!=L'-';
+			std::string name = wtoa(b_short?a+1:a+2); // strip hyphens
+			if(name.empty()||!isalpha(name[0])) continue;
 
-		// combination of short arguments
-		if(b_short&&name.length()>1)
-		{
-			for( auto& n : name )
+			// split by equal
+			std::wstring value1;
+			const char* eq=strchr(name.c_str(),'=');
+			bool eq_exists = name.length()>=2&&eq;
+			if(name.length()>=2&&eq)
 			{
-				char sn[2]={n,0};
-				option_t* p=find_option(sn);
-				if(!p) return exit( "unrecognized option: -%s in {%s}", sn, name.c_str() );
-				if(p->use_subarg) return exit( "-%s: %s is not a simple flag that can be used in combination.", name.c_str(), sn );
-				p->instance=1;
+				value1 = atow(trim(eq+1,"'")); // ignored in combination mode; allows additional '='
+				name = name.substr(0,size_t(eq-name.c_str()));
 			}
-			continue;
+			bool subarg_exists = eq_exists && !value1.empty();
+
+			// combination of short arguments
+			if(b_short&&name.length()>1)
+			{
+				for( auto& n : name )
+				{
+					char sn[2]={n,0};
+					option_t* p=find_option(sn);
+					if(!p) return exit( "unrecognized option: -%s in {%s}", sn, name.c_str() );
+					if(p->use_subarg) return exit( "-%s: %s is not a simple flag that can be used in combination.", name.c_str(), sn );
+					p->instance=1;
+				}
+				continue;
+			}
+
+			// find option by name
+			option_t* p=find_option(name.c_str()); if(!p) return exit( "unrecognized option: %s", name.c_str() );
+			if( p->use_subarg )	p->instance++;
+			else {				p->instance=1; continue; }
+
+			// find inline sub-arguments
+			if(!subarg_exists) option_needs_subarg = p;
+			else if(!value1.empty())
+			{
+				if(p->instance==0||p->value.empty())	p->value = value1;
+				else									p->others.push_back(value1);
+				option_needs_subarg = nullptr;
+			}
 		}
-
-		// find option by name
-		option_t* p=find_option(name.c_str()); if(!p) return exit( "unrecognized option: %s", name.c_str() );
-		if(!p->use_subarg){ p->instance=1; continue; }
-		else p->instance++;
-
-		// find non-inline sub-arguments
-		if(new_value.empty()) continue; // skip still empty argument
-
-		if(0==p->instance||p->value.empty())	p->value = new_value;
-		else									p->others.push_back(new_value);
 	}
 
 	// if help exists, show usage
