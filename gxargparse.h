@@ -80,7 +80,7 @@ protected:
 	std::vector<const char*> long_names() const { std::vector<const char*> v; for( auto& n : names ) if(n.size()>1) v.push_back(n.c_str()); return v; }
 
 	std::set<std::string>		names;				// multiple names allowed for a single option
-	std::wstring				value;				// found values
+	std::wstring				value;				// found first values
 	std::vector<std::wstring>	others;				// additional excessive multiple options
 	std::string					shelp;				// help string
 	std::string					subarg_name;		// name of sub-argument
@@ -439,8 +439,17 @@ inline void parser_t::dump()
 	for(auto* o:options)
 	{
 		std::string n=o->name();
-		std::string v=format( "%d: %s", o->instance, wtoa(o->value.c_str()) );
-		if(o->instance>1){ v+= " ("; for( size_t j=0; j<o->others.size();j++){auto& t=o->others[j]; v+= format("%s%s",j>0?" ":"",wtoa(t.c_str()));} v+=")"; }
+		std::string v;
+		if(o->instance==0) v="0";
+		else
+		{
+			v=format( "%d", o->instance );
+			if(o->use_subarg)
+			{
+				v+= format( ": '%s'", wtoa(o->value.c_str()) );
+				if(o->instance>1){ for( size_t j=0; j<o->others.size();j++){auto& t=o->others[j]; v+= format(" '%s'",wtoa(t.c_str()));} }
+			}
+		}
 		opts.emplace_back(n,v);
 	}
 
