@@ -79,8 +79,12 @@ path mtl_item_t::map_path()
 
 bool mtl_item_t::make_canonical_relative_path()
 {
-	::path p(tokens.back()=path(tokens.back()).to_backslash().canonical().wtoa());
-	if(!p.is_absolute()) return false; tokens.back()=p.is_subdir(mtl_dir)?p.relative(false,mtl_dir).wtoa():p.name().wtoa(); return true;
+	auto &b=tokens.back(), b0=b;
+	for( int k=0;k<8&&strstr(b.c_str(),"\\\\");k++) b=str_replace(b.c_str(),"\\\\","\\");	// remove double backslash
+	for( int k=0;k<8&&strstr(b.c_str(),"//");k++) b=str_replace(b.c_str(),"//","/");		// remove double slash
+	::path p(b=path(b).to_backslash().canonical().wtoa());
+	if(!p.is_relative()) b=p.is_subdir(mtl_dir)?p.relative(false,mtl_dir).wtoa():p.name().wtoa();
+	return _stricmp(b0.c_str(),b.c_str())!=0; // return change exists
 }
 
 static const std::vector<vec2> halton_samples =
@@ -234,15 +238,18 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 	// replace redundant map path
 	nocase::set<path> dups; // duplicate images
 	auto crc_lut = build_crc_lut( sections );
-	for( auto& section : sections ) for( auto* t : section.maps() )
-	{
-		if(!t->map_path().exists()) continue;
-		auto &src=t->back(), &dst=crc_lut[t->crc]; if(_stricmp(src.c_str(),dst.c_str())==0) continue;
-		printf( "[%s] replace: %s << %s\n", file_path.name().wtoa(), src.c_str(), dst.c_str() );
-		dups.emplace(t->map_path());
-		src = dst;
-		b_dirty = true;
-	}
+	for( auto& section : sections )
+		for( auto* t : section.maps() )
+		{
+			if(!t->map_path().exists()) continue;
+
+			auto &src=t->back();
+			auto &dst=crc_lut[t->crc]; if(_stricmp(src.c_str(),dst.c_str())==0) continue;
+			printf( "[%s] replace: %s << %s\n", file_path.name().wtoa(), src.c_str(), dst.c_str() );
+			dups.emplace(t->map_path());
+			src = dst;
+			b_dirty = true;
+		}
 
 	// normal map tests
 	// 1. clear invalid normal maps
