@@ -21,19 +21,20 @@ struct image
 	unsigned char*	data;
 	unsigned int	width;
 	unsigned int	height;
-	unsigned int	depth;					// should be one of 8=IPL_DEPTH_8U, and 32=IPL_DEPTH_32F
-	unsigned int	channels;				// should be one of 1, 2, 3, and 4
-	unsigned int	space;					// color space: accepts only RGB, YUY2, YV12
-	union { unsigned int crc; int index; };	// user can fill crc or other attributes; not used by default
+	unsigned int	depth;		// should be one of 8=IPL_DEPTH_8U, and 32=IPL_DEPTH_32F
+	unsigned int	channels;	// should be one of 1, 2, 3, and 4
+	unsigned int	space=0;	// color space: accepts only RGB, YUY2, YV12
+	unsigned int	crc=0;		// image data crc
+	int				index;		// signed image index
+	const unsigned	align=4;	// byte alignment for rows; can be overriden for YUV (e.g., 64)
 
-	inline unsigned int stride() const { unsigned int bpp=space==YUY2?2:space==YV12?1:channels; return ((depth>>3)*bpp*width+3)&(~3); }	// 4-byte aligned stride for the first plane; YUY2/YV12 uses 2/1 bytes for the first plane
-	inline unsigned int size() const { return space==YV12?stride()*3/2:stride()*height; }
-	template <class T> inline T* ptr( int y=0, int x=0, bool vflip=false ){ return ((T*)(data+stride()*(vflip?height-1-y:y)))+x; }
-	template <class T> inline const T* ptr ( int y=0, int x=0, bool vflip=false ) const { return ((T*)(data+stride()*(vflip?height-1-y:y)))+x; }
-	template <class T> inline T* plane( int z=0 ){ if(space!=YV12) return data; else return data+(z==1?stride()*height:z==2?stride()*height*5/4:0); }
-	template <class T> inline const T* plane( int z=0 ) const { if(space!=YV12) return data; else return data+(z==1?stride()*height:z==2?stride()*height*5/4:0); }
+	inline unsigned int stride( int channel=0 ) const { unsigned int bpp=(space==YUY2)?2:(space==I420||space==YV12||space==IYUV)?1:channels; uint r=(depth>>3)*bpp*width; if(align<2) return r; return ((channel?((r+1)>>1):r)+align-1)&(~(align-1)); }
+	inline unsigned int size() const { return height*((space==I420||space==YV12||space==IYUV)?(stride()+stride(1)):stride()); }
+	template <class T> inline T* ptr( int y=0, int x=0, bool vflip=false ){ return ((T*)(data+stride()*(vflip?height-1-y:y)))+x; } // works only for RGB
+	template <class T> inline T* plane( int channel=0 ){ unsigned char* p=data; int c=channel; if(c&&(space==I420||space==YV12||space==IYUV)){ if(c>0) p+=stride()*height; if(c>1) p+=stride(1)*height/2; } return (T*)p; }
 
-	enum color_space { RGB=0, YUY2=0x32595559, YUYV=0x56595559, YV12=0x32315659, I420=0x30323449, IYUV=0x56555949, NV12=0x3231564E }; // fourcc; duplicats: YUY2==YUYV, I420==IYUV
+	// fourcc; YUY2==YUYV, I420==YU12==IYUV (YUV420P), YV12 (YVU420P)
+	enum color_space { RGB=0, YUY2=0x32595559, YUYV=0x56595559, I420=0x30323449, YU12=I420, IYUV=0x56555949, YV12=0x32315659, NV12=0x3231564E };
 };
 #endif // __GX_IMAGE_DECL__
 
