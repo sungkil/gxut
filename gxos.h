@@ -260,7 +260,7 @@ struct dll_t
 	HMODULE hdll = nullptr;
 
 	~dll_t(){ release(); }
-	void release(){ if(hdll){ FreeLibrary(hdll); hdll=nullptr; }  }
+	void release(){ if(hdll){ FreeLibrary(hdll); hdll=nullptr; } }
 	path file_path(){ path f; if(hdll) GetModuleFileNameW(hdll,f,path::capacity); return f; }
 	bool load( const wchar_t* dll_path ){ return nullptr!=(hdll=LoadLibraryW(dll_path)); }
 	template <class T> T get_proc_address( const char* name ) const { return hdll==nullptr?nullptr:(T)GetProcAddress(hdll,name); }
