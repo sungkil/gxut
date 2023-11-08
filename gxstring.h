@@ -514,4 +514,15 @@ __noinline const wchar_t* unicode_symbols_to_ansi( const wchar_t* str )
 }
 
 //***********************************************
+// 16. autoquote
+
+template <class T>
+__noinline const T* auto_quote( const T* _Src )
+{
+	size_t l=strlen(_Src); static const T q=T('\"'); if(!*_Src||(_Src[0]==q&&_Src[l-1]==q)) return __tstrdup(_Src,l);
+	const T* s=trim(_Src); if(!strchr(s,T(' '))&&!strchr(s,T('\t'))) return __tstrdup(_Src,l);
+	T* b=__tstrbuf<T>(l+2); b[0]=q; memcpy(b+1,_Src,l*sizeof(T)); b[l+1]=q; b[l+2]=0; return b;
+}
+
+//***********************************************
 #endif // __GX_STRING_H__
