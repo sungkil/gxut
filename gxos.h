@@ -72,9 +72,6 @@ __noinline void flush_message( int sleepTime=1 ){MSG m;for(int k=0;k<100&&PeekMe
 
 inline void exit( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(size_t(_vscprintf(fmt,a))+1); vsprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fprintf( stdout, "[%s] %s", path::module_path().name(false).wtoa(), &buff[0] ); ::exit(EXIT_FAILURE); }
 inline void exit( const wchar_t* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<wchar_t> buff(size_t(_vscwprintf(fmt,a))+1); vswprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fwprintf( stdout, L"[%s] %s", path::module_path().name(false).c_str(), &buff[0] ); ::exit(EXIT_FAILURE); }
-#if !defined(__GNUC__)&&((__cplusplus>199711L)||(_MSC_VER>=1600/*VS2010*/))
-inline void usleep( int us ){ std::this_thread::sleep_for(std::chrono::microseconds(us)); }
-#endif
 inline bool shutdown()
 {
 	HANDLE hToken; if(!OpenProcessToken(GetCurrentProcess(),TOKEN_ADJUST_PRIVILEGES|TOKEN_QUERY,&hToken)) return false;
@@ -235,6 +232,30 @@ struct timer_t
 	static int64_t epoch(){ static int64_t e=0; if(e==0){ auto* ef=(int64_t(*)()) GetProcAddress(GetModuleHandleW(nullptr),"rex_timer_epoch"); e=ef?ef():0; if(e==0){ LARGE_INTEGER li; QueryPerformanceCounter(&li); e=li.QuadPart;} } return e; }
 };
 #endif // __GX_OS_TIMER__
+
+inline void usleep( int us )
+{
+#if defined(_MSC_VER)&&defined(__has_include)&&__has_include(<winsock2.h>) // use higher-precision select() when available
+	struct ws2select_t
+	{
+		HMODULE hdll=nullptr;
+		int(*pf_select)(int,void*,void*,void*,void*)=nullptr;
+		ws2select_t(){ hdll=LoadLibraryW(L"WS2_32.dll"); if(!hdll) return; pf_select=(decltype(pf_select))GetProcAddress(hdll,"select"); if(!pf_select) printf("ws2usleep_t::select()==nullptr\n"); }
+		~ws2select_t(){ if(hdll) FreeLibrary(hdll); }
+		bool select( int usec ){ if(!pf_select)return false;struct{long tv_sec,tv_usec;}t={usec/1000000,usec%1000000};pf_select(0,0,0,0,&t);return true; }
+	};
+	static ws2select_t ws2; if(ws2.select(us)) return;
+#endif
+	std::this_thread::sleep_for(std::chrono::microseconds(us)); // actually, this doesn't work well due to too much context switch overhead
+}
+inline void sleep( double ms ){ usleep(int(ms*1000.0)); }
+inline void limit_fps( double fps, double overhead=0 ) // overhead: estimated delta to compensate slight differences
+{
+	static timer_t m;
+	static double t=m.now();
+	double t1=t+(1000.0/fps)-overhead;
+	for( t=m.now(); t<t1; t=m.now()) usleep(10);
+}
 
 class mutex_t
 {
