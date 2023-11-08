@@ -23,7 +23,11 @@
 	#define _CRT_SECURE_NO_WARNINGS
 #endif
 #ifndef _HAS_EXCEPTIONS
-	#define _HAS_EXCEPTIONS 0
+	#ifdef __cpp_exceptions
+		#define _HAS_EXCEPTIONS 1
+	#else
+		#define _HAS_EXCEPTIONS 0
+	#endif
 #endif
 // SDKDDKVer
 #if defined(__has_include) && __has_include(<SDKDDKVer.h>)
