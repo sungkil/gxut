@@ -525,4 +525,22 @@ __noinline const T* auto_quote( const T* _Src )
 }
 
 //***********************************************
+// 17. GUID conversion
+
+#if defined(GUID_DEFINED)
+__noinline const wchar_t* guidtow( const GUID& guid )
+{
+	wchar_t* b=_wcsbuf(64); auto* d=guid.Data4;
+	swprintf_s( b, 64, L"{%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}",guid.Data1,guid.Data2,guid.Data3,d[0],d[1],d[2],d[3],d[4],d[5],d[6],d[7] );
+	return b;
+}
+__noinline const char* guidtoa( const GUID& guid )
+{
+	char* b=_strbuf(64); auto* d=guid.Data4;
+	sprintf_s( b, 64, "{%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}",guid.Data1,guid.Data2,guid.Data3,d[0],d[1],d[2],d[3],d[4],d[5],d[6],d[7] );
+	return b;
+}
+#endif
+
+//***********************************************
 #endif // __GX_STRING_H__
