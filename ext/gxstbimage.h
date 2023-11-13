@@ -28,13 +28,13 @@ struct image
 	int				index;		// signed image index
 	const unsigned	align=4;	// byte alignment for rows; can be overriden for YUV (e.g., 64)
 
-	inline unsigned int stride( int channel=0 ) const { unsigned int bpp=(space==YUY2)?2:(space==I420||space==YV12||space==IYUV)?1:channels; uint r=(depth>>3)*bpp*width; if(align<2) return r; return ((channel?((r+1)>>1):r)+align-1)&(~(align-1)); }
-	inline unsigned int size() const { return height*((space==I420||space==YV12||space==IYUV)?(stride()+stride(1)):stride()); }
+	inline unsigned int stride( int channel=0 ) const { bool i420=space==I420||space==YV12||space==IYUV; unsigned int bpp=(space==YUY2)?2:(i420||space==NV12)?1:channels; uint r=(depth>>3)*bpp*width; if(align<2) return r; return (((i420&&channel)?(r>>1):r)+align-1)&(~(align-1)); }
+	inline unsigned int size() const { bool i420=space==I420||space==YV12||space==IYUV; return height*(i420?(stride()+stride(1)):space==NV12?(stride()+stride(1)/2):stride()); }
 	template <class T> inline T* ptr( int y=0, int x=0, bool vflip=false ){ return ((T*)(data+stride()*(vflip?height-1-y:y)))+x; } // works only for RGB
-	template <class T> inline T* plane( int channel=0 ){ unsigned char* p=data; int c=channel; if(c&&(space==I420||space==YV12||space==IYUV)){ if(c>0) p+=stride()*height; if(c>1) p+=stride(1)*height/2; } return (T*)p; }
+	template <class T> inline T* plane( int channel=0 ){ unsigned char* p=data; int c=channel; if(c){ p+=stride()*height; if((space==I420||space==YV12||space==IYUV)&&c>1) p+=stride(1)*height/2; } return (T*)p; }
 
-	// fourcc; YUY2==YUYV, I420==YU12==IYUV (YUV420P), YV12 (YVU420P)
-	enum color_space { RGB=0, YUY2=0x32595559, YUYV=0x56595559, I420=0x30323449, YU12=I420, IYUV=0x56555949, YV12=0x32315659, NV12=0x3231564E };
+	// fourcc; YUY2==YUYV, I420==YU12==IYUV (YUV420P), YV12 (YVU420P), NV12 (YUV420SP)
+	enum color_space { RGB=0, YUY2='2yuy', YUYV='vyuy', I420='024i', YU12=I420, IYUV='vuyi', YV12='21vy', NV12='21vn' };
 };
 #endif // __GX_IMAGE_DECL__
 
