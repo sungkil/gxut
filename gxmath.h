@@ -257,11 +257,13 @@ template<> __forceinline bool tvec4<double>::operator==(const tvec4& v) const { 
 
 //*************************************
 // type definitions and size check
-using vec2	= tvec2<float>;		using vec3	= tvec3<float>;		using vec4	= tvec4<float>;
-using dvec2 = tvec2<double>;	using dvec3 = tvec3<double>;	using dvec4 = tvec4<double>;
-using ivec2 = tvec2<int>;		using ivec3 = tvec3<int>;		using ivec4 = tvec4<int>;
-using uvec2 = tvec2<uint>;		using uvec3 = tvec3<uint>;		using uvec4 = tvec4<uint>;
-using bvec2 = tvec2<bool>;		using bvec3 = tvec3<bool>;		using bvec4 = tvec4<bool>;
+using bvec2 = tvec2<bool>;			using bvec3 = tvec3<bool>;			using bvec4 = tvec4<bool>;
+using vec2	= tvec2<float>;			using vec3	= tvec3<float>;			using vec4	= tvec4<float>;
+using dvec2 = tvec2<double>;		using dvec3 = tvec3<double>;		using dvec4 = tvec4<double>;
+using ivec2 = tvec2<int>;			using ivec3 = tvec3<int>;			using ivec4 = tvec4<int>;
+using uvec2 = tvec2<uint>;			using uvec3 = tvec3<uint>;			using uvec4 = tvec4<uint>;
+using llvec2 = tvec2<int64_t>;		using llvec3 = tarray3<int64_t>;	using llvec4 = tarray4<int64_t>;
+using ullvec2 = tarray2<uint64_t>;	using ullvec3 = tarray3<uint64_t>;	using ullvec4 = tarray4<uint64_t>;
 
 static_assert(sizeof(vec2)==(sizeof(float)*2),"sizeof(vec2)!=sizeof(float)*2" );
 static_assert(sizeof(vec3)==(sizeof(float)*3),"sizeof(vec3)!=sizeof(float)*3" );
@@ -699,21 +701,21 @@ __forceinline vec2 smootherstep( const vec2& t ){ return vec2(smootherstep(t.x),
 __forceinline vec3 smootherstep( const vec3& t ){ return vec3(smootherstep(t.x),smootherstep(t.y),smootherstep(t.z)); }
 __forceinline vec4 smootherstep( const vec4& t ){ return vec4(smootherstep(t.x),smootherstep(t.y),smootherstep(t.z),smootherstep(t.w)); }
 // packing/unpacking/casting: https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_shading_language_packing.txt
-__forceinline uint packUnorm2x16( vec2 v ){ ushort2 u={}; for(int k=0;k<2;k++) u[k]=ushort(round(clamp(v[k],0.0f,1.0f)*65535.0f)); return reinterpret_cast<uint&>(u); }
-__forceinline uint packSnorm2x16( vec2 v ){ short2 s={}; for(int k=0;k<2;k++) s[k]=short(round(clamp(v[k],-1.0f,1.0f)*32767.0f)); return reinterpret_cast<uint&>(s); }
-__forceinline uint packUnorm4x8( vec4 v ){ uchar4 u={}; for(int k=0;k<4;k++) u[k]=uchar(round(clamp(v[k],0.0f,1.0f)*255.0f)); return reinterpret_cast<uint&>(u); }
-__forceinline uint packSnorm4x8( vec4 v ){ char4 s={}; for(int k=0;k<4;k++) s[k]=char(round(clamp(v[k],-1.0f,1.0f)*127.0f)); return reinterpret_cast<uint&>(s); }
+__forceinline uint packUnorm2x16( vec2 v ){ ushort2 u={}; for(int k=0;k<2;k++) (&u.x)[k]=ushort(round(clamp(v[k],0.0f,1.0f)*65535.0f)); return reinterpret_cast<uint&>(u); }
+__forceinline uint packSnorm2x16( vec2 v ){ short2 s={}; for(int k=0;k<2;k++) (&s.x)[k]=short(round(clamp(v[k],-1.0f,1.0f)*32767.0f)); return reinterpret_cast<uint&>(s); }
+__forceinline uint packUnorm4x8( vec4 v ){ uchar4 u={}; for(int k=0;k<4;k++) (&u.x)[k]=uchar(round(clamp(v[k],0.0f,1.0f)*255.0f)); return reinterpret_cast<uint&>(u); }
+__forceinline uint packSnorm4x8( vec4 v ){ char4 s={}; for(int k=0;k<4;k++) (&s.x)[k]=char(round(clamp(v[k],-1.0f,1.0f)*127.0f)); return reinterpret_cast<uint&>(s); }
 #ifndef __GXMATH_NO_HALF__
 __forceinline uint packHalf2x16( vec2 v ){ half2 h=ftoh(v); return reinterpret_cast<uint&>(h); }
 #endif
-__forceinline vec2 unpackUnorm2x16( uint u ){ vec2 v={}; for(int k=0;k<2;k++) v[k]=reinterpret_cast<ushort2&>(u)[k]/65535.0f; return v; }
-__forceinline vec2 unpackSnorm2x16( uint u ){ vec2 v={}; for(int k=0;k<2;k++) v[k]=clamp(reinterpret_cast<short2&>(u)[k]/32767.0f,-1.0f,1.0f); return v; }
-__forceinline vec4 unpackUnorm4x8( uint u ){ vec4 v={}; for(int k=0;k<4;k++) v[k]=reinterpret_cast<uchar4&>(u)[k]/255.0f; return v; }
-__forceinline vec4 unpackSnorm4x8( uint u ){ vec4 v={}; for(int k=0;k<4;k++) v[k]=clamp(reinterpret_cast<char4&>(u)[k]/127.0f,-1.0f,1.0f); return v; }
+__forceinline vec2 unpackUnorm2x16( uint u ){ vec2 v={}; for(int k=0;k<2;k++) v[k]=((ushort*)&u)[k]/65535.0f; return v; }
+__forceinline vec2 unpackSnorm2x16( uint u ){ vec2 v={}; for(int k=0;k<2;k++) v[k]=clamp(((short*)&u)[k]/32767.0f,-1.0f,1.0f); return v; }
+__forceinline vec4 unpackUnorm4x8( uint u ){ vec4 v={}; for(int k=0;k<4;k++) v[k]=((uchar*)&u)[k]/255.0f; return v; }
+__forceinline vec4 unpackSnorm4x8( uint u ){ vec4 v={}; for(int k=0;k<4;k++) v[k]=clamp(((char*)&u)[k]/127.0f,-1.0f,1.0f); return v; }
 #ifndef __GXMATH_NO_HALF__
 __forceinline vec2 unpackHalf2x16( uint u ){ return htof(reinterpret_cast<half2&>(u)); }
 #endif
-__forceinline uint packUint4x8( uint4 v ){ return (v[0]&0xff)+((v[1]&0xff)<<8)+((v[2]&0xff)<<16)+((v[3]&0xff)<<24); }
+__forceinline uint packUint4x8( uint4 v ){ return (v.x&0xff)+((v.y&0xff)<<8)+((v.z&0xff)<<16)+((v.w&0xff)<<24); }
 __forceinline uvec4 unpackUint4x8( uint u ){ return uvec4(u&0xff,(u>>8)&0xff,(u>>16)&0xff,(u>>24)&0xff); }
 __forceinline uint floatBitsToUint( float f ){ return reinterpret_cast<uint&>(f); }
 __forceinline int floatBitsToInt( float f ){ return reinterpret_cast<int&>(f); }
