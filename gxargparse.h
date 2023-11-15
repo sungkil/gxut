@@ -79,7 +79,8 @@ protected:
 	const char* short_name() const { for( auto& n : names ) if(n.size()==1) return n.c_str(); return ""; }
 	std::vector<const char*> long_names() const { std::vector<const char*> v; for( auto& n : names ) if(n.size()>1) v.push_back(n.c_str()); return v; }
 
-	std::set<std::string>		names;				// multiple names allowed for a single option
+	struct lless { bool operator()(const std::string& a,const std::string& b)const{return a.size()!=b.size()?a.size()<b.size():_stricmp(a.c_str(),b.c_str())<0;}};
+	std::set<std::string,lless>	names;				// multiple names allowed for a single option
 	std::wstring				value;				// found first values
 	std::vector<std::wstring>	others;				// additional excessive multiple options
 	std::string					shelp;				// help string
