@@ -189,15 +189,15 @@ template<> __noinline void parser_t::set<double>( const char* key, double value 
 template<> __noinline void parser_t::set<int2>( const char* key, int2 value ){			swprintf_s(buffer,buffer_capacity,L"%d %d",value.x,value.y); set(key,buffer); }
 template<> __noinline void parser_t::set<int3>( const char* key, int3 value ){			swprintf_s(buffer,buffer_capacity,L"%d %d %d",value.x,value.y,value.z); set(key,buffer); }
 template<> __noinline void parser_t::set<int4>( const char* key, int4 value ){			swprintf_s(buffer,buffer_capacity,L"%d %d %d %d",value.x,value.y,value.z,value.w); set(key,buffer); }
-template<> __noinline void parser_t::set<ivec2>( const char* key, ivec2 value ){		set<int2>(key,value); }
-template<> __noinline void parser_t::set<ivec3>( const char* key, ivec3 value ){		set<int3>(key,value); }
-template<> __noinline void parser_t::set<ivec4>( const char* key, ivec4 value ){		set<int4>(key,value); }
+template<> __noinline void parser_t::set<ivec2>( const char* key, ivec2 value ){		set<int2>(key,reinterpret_cast<int2&>(value)); }
+template<> __noinline void parser_t::set<ivec3>( const char* key, ivec3 value ){		set<int3>(key,reinterpret_cast<int3&>(value)); }
+template<> __noinline void parser_t::set<ivec4>( const char* key, ivec4 value ){		set<int4>(key,reinterpret_cast<int4&>(value)); }
 template<> __noinline void parser_t::set<float2>( const char* key, float2 value ){		swprintf_s(buffer,buffer_capacity,L"%g %g",value.x,value.y); set(key,buffer); }
 template<> __noinline void parser_t::set<float3>( const char* key, float3 value ){		swprintf_s(buffer,buffer_capacity,L"%g %g %g",value.x,value.y,value.z); set(key,buffer); }
 template<> __noinline void parser_t::set<float4>( const char* key, float4 value ){		swprintf_s(buffer,buffer_capacity,L"%g %g %g %g",value.x,value.y,value.z,value.w); set(key,buffer); }
-template<> __noinline void parser_t::set<vec2>( const char* key, vec2 value ){			set<float2>(key,value); }
-template<> __noinline void parser_t::set<vec3>( const char* key, vec3 value ){			set<float3>(key,value); }
-template<> __noinline void parser_t::set<vec4>( const char* key, vec4 value ){			set<float4>(key,value); }
+template<> __noinline void parser_t::set<vec2>( const char* key, vec2 value ){			set<float2>(key,reinterpret_cast<float2&>(value)); }
+template<> __noinline void parser_t::set<vec3>( const char* key, vec3 value ){			set<float3>(key,reinterpret_cast<float3&>(value)); }
+template<> __noinline void parser_t::set<vec4>( const char* key, vec4 value ){			set<float4>(key,reinterpret_cast<float4&>(value)); }
 
 //*************************************
 } // namespace ini

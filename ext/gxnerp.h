@@ -80,12 +80,12 @@ inline mat4 shermite( const mat4& m0, const mat4& m1, const mat4& m2, const mat4
 template <class T> T _atof( const char* s ){		return T(); }
 template <> float _atof<float>( const char* s ){	return float(atof(s)); }
 template <> double _atof<double>( const char* s ){	return double(atof(s)); }
-template <> vec2 _atof<vec2>( const char* s ){		return vec2(atof2(s)); }
-template <> vec3 _atof<vec3>( const char* s ){		return vec3(atof3(s)); }
-template <> vec4 _atof<vec4>( const char* s ){		return vec4(atof4(s)); }
-template <> dvec2 _atof<dvec2>( const char* s ){	return dvec2(atod2(s)); }
-template <> dvec3 _atof<dvec3>( const char* s ){	return dvec3(atod3(s)); }
-template <> dvec4 _atof<dvec4>( const char* s ){	return dvec4(atod4(s)); }
+template <> vec2 _atof<vec2>( const char* s ){		return reinterpret_cast<vec2&>(atof2(s)); }
+template <> vec3 _atof<vec3>( const char* s ){		return reinterpret_cast<vec3&>(atof3(s)); }
+template <> vec4 _atof<vec4>( const char* s ){		return reinterpret_cast<vec4&>(atof4(s)); }
+template <> dvec2 _atof<dvec2>( const char* s ){	return reinterpret_cast<dvec2&>(atod2(s)); }
+template <> dvec3 _atof<dvec3>( const char* s ){	return reinterpret_cast<dvec3&>(atod3(s)); }
+template <> dvec4 _atof<dvec4>( const char* s ){	return reinterpret_cast<dvec4&>(atod4(s)); }
 template <> mat4 _atof<mat4>( const char* s ){		return mat4(atof16(s)); }
 
 template <class T> T lerp( const char* s1, const char* s2, float t ){ return lerp(_atof<T>(s1),_atof<T>(s2),t); }

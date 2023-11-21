@@ -224,7 +224,7 @@ namespace gl {
 
 		// constructor: initialized with the internal qpc or an external qpc
 		timer_t():timer_t(_qpc0){}
-		timer_t(os::timer_t& t):Object(gxCreateQuery(GL_TIMESTAMP),"",GL_TIMESTAMP),_ID1(gxCreateQuery(target)),_qpc(t){ result=_qpc.result=dvec2(0.0); }
+		timer_t(os::timer_t& t):Object(gxCreateQuery(GL_TIMESTAMP),"",GL_TIMESTAMP),_ID1(gxCreateQuery(target)),_qpc(t){ result=_qpc.result={0,0}; }
 		~timer_t() override { GLuint idx[2]={ID,_ID1}; glDeleteQueries(2,idx); }
 
 		// gl::Timer specific implementations
@@ -794,25 +794,25 @@ namespace gl {
 		const char* get_value( GLuint prog )
 		{
 			if(ID==-1) return "";
-			static vec4 f; static ivec4 i; static uvec4 u; static bvec4 b; static mat2 m2; static mat3 m3; static mat4 m4;
+			static float4 f; static int4 i; static uint4 u; static mat2 m2; static mat3 m3; static mat4 m4;
 
 			switch(type)
 			{
 			case GL_FLOAT:				glGetUniformfv(prog,ID,&f.x); return ftoa(f.x);
-			case GL_FLOAT_VEC2:			glGetUniformfv(prog,ID,&f.x); return ftoa(f.xy);
-			case GL_FLOAT_VEC3:			glGetUniformfv(prog,ID,&f.x); return ftoa(f.xyz);
-			case GL_FLOAT_VEC4:			glGetUniformfv(prog,ID,&f.x); return ftoa(f); 
+			case GL_FLOAT_VEC2:			glGetUniformfv(prog,ID,&f.x); return ftoa(reinterpret_cast<float2&>(f.x));
+			case GL_FLOAT_VEC3:			glGetUniformfv(prog,ID,&f.x); return ftoa(reinterpret_cast<float3&>(f.x));
+			case GL_FLOAT_VEC4:			glGetUniformfv(prog,ID,&f.x); return ftoa(f);
 			case GL_INT:				glGetUniformiv(prog,ID,&i.x); return itoa(i.x);
-			case GL_INT_VEC2:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xy);
-			case GL_INT_VEC3:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xyz);
+			case GL_INT_VEC2:			glGetUniformiv(prog,ID,&i.x); return itoa(reinterpret_cast<int2&>(i.x));
+			case GL_INT_VEC3:			glGetUniformiv(prog,ID,&i.x); return itoa(reinterpret_cast<int3&>(i.x));
 			case GL_INT_VEC4:			glGetUniformiv(prog,ID,&i.x); return itoa(i);
 			case GL_UNSIGNED_INT:		glGetUniformuiv(prog,ID,&u.x); return utoa(u.x);
-			case GL_UNSIGNED_INT_VEC2:	glGetUniformuiv(prog,ID,&u.x); return utoa(u.xy);
-			case GL_UNSIGNED_INT_VEC3:	glGetUniformuiv(prog,ID,&u.x); return utoa(u.xyz);
+			case GL_UNSIGNED_INT_VEC2:	glGetUniformuiv(prog,ID,&u.x); return utoa(reinterpret_cast<uint2&>(u.x));
+			case GL_UNSIGNED_INT_VEC3:	glGetUniformuiv(prog,ID,&u.x); return utoa(reinterpret_cast<uint3&>(u.x));
 			case GL_UNSIGNED_INT_VEC4:	glGetUniformuiv(prog,ID,&u.x); return utoa(u);
 			case GL_BOOL:				glGetUniformiv(prog,ID,&i.x); return itoa(i.x);
-			case GL_BOOL_VEC2:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xy);
-			case GL_BOOL_VEC3:			glGetUniformiv(prog,ID,&i.x); return itoa(i.xyz);
+			case GL_BOOL_VEC2:			glGetUniformiv(prog,ID,&i.x); return itoa(reinterpret_cast<int2&>(i.x));
+			case GL_BOOL_VEC3:			glGetUniformiv(prog,ID,&i.x); return itoa(reinterpret_cast<int3&>(i.x));
 			case GL_BOOL_VEC4:			glGetUniformiv(prog,ID,&i.x); return itoa(i);
 			case GL_FLOAT_MAT2:			glGetUniformfv(prog,ID,&m2._11); return ftoa(m2.transpose());
 			case GL_FLOAT_MAT3:			glGetUniformfv(prog,ID,&m3._11); return ftoa(m3.transpose());

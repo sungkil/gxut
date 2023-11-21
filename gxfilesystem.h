@@ -613,7 +613,8 @@ __noinline path path::relative( bool first_dot, const wchar_t* from ) const
 	// 3. if empty dir, then attach ./
 	if(first_dot&&(result[0]==0||result[0]!=L'.')) result=path(".\\")+result;
 
-	return this->is_dir()?result:result+name();
+	wchar_t b=back();
+	return b==L'\\'||b==L'/'?result:result+name();
 }
 
 __noinline void path::canonicalize()

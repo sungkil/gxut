@@ -83,8 +83,8 @@ inline font_engine::font_engine( const wchar_t* face, int point_size, uchar3 col
 	buffer		= rex::create_image(TY,TY,8,4);
 	bitmap_info	= create_font_bitmap_info(TY,TY,1);
 
-	text_color = uchar4{color.r,color.g,color.b,255};
-	shadow_color = uchar4{shadow.r,shadow.g,shadow.b,255};
+	text_color = uchar4{color.x,color.y,color.z,255};
+	shadow_color = uchar4{shadow.x,shadow.y,shadow.z,255};
 
 	// create an initial LUT table image for ANSI chars. In the beginning, 2 rows are created
 	wchar_t ascii[129-N0]={}; for(wchar_t k=0,kn=_countof(ascii)-1;k<kn; k++) ascii[k]=k+N0; update( ascii );
@@ -109,7 +109,7 @@ inline font_engine::font_engine( image* table0, int ty, int row, bool vflip ):vf
 		for( int x=0; x<w; x++, d++ )
 		{
 			uchar3 s = *table0->ptr<uchar3>((row*h+y)*ty/TY,x*ty/TY);
-			uchar r=s.r, g=s.g, b=s.b;
+			uchar r=s.x, g=s.y, b=s.z;
 			*d = (r==255&&g==255&&b==255)?uchar4{0,0,0,0}:uchar4{r,g,b,uchar(r||g||b?255:0)};
 			char_map[N0+x/ty].wide=b_wide;
 		}
