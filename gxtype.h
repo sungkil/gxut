@@ -45,15 +45,17 @@
 	#ifndef GX_REDIR
 		#define GX_REDIR
 	#endif
-	#if defined(_INC_STDIO) && !defined(GX_REDIR_IMPL)
+	#if !defined(printf) && (defined(_INC_STDIO)||defined(_INC_WCHAR)||defined(_CSTDIO_)||defined(_CWCHAR_)) && !defined(GX_REDIR_IMPL)
 		#error do not include <stdio.h> or define GX_NO_REDIR before gxut headers
 	#endif
-	#define	printf	__printf	// rename default printf
-	#define	wprintf __wprintf	// rename default wprintf
-		#include <stdio.h>
-		#include <wchar.h>
-		#include <cstdio>
-		#include <cwchar>
+	#ifndef printf
+		#define	printf	__printf	// rename default printf
+		#define	wprintf	__wprintf	// rename default wprintf
+	#endif
+	#include <stdio.h>
+	#include <wchar.h>
+	#include <cstdio>
+	#include <cwchar>
 	#undef	printf
 	#undef	wprintf
 	// drop-in replacement of printf, where non-rex applications fallbacks to stdout
@@ -152,7 +154,9 @@ template <class T> struct tarray2  { __default_array_impl(2,T,tarray2); __defaul
 template <class T> struct tarray3  { __default_array_impl(3,T,tarray3); __default_cmps(tarray3); using V2=tarray2<T>; union{struct{T x,y,z;};struct{T r,g,b;};union{V2 xy,rg;};struct{T _x;union{V2 yz,gb;};};}; };
 template <class T> struct tarray4  { __default_array_impl(4,T,tarray4); __default_cmps(tarray4); using V2=tarray2<T>; using V3=tarray3<T>; union{struct{T x,y,z,w;};struct{T r,g,b,a;};struct{union{V2 xy,rg;};union{V2 zw,ba;};};union{V3 xyz,rgb;};struct{T _x;union{V3 yzw,gba;V2 yz,gb;};};}; };
 using uint		= unsigned int;			using uchar		= unsigned char;		using ushort	= unsigned short;	using ulong = unsigned long;
-#ifndef __VECTOR_TYPES_H__ // type definitions in CUDA/vector_types.h
+#ifdef __VECTOR_TYPES_H__ // type definitions in CUDA/vector_types.h
+namespace gx {
+#endif
 using bool2		= tarray2<bool>;		using bool3		= tarray3<bool>;		using bool4		= tarray4<bool>;
 using float2	= tarray2<float>;		using float3	= tarray3<float>;		using float4	= tarray4<float>;
 using double2	= tarray2<double>;		using double3	= tarray3<double>;		using double4	= tarray4<double>;
@@ -166,6 +170,8 @@ using long2		= tarray2<long>;		using long3		= tarray3<long>;		using long4		= tar
 using ulong2	= tarray2<ulong>;		using ulong3	= tarray3<ulong>;		using ulong4	= tarray4<ulong>;
 using longlong2	= tarray2<int64_t>;		using longlong3	= tarray3<int64_t>;		using longlong4	= tarray4<int64_t>;
 using ulonglong2= tarray2<uint64_t>;	using ulonglong3= tarray3<uint64_t>;	using ulonglong4= tarray4<uint64_t>;
+#ifdef __VECTOR_TYPES_H__
+} // end namespace gx
 #endif
 
 // Common unique types in std namespace

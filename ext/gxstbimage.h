@@ -50,20 +50,21 @@ inline void release_image( image** pp_image )
 	*pp_image = nullptr;
 }
 
-inline image* create_image_header( int width, int height, int depth, int channels, void* data=nullptr )
+inline image* create_image_header( int width, int height, int depth, int channels, unsigned align=4, void* data=nullptr )
 {
 	image* i = new image();
 	i->width = width;
 	i->height = height;
 	i->depth = depth;
 	i->channels = channels;
+	const_cast<unsigned&>(i->align) = align;
 	i->data = (decltype(i->data)) data;
 	return i;
 }
 
-inline image* create_image( int width, int height, int depth, int channels )
+inline image* create_image( int width, int height, int depth, int channels, unsigned align=4 )
 {
-	image* i = create_image_header( width, height, depth, channels );
+	image* i = create_image_header( width, height, depth, channels, align, nullptr );
 	i->data = (unsigned char*) malloc(i->size());
 	return i;
 }
