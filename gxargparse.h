@@ -299,7 +299,7 @@ inline bool parser_t::parse_impl( int argc, const wchar_t** argv )
 			}
 
 			// find option by name
-			option_t* p=find_option(name.c_str()); if(!p) return exit( "unrecognized option: %s", name.c_str() );
+			option_t* p=find_option(name.c_str()); if(!p) return exit( "unrecognized option: %s%s", name.size()>1?"--":"-", name.c_str() );
 			if( p->subarg_count )	p->instance++;
 			else {					p->instance=1; continue; }
 
