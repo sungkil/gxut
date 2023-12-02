@@ -304,9 +304,7 @@ struct path
 	inline bool is_rsync() const { auto* p=wcsstr(_data,L":\\"); if(!p) p=wcsstr(_data,L":/"); return p!=nullptr&&p>_data+1; }
 	inline bool is_subdir( const path& ancestor ) const { return _wcsnicmp(_data,ancestor._data,ancestor.size())==0; } // do not check existence
 	inline path absolute( const wchar_t* base=L"" ) const { if(!*_data) return *this; return _wfullpath(__wcsbuf(),(!*base||is_absolute())?_data:wcscat(wcscpy(__wcsbuf(),path(base).add_backslash()),_data),capacity); }	// do not directly return for non-canonicalized path
-	inline path relative( bool first_dot, const wchar_t* from ) const;
-	inline path relative( bool first_dot ) const { return relative(first_dot,L""); }
-	inline path relative( const wchar_t* from=L"" ) const { return relative(false,from); }
+	inline path relative( const wchar_t* from=L"", bool first_dot=false ) const;
 	inline path canonical() const { path p(*this); p.canonicalize(); return p; } // not necessarily absolute: return relative path as well
 
 	// time stamp
@@ -592,11 +590,11 @@ __noinline path path::temp( bool local, path local_dir )
 	return t;
 }
 
-__noinline path path::relative( bool first_dot, const wchar_t* from ) const
+__noinline path path::relative( const wchar_t* from, bool first_dot ) const
 {
 	if(is_relative()) return *this;
 
-	path from_dir = (!from||!from[0]) ? module_dir() : path(from).dir().absolute();
+	path from_dir = (!from||!from[0]) ? path::cwd() : path(from).dir().absolute();
 	if(::tolower(from_dir[0])!=::tolower(this->_data[0])) return *this; // different drive
 
 	// 1. keep filename, make the list of reference and current path

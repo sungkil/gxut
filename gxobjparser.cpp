@@ -513,7 +513,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 			{
 				path mtl_path = path(file_path).dir() + atow(trim(buff));
 				if(!mtl::load_mtl(mtl_path, p_mesh->materials)){ printf("unable to load material file: %s\n",wtoa(mtl_path)); return nullptr; }
-				wcscpy( p_mesh->mtl_path, mtl_path.relative(false,path(file_path).dir()) );
+				wcscpy( p_mesh->mtl_path, mtl_path.relative(path(file_path).dir()) );
 				
 				// postprocessing
 				if(!p_mesh->materials.empty()) mat_index = p_mesh->materials.size()>1?1:0; // default material

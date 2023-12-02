@@ -73,7 +73,7 @@ mtl_item_t::mtl_item_t( const std::string& _key, const char* first_token ):key(_
 path mtl_item_t::map_path()
 {
 	if(tokens.empty()) return L"";
-	auto& b=tokens.back(); if(::path p(b);p.is_absolute()){b=p.is_subdir(mtl_dir)?p.relative(false,mtl_dir).wtoa():p.name().wtoa();}
+	auto& b=tokens.back(); if(::path p(b);p.is_absolute()){b=p.is_subdir(mtl_dir)?p.relative(mtl_dir).wtoa():p.name().wtoa();}
 	return mtl_dir+tokens.back();
 }
 
@@ -83,7 +83,7 @@ bool mtl_item_t::make_canonical_relative_path()
 	for( int k=0;k<8&&strstr(b.c_str(),"\\\\");k++) b=str_replace(b.c_str(),"\\\\","\\");	// remove double backslash
 	for( int k=0;k<8&&strstr(b.c_str(),"//");k++) b=str_replace(b.c_str(),"//","/");		// remove double slash
 	::path p(b=path(b).to_backslash().canonical().wtoa());
-	if(!p.is_relative()) b=p.is_subdir(mtl_dir)?p.relative(false,mtl_dir).wtoa():p.name().wtoa();
+	if(!p.is_relative()) b=p.is_subdir(mtl_dir)?p.relative(mtl_dir).wtoa():p.name().wtoa();
 	return _stricmp(b0.c_str(),b.c_str())!=0; // return change exists
 }
 
@@ -280,7 +280,7 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 		auto *n=m.find("norm"), *b=m.find("bump"); if(n||!b) continue;
 		path norm_path = get_normal_path( b->map_path(), bton, used_images ); if(norm_path.empty()) continue;
 		if(!norm_path.exists()&&!generate_normal_map( norm_path, b->map_path(), file_path )) continue;
-		n = m.add_norm( norm_path.relative(false,mtl_dir).wtoa() ); if(!n) continue;
+		n = m.add_norm( norm_path.relative(mtl_dir).wtoa() ); if(!n) continue;
 		
 		used_images.insert(norm_path);
 		bton[b->map_path()] = norm_path;
