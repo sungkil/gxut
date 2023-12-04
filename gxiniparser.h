@@ -136,7 +136,7 @@ __noinline bool parser_t::save( const path& file_path )
 	bool b_hidden_file=false;if(_waccess(file_path,0)==0&&(GetFileAttributesW(file_path)&FILE_ATTRIBUTE_HIDDEN)){b_hidden_file=true;SetFileAttributesW( file_path,GetFileAttributesW(file_path)&(~FILE_ATTRIBUTE_HIDDEN) );} // save and remove hidden attribute
 	FILE* fp=nullptr; for(uint k=0;fp==nullptr&&k<20;k++){ fp=file_path.fopen(L"w",true); Sleep(5); } // wait 100ms for busy writing
 	if(fp==nullptr){ printf( "%s(): Unable to open %s to write", __func__, file_path.wtoa() ); return false; }
-	fseek( fp, 0, SEEK_SET ); // remove BOM
+	_fseeki64( fp, 0, SEEK_SET ); // remove BOM
 	
 	std::string sec; bool bLine0=true;
 	for( auto it=dic.begin(); it!=dic.end(); )

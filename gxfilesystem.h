@@ -56,7 +56,7 @@ static const int GX_MAX_PATH = 1024;	// MAX_PATH == 260
 struct path
 {
 	typedef WIN32_FILE_ATTRIBUTE_DATA attrib_t; // auxiliary cache information from scan()
-	typedef struct _stat stat_t; // use "struct _stat" instead of "_stat" for C-compatibility
+	typedef struct _stat64 stat_t; // use "struct _stat" instead of "_stat" for C-compatibility
 
 	static constexpr int max_buffers	= 4096;
 	static constexpr int capacity		= GX_MAX_PATH; // MAX_PATH == 260
@@ -252,7 +252,7 @@ struct path
 	const wchar_t* wname( bool with_ext=true ) const { return name(with_ext).c_str(); }
 
 	// attribute by stats
-	inline stat_t	stat() const { stat_t s={}; if(exists()) _wstat(_data,&s); return s; }
+	inline stat_t	stat() const { stat_t s={}; if(exists()) _wstat64(_data,&s); return s; }
 	inline DWORD&	attributes() const { if(!cache_exists()) update_cache(); return cache().dwFileAttributes; }
 	inline void		update_cache() const { auto& c=cache(); if(!GetFileAttributesExW(_data,GetFileExInfoStandard,&c)||c.dwFileAttributes==INVALID_FILE_ATTRIBUTES){ memset(&c,0,sizeof(attrib_t)); c.dwFileAttributes=INVALID_FILE_ATTRIBUTES; return; } c.ftLastWriteTime = DiscardFileTimeMilliseconds(c.ftLastWriteTime); }
 	inline void		clear_cache() const { attrib_t* a=(attrib_t*)(_data+capacity); memset(a,0,sizeof(attrib_t)); a->dwFileAttributes=INVALID_FILE_ATTRIBUTES; }
@@ -364,6 +364,7 @@ protected:
 
 	__forceinline attrib_t& cache() const { return *((attrib_t*)(_data+capacity)); }
 	__forceinline bool		cache_exists() const { attrib_t* c=(attrib_t*)(_data+capacity); return c->ftLastWriteTime.dwHighDateTime>0&&c->dwFileAttributes==INVALID_FILE_ATTRIBUTES; }
+	static uint64_t file_size( FILE* fp ){ if(!fp) return 0; auto p=_ftelli64(fp); _fseeki64(fp,0,SEEK_END); uint64_t s=_ftelli64(fp); _fseeki64(fp,p,SEEK_SET); return s; }
 	void canonicalize(); // remove redundancies in directories (e.g., "../some/..", "./" )
 
 	struct scan_t { std::vector<path> result; bool recursive; sized_ptr_t<wchar_t>* exts; size_t exts_l; const wchar_t* pattern; size_t plen; bool b_glob; };
@@ -390,31 +391,25 @@ __noinline FILE* path::fopen( const wchar_t* mode, bool utf8 ) const
 {
 	wchar_t m[32]={}; _swprintf(m,L"%s%s",mode,utf8?L",ccs=UTF-8":L"");
 	FILE* fp = _wfopen(_data,m); if(!fp) return nullptr;
-	if(wcscmp(mode,L"w")==0&&utf8&&ext()!=L"sln") fseek(fp,0,SEEK_SET); // remove byte order mask (BOM); sln use BOM, but vcxproj do not use BOM
+	else if(wcscmp(mode,L"w")==0&&utf8&&ext()!=L"sln") _fseeki64(fp,0,SEEK_SET); // remove byte order mask (BOM); sln use BOM, but vcxproj do not use BOM
 	return fp;
 }
 
 template<> __noinline sized_ptr_t<void> path::read_file<void>() const
 {
 	sized_ptr_t<void> p={nullptr,0};
-	FILE* fp=fopen(L"rb"); if(!fp) return {nullptr,0};
-	fseek(fp,0,SEEK_END); p.size=ftell(fp); fseek(fp,0,SEEK_SET);
-	if(p.size){ p.ptr=malloc(p.size+1); if(p.ptr) fread(p.ptr,1,p.size,fp); ((char*)p.ptr)[p.size]=0; }
+	FILE* fp=fopen(L"rb",false); if(!fp) return {nullptr,0};
+	p.size = file_size(fp); if(!p.size){ fclose(fp); return {nullptr,0}; }
+	p.ptr=malloc(p.size+1); if(p.ptr) fread(p.ptr,1,p.size,fp); ((char*)p.ptr)[p.size]=0;
 	fclose(fp);
 	return p;
-}
-
-template<> __noinline sized_ptr_t<const void> path::read_file<const void>() const
-{
-	auto p=read_file<void>(); return {(const void*)p.ptr,p.size};
 }
 
 template<> __noinline sized_ptr_t<wchar_t> path::read_file<wchar_t>() const
 {
 	sized_ptr_t<wchar_t> p={nullptr,0};
 	FILE* fp=fopen(L"r",true); if(!fp) return {nullptr,0};
-	fseek(fp,0,SEEK_END); size_t size0=ftell(fp); fseek(fp,0,SEEK_SET);
-	if(!size0){ fclose(fp); return {nullptr,0}; }
+	size_t size0 = file_size(fp); if(!size0){ fclose(fp); return {nullptr,0}; }
 
 	std::wstring buffer; buffer.reserve(size0*2);
 	wchar_t buff[4096]; while(fgetws(buff,4096,fp)) buffer+=buff; fclose(fp);
@@ -425,17 +420,11 @@ template<> __noinline sized_ptr_t<wchar_t> path::read_file<wchar_t>() const
 	return p;
 }
 
-template<> __noinline sized_ptr_t<const wchar_t> path::read_file<const wchar_t>() const
-{
-	auto p=read_file<wchar_t>(); return {(const wchar_t*)p.ptr,p.size};
-}
-
 template<> __noinline sized_ptr_t<char> path::read_file<char>() const
 {
 	sized_ptr_t<char> p={nullptr,0};
 	FILE* fp=fopen(L"r"); if(!fp) return {nullptr,0};
-	fseek(fp,0,SEEK_END); size_t size0=ftell(fp); fseek(fp,0,SEEK_SET);
-	if(!size0){ fclose(fp); return {nullptr,0}; }
+	size_t size0 = file_size(fp); if(!size0){ fclose(fp); return {nullptr,0}; }
 
 	std::string buffer; buffer.reserve(size0*2);
 	char buff[4096]; while(fgets(buff,4096,fp)) buffer+=buff; fclose(fp);
@@ -446,15 +435,25 @@ template<> __noinline sized_ptr_t<char> path::read_file<char>() const
 	return p;
 }
 
+__noinline std::wstring path::read_file() const
+{
+	sized_ptr_t<wchar_t> p=read_file<wchar_t>(); if(!p) return L"";
+	std::wstring s=p.ptr; free(p.ptr); return s;
+}
+
+template<> __noinline sized_ptr_t<const void> path::read_file<const void>() const
+{
+	auto p=read_file<void>(); return {(const void*)p.ptr,p.size};
+}
+
 template<> __noinline sized_ptr_t<const char> path::read_file<const char>() const
 {
 	auto p=read_file<char>(); return {(const char*)p.ptr,p.size};
 }
 
-__noinline std::wstring path::read_file() const
+template<> __noinline sized_ptr_t<const wchar_t> path::read_file<const wchar_t>() const
 {
-	sized_ptr_t<wchar_t> p=read_file<wchar_t>(); if(!p) return L"";
-	std::wstring s=p.ptr; free(p.ptr); return s;
+	auto p=read_file<wchar_t>(); return {(const wchar_t*)p.ptr,p.size};
 }
 
 __noinline bool path::write_file( const void* ptr, size_t size ) const

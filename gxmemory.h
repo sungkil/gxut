@@ -56,7 +56,7 @@ template <class T> struct mmap // memory-mapped file (similar to virtual memory)
 	
 	mmap( size_t n ):b_readonly(false),size(n){ size_t s=size*sizeof(T); hFileMap=CreateFileMappingW( INVALID_HANDLE_VALUE /* use pagefile */, nullptr, PAGE_READWRITE, DWORD(s>>32), DWORD(s&0xffffffff), _uname() ); }
 	mmap( const wchar_t* file_path ):b_readonly(true) /* if n>0 or n != existing file size, a new file with n is created */ { struct _stat st={}; if(_waccess(file_path,0)!=0) return; _wstat(file_path,&st); size_t file_size=st.st_size; if(file_size==0) return; size=file_size/sizeof(T); hFile=CreateFileW(file_path,GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_FLAG_RANDOM_ACCESS,nullptr); if(hFile==INVALID_HANDLE_VALUE){size=0;return;} size_t memsize=sizeof(T)*size; hFileMap=CreateFileMappingW(hFile,nullptr,PAGE_READONLY,DWORD(uint64_t(memsize)>>32),DWORD(memsize&0xffffffff),nullptr); if(hFileMap==INVALID_HANDLE_VALUE){size=0;CloseHandle(hFile);hFile=nullptr;return;} }
-	virtual ~mmap(){ if(hFileMap!=INVALID_HANDLE_VALUE) CloseHandle(hFileMap); hFileMap=INVALID_HANDLE_VALUE; if(hFile!=INVALID_HANDLE_VALUE) CloseHandle(hFile); hFile=INVALID_HANDLE_VALUE; }
+	virtual ~mmap(){ if(!empty()&&ptr){ FlushViewOfFile(ptr,0); UnmapViewOfFile(ptr); ptr=nullptr; } if(hFileMap!=INVALID_HANDLE_VALUE) CloseHandle(hFileMap); hFileMap=INVALID_HANDLE_VALUE; if(hFile!=INVALID_HANDLE_VALUE) CloseHandle(hFile); hFile=INVALID_HANDLE_VALUE; }
 	bool empty() const { return hFile==INVALID_HANDLE_VALUE||hFileMap==INVALID_HANDLE_VALUE||size==0; }
 	T* map( size_t offset=0, size_t n=0 ){ if(empty()) return nullptr; size_t s=offset*sizeof(T); return ptr=(T*)MapViewOfFile(hFileMap,FILE_MAP_READ|(b_readonly?0:FILE_MAP_WRITE),DWORD(uint64_t(s)>>32),DWORD(s&0xffffffff),(n?n:size)*sizeof(T)); }
 	void unmap( T* p=nullptr ){ T* t=p?p:ptr; if(empty()||!t) return; FlushViewOfFile(t,0); UnmapViewOfFile(t); }
@@ -167,7 +167,7 @@ struct md5
 private:
 	uint32_t a=0x67452301,b=0xefcdab89,c=0x98badcfe,d=0x10325476;
 	inline const void* body( const unsigned char* data, size_t size );
-	inline void update( const void* data, size_t size );
+	void update( const void* data, size_t size );
 };
 
 __noinline const void* md5::body( const unsigned char* data, size_t size )
@@ -232,14 +232,17 @@ __noinline void md5::update( const void* data, size_t size )
 #ifdef __GX_FILESYSTEM_H__
 __noinline uint path::crc32c() const
 {
-	{ mmap<char> f(_data); char* p=f.map(); if(p){ uint c=::crc32c(p,f.size ); f.unmap(p); return c; } } // try mmap
-	auto p=read_file<void>(); if(!p.ptr) return 0; uint c=::crc32c(p); if(p.ptr) free(p.ptr); return c; // fallback to regular fread
+	FILE* fp=_wfopen(_data,L"rb"); if(!fp) return 0;
+	size_t bs=min(file_size(fp),size_t(1<<16)); if(bs==0){ fclose(fp); return 0; }
+	char* buff=(char*)malloc(bs); uint c=0; size_t r=0; while(r=fread(buff,1,bs,fp)) c=::crc32c(buff,r,c);
+	fclose(fp); free(buff);
+	return c;
 }
 
 __noinline uint4 path::md5() const
 {
-	{ mmap<char> f(_data); char* p=f.map(); if(p){ ::md5 c(p); f.unmap(p); return c.digest; } } // try mmap
-	auto p=read_file<void>(); if(!p.ptr) return ::md5(nullptr,0); ::md5 c(p); if(p.ptr) free(p.ptr); return c.digest; // fallback to regular fread
+	auto p=read_file<void>(); if(!p.ptr) return ::md5(nullptr,0);
+	::md5 c(p); if(p.ptr) free(p.ptr); return c.digest;
 }
 #endif // __GX_FILESYSTEM_H__
 
