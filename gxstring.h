@@ -75,6 +75,7 @@ inline const wchar_t* format( const wchar_t* fmt,... ){ va_list a; va_start(a,fm
 template <class T,class I> const T* _strcvt( const I* s ){size_t len=strlen(s);T* buff=__tstrbuf<T>(len);for(uint k=0;k<len;k++)buff[k]=T(s[k]);return buff;}
 inline const wchar_t* atow( const char* a ){int wlen=MultiByteToWideChar(0,0,a,-1,0,0);wchar_t* wbuff=_wcsbuf(wlen);MultiByteToWideChar(0,0,a,-1,wbuff,wlen);return wbuff;}
 inline const char* wtoa( const wchar_t* w ){int mblen=WideCharToMultiByte(0,0,w,-1,0,0,0,0);char* buff=_strbuf(mblen);WideCharToMultiByte(0,0,w,-1,buff,mblen,0,0);return buff;}
+inline bool ismbs( const char* s ){ if(!s||!*s)return false;for(int k=0,kn=int(strlen(s));k<kn;k++,s++)if(*s<0)return true;return false; }
 
 //***********************************************
 // 4. case-insensitive comparison for std::map/set, std::unordered_map/set
