@@ -139,6 +139,8 @@ struct parser_t
 	template<> inline path			get<path>( const std::string& name ) const { return get<std::wstring>(name).c_str(); }
 	template<> inline int			get<int>( const std::string& name ) const { return _wtoi(get<std::wstring>(name).c_str()); }
 	template<> inline uint			get<uint>( const std::string& name ) const { return uint(_wtoi(get<std::wstring>(name).c_str())); }
+	template<> inline float			get<float>( const std::string& name ) const { return float(_wtof(get<std::wstring>(name).c_str())); }
+	template<> inline double		get<double>( const std::string& name ) const { return _wtof(get<std::wstring>(name).c_str()); }
 	std::vector<std::wstring>		others( const std::string& name="" ) const;
 
 	// get multiple values
@@ -396,34 +398,34 @@ inline bool parser_t::usage( const char* alt_name )
 		if(a->optional)	fprintf( stdout, " [%s]", a->name.c_str() );
 		else			fprintf( stdout, " %s", a->name.c_str() );
 	}
-	fprintf( stdout, " ...\n\n" );
+	fprintf( stdout, " ...\n" );
 
 	std::string sfmt=format(" %%-%ds %%s\n",int(cap+4));
 	const char* fmt=sfmt.c_str();
 
 	if(!commands.empty())
 	{
-		fprintf( stdout, "commands:\n");
+		fprintf( stdout, "\ncommands:\n");
 		for( auto* c : commands ) print_option( fmt, c->name(), c->attrib.help.c_str() );
-		fprintf( stdout, "\n");
 	}
 
 	if(!req_args.empty()||!opt_args.empty())
 	{
-		fprintf( stdout, "arguments:\n");
+		fprintf( stdout, "\narguments:\n");
 		for( auto& a : req_args ) print_option( fmt, format(" %s",a.first.c_str()), a.second.c_str() );
 		for( auto& a : opt_args ) print_option( fmt, format("[%s]",a.first.c_str()), a.second.c_str() );
-		fprintf( stdout, "\n" );
 	}
 
 	if(!opts.empty())
 	{
-		fprintf( stdout, "options:\n");
+		fprintf( stdout, "\noptions:\n");
 		for( auto& o : opts ) print_option( fmt, o.first.c_str(), o.second.c_str() );
-		fprintf( stdout, "\n" );
 	}
 
-	if(!attrib.footer.empty()) fprintf( stdout, "%s\n", attrib.footer.c_str() );
+	if(!attrib.footer.empty())
+	{
+		fprintf( stdout, "\n%s\n", attrib.footer.c_str() );
+	}
 
 	if(!os::console::has_parent()) _wsystem(L"pause");
 
