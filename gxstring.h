@@ -526,7 +526,25 @@ __noinline const T* auto_quote( const T* _Src )
 }
 
 //***********************************************
-// 17. GUID conversion
+// 17. Longest Common SubString (LCSS)
+
+template <class T>
+__noinline T strlcss( const std::vector<T>& v ) // longest common substring
+{
+	if(v.empty()) return T();
+	T a=v.front();
+	for( int k=1, kn=int(v.size()); k<kn; k++ )
+	{
+		auto& b=v[k];
+		int bl=int(b.size()); if(bl==0) return T();
+		int al=int(a.size()), l=al<bl?al:bl;
+		int j=0; for( ; j<l; j++ ){ if(a[j]!=b[j]) break; } a[j]=0;
+	}
+	return a;
+}
+
+//***********************************************
+// 18. GUID conversion
 
 #if defined(GUID_DEFINED)
 __noinline const wchar_t* guidtow( const GUID& guid )
