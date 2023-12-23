@@ -3095,12 +3095,9 @@ typedef void (APIENTRYP PFNGLCONSERVATIVERASTERPARAMETERINVPROC) (GLenum pname, 
 }
 #endif
 
-#endif
 
-#ifdef GXCOREARB_IMPL
-	#define e(t) bool GX_##t = false;
-#else
-	#define e(t) extern bool GX_##t;
+#if __cplusplus>=201703L||(defined(_MSVC_LANG)&&_MSVC_LANG>=201703L)
+	#define e(t) inline bool GX_##t = false;
 #endif
 
 e(ARB_ES2_compatibility)
@@ -3254,10 +3251,8 @@ e(NV_conservative_raster_pre_snap_triangles)
 e(NV_conservative_raster_underestimation)
 #undef e
 
-#ifdef GXCOREARB_IMPL
-	#define f(proc,func) PFNGL##proc##PROC gl##func = 0;
-#else
-	#define f(proc,func) extern PFNGL##proc##PROC gl##func;
+#if __cplusplus>=201703L||(defined(_MSVC_LANG)&&_MSVC_LANG>=201703L)
+	#define f(proc,func) inline PFNGL##proc##PROC gl##func = 0;
 #endif
 
 f(CULLFACE,CullFace)
@@ -4021,29 +4016,22 @@ f(CONSERVATIVERASTERPARAMETERFNV,ConservativeRasterParameterfNV)
 f(CONSERVATIVERASTERPARAMETERINV,ConservativeRasterParameteriNV)
 #undef f
 
-extern PROC (WINAPI* __wglGetProcAddress)(LPCSTR);
-extern void* (*__xglGetProcAddress)(LPCSTR);
-void gxcorearb( HMODULE hOpenGL32 );
-bool gxcorearb_extension_exists( const char* extension );
+inline PROC (WINAPI* __wglGetProcAddress)(LPCSTR) = nullptr;
+inline void* (*__xglGetProcAddress)(LPCSTR) = nullptr;
+inline const char** (*__xglGetExtensions)(int*) = nullptr;
+inline HMODULE __hOpenGL32 = nullptr;
+inline std::vector<std::string> gxcorearb_unsupported_functions;
+inline std::vector<std::string> gxcorearb_unsupported_extensions;
 
-#ifdef GXCOREARB_IMPL
-
-HMODULE __hOpenGL32 = nullptr;
-PROC (WINAPI* __wglGetProcAddress)(LPCSTR) = nullptr;
-void* (*__xglGetProcAddress)(LPCSTR) = nullptr;
-const char** (*__xglGetExtensions)(int*) = nullptr;
-static std::vector<std::string> unsupported_functions;
-static std::vector<std::string> unsupported_extensions;
-
-__declspec(noinline) static void* get_gxcorearb_proc( const char* fname )
+__declspec(noinline) inline void* get_gxcorearb_proc( const char* fname )
 {
 	void* p = __xglGetProcAddress?__xglGetProcAddress(fname):nullptr;	if(p) return p;
 	p = (void*) __wglGetProcAddress(fname);								if(p) return p;
 	p = (void*) GetProcAddress(__hOpenGL32,fname);						if(p) return p;
-	unsupported_functions.emplace_back(fname);							return p;
+	gxcorearb_unsupported_functions.emplace_back(fname);							return p;
 }
 
-__declspec(noinline) std::unordered_set<std::string>& get_gxcorearb_extensions()
+__declspec(noinline) inline std::unordered_set<std::string>& get_gxcorearb_extensions()
 {
 	static std::unordered_set<std::string> extension_set; if(!extension_set.empty()) return extension_set;
 	if(__xglGetExtensions)
@@ -4061,14 +4049,14 @@ __declspec(noinline) std::unordered_set<std::string>& get_gxcorearb_extensions()
 	return extension_set;
 }
 
-__declspec(noinline) bool gxcorearb_extension_exists( const char* extension )
+__declspec(noinline) inline bool gxcorearb_extension_exists( const char* extension )
 {
 	static const std::unordered_set<std::string>& extension_set = get_gxcorearb_extensions();
 	if(extension_set.find(extension)!=extension_set.end()) return true;
-	unsupported_extensions.emplace_back(extension); return false;
+	gxcorearb_unsupported_extensions.emplace_back(extension); return false;
 }
 
-__declspec(noinline) void gxcorearb( HMODULE hOpenGL32 )
+__declspec(noinline) inline void gxcorearb( HMODULE hOpenGL32 )
 {
 	__hOpenGL32 = hOpenGL32; if(__hOpenGL32==nullptr) __hOpenGL32=LoadLibraryW(L"OpenGL32.dll"); if(__hOpenGL32==nullptr){ printf( "gxcorearb(): unable to load OpenGL32.dll" ); return; }
 	__wglGetProcAddress = (decltype(__wglGetProcAddress)) GetProcAddress(__hOpenGL32,"wglGetProcAddress"); if(__wglGetProcAddress==nullptr){ printf( "gxcorearb(): __wglGetProcAddress==nullptr" ); return; }
@@ -4995,7 +4983,7 @@ e(NV_conservative_raster_underestimation)
 	if(__hOpenGL32&&!hOpenGL32) FreeLibrary(__hOpenGL32);
 
 	// return if unsupported exists or logging is disabled
-	if(unsupported_functions.empty()&&unsupported_extensions.empty()) return;
+	if(gxcorearb_unsupported_functions.empty()&&gxcorearb_unsupported_extensions.empty()) return;
 
 #ifdef GXCOREARB_LOG
 
@@ -5014,8 +5002,8 @@ e(NV_conservative_raster_underestimation)
 
 	// leave a log for unsupported
 	FILE* fp = _wfopen( log_path, L"w" ); if(!fp) return;
-	if(!unsupported_extensions.empty()){ fprintf( fp, "# Unavailable OpenGL extensions\n" ); for( auto& s : unsupported_extensions ) fprintf(fp,"%s\n", s.c_str() ); fprintf( fp, "\n" ); }
-	if(!unsupported_functions.empty()){ fprintf( fp, "# Unavailable OpenGL core-profile functions\n" ); for( auto& s : unsupported_functions ) fprintf(fp,"%s\n", s.c_str() ); }
+	if(!gxcorearb_unsupported_extensions.empty()){ fprintf( fp, "# Unavailable OpenGL extensions\n" ); for( auto& s : gxcorearb_unsupported_extensions ) fprintf(fp,"%s\n", s.c_str() ); fprintf( fp, "\n" ); }
+	if(!gxcorearb_unsupported_functions.empty()){ fprintf( fp, "# Unavailable OpenGL core-profile functions\n" ); for( auto& s : gxcorearb_unsupported_functions ) fprintf(fp,"%s\n", s.c_str() ); }
 	fclose(fp);
 
 	wprintf( L"[gxcorearb] see %s for unavailable OpenGL extensions\n", log_path );
@@ -5023,4 +5011,4 @@ e(NV_conservative_raster_underestimation)
 #endif
 }
 
-#endif /* GXCOREARB_IMPL */
+#endif /* __gxcorearb_h_ */
