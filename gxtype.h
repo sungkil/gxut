@@ -77,13 +77,14 @@
 #include <string>
 using namespace std::string_literals; // enables s-suffix for std::string literals
 #include <vector>
-// C++11
-#if (__cplusplus>199711L) || (_MSC_VER>=1600/*VS2010*/)
+// C++11 (c++14/17/20: 201402L, 201703L, 202002L, ...)
+#if (__cplusplus>199711L)||(defined(_MSVC_LANG)&&_MSVC_LANG>199711L) // MSVC define not  __cplusplus but _MSVC_LANG
 	#include <random>
 	#include <type_traits>
 	#include <unordered_map>
 	#include <unordered_set>
 #endif
+
 // Windows
 #if defined(_WIN32)||defined(_WIN64) // Windows
 	#ifndef WIN32_LEAN_AND_MEAN

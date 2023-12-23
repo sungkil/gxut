@@ -963,7 +963,6 @@ namespace gl {
 
 		// friend classes/functions
 		friend struct Effect;
-		friend Program* gxCreateProgram(std::string,std::string,const gl::program_source_t&);
 
 		// public member variables
 		program_source_t					source;
@@ -982,8 +981,9 @@ namespace gl {
 	{
 		GLuint b0=binding(); if(!b_bind||b0!=ID) glUseProgram(b_bind?ID:0); if(!b_bind) return b0;
 		if(_uniform_cache.empty()) update_uniform_cache(); else if( Texture::b_texture_deleted() ){std::set<Program*>& s=get_instances();for(auto it:s)it->update_uniform_cache();Texture::b_texture_deleted()=false;}
-		for(auto& [n,u]:_uniform_cache)
+		for(auto& it:_uniform_cache)
 		{
+			auto& n=it.first; auto& u=it.second;
 			if(u.ID<0||!u.texture||u.textureID<0) continue;
 			if(glBindTextureUnit) glBindTextureUnit(u.textureID,u.texture->ID); else { glActiveTexture(GL_TEXTURE0+u.textureID);glBindTexture(u.texture->target,u.texture->ID); }
 		}
@@ -1035,7 +1035,7 @@ namespace gl {
 			GLsizei l=gxGetActiveUniformBlockiv(ID,k,GL_UNIFORM_BLOCK_NAME_LENGTH); /* length includes NULL */ if(l>std::extent<decltype(UniformBlock::name)>::value) printf("[%s] uniform block name is too long\n",_name);
 			glGetActiveUniformBlockName(ID,k,l,&l,ub.name);
 			_uniform_block_map[ub.name] = ub;
-			for(auto& [n,u]:_uniform_cache){ if(u.block_index==ub.ID) strcpy(u.block_name,ub.name); } // update uniform block in uniform cache
+			for(auto& it:_uniform_cache){ auto&n=it.first;auto&u=it.second; if(u.block_index==ub.ID) strcpy(u.block_name,ub.name); } // update uniform block in uniform cache
 		}
 
 		if(program0!=ID&&program0>=0) glUseProgram(program0); // restore the original program

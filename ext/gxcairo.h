@@ -32,7 +32,7 @@
 
 //***********************************************
 // cairo.h
-#if (__cplusplus>=201703L||_MSC_VER>=1911/*VS2017*/)
+#ifdef __has_include
 	#if __has_include("cairo.h")
 		#include "cairo.h"
 	#elif __has_include("../cairo/cairo.h")
