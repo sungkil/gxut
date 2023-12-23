@@ -364,7 +364,11 @@ protected:
 
 	__forceinline attrib_t& cache() const { return *((attrib_t*)(_data+capacity)); }
 	__forceinline bool		cache_exists() const { attrib_t* c=(attrib_t*)(_data+capacity); return c->ftLastWriteTime.dwHighDateTime>0&&c->dwFileAttributes==INVALID_FILE_ATTRIBUTES; }
-	static uint64_t file_size( FILE* fp ){ if(!fp) return 0; auto p=_ftelli64(fp); _fseeki64(fp,0,SEEK_END); uint64_t s=_ftelli64(fp); _fseeki64(fp,p,SEEK_SET); return s; }
+#if defined _M_IX86
+	static size_t file_size( FILE* fp ){ if(!fp) return 0; auto p=ftell(fp); fseek(fp,0,SEEK_END); size_t s=ftell(fp); fseek(fp,p,SEEK_SET); return s; }
+#elif defined _M_X64
+	static size_t file_size( FILE* fp ){ if(!fp) return 0; auto p=_ftelli64(fp); _fseeki64(fp,0,SEEK_END); size_t s=_ftelli64(fp); _fseeki64(fp,p,SEEK_SET); return s; }
+#endif
 	void canonicalize(); // remove redundancies in directories (e.g., "../some/..", "./" )
 
 	struct scan_t { std::vector<path> result; bool recursive; sized_ptr_t<wchar_t>* exts; size_t exts_l; const wchar_t* pattern; size_t plen; bool b_glob; };
@@ -678,9 +682,9 @@ namespace logical
 // compiler utility
 namespace gx { namespace compiler
 {
-	inline int mtoi( const char* month ){ if(!month||!month[0]||!month[1]||!month[2]) return 0; char a=tolower(month[0]), b=tolower(month[1]), c=tolower(month[2]); if(a=='j'){ if(b=='a') return 1; if(c=='n') return 6; return 7; } if(a=='f') return 2; if(a=='m'){ if(c=='r') return 3; return 5; } if(a=='a'){ if(b=='p') return 4; return 8; } if(a=='s') return 9; if(a=='o') return 10; if(a=='n') return 11; return 12; }
+	inline int monthtoi( const char* month ){ if(!month||!month[0]||!month[1]||!month[2]) return 0; char a=tolower(month[0]), b=tolower(month[1]), c=tolower(month[2]); if(a=='j'){ if(b=='a') return 1; if(c=='n') return 6; return 7; } if(a=='f') return 2; if(a=='m'){ if(c=='r') return 3; return 5; } if(a=='a'){ if(b=='p') return 4; return 8; } if(a=='s') return 9; if(a=='o') return 10; if(a=='n') return 11; return 12; }
 	inline int year(){ static int y=0; if(y) return y; char buff[64]={}; int r=sscanf(__DATE__,"%*s %*s %s", buff); return y=atoi(buff); }
-	inline int month(){ static int m=0; if(m) return m; char buff[64]={}; int r=sscanf(__DATE__,"%s", buff); return m=mtoi(buff); }
+	inline int month(){ static int m=0; if(m) return m; char buff[64]={}; int r=sscanf(__DATE__,"%s", buff); return m=monthtoi(buff); }
 	inline int day(){ static int d=0; if(d) return d; char buff[64]={}; int r=sscanf(__DATE__,"%*s %s %*s", buff); return d=atoi(buff); }
 }}
 
