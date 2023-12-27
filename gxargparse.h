@@ -291,8 +291,8 @@ inline bool parser_t::parse_impl( int argc, const wchar_t** argv )
 			{
 				for( auto& n : name )
 				{
-					char sn[2]={n,0};
-					option_t* p=find_option(sn);
+					if(n=='h'){ attrib.b.help_exists=true; continue; }
+					char sn[2]={n,0}; option_t* p=find_option(sn);
 					if(!p) return exit( "unrecognized option: -%s in {%s}", sn, name.c_str() );
 					if(p->subarg_count) return exit( "-%s: %s is not a simple flag that can be used in combination.", name.c_str(), sn );
 					p->instance=1;
