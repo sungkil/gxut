@@ -288,7 +288,7 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 	}
 
 	// delete non-used images
-	for( auto& f : mtl_dir.scan( false, L"jpg;png" ) )
+	for( auto& f : mtl_dir.scan<false>( L"jpg;png" ) )
 	{
 		if(used_images.find(f)!=used_images.end()) continue;
 		if(dups.find(f)==dups.end()) // do not delete other non-duplicate non-used images

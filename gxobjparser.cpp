@@ -97,7 +97,7 @@ namespace obj::cache
 			std::string(__GX_OBJPARSER_CPP_TIMESTAMP__)+
 			std::string(__GX_MTLPARSER_CPP_TIMESTAMP__);
 		std::string s = codestamp+file_path.mtimestamp();
-		for( auto& f : file_path.dir().absolute().scan( true, L"obj;mtl;7z;zip;jpg;jpeg;png;hdr" ) )
+		for( auto& f : file_path.dir().absolute().scan( L"obj;mtl;7z;zip;jpg;jpeg;png;hdr" ) )
 			s += f.mtimestamp();
 		return uint64_t(std::hash<std::string>{}(s));
 	}
@@ -411,7 +411,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 
 	//*********************************
 	// start logging in case that there is no material
-	if(file_path.dir().scan(false,L"mtl").empty()) log_begin(); 
+	if(file_path.dir().scan<false>(L"mtl").empty()) log_begin(); 
 
 	//*********************************
 	// string buffers
