@@ -172,9 +172,9 @@ using ulonglong2= tarray2<uint64_t>;	using ulonglong3= tarray3<uint64_t>;	using 
 #endif
 
 // Common unique types in std namespace
-// these types should hardly have the same names in user definitions
+// These types should hardly have the same names in user definitions
 using std::string;
 using std::wstring;
 using std::vector;
 
-#endif // __GXUT_TYPE_H__
+#endif // __GX_TYPE_H__

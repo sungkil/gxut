@@ -31,27 +31,59 @@
 //***********************************************
 // Win32-like filetime utilities
 inline int64_t FileTimeOffset( int days, int hours=0, int mins=0, int secs=0, int mss=0 ){ return 10000ll*(mss+1000ll*secs+60ll*1000*mins+60ll*60*1000*hours+24ll*60*60*1000*days); } // FILETIME in 100 ns scale
-inline FILETIME DiscardFileTimeMilliseconds( FILETIME f ){uint64_t u=((uint64_t(f.dwHighDateTime)<<32|uint64_t(f.dwLowDateTime))/10000000)*10000000;return FILETIME{DWORD(u&0xffffffff),DWORD(u>>32)};} // 1ms = 10000 in FILETIME
-inline SYSTEMTIME FileTimeToSystemTime( const FILETIME& f ){ SYSTEMTIME s; FileTimeToSystemTime(&f,&s); return s; }
+inline FILETIME DiscardFileTimeMilliseconds( FILETIME f ){ uint64_t u=((uint64_t(f.dwHighDateTime)<<32|uint64_t(f.dwLowDateTime))/10000000)*10000000;return FILETIME{DWORD(u&0xffffffff),DWORD(u>>32)}; } // 1ms = 10000 in FILETIME
+inline SYSTEMTIME FileTimeToSystemTime( FILETIME f ){ SYSTEMTIME s; FileTimeToSystemTime(&f,&s); return s; }
 inline FILETIME SystemTimeToFileTime( const SYSTEMTIME& s ){ FILETIME f; SystemTimeToFileTime(&s,&f); return f; }
-inline uint64_t FileTimeToUint64( const FILETIME& f ){ return (uint64_t(f.dwHighDateTime)<<32|uint64_t(f.dwLowDateTime)); }
+inline uint64_t FileTimeToUint64( FILETIME f ){ return (uint64_t(f.dwHighDateTime)<<32|uint64_t(f.dwLowDateTime)); }
 inline FILETIME	Uint64ToFileTime( uint64_t u ){ FILETIME f={}; f.dwHighDateTime=DWORD(u>>32); f.dwLowDateTime=u&0xffffffff; return f; }
 inline uint64_t SystemTimeToUint64( const SYSTEMTIME& s ){ FILETIME f; SystemTimeToFileTime( &s, &f ); return FileTimeToUint64(f); }
 inline FILETIME now(){ FILETIME f; GetSystemTimeAsFileTime(&f); return f; } // current time
-
-inline bool operator==( const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)==0; }
-inline bool operator!=( const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)!=0; }
-inline bool operator>=( const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)>=0; }
-inline bool operator<=( const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)<=0; }
-inline bool operator>(  const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)>0; }
-inline bool operator<(  const FILETIME& f1, const FILETIME& f2 ){ return CompareFileTime(&f1,&f2)<0; }
+inline bool operator==( FILETIME f1, FILETIME f2 ){ return CompareFileTime(&f1,&f2)==0; }
+inline bool operator!=( FILETIME f1, FILETIME f2 ){ return CompareFileTime(&f1,&f2)!=0; }
+inline bool operator>=( FILETIME f1, FILETIME f2 ){ return CompareFileTime(&f1,&f2)>=0; }
+inline bool operator<=( FILETIME f1, FILETIME f2 ){ return CompareFileTime(&f1,&f2)<=0; }
+inline bool operator>(  FILETIME f1, FILETIME f2 ){ return CompareFileTime(&f1,&f2)>0; }
+inline bool operator<(  FILETIME f1, FILETIME f2 ){ return CompareFileTime(&f1,&f2)<0; }
 static const uint64_t DefaultFileTimeOffset = FileTimeOffset(0,0,0,30); // server-local difference can be up to several seconds
-// do not make FileTimeLess(), which causes confusion in use cases
-inline bool FileTimeGreater( const FILETIME& f1, const FILETIME& f2, int64_t offset=DefaultFileTimeOffset ){ return FileTimeToUint64(f1)>FileTimeToUint64(f2)+offset; }
+inline bool FileTimeGreater( FILETIME f1, FILETIME f2, int64_t offset=DefaultFileTimeOffset ){ return FileTimeToUint64(f1)>FileTimeToUint64(f2)+offset; } // do not make FileTimeLess(), which causes confusion in use cases
 
 //***********************************************
 // common constants
 static const int GX_MAX_PATH = 1024;	// MAX_PATH == 260
+
+// disk volume type
+struct volume_t
+{
+	static const int	capacity = GX_MAX_PATH; // MAX_PATH == 260
+	wchar_t				root[4]={}; // trailing backslash required
+	wchar_t				name[capacity+1]={};
+	unsigned long		serial_number=0;
+	unsigned long		maximum_component_length=0;
+	uint64_t			_disk_size=0;
+	struct { unsigned long flags=0; wchar_t name[capacity+1]={}; } filesystem;
+
+	// constructor
+	volume_t() = default;
+	volume_t( const volume_t& other ) = default;
+	volume_t& operator=( const volume_t& other ) = default;
+	volume_t( const wchar_t* drive )
+	{
+		if(!drive||!drive[0]||!isalpha(drive[0])) return;
+		root[0]=drive[0]; root[1]=L':'; root[2]=L'\\'; root[3]=0;
+		if(!GetVolumeInformationW(root,name,capacity,&serial_number,&maximum_component_length,&filesystem.flags,filesystem.name,capacity)){ root[0]=0; return; }
+		ULARGE_INTEGER a,t,f; GetDiskFreeSpaceExW( root, &a, &t, &f);
+		_disk_size = uint64_t(t.QuadPart);
+	}
+
+	// query
+	bool exists() const { return root[0]!=0&&serial_number!=0&&filesystem.name[0]!=0; }
+	uint64_t size() const { return exists()?_disk_size:0; }
+	uint64_t free_space() const { ULARGE_INTEGER a,t,f; GetDiskFreeSpaceExW( root, &a, &t, &f); return uint64_t(a.QuadPart); }
+	bool has_free_space( uint64_t inverse_thresh=10 ) const { return exists()&&free_space()>(size()/inverse_thresh); }
+	bool is_exfat() const { return _wcsicmp(filesystem.name,L"exFAT")==0; }
+	bool is_ntfs() const { return _wcsicmp(filesystem.name,L"NTFS")==0; }
+	bool is_fat32() const { return _wcsicmp(filesystem.name,L"FAT32")==0; }
+};
 
 struct path
 {
@@ -69,41 +101,6 @@ struct path
 	static __forceinline const wchar_t*	__tolower( const wchar_t* _Str, size_t l ){ wchar_t* s=(wchar_t*)memcpy(__wcsbuf(),_Str,sizeof(wchar_t)*l); s[l]=L'\0'; for(wchar_t* p=s;*p;p++) *p=towlower(*p); return s; }
 	static __forceinline const wchar_t*	__wcsistr( const wchar_t* _Str1, size_t l1, const wchar_t* _Str2, size_t l2 ){ const wchar_t *s1=__tolower(_Str1,l1), *s2=__tolower(_Str2,l2); const wchar_t* r=wcsstr(s1,s2); return r?_Str1+(r-s1):nullptr; }
 	static __forceinline const wchar_t*	__wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return __wcsistr(_Str1,wcslen(_Str1),_Str2,wcslen(_Str2)); }
-	static __forceinline bool			__wcsiext( const wchar_t* _Str, size_t l, const wchar_t* ext, size_t el ){ return el<l&&_wcsicmp(ext,_Str+l-el)==0; }
-
-	// disk volume
-	struct volume_t
-	{
-		static const int	capacity = GX_MAX_PATH; // MAX_PATH == 260
-		wchar_t				root[4]={}; // trailing backslash required
-		wchar_t				name[capacity+1]={};
-		unsigned long		serial_number=0;
-		unsigned long		maximum_component_length=0;
-		uint64_t			_disk_size=0;
-		struct { unsigned long flags=0; wchar_t name[capacity+1]={}; } filesystem;
-
-		// constructor
-		volume_t() = default;
-		volume_t( const volume_t& other ) = default;
-		volume_t& operator=( const volume_t& other ) = default;
-		volume_t( const wchar_t* drive )
-		{
-			if(!drive||!drive[0]||!isalpha(drive[0])) return;
-			root[0]=drive[0]; root[1]=L':'; root[2]=L'\\'; root[3]=0;
-			if(!GetVolumeInformationW(root,name,capacity,&serial_number,&maximum_component_length,&filesystem.flags,filesystem.name,capacity)){ root[0]=0; return; }
-			ULARGE_INTEGER a,t,f; GetDiskFreeSpaceExW( root, &a, &t, &f);
-			_disk_size = uint64_t(t.QuadPart);
-		}
-
-		// query
-		bool exists() const { return root[0]!=0&&serial_number!=0&&filesystem.name[0]!=0; }
-		uint64_t size() const { return exists()?_disk_size:0; }
-		uint64_t free_space() const { ULARGE_INTEGER a,t,f; GetDiskFreeSpaceExW( root, &a, &t, &f); return uint64_t(a.QuadPart); }
-		bool has_free_space( uint64_t inverse_thresh=10 ) const { return exists()&&free_space()>(size()/inverse_thresh); }
-		bool is_exfat() const { return _wcsicmp(filesystem.name,L"exFAT")==0; }
-		bool is_ntfs() const { return _wcsicmp(filesystem.name,L"NTFS")==0; }
-		bool is_fat32() const { return _wcsicmp(filesystem.name,L"FAT32")==0; }
-	};
 
 	// destructor/constuctors
 	__forceinline wchar_t* alloc(){ static constexpr size_t s=sizeof(wchar_t)*capacity+sizeof(attrib_t); _data=(wchar_t*)malloc(s); if(_data)_data[0]=0; return _data; }
@@ -125,7 +122,7 @@ struct path
 	path& operator=( const std::wstring& s ) noexcept { wcscpy(_data,s.c_str()); return *this; }
 	path& operator=( const std::string& s ) noexcept { __mb2wc(s.c_str(),_data); return *this; }
 
-	// concatenations
+	// operator overloading: concatenations
 	path& operator+=( const path& p ){ wcscat(_data,p._data+((p._data[0]==L'.'&&p._data[1]==L'\\'&&p._data[2])?2:0)); return *this; }
 	path& operator+=( const wchar_t* s ){ if(s[0]==L'.'&&s[1]==L'\\'&&s[2]) s+=2; size_t l=wcslen(_data); wcscpy(_data+l,s); return *this; }
 	path& operator+=( const char* s ){ size_t l=wcslen(_data); __mb2wc(s,_data+l); return *this; }
@@ -147,14 +144,6 @@ struct path
 	path operator+( char c ){ return clone().operator+=(c); }
 	path operator+( const std::wstring& s ) const { return clone().operator+=(s.c_str()); }
 	path operator+( const std::string& s ) const { return clone().operator+=(s.c_str()); }
-
-	path cat( const path& p ) const { return clone().operator+=(p); }
-	path cat( const wchar_t* s ) const { return clone().operator+=(s); }
-	path cat( const char* s ) const { return clone().operator+=(s); }
-	path cat( wchar_t c ){ return clone().operator+=(c); }
-	path cat( char c ){ return clone().operator+=(c); }
-	path cat( const std::wstring& s ) const { return clone().operator+=(s.c_str()); }
-	path cat( const std::string& s ) const { return clone().operator+=(s.c_str()); }
 
 	path operator/( const path& p ) const { return clone().operator/=(p); }
 	path operator/( const wchar_t* s ) const { return clone().operator/=(s); }
@@ -178,6 +167,7 @@ struct path
 	bool operator<=( const path& p )	const { return StrCmpLogicalW(_data,p._data)<=0; }
 	bool operator>=( const path& p )	const { return StrCmpLogicalW(_data,p._data)>=0; }
 #endif
+
 	// operator overloading: array operator
 	inline wchar_t& operator[]( ptrdiff_t i ){ return _data[i]; }
 	inline const wchar_t& operator[]( ptrdiff_t i ) const { return _data[i]; }
@@ -239,13 +229,13 @@ struct path
 	path parent() const { return dir().remove_backslash().dir(); }
 	std::vector<path> ancestors( path root=L"" ) const { if(empty()) return std::vector<path>(); if(root._data[0]==0) root=is_unc()?unc_root():module_dir(); path d=dir(); int l=int(d.size()),rl=int(root.size()); bool r=_wcsnicmp(d._data,root._data,rl)==0; std::vector<path> a;a.reserve(4); for(int k=l-1,e=r?rl-1:0;k>=e;k--){ if(d._data[k]!=L'\\'&&d._data[k]!=L'/') continue; d._data[k+1]=0; a.emplace_back(d); } return a; }
 	path junction() const { path t; if(empty()) return t; auto& a=attributes(); if(a==INVALID_FILE_ATTRIBUTES||(a&FILE_ATTRIBUTE_DIRECTORY)==0||(a&FILE_ATTRIBUTE_REPARSE_POINT)==0) return t; HANDLE h=CreateFileW(_data,GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,0); if(h==INVALID_HANDLE_VALUE) return t; GetFinalPathNameByHandleW(h,t._data,t.capacity,FILE_NAME_NORMALIZED); CloseHandle(h); if(wcsncmp(t._data,L"\\\\?\\",4)==0) t=path(t._data+4).add_backslash(); return t; }
-	path remove_first_dot()	const { return (wcslen(_data)>2&&_data[0]==L'.'&&_data[1]==L'\\') ? path(_data+2) : *this; }
-	path remove_ext() const { split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
-	std::vector<path> explode( const wchar_t* delim=L"\\") const { std::vector<path> L; if(!delim||!*delim) return L; path s=delim[0]==L'/'&&delim[1]==0?to_slash():*this; L.reserve(16); wchar_t* ctx=nullptr; for(wchar_t* t=wcstok_s(s._data,delim,&ctx);t;t=wcstok_s(0,delim,&ctx)) L.emplace_back(t); return L; }
 
 	// content manipulations
+	path remove_first_dot()	const { return (wcslen(_data)>2&&_data[0]==L'.'&&_data[1]==L'\\') ? path(_data+2) : *this; }
+	path remove_ext() const { split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
 	path replace_ext( const wchar_t* ext ) const { if(!ext||!ext[0])return *this;split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf(),__wcsbuf());path p;swprintf_s(p._data,capacity,L"%s%s%s%s%s",si.drive,si.dir,si.fname,ext[0]==L'.'?L"":L".",ext );return p; }
 	path replace_ext( const char* ext ) const { if(!ext||!ext[0])return *this; return replace_ext(__mb2wc(ext,__wcsbuf())); }
+	std::vector<path> explode( const wchar_t* delim=L"\\") const { std::vector<path> L; if(!delim||!*delim) return L; path s=delim[0]==L'/'&&delim[1]==0?to_slash():*this; L.reserve(16); wchar_t* ctx=nullptr; for(wchar_t* t=wcstok_s(s._data,delim,&ctx);t;t=wcstok_s(0,delim,&ctx)) L.emplace_back(t); return L; }
 
 	// multi-byte path info
 	const char* aname( bool with_ext=true ) const { return name(with_ext).wtoa(); }
@@ -254,19 +244,19 @@ struct path
 	// attribute by stats
 	inline stat_t	stat() const { stat_t s={}; if(exists()) _wstat64(_data,&s); return s; }
 	inline DWORD&	attributes() const { if(!cache_exists()) update_cache(); return cache().dwFileAttributes; }
-	inline void		update_cache() const { auto& c=cache(); if(!GetFileAttributesExW(_data,GetFileExInfoStandard,&c)||c.dwFileAttributes==INVALID_FILE_ATTRIBUTES){ memset(&c,0,sizeof(attrib_t)); c.dwFileAttributes=INVALID_FILE_ATTRIBUTES; return; } c.ftLastWriteTime = DiscardFileTimeMilliseconds(c.ftLastWriteTime); }
+	inline void		update_cache() const { auto& c=cache(); if(!GetFileAttributesExW(_data,GetFileExInfoStandard,&c)||c.dwFileAttributes==INVALID_FILE_ATTRIBUTES){ memset(&c,0,sizeof(attrib_t)); c.dwFileAttributes=INVALID_FILE_ATTRIBUTES; return; } c.ftLastWriteTime=DiscardFileTimeMilliseconds(c.ftLastWriteTime); }
 	inline void		clear_cache() const { attrib_t* a=(attrib_t*)(_data+capacity); memset(a,0,sizeof(attrib_t)); a->dwFileAttributes=INVALID_FILE_ATTRIBUTES; }
 
 	// get attributes
-	bool exists() const {				if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES; }
-	bool is_dir() const {				if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_DIRECTORY)!=0; }
-	bool is_root_dir() const {			if(!*_data) return false; size_t l=length(); return is_dir()&&l<4&&l>1&&_data[1]==L':'; }
-	bool is_hidden() const {			if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_HIDDEN)!=0; }
-	bool is_readonly() const {			if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_READONLY)!=0; }
-	bool is_system() const {			if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_SYSTEM)!=0; }
-	bool is_junction() const {			if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_REPARSE_POINT)!=0; }
-	bool is_ssh() const {				if(!*_data) return false; return wcsstr(_data+2,L":\\")!=nullptr||wcsstr(_data+2,L":/")!=nullptr; }
-	bool is_synology() const {			if(!*_data) return false; return __wcsistr(_data,L":\\volume")!=nullptr||__wcsistr(_data,L":/volume")!=nullptr; }
+	bool exists() const {		if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES; }
+	bool is_dir() const {		if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_DIRECTORY)!=0; }
+	bool is_root_dir() const {	if(!*_data) return false; size_t l=length(); return is_dir()&&l<4&&l>1&&_data[1]==L':'; }
+	bool is_hidden() const {	if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_HIDDEN)!=0; }
+	bool is_readonly() const {	if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_READONLY)!=0; }
+	bool is_system() const {	if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_SYSTEM)!=0; }
+	bool is_junction() const {	if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_REPARSE_POINT)!=0; }
+	bool is_ssh() const {		if(!*_data) return false; return wcsstr(_data+2,L":\\")!=nullptr||wcsstr(_data+2,L":/")!=nullptr; }
+	bool is_synology() const {	if(!*_data) return false; return __wcsistr(_data,L":\\volume")!=nullptr||__wcsistr(_data,L":/volume")!=nullptr; }
 
 	// set attributes
 	void set_hidden( bool h ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(_data,a=h?(a|FILE_ATTRIBUTE_HIDDEN):(a^FILE_ATTRIBUTE_HIDDEN)); }
@@ -274,7 +264,7 @@ struct path
 	void set_system( bool s ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(_data,a=s?(a|FILE_ATTRIBUTE_SYSTEM):(a^FILE_ATTRIBUTE_SYSTEM)); }
 
 	// directory attributes
-	bool has_file( const path& file_name ) const { return is_dir()&&cat(file_name).exists(); }
+	bool has_file( const path& file_name ) const { return is_dir()&&operator+(file_name).exists(); }
 
 	// chdir/make/copy/delete file/dir operations
 	path chdir() const { path old=cwd(); int r=is_dir()?_wchdir(_data):0; return old; } // return old working directory
@@ -293,7 +283,7 @@ struct path
 	bool rmdir( bool b_undo=true ) const { return delete_dir(b_undo); }
 	bool copy_dir( path dst, bool overwrite=true ) const { if(!is_dir()) return false;wchar_t* from=__wcsbuf();swprintf_s(from,capacity,L"%s\\*\0",_data);dst[dst.size()+1]=L'\0'; SHFILEOPSTRUCTW fop={};fop.wFunc=FO_COPY;fop.fFlags=FOF_ALLOWUNDO|FOF_SILENT|FOF_NOCONFIRMATION;fop.pFrom=from;fop.pTo=dst;return SHFileOperationW(&fop)==0; }
 	bool move_dir( path dst ) const { return !is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(_data,dst.c_str())!=0 : !copy_dir(dst,true) ? false: rmdir(); }
-	void open( const wchar_t* args=nullptr, bool b_show_window=true ) const {path cmd;swprintf(cmd,capacity,L"\"%s\"",_data);ShellExecuteW(GetDesktopWindow(),L"Open",cmd,args,nullptr,b_show_window?SW_SHOW:SW_HIDE);}
+	void open( const wchar_t* args=nullptr, bool b_show_window=true ) const { path cmd;swprintf(cmd,capacity,L"\"%s\"",_data);ShellExecuteW(GetDesktopWindow(),L"Open",cmd,args,nullptr,b_show_window?SW_SHOW:SW_HIDE); }
 	void open_dir() const { dir().open(nullptr,true); }
 #endif
 
@@ -309,7 +299,7 @@ struct path
 
 	// time stamp
 	static const char* timestamp( const struct tm* t ){char* buff=__strbuf();sprintf(buff,"%04d%02d%02d%02d%02d%02d",t->tm_year+1900,t->tm_mon+1,t->tm_mday,t->tm_hour,t->tm_min,t->tm_sec);return buff;}
-	static const char* timestamp( const FILETIME& f ){ SYSTEMTIME s;FileTimeToSystemTime(&f,&s);char* buff=__strbuf();sprintf(buff,"%04d%02d%02d%02d%02d%02d",s.wYear,s.wMonth,s.wDay,s.wHour,s.wMinute,s.wSecond);return buff; }
+	static const char* timestamp( FILETIME f ){ SYSTEMTIME s;FileTimeToSystemTime(&f,&s);char* buff=__strbuf();sprintf(buff,"%04d%02d%02d%02d%02d%02d",s.wYear,s.wMonth,s.wDay,s.wHour,s.wMinute,s.wSecond);return buff; }
 	const char* ctimestamp() const { if(!exists()) return ""; stat_t s=stat(); struct tm t; _gmtime64_s(&t,&s.st_ctime); return timestamp(&t); }
 	const char* atimestamp() const { if(!exists()) return ""; stat_t s=stat(); struct tm t; _gmtime64_s(&t,&s.st_atime); return timestamp(&t); }
 	const char* mtimestamp() const { if(!exists()) return ""; stat_t s=stat(); struct tm t; _gmtime64_s(&t,&s.st_mtime); return timestamp(&t); }
@@ -321,7 +311,7 @@ struct path
 	SYSTEMTIME asystemtime() const { return FileTimeToSystemTime(afiletime()); }
 	SYSTEMTIME msystemtime() const { return FileTimeToSystemTime(mfiletime()); }
 	void set_filetime( const FILETIME* ctime, const FILETIME* atime, const FILETIME* mtime ) const { HANDLE h=CreateFileW(_data,FILE_WRITE_ATTRIBUTES,0,nullptr,OPEN_EXISTING,0,nullptr); if(!h)return; auto& c=cache(); if(ctime) c.ftCreationTime=*ctime; if(atime) c.ftLastAccessTime=*atime; if(mtime) c.ftLastWriteTime=*mtime; SetFileTime(h, ctime, atime, mtime ); CloseHandle(h); }
-	void set_filetime( const FILETIME& f ) const { set_filetime(&f,&f,&f); }
+	void set_filetime( FILETIME f ) const { set_filetime(&f,&f,&f); }
 	void set_filetime( const path& other ) const { if(!other.exists()) return; other.update_cache(); auto& c=other.cache(); set_filetime(&c.ftCreationTime,&c.ftLastAccessTime,&c.ftLastWriteTime); }
 
 	// module/working directories
@@ -529,7 +519,7 @@ std::vector<path> path::scan( const wchar_t* ext_filter, const wchar_t* pattern,
 __noinline void path::scan_recursive( path dir, path::scan_t& si ) const
 {
 	WIN32_FIND_DATAW fd={}; HANDLE h=FindFirstFileExW(dir+L"*.*",FindExInfoBasic/*minimal(faster)*/,&fd,FindExSearchNameMatch,0,FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
-	size_t dl=wcslen(dir._data); wchar_t *f=fd.cFileName, *p=dir._data+dl;
+	size_t dl=wcslen(dir._data); wchar_t *f=fd.cFileName, *p=dir._data+dl; auto*e=si.ext.v;
 	std::vector<path> sdir; if(si.b.recursive) sdir.reserve(16);
 
 	while(FindNextFileW(h,&fd))
@@ -537,7 +527,7 @@ __noinline void path::scan_recursive( path dir, path::scan_t& si ) const
 		size_t fl=wcslen(f);
 		if((fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)==0) // files
 		{
-			if(si.ext.v){size_t e=0;for(;e<si.ext.l;e++)if(__wcsiext(f,fl,si.ext.v[e].ptr,si.ext.v[e].size))break;if(e==si.ext.l)continue;}
+			if(e){size_t j=0;for(;j<si.ext.l;j++){if(e[j].size<fl&&_wcsicmp(e[j],f+fl-e[j].size)==0)break;}if(j==si.ext.l)continue;}
 			if(si.glob.l){if(si.b.glob?!glob(f,fl,si.glob.pattern,si.glob.l):__wcsistr(f,fl,si.glob.pattern,si.glob.l)==nullptr)continue;}
 			memcpy(p,f,sizeof(wchar_t)*fl); p[fl]=0; si.result.emplace_back(dir);
 		}
@@ -696,4 +686,4 @@ namespace logical
 #endif
 
 //***********************************************
-#endif // __GX_FILESYSTEM__
+#endif // __GX_FILESYSTEM_H__

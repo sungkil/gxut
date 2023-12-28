@@ -457,6 +457,6 @@ inline void clear_color(){ HANDLE h=GetStdHandle(STD_OUTPUT_HANDLE); if(!h) retu
 
 //*************************************
 } // namespace os
-
 //*************************************
+
 #endif // __GX_OS_H__

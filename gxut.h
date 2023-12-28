@@ -19,7 +19,7 @@
 #define __GXUT_H__
 
 // includes only essential header files
-#if defined(__has_include)
+#ifdef __has_include
 	#if __has_include("gxmath.h")
 		#include "gxmath.h"
 	#endif

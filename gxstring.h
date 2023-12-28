@@ -251,7 +251,6 @@ inline bool wtob( const wchar_t* w ){		return w&&w[0]&&(_wcsicmp(w,L"true")==0||
 inline uint wtou( const wchar_t* w ){		return atou(wtoa(w)); }
 inline int64_t wtoill( const wchar_t* w ){	return atoill(wtoa(w)); }
 inline uint64_t wtoull( const wchar_t* w ){	return atoull(wtoa(w)); }
-
 inline int2 wtoi2( const wchar_t* w ){		return atoi2(wtoa(w)); }
 inline int3 wtoi3( const wchar_t* w ){		return atoi3(wtoa(w)); }
 inline int4 wtoi4( const wchar_t* w ){		return atoi4(wtoa(w)); }
