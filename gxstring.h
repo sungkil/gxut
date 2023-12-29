@@ -546,18 +546,34 @@ __noinline T strlcss( const std::vector<T>& v ) // longest common substring
 // 18. GUID conversion
 
 #if defined(GUID_DEFINED)
-__noinline const wchar_t* guidtow( const GUID& guid )
+
+struct guid_t : public GUID
 {
-	wchar_t* b=_wcsbuf(64); auto* d=guid.Data4;
-	swprintf_s( b, 64, L"{%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}",guid.Data1,guid.Data2,guid.Data3,d[0],d[1],d[2],d[3],d[4],d[5],d[6],d[7] );
-	return b;
-}
-__noinline const char* guidtoa( const GUID& guid )
-{
-	char* b=_strbuf(64); auto* d=guid.Data4;
-	sprintf_s( b, 64, "{%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}",guid.Data1,guid.Data2,guid.Data3,d[0],d[1],d[2],d[3],d[4],d[5],d[6],d[7] );
-	return b;
-}
+	guid_t() noexcept { memset(this,0,sizeof(GUID)); }
+	guid_t( const GUID& other ) noexcept { operator=(other); }
+	guid_t( GUID&& other ) noexcept { operator=(other); }
+	guid_t( const wchar_t* other ) noexcept { operator=(other); }
+	guid_t( const char* other ) noexcept { operator=(other); }
+	explicit guid_t( const std::wstring& other ) noexcept { operator=(other.c_str()); }
+	explicit guid_t( const std::string& other ) noexcept { operator=(other.c_str()); }
+
+	guid_t& operator=( const GUID& other ) noexcept { memcpy(this,&other,sizeof(GUID)); return *this; }
+	guid_t& operator=( GUID&& other ) noexcept { auto t=*this; memcpy(this,&other,sizeof(GUID)); memcpy(&other,&t,sizeof(GUID)); return *this; }
+	guid_t& operator=( const wchar_t* other ) noexcept { auto* d=Data4; swscanf_s( other, L"{%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}", &Data1,&Data2,&Data3,d,d+1,d+2,d+3,d+4,d+5,d+6,d+7 ); return *this; }
+	guid_t& operator=( const char* other ) noexcept { auto* d=Data4; sscanf_s( other, "{%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}", &Data1,&Data2,&Data3,d,d+1,d+2,d+3,d+4,d+5,d+6,d+7 ); return *this; }
+	guid_t& operator=( const std::wstring& other ) noexcept { return operator=(other.c_str()); }
+	guid_t& operator=( const std::string& other ) noexcept { return operator=(other.c_str()); }
+	bool operator==( const GUID& other ) const noexcept { return memcmp(this,&other,sizeof(GUID))==0; }
+	bool operator!=( const GUID& other ) const noexcept { return memcmp(this,&other,sizeof(GUID))!=0; }
+
+	operator GUID (){ return *this; }
+	operator const GUID () const { return *this; }
+	operator bool() const { static decltype(Data4) z={}; return Data1||Data2||Data3||memcmp(Data4,&z,sizeof(z))!=0; }
+	const wchar_t* c_str() const { wchar_t* b=_wcsbuf(64); auto* d=Data4; swprintf_s( b, 64, L"{%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}", Data1,Data2,Data3,d[0],d[1],d[2],d[3],d[4],d[5],d[6],d[7] ); return b; }
+	const char* wtoa() const { char* b=_strbuf(64); auto* d=Data4; sprintf_s( b, 64, "{%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}", Data1,Data2,Data3,d[0],d[1],d[2],d[3],d[4],d[5],d[6],d[7] ); return b; }
+	void clear(){ memset(this,0,sizeof(GUID)); }
+};
+
 #endif
 
 //***********************************************
