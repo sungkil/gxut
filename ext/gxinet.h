@@ -121,7 +121,7 @@ __noinline bool session_t::download_thread_func( std::vector<std::wstring> urls,
 		// modify the time stamp
 		FILETIME fnow=now();
 		dst.set_filetime(&fnow,&fnow,&f.mfiletime);
-		fprintf( stdout, "%s\n", dst.name().wtoa() );
+		// fprintf( stdout, "%s\n", dst.name().wtoa() );
 
 		return true;
 	}
