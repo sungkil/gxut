@@ -121,25 +121,23 @@ struct zip_t : public izip_t
 {
 	HZIP hzip=nullptr;
 
+	static bool cmp_signature( void* ptr ){ static uchar s[4]={0x50,0x4b,0x03,0x04}; return memcmp(ptr,s,4)==0; }
+
 	virtual ~zip_t(){ release(); }
-	zip_t( const path& file_path ){ hzip=OpenZip( file_path.absolute(), nullptr ); }
+	zip_t( const path& _file_path ){ hzip=OpenZip( file_path=_file_path.absolute(), nullptr ); if(!hzip) file_path.clear(); else _zipmtime64=FileTimeToUint64(_zipmtime=file_path.mfiletime()); }
 	zip_t( void* ptr, size_t size ){ hzip=OpenZip( ptr, uint(size), nullptr ); }
 
 	virtual void release(){ for( auto& e : entries ){ if(e.ptr){ free(e.ptr); e.ptr=nullptr; }} entries.clear(); if(hzip){ CloseZipU(hzip); hzip=nullptr; } }
-	virtual bool load(){ if(!hzip) return false; entry e; GetZipItem(hzip,-1,&e ); for(int k=0, kn=e.index;k<kn;k++){ GetZipItem( hzip, k, (ZIPENTRY*) &e); e.ptr=nullptr; e.size=0; if(!e.is_dir()) entries.emplace_back(e); } return true; }
-	virtual bool extract_to_files( path dir, const wchar_t* name=nullptr ){ bool b=false; if(!hzip) return b; for(size_t k=0;k<entries.size();k++){ auto& e=entries[k]; if(e.is_dir()||(name&&_wcsicmp(name,e.name)!=0)) continue; path p=dir+e.name; if(!p.dir().exists()) p.dir().mkdir(); UnzipItem( hzip, e.index, p ); b=true; } return b; }
-	virtual bool extract_to_memory( const wchar_t* name=nullptr )
-	{
-		if(!hzip) return false;
-		for(size_t k=0;k<entries.size();k++)
-		{
-			auto& e=entries[k]; if(e.is_dir()||e.ptr||(name&&_wcsicmp(name,e.name)!=0)) continue;
-			UnzipItem( hzip, e.index, e.ptr=malloc(e.unc_size), uint(e.size=uint(e.unc_size)) );
-		}
-		return true;
-	}
+	virtual bool load(){ if(!hzip) return false; entry e;GetZipItem(hzip,-1,&e); for(int k=0,kn=e.index;k<kn;k++){ GetZipItem( hzip, k, (ZIPENTRY*) &e); e.ptr=nullptr; e.size=0; e.mtime=_fix_dostime(e.mtime); if(!e.is_dir()) entries.emplace_back(e); } return true; }
+	virtual bool extract_to_files( path dir, const wchar_t* name=nullptr ){ bool b=false; if(!hzip) return b; for(size_t k=0;k<entries.size();k++){ auto& e=entries[k]; if(e.is_dir()||(name&&_wcsicmp(name,e.name)!=0)) continue; path p=dir+e.name; if(!p.dir().exists()) p.dir().mkdir(); UnzipItem( hzip, e.index, p ); _fix_dostime( e.mtime, p ); b=true; } return b; }
+	virtual bool extract_to_memory( const wchar_t* name=nullptr ){ if(!hzip) return false; for(size_t k=0;k<entries.size();k++){ auto& e=entries[k]; if(e.is_dir()||e.ptr||(name&&_wcsicmp(name,e.name)!=0)) continue; UnzipItem( hzip, e.index, e.ptr=malloc(e.unc_size), uint(e.size=uint(e.unc_size)) ); } return true; }
 
-	static bool cmp_signature( void* ptr ){ static uchar s[4]={0x50,0x4b,0x03,0x04}; return memcmp(ptr,s,4)==0; }
+protected:
+
+	FILETIME	_zipmtime={};	// to fix dostime error
+	uint64_t	_zipmtime64=0;	// 
+	bool		_in_dostime_error( FILETIME t ){ return (_zipmtime64&&abs(int(FileTimeToUint64(t)-_zipmtime64))<=FileTimeOffset(0,0,0,2)); }
+	FILETIME	_fix_dostime( FILETIME t, path f=L"" ){ if(!_in_dostime_error(t)) return t; if(!f.empty()&&f.exists()) f.set_filetime(nullptr,nullptr,&_zipmtime); return _zipmtime; }
 };
 
 #ifdef __7ZIP_H__
