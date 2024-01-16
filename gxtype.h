@@ -141,6 +141,10 @@ template <class T=void> struct sized_ptr_t
 template <class T> T*& safe_free( T*& p ){if(p) free(p); return p=nullptr; }
 template <class T> T*& safe_delete( T*& p ){if(p) delete p; return p=nullptr; }
 template <class T> T*& safe_release( T*& p ){if(p) p->Release(); return p=nullptr; }
+#ifdef INVALID_HANDLE_VALUE
+inline HANDLE& safe_close_handle( HANDLE& h ){ if(h!=INVALID_HANDLE_VALUE) CloseHandle(h); return h=INVALID_HANDLE_VALUE; }
+#endif
+
 // nocase/logical base template
 namespace nocase { template <class T> struct less {}; template <class T> struct equal_to {}; template <class T> struct hash {}; };
 namespace logical { template <class T> struct less {}; };
