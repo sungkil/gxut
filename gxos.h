@@ -20,6 +20,7 @@
 
 #include "gxtype.h"
 #include <time.h>
+#include <functional>
 
 #if defined(__has_include) && __has_include("gxfilesystem.h") && !defined(__GX_FILESYSTEM_H__)
 	#include "gxfilesystem.h"
@@ -325,26 +326,87 @@ inline HWND find_window( const wchar_t* filter )
 
 //*************************************
 // process
-__noinline bool create_process( const wchar_t* app=nullptr, const wchar_t* arguments=nullptr, bool show_window=true, bool wait_finish=false )
+__noinline bool create_process( const wchar_t* app, const wchar_t* args=nullptr,
+	bool wait=true, bool windowed=false, bool redir=false, uint* redir_count=nullptr, DWORD priority=NORMAL_PRIORITY_CLASS )
 {
-	// static buffers
-	static wchar_t *cmd=(wchar_t*)malloc(sizeof(wchar_t)*4096), *buf=(wchar_t*)malloc(sizeof(wchar_t)*4096);
-
+	// buffers
+	wchar_t *cmd=(wchar_t*)malloc(sizeof(wchar_t)*4096), *buf=(wchar_t*)malloc(sizeof(wchar_t)*4096);
+	
 	// prioritize com against exe for no-extension apps
-	if(!app&&arguments&&*arguments!=L'\"')
+	if(!app&&args&&*args!=L'\"')
 	{
-		wcscpy(buf,arguments); wchar_t *ctx=nullptr, *token=wcstok_s(buf,L" \t\n",&ctx); path t=path(token).to_backslash(), e=env::where(t);
-		if(!t.exists()&&t.ext().empty()&&!e.empty()&&e.ext()==L"com") arguments=wcscpy(buf,wcscat(wcscat(wcscpy(cmd,token),L".com "),buf+wcslen(token)+1)); // use cmd as temp
+		wcscpy(buf,args); wchar_t *ctx=nullptr, *token=wcstok_s(buf,L" \t\n",&ctx); path t=path(token).to_backslash(), e=env::where(t);
+		if(!t.exists()&&t.ext().empty()&&!e.empty()&&e.ext()==L"com") args=wcscpy(buf,wcscat(wcscat(wcscpy(cmd,token),L".com "),buf+wcslen(token)+1)); // use cmd as temp
 	}
 
 	// build cmdline, which should also embed app path
-	*cmd=0; bool p=app&&*app,g=arguments&&*arguments;
-	if(p) wcscpy(cmd,path(app).auto_quote().c_str()); if(p&&g) wcscat(cmd,L" "); if(g) wcscat(cmd,arguments);
+	*cmd=0; bool p=app&&*app,g=args&&*args;
+	if(p) wcscpy(cmd,path(app).auto_quote().c_str()); if(p&&g) wcscat(cmd,L" "); if(g) wcscat(cmd,args);
+
+	// startup attributes
+	STARTUPINFOW si={sizeof(si)};
+	si.dwFlags=STARTF_USESHOWWINDOW;
+	si.wShowWindow=windowed?SW_SHOW:SW_HIDE;
+
+	// prepare redirection
+	HANDLE stdout_read=INVALID_HANDLE_VALUE;	// parent process's stdout read handle
+	HANDLE stdout_write=INVALID_HANDLE_VALUE;	// child process' stdout write handle
+	if(redir)
+	{
+		static const int REDIR_BUFFER_SIZE = 1<<24;	// 16 MB should be enough for buffering; otherwise, stdout will not be written no more, which printf hangs
+
+		SECURITY_DESCRIPTOR sd; InitializeSecurityDescriptor(&sd,SECURITY_DESCRIPTOR_REVISION); SetSecurityDescriptorDacl(&sd,true,NULL,false);
+		SECURITY_ATTRIBUTES sa={sizeof(SECURITY_ATTRIBUTES),&sd,TRUE/*inheritance*/};
+		if(!CreatePipe( &stdout_read, &stdout_write, &sa, REDIR_BUFFER_SIZE )){ printf( "[redir] CreatePipe(stdout) failed: %s\n", wtoa(os::get_last_error()) ); return false; }
+		if(stdout_read==INVALID_HANDLE_VALUE||stdout_write==INVALID_HANDLE_VALUE){ printf( "[redir] CreatePipe(stdout) failed: %s\n", wtoa(os::get_last_error()) ); return false; }
+		if(!SetHandleInformation(stdout_read,HANDLE_FLAG_INHERIT,0)){ printf( "[redir] SetHandleInformation() failed: %s\n", wtoa(os::get_last_error()) ); return false; }
+
+		// additional configuration for non-buffered IO
+		setvbuf( stdout, nullptr, _IONBF, 0 );	// absolutely needed
+		setvbuf( stderr, nullptr, _IONBF, 0 );	// absolutely needed
+		std::ios::sync_with_stdio();
+
+		// override startup attributes
+		si.hStdError	= stdout_write;
+		si.hStdOutput	= stdout_write;
+		si.hStdInput	= INVALID_HANDLE_VALUE;
+		si.dwFlags		= si.dwFlags|STARTF_USESTDHANDLES;
+	}
 
 	// create process and wait if necessary
-	PROCESS_INFORMATION pi={}; STARTUPINFOW si={}; si.cb=sizeof(si); si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=show_window?SW_SHOW:SW_HIDE;
-	if(!CreateProcessW( app, (LPWSTR)cmd, nullptr, nullptr, FALSE, NORMAL_PRIORITY_CLASS, nullptr, nullptr, &si, &pi )){ ebox(get_last_error()); return false; }
-	if(wait_finish&&pi.hProcess) WaitForSingleObject(pi.hProcess,INFINITE); if(pi.hThread) CloseHandle(pi.hThread); if(pi.hProcess) CloseHandle(pi.hProcess);
+	PROCESS_INFORMATION pi={};
+	BOOL bInheritHandles = redir?TRUE:FALSE;
+	if(!CreateProcessW( app, (LPWSTR)cmd, nullptr, nullptr, bInheritHandles, priority, nullptr, nullptr, &si, &pi )||!pi.hProcess){ ebox(get_last_error()); return false; }
+
+	if(redir)
+	{
+		static char* buff=nullptr; static size_t blen=0;
+		DWORD n_avail=0, n_read=0, read_count=0;
+		while( PeekNamedPipe( stdout_read, nullptr, 0, nullptr, &n_avail, nullptr ))
+		{
+			DWORD exit; GetExitCodeProcess(pi.hProcess,&exit); if(exit!= STILL_ACTIVE) break;
+			if(n_avail==0){ Sleep(1); continue; }
+			if(blen<n_avail) buff = (char*) realloc(buff,((blen=n_avail)+1)*sizeof(char));
+			if(!ReadFile(stdout_read, buff, n_avail, &n_read, nullptr)) return false; if(n_read==0) continue;
+			read_count += n_read;
+			buff[n_read]=0;
+			printf( buff );
+		}
+		if(redir_count) *redir_count = read_count;
+
+		safe_close_handle( pi.hThread );
+		safe_close_handle( pi.hProcess );
+		safe_close_handle( stdout_read );
+		safe_close_handle( stdout_write );
+	}
+	else if(wait)
+	{
+		WaitForSingleObject(pi.hProcess,INFINITE);
+		safe_close_handle( pi.hThread );
+		safe_close_handle( pi.hProcess );
+	}
+
+	free(cmd); free(buf);
 	return true;
 }
 
