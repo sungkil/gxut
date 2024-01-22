@@ -50,13 +50,13 @@ struct argument_t
 	argument_t& set_default( const char* v ){ value=atow(v); return *this; }
 	argument_t& set_default( const wchar_t* v ){ value=v; return *this; }
 	argument_t& set_optional(){ optional=true; return *this; } 
-
+	
 protected:
 	std::string		name;
 	std::wstring	value;
 	std::string		shelp;
 	bool			optional=false;
-
+	
 	friend struct parser_t;
 	bool value_exists() const { return !value.empty(); }
 };
@@ -69,6 +69,7 @@ struct option_t
 	option_t& add_break( int count=1 ){ break_count+=count; return* this; }
 	option_t& set_default( const char* arg ){ value=atow(arg); return *this; }
 	option_t& set_default( const wchar_t* arg ){ value=arg; return *this; }
+	option_t& set_hidden(){ hidden=true; return *this; } 
 
 protected:
 	friend struct parser_t;
@@ -85,6 +86,7 @@ protected:
 	struct lless { bool operator()(const std::string& a,const std::string& b)const{return a.size()!=b.size()?a.size()<b.size():_stricmp(a.c_str(),b.c_str())<0;}};
 	std::set<std::string,lless>	names;				// multiple names allowed for a single option
 	std::string					shelp;				// help string
+	bool						hidden=false;		// hide in usage()
 	int							break_count=0;		// post-line breaks
 	int							subarg_count=0;		// required subarg counter
 	std::vector<std::string>	constraints;		// value constraints: allow values only in this set
@@ -358,6 +360,7 @@ inline bool parser_t::usage( const char* alt_name )
 	for( auto* o : options )
 	{
 		if(o->empty()){ opts.emplace_back( "", "" ); continue; } // simple line break
+		if(o->hidden) continue;
 
 		auto* short_name = o->short_name();
 		std::string front = short_name&&short_name[0]?format("-%s ",short_name):"   ";
