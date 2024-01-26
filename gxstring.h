@@ -431,7 +431,7 @@ __noinline std::vector<const T*> explode_conservative( const T* _Src, T _Delim )
 }
 
 //***********************************************
-// 13. substring, replace
+// 13. substring, replace, escape
 
 template <class T>
 __noinline const T* substr( const T* _Src, int _Pos, int _Count=0 )
@@ -470,6 +470,16 @@ __noinline const T* str_replace( const T* _Src, T _Find, T _Replace )
 	T *s=__tstrdup(_Src), *p=s;
 	for(int k=0,l=int(strlen(s));k<l;k++,p++) if(*p==_Find) *p=_Replace;
 	return s;
+}
+
+template <class T>
+__noinline const T* str_escape( const T* _Src )
+{
+	const T* t = str_replace( _Src, _strcvt<T>("\\"), _strcvt<T>("\\\\") );
+	t = str_replace( t, _strcvt<T>("\""), _strcvt<T>("\\\"") );
+	t = str_replace( t, _strcvt<T>("\'"), _strcvt<T>("\\\'") );
+	t = str_replace( t, _strcvt<T>("\t"), _strcvt<T>("\\\t") );
+	return t;
 }
 
 //***********************************************
