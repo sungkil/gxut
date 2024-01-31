@@ -77,7 +77,9 @@ namespace os {
 //*************************************
 
 // win32 utilities
-__noinline const wchar_t* get_last_error(){ static wchar_t buff[4096]={};DWORD e=GetLastError();wchar_t *s=nullptr;FormatMessageW( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,e,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPWSTR)&s,0,nullptr);wsprintf(buff,L"%s (code=%x)",s,uint(e));LocalFree(s);return buff; }
+template <class T=wchar_t> __noinline const T* get_last_error();
+template<> __noinline const wchar_t* get_last_error<wchar_t>(){ static wchar_t buff[4096]={};DWORD e=GetLastError();wchar_t *s=nullptr;FormatMessageW( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,e,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPWSTR)&s,0,nullptr);wsprintf(buff,L"%s (code=%x)",s,uint(e));LocalFree(s);return buff; }
+template<> __noinline const char* get_last_error<char>(){ static char buff[4096]={};DWORD e=GetLastError();char *s=nullptr;FormatMessageA( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,e,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPSTR)&s,0,nullptr);sprintf(buff,"%s (code=%x)",s,uint(e));LocalFree(s);return buff; }
 __noinline void flush_message( int sleepTime=1 ){MSG m;for(int k=0;k<100&&PeekMessageW(&m,nullptr,0,0,PM_REMOVE);k++)SendMessage(m.hwnd,m.message,m.wParam,m.lParam);if(sleepTime>=0) Sleep(sleepTime);}
 
 inline void exit( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(size_t(_vscprintf(fmt,a))+1); vsprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); fprintf( stdout, "[%s] %s", path::module_path().name(false).wtoa(), &buff[0] ); ::exit(EXIT_FAILURE); }
@@ -357,9 +359,9 @@ __noinline bool create_process( const wchar_t* app, const wchar_t* args=nullptr,
 
 		SECURITY_DESCRIPTOR sd; InitializeSecurityDescriptor(&sd,SECURITY_DESCRIPTOR_REVISION); SetSecurityDescriptorDacl(&sd,true,NULL,false);
 		SECURITY_ATTRIBUTES sa={sizeof(SECURITY_ATTRIBUTES),&sd,TRUE/*inheritance*/};
-		if(!CreatePipe( &stdout_read, &stdout_write, &sa, REDIR_BUFFER_SIZE )){ printf( "[redir] CreatePipe(stdout) failed: %s\n", wtoa(os::get_last_error()) ); return false; }
-		if(stdout_read==INVALID_HANDLE_VALUE||stdout_write==INVALID_HANDLE_VALUE){ printf( "[redir] CreatePipe(stdout) failed: %s\n", wtoa(os::get_last_error()) ); return false; }
-		if(!SetHandleInformation(stdout_read,HANDLE_FLAG_INHERIT,0)){ printf( "[redir] SetHandleInformation() failed: %s\n", wtoa(os::get_last_error()) ); return false; }
+		if(!CreatePipe( &stdout_read, &stdout_write, &sa, REDIR_BUFFER_SIZE )){ printf( "[redir] CreatePipe(stdout) failed: %s\n", os::get_last_error<char>() ); return false; }
+		if(stdout_read==INVALID_HANDLE_VALUE||stdout_write==INVALID_HANDLE_VALUE){ printf( "[redir] CreatePipe(stdout) failed: %s\n", os::get_last_error<char>() ); return false; }
+		if(!SetHandleInformation(stdout_read,HANDLE_FLAG_INHERIT,0)){ printf( "[redir] SetHandleInformation() failed: %s\n", os::get_last_error<char>() ); return false; }
 
 		// additional configuration for non-buffered IO
 		setvbuf( stdout, nullptr, _IONBF, 0 );	// absolutely needed
@@ -554,7 +556,7 @@ namespace reg { // read-only registry reader
 template <HKEY root=HKEY_CLASSES_ROOT> // HKEY_CLASSES_ROOT, HKEY_LOCAL_MACHINE, ...
 struct key_t
 {
-	key_t( const wchar_t* fmt, ... ){ if(!fmt) return; va_list a; va_start(a,fmt); size_t len=size_t(_vscwprintf(fmt,a)); wchar_t* b=_wcsbuf(len); vswprintf_s(b,len+1,fmt,a); va_end(a); this->key=path(b).canonical().remove_backslash().c_str(); }
+	key_t( const wchar_t* fmt, ... ){ if(!fmt) return; va_list a; va_start(a,fmt); size_t len=size_t(_vscwprintf(fmt,a)); std::vector<wchar_t> b; b.resize(len+1,0); vswprintf_s(b.data(),len+1,fmt,a); va_end(a); this->key=path(b.data()).canonical().remove_backslash().c_str(); }
 	~key_t(){ if(hkey) RegCloseKey(hkey); }
 	
 	operator bool() const { return hkey!=nullptr; }
@@ -567,7 +569,7 @@ struct key_t
 	{
 		std::vector<BYTE> v; DWORD t; if(!_query( name, &v, &t )) return L"";
 		if(t==REG_SZ)		return std::wstring((wchar_t*)v.data());
-		if(t==REG_DWORD)	return utow(*((DWORD*)v.data()));
+		if(t==REG_DWORD){ wchar_t b[256]; swprintf(b,L"%u",*((DWORD*)v.data())); return b; }
 		return L"";
 	}
 
@@ -575,7 +577,7 @@ struct key_t
 	{
 		std::vector<BYTE> v; DWORD t; if(!_query( name, &v, &t )) return 0;
 		if(t==REG_DWORD)	return *((DWORD*)v.data());
-		if(t==REG_SZ)		return wtou((wchar_t*)v.data());
+		if(t==REG_SZ)		return DWORD(_wtoi((wchar_t*)v.data()));
 		return 0;
 	}
 
