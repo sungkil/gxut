@@ -279,7 +279,7 @@ inline const char* tohex( uint4 u ){ return tohex(&u,sizeof(u)); }
 // 11. trim: delimiters of strings or characters
 
 template <class T>
-inline const T* ltrim( const T* src, const T* delims=_strcvt<T>(" \t\n") )
+inline const T* ltrim( const T* src, const T* delims=_strcvt<T>(" \t\r\n") )
 {
 	if(!src||!src[0]) return reinterpret_cast<const T*>(L"");
 	return __tstrdup(src,strlen(src))+strspn(src,delims);
@@ -293,7 +293,7 @@ inline const T* ltrim( const T* src, T delim )
 }
 
 template <class T>
-inline const T* rtrim( const T* src, const T* delims=_strcvt<T>(" \t\n") )
+inline const T* rtrim( const T* src, const T* delims=_strcvt<T>(" \t\r\n") )
 {
 	if(!src||!src[0]) return reinterpret_cast<const T*>(L"");
 	return __tstrdup(src,strlen(src)-_strrspn(src,delims));
@@ -308,7 +308,7 @@ inline const T* rtrim( const T* src, T delim )
 }
 
 template <class T>
-inline const T* trim( const T* src, const T* delims=_strcvt<T>(" \t\n") )
+inline const T* trim( const T* src, const T* delims=_strcvt<T>(" \t\r\n") )
 {
 	if(!src||!src[0]) return reinterpret_cast<const T*>(L"");
 	const T* r=rtrim(src,delims); return r+(*r?strspn(src,delims):0);
@@ -325,7 +325,7 @@ inline const T* trim( const T* src, T delim )
 
 // in-place trim
 template <class T>
-inline T* itrim( T* src, const T* delims=_strcvt<T>(" \t\n") )
+inline T* itrim( T* src, const T* delims=_strcvt<T>(" \t\r\n") )
 {
 	if(!src||!src[0]) return src; // return as-is
 	src += strspn(src,delims);
@@ -351,7 +351,7 @@ inline const T* trim_comment( const T* src, const char* marker="#" )
 		}
 		if(j<clen){buff[slen=k]=0;break;}
 	}
-	buff[slen-_strrspn(buff,_strcvt<T>(" \t\n"))]=0; // rtrim
+	buff[slen-_strrspn(buff,_strcvt<T>(" \t\r\n"))]=0; // rtrim
 	return buff;
 }
 
@@ -368,7 +368,7 @@ __noinline const T* join( std::vector<std::basic_string<T,std::char_traits<T>,st
 
 template <class T>
 __noinline std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T> > >
-explode( const T* src, const T* seps=_strcvt<T>(" \t\n") )
+explode( const T* src, const T* seps=_strcvt<T>(" \t\r\n") )
 {
 	std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T> > > vs; vs.reserve(32);
 	T *ctx=nullptr, *token = strtok_s(__tstrdup(src),seps,&ctx);
@@ -378,7 +378,7 @@ explode( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 
 template <class T>
 __noinline std::set<std::basic_string<T,std::char_traits<T>,std::allocator<T> > >
-explode_set( const T* src, const T* seps=_strcvt<T>(" \t\n") )
+explode_set( const T* src, const T* seps=_strcvt<T>(" \t\r\n") )
 {
 	std::set<std::basic_string<T,std::char_traits<T>,std::allocator<T> > > vs;
 	T *ctx=nullptr, *token = strtok_s(__tstrdup(src), seps, &ctx);
@@ -387,7 +387,7 @@ explode_set( const T* src, const T* seps=_strcvt<T>(" \t\n") )
 }
 
 template <class T>
-__noinline std::vector<int> explodei( const T* src, const T* seps=_strcvt<T>(" \t\n") )
+__noinline std::vector<int> explodei( const T* src, const T* seps=_strcvt<T>(" \t\r\n") )
 {
 	std::vector<int> vs; vs.reserve(32);
 	T *ctx=nullptr, *token = strtok_s(__tstrdup(src), seps, &ctx);
@@ -396,7 +396,7 @@ __noinline std::vector<int> explodei( const T* src, const T* seps=_strcvt<T>(" \
 }
 
 template <class T>
-__noinline std::vector<unsigned int> explodeu( const T* src, const T* seps=_strcvt<T>(" \t\n") )
+__noinline std::vector<unsigned int> explodeu( const T* src, const T* seps=_strcvt<T>(" \t\r\n") )
 {
 	std::vector<unsigned int> vs; vs.reserve(32);
 	T *ctx=nullptr, *token = strtok_s(__tstrdup(src), seps, &ctx);
@@ -405,7 +405,7 @@ __noinline std::vector<unsigned int> explodeu( const T* src, const T* seps=_strc
 }
 
 template <class T>
-__noinline std::vector<float> explodef( const T* src, const T* seps=_strcvt<T>(" \t\n") )
+__noinline std::vector<float> explodef( const T* src, const T* seps=_strcvt<T>(" \t\r\n") )
 {
 	std::vector<float>  vs; vs.reserve(32);
 	T *ctx=nullptr, *token = strtok_s(__tstrdup(src), seps, &ctx);
@@ -414,7 +414,7 @@ __noinline std::vector<float> explodef( const T* src, const T* seps=_strcvt<T>("
 }
 
 template <class T>
-__noinline std::vector<double> exploded( const T* src, const T* seps=_strcvt<T>(" \t\n") )
+__noinline std::vector<double> exploded( const T* src, const T* seps=_strcvt<T>(" \t\r\n") )
 {
 	std::vector<double>  vs; vs.reserve(32);
 	T *ctx=nullptr, *token = strtok_s(__tstrdup(src), seps, &ctx);
