@@ -257,6 +257,8 @@ struct path
 	bool is_junction() const {	if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_REPARSE_POINT)!=0; }
 	bool is_ssh() const {		if(!*_data) return false; return wcsstr(_data+2,L":\\")!=nullptr||wcsstr(_data+2,L":/")!=nullptr; }
 	bool is_synology() const {	if(!*_data) return false; return __wcsistr(_data,L":\\volume")!=nullptr||__wcsistr(_data,L":/volume")!=nullptr; }
+	bool is_pipe() const {		if(!*_data) return false; return wcscmp(_data,L"-")==0||_wcsnicmp(_data,L"pipe:",5)==0; }
+	bool is_http_url() const {	if(!*_data) return false; return _wcsnicmp(_data,L"http://",7)==0||_wcsnicmp(_data,L"https://",8)==0; }
 
 	// set attributes
 	void set_hidden( bool h ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(_data,a=h?(a|FILE_ATTRIBUTE_HIDDEN):(a^FILE_ATTRIBUTE_HIDDEN)); }
@@ -293,9 +295,9 @@ struct path
 	inline bool is_unc() const { return (_data[0]==L'\\'&&_data[1]==L'\\')||(_data[0]==L'/'&&_data[1]==L'/'); }
 	inline bool is_rsync() const { auto* p=wcsstr(_data,L":\\"); if(!p) p=wcsstr(_data,L":/"); return p!=nullptr&&p>_data+1; }
 	inline bool is_subdir( const path& ancestor ) const { return _wcsnicmp(_data,ancestor._data,ancestor.size())==0; } // do not check existence
-	inline path absolute( const wchar_t* base=L"" ) const { if(!*_data) return *this; return _wfullpath(__wcsbuf(),(!*base||is_absolute())?_data:wcscat(wcscpy(__wcsbuf(),path(base).add_backslash()),_data),capacity); }	// do not directly return for non-canonicalized path
+	inline path absolute( const wchar_t* base=L"" ) const { if(!*_data||is_pipe()||is_http_url()) return *this; return _wfullpath(__wcsbuf(),(!*base||is_absolute())?_data:wcscat(wcscpy(__wcsbuf(),path(base).add_backslash()),_data),capacity); }	// do not directly return for non-canonicalized path
 	inline path relative( const wchar_t* from=L"", bool first_dot=false ) const;
-	inline path canonical() const { path p(*this); p.canonicalize(); return p; } // not necessarily absolute: return relative path as well
+	inline path canonical() const { path p(*this); if(p.is_pipe()||p.is_http_url()) return p; p.canonicalize(); return p; } // not necessarily absolute: return relative path as well
 
 	// time stamp
 	static const char* timestamp( const struct tm* t ){char* buff=__strbuf();sprintf(buff,"%04d%02d%02d%02d%02d%02d",t->tm_year+1900,t->tm_mon+1,t->tm_mday,t->tm_hour,t->tm_min,t->tm_sec);return buff;}
@@ -602,7 +604,8 @@ __noinline path path::temp( bool local, path local_dir )
 
 __noinline path path::relative( const wchar_t* from, bool first_dot ) const
 {
-	if(is_relative()) return *this;
+	if(is_pipe()||is_http_url()) return *this;
+	if(is_relative()) return !first_dot?this->remove_first_dot():*this;
 
 	path from_dir = (!from||!from[0]) ? path::cwd() : path(from).dir().absolute();
 	if(::tolower(from_dir[0])!=::tolower(this->_data[0])) return *this; // different drive
@@ -619,7 +622,7 @@ __noinline path path::relative( const wchar_t* from, bool first_dot ) const
 	result.canonicalize();
 
 	// 3. if empty dir, then attach ./
-	if(first_dot&&(result[0]==0||result[0]!=L'.')) result=path(".\\")+result;
+	if(first_dot){ if(result[0]==0||result[0]!=L'.') result=path(".\\")+result; }
 
 	wchar_t b=back();
 	return b==L'\\'||b==L'/'?result:result+name();

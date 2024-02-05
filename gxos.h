@@ -369,7 +369,7 @@ __noinline bool create_process( const wchar_t* app, const wchar_t* args=nullptr,
 		std::ios::sync_with_stdio();
 
 		// override startup attributes
-		si.hStdError	= stdout_write;
+		si.hStdError	= INVALID_HANDLE_VALUE; // ignore stderr: was stdout_write
 		si.hStdOutput	= stdout_write;
 		si.hStdInput	= INVALID_HANDLE_VALUE;
 		si.dwFlags		= si.dwFlags|STARTF_USESTDHANDLES;

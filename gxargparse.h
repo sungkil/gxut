@@ -266,7 +266,7 @@ inline bool parser_t::parse_impl( int argc, const wchar_t** argv )
 		{
 			attrib.b.help_exists=true;
 		}
-		else if(a[0]!=L'-')
+		else if(a[0]!=L'-'||wcscmp(a,L"-")==0) // accept stdin as argument
 		{
 			if(r>=int(arguments.size())) arguments.push_back(new argument_t()); // increase array to accept excessive arguments
 			arguments[r++]->value = a;
