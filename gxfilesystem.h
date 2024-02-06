@@ -48,6 +48,10 @@ static const uint64_t DefaultFileTimeOffset = FileTimeOffset(0,0,0,30); // serve
 inline bool FileTimeGreater( FILETIME f1, FILETIME f2, int64_t offset=DefaultFileTimeOffset ){ return FileTimeToUint64(f1)>FileTimeToUint64(f2)+offset; } // do not make FileTimeLess(), which causes confusion in use cases
 
 //***********************************************
+// posix-like or std::filesystem-like utilities
+inline bool is_fifo( FILE* fp ){ if(!fp) return false; struct stat s; return fstat(_fileno(fp),&s)==0?(s.st_mode&_S_IFIFO?true:false):false; }
+
+//***********************************************
 // common constants
 static const int GX_MAX_PATH = 1024;	// MAX_PATH == 260
 
