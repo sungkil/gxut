@@ -133,9 +133,9 @@ inline const wchar_t* var( const wchar_t* key )
 	return &buff[0];
 }
 
-inline const std::vector<path>& paths()
+inline std::vector<path> paths()
 {
-	static std::vector<path> v; v.reserve(64); if(!v.empty()) return v;
+	std::vector<path> v; v.reserve(64);
 	wchar_t* buff = (wchar_t*) var( L"PATH" ); if(!buff||!*buff) return v;
 	for(wchar_t *ctx=nullptr,*token=wcstok_s(buff,L";",&ctx);token;token=wcstok_s(nullptr,L";",&ctx))
 	{
@@ -144,6 +144,29 @@ inline const std::vector<path>& paths()
 		if(t.is_absolute()&&t.exists()) v.emplace_back(t);
 	}
 	return v;
+}
+
+inline void add_path( path d )
+{
+	if(d.relative()) d=d.absolute(); else d=d.canonical();
+	for( auto& f : paths() ) if(f==d) return; // skip existing dir
+	std::wstring v = std::wstring(d.c_str()) + L";";
+	v += var(L"PATH");
+	SetEnvironmentVariableW( L"PATH", v.c_str() );
+}
+
+inline void add_paths( const std::vector<path>& dirs )
+{
+	auto ps = paths();
+	std::wstring v;
+	for( auto d : dirs )
+	{
+		if(d.relative()) d=d.absolute(); else d=d.canonical();
+		for( auto& f : ps ) if(f==d) continue; // skip existing dir
+		v += d; v += L';';
+	}
+	v += var(L"PATH");
+	SetEnvironmentVariableW( L"PATH", v.c_str() );
 }
 
 inline path where( path file_name )

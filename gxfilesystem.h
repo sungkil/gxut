@@ -252,7 +252,7 @@ struct path
 	inline void		clear_cache() const { attrib_t* a=(attrib_t*)(_data+capacity); memset(a,0,sizeof(attrib_t)); a->dwFileAttributes=INVALID_FILE_ATTRIBUTES; }
 
 	// get attributes
-	bool exists() const {		if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES; }
+	bool exists() const {		if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES||is_pipe()||is_http_url(); } // always return true for pipe or url
 	bool is_dir() const {		if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_DIRECTORY)!=0; }
 	bool is_root_dir() const {	if(!*_data) return false; size_t l=length(); return is_dir()&&l<4&&l>1&&_data[1]==L':'; }
 	bool is_hidden() const {	if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_HIDDEN)!=0; }
