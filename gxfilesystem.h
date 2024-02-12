@@ -214,7 +214,7 @@ struct path
 	path add_slash()		const { path p(*this); size_t l=wcslen(p._data); if(l&&p._data[l-1]=='\\') p._data[l-1]='/'; else if(l&&p._data[l-1]!='/'){p._data[l]='/';p._data[l+1]=L'\0';} return p; }
 	path remove_backslash()	const { path p(*this); size_t l=wcslen(p._data); if(l&&(p._data[l-1]=='\\'||p._data[l-1]=='/')) p._data[l-1]=L'\0'; return p; }
 	path remove_slash()		const { path p(*this); size_t l=wcslen(p._data); if(l&&(p._data[l-1]=='\\'||p._data[l-1]=='/')) p._data[l-1]=L'\0'; return p; }
-	path auto_quote()		const { if(!*_data||(_data[0]==L'\"'&&_data[wcslen(_data)-1]==L'\"')) return *this; auto* t=__wcsbuf(); size_t l=wcslen(_data); memcpy(t,_data,l*sizeof(wchar_t)); if(t[l]==L' '||t[l]==L'\t'||t[l]==L'\n') t[l]=0; if(t[0]==L' '||t[0]==L'\t'||t[0]==L'\n') t++; if(!wcschr(t,L' ')&&!wcschr(t,L'\t')&&!wcschr(t,L'\n')) return *this; path p; p[0]=L'\"'; memcpy(p._data+1,_data,l*sizeof(wchar_t)); p[l+1]=L'\"'; p[l+2]=0; return p; }
+	path auto_quote()		const { if(!*_data||(_data[0]==L'\"'&&_data[wcslen(_data)-1]==L'\"')) return *this; auto* t=__wcsbuf(); size_t l=wcslen(_data); memcpy(t,_data,l*sizeof(wchar_t)); if(t[l]==L' '||t[l]==L'\t'||t[l]==L'\n') t[l]=0; if(t[0]==L' '||t[0]==L'\t'||t[0]==L'\n') t++; if(t[0]!=L'-'&&!wcschr(t,L' ')&&!wcschr(t,L'\t')&&!wcschr(t,L'\n')&&!wcschr(t,L'|')&&!wcschr(t,L'&')&&!wcschr(t,L'<')&&!wcschr(t,L'>')) return *this; path p; p[0]=L'\"'; memcpy(p._data+1,_data,l*sizeof(wchar_t)); p[l+1]=L'\"'; p[l+2]=0; return p; }
 	path unix()				const {	path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; if(p._data[1]==L':'){ p._data[1]=wchar_t(::tolower(p._data[0])); p._data[0]=L'/'; } return p; }
 	path cygwin()			const { path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; path p2; swprintf_s( p2, capacity, L"/cygdrive/%c%s", ::tolower(p[0]), p._data+2 ); return p2; }
 
@@ -510,10 +510,9 @@ __noinline bool path::iglob( const wchar_t* str, size_t slen, const wchar_t* pat
 template <bool recursive> __noinline
 std::vector<path> path::scan( const wchar_t* ext_filter, const wchar_t* pattern, bool b_subdirs ) const
 {
-	if(!is_dir()) return std::vector<path>{};
+	path src=empty()?path(L".\\"):(is_relative()?absolute(L".\\"):*this).add_backslash(); if(!src.is_dir()) return std::vector<path>{};
 	std::vector<std::wstring> exts; if(ext_filter&&ext_filter[0]){ wchar_t ef[4096]={}, *ctx=nullptr; wcscpy(ef,ext_filter); for(wchar_t* e=wcstok_s(ef,L";",&ctx);e;e=wcstok_s(nullptr,L";",&ctx)) if(e[0]) exts.push_back(std::wstring(L".")+e); }
 	std::vector<sized_ptr_t<wchar_t>> eptr; for( auto& e:exts ) eptr.emplace_back(sized_ptr_t<wchar_t>{(wchar_t*)e.c_str(),e.size()});
-	path src=(is_relative()?absolute(L".\\"):*this).add_backslash();
 	scan_t si;
 	si.b.recursive=recursive; si.b.subdirs=b_subdirs; si.b.dir=recursive||b_subdirs; si.b.glob=pattern&&(wcschr(pattern,L'*')||wcschr(pattern,L'?'));
 	si.ext.v=eptr.size()>0?&eptr[0]:nullptr; si.ext.l=eptr.size();
@@ -555,8 +554,7 @@ __noinline void path::scan_recursive( path dir, path::scan_t& si ) const
 template <bool recursive> __noinline
 std::vector<path> path::subdirs( const wchar_t* pattern ) const
 {
-	if(!is_dir()) return std::vector<path>{};
-	path src=(is_relative()?absolute(L".\\"):*this).add_backslash();
+	path src=empty()?path(L".\\"):(is_relative()?absolute(L".\\"):*this).add_backslash(); if(!src.is_dir()) return std::vector<path>{};
 	scan_t si;
 	si.b.recursive=recursive; si.b.subdirs=true; si.b.dir=true; si.b.glob=pattern&&(wcschr(pattern,L'*')||wcschr(pattern,L'?'));
 	si.ext.v=nullptr; si.ext.l=0;
