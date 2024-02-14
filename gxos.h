@@ -40,6 +40,9 @@
 #endif
 
 #if defined(__has_include)
+	#if __has_include("gxstring.h") && !defined(__GX_STRING_H__)
+		#include "gxstring.h"
+	#endif
 	#if __has_include("gxfilesystem.h") && !defined(__GX_FILESYSTEM_H__)
 		#include "gxfilesystem.h"
 	#endif
@@ -443,7 +446,7 @@ __noinline std::wstring read_process( std::wstring cmd )
 	path tmp = L".stdout.txt";
 	if(_wsystem((cmd+L">> "+tmp.c_str()).c_str())!=0||!tmp.exists()) return L"";
 	std::wstring r=tmp.read_file(); tmp.delete_file();
-	return r;
+	return trim(r.c_str(),L" \t\r\n");
 }
 
 #ifdef _INC_SHELLAPI
