@@ -22,10 +22,6 @@
 #include <time.h>
 #include <functional>
 
-#if defined(__has_include) && __has_include("gxfilesystem.h") && !defined(__GX_FILESYSTEM_H__)
-	#include "gxfilesystem.h"
-#endif
-
 #if defined(_WIN32)||defined(_WIN64) // Windows
 	#include <shlobj.h>		// for SHGetKnownFolderPath
 #endif
@@ -41,6 +37,12 @@
 #ifndef __GNUC__		// MinGW has a problem with threads
 	#include <thread>	// usleep
 	#include <chrono>	// microtimer
+#endif
+
+#if defined(__has_include)
+	#if __has_include("gxfilesystem.h") && !defined(__GX_FILESYSTEM_H__)
+		#include "gxfilesystem.h"
+	#endif
 #endif
 
 // compiler utility
@@ -409,7 +411,7 @@ __noinline bool create_process( const wchar_t* app, const wchar_t* args=nullptr,
 		DWORD n_avail=0, n_read=0, read_count=0;
 		while( PeekNamedPipe( stdout_read, nullptr, 0, nullptr, &n_avail, nullptr ))
 		{
-			DWORD exit; GetExitCodeProcess(pi.hProcess,&exit); if(exit!= STILL_ACTIVE) break;
+			DWORD exit; GetExitCodeProcess(pi.hProcess,&exit); if(exit!=STILL_ACTIVE) break;
 			if(n_avail==0){ Sleep(1); continue; }
 			if(blen<n_avail) buff = (char*) realloc(buff,((blen=n_avail)+1)*sizeof(char));
 			if(!ReadFile(stdout_read, buff, n_avail, &n_read, nullptr)) return false; if(n_read==0) continue;
@@ -433,6 +435,15 @@ __noinline bool create_process( const wchar_t* app, const wchar_t* args=nullptr,
 
 	free(cmd); free(buf);
 	return true;
+}
+
+__noinline std::wstring read_process( std::wstring cmd )
+{
+	// write to and read from a file, because some apps (e.g., ffprobe) write in UTF-8 regardless of codepage
+	path tmp = L".stdout.txt";
+	if(_wsystem((cmd+L">> "+tmp.c_str()).c_str())!=0||!tmp.exists()) return L"";
+	std::wstring r=tmp.read_file(); tmp.delete_file();
+	return r;
 }
 
 #ifdef _INC_SHELLAPI
