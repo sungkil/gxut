@@ -72,9 +72,14 @@ inline const wchar_t* format( const wchar_t* fmt,... ){ va_list a; va_start(a,fm
 
 //***********************************************
 // 3. conversion between const wchar_t* and const char*
+#ifndef CP_ACP
+	#define CP_ACP		0           // default to ANSI code page
+	#define CP_UTF8		65001       // UTF-8 translation
+#endif
 template <class T,class I> const T* _strcvt( const I* s ){size_t len=strlen(s);T* buff=__tstrbuf<T>(len);for(uint k=0;k<len;k++)buff[k]=T(s[k]);return buff;}
-inline const wchar_t* atow( const char* a ){int wlen=MultiByteToWideChar(0,0,a,-1,0,0);wchar_t* wbuff=_wcsbuf(wlen);MultiByteToWideChar(0,0,a,-1,wbuff,wlen);return wbuff;}
-inline const char* wtoa( const wchar_t* w ){int mblen=WideCharToMultiByte(0,0,w,-1,0,0,0,0);char* buff=_strbuf(mblen);WideCharToMultiByte(0,0,w,-1,buff,mblen,0,0);return buff;}
+inline const wchar_t* atow( const char* a, int cp=0 /* code page: CP_ACP=0 */ ){int wlen=MultiByteToWideChar(cp,0,a,-1,0,0);wchar_t* wbuff=_wcsbuf(wlen);MultiByteToWideChar(cp,0,a,-1,wbuff,wlen);return wbuff;}
+inline const char* wtoa( const wchar_t* w, int cp=0 /* code page: CP_ACP=0 */ ){int mblen=WideCharToMultiByte(cp,0,w,-1,0,0,0,0);char* buff=_strbuf(mblen);WideCharToMultiByte(cp,0,w,-1,buff,mblen,0,0);return buff;}
+inline const char* atoa( const char* src, int src_cp, int dst_cp ){ return wtoa(atow(src,src_cp),dst_cp); }
 inline bool ismbs( const char* s ){ if(!s||!*s)return false;for(int k=0,kn=int(strlen(s));k<kn;k++,s++)if(*s<0)return true;return false; }
 
 //***********************************************

@@ -553,7 +553,7 @@ static_assert(sizeof(dmat4)%sizeof(double)*16==0,"sizeof(dmat4)!=sizeof(double)*
 
 //*************************************
 // string-matrix conversion functions
-char* _strbuf(size_t); const wchar_t* atow( const char*); const char* wtoa( const wchar_t* w ); // forward decl. in gxstring.h
+char* _strbuf(size_t); // forward decl. in gxstring.h
 inline const char* ftoa( const mat2& m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g";size_t size=size_t(_scprintf(fmt,f[0],f[1],f[2],f[3]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,f[0],f[1],f[2],f[3]);return buff;}
 inline const char* ftoa( const mat3& m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g";size_t size=size_t(_scprintf(fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]);return buff;}
 inline const char* ftoa( const mat4& m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g";size_t size=size_t(_scprintf(fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]);return buff;}

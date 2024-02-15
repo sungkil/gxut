@@ -440,13 +440,11 @@ __noinline bool create_process( const wchar_t* app, const wchar_t* args=nullptr,
 	return true;
 }
 
-__noinline std::wstring read_process( std::wstring cmd )
+__noinline std::wstring read_process( std::wstring cmd, uint cp=0 ) // provide CP_UTF8 for some apps
 {
-	// write to and read from a file, because some apps (e.g., ffprobe) write in UTF-8 regardless of codepage
-	path tmp = L".stdout.txt";
-	if(_wsystem((cmd+L">> "+tmp.c_str()).c_str())!=0||!tmp.exists()) return L"";
-	std::wstring r=tmp.read_file(); tmp.delete_file();
-	return trim(r.c_str(),L" \t\r\n");
+	FILE* pp=_wpopen( cmd.c_str(), L"r" ); if(!pp) return L"";
+	std::string b; char buff[256]={}; while( fgets(buff,sizeof(buff)/sizeof(buff[0]),pp) ) b+= buff;
+	return trim(atow(b.c_str(),cp),L" \t\r\n");
 }
 
 #ifdef _INC_SHELLAPI

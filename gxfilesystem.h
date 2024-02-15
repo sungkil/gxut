@@ -100,8 +100,8 @@ struct path
 	// utility string functions
 	static __forceinline wchar_t*		__wcsbuf(){ static wchar_t buff[max_buffers][capacity]; static int i=0; return buff[(i++)%std::extent<decltype(buff)>::value]; }
 	static __forceinline char*			__strbuf(){ return (char*)__wcsbuf(); }
-	static __forceinline wchar_t*		__mb2wc( const char* _Src, wchar_t* _Dst ){ int l=MultiByteToWideChar(0,0,_Src,-1,0,0);if(l>capacity-1)l=capacity-1; MultiByteToWideChar(0,0,_Src,-1,_Dst,l); return _Dst; }
-	static __forceinline char*			__wc2mb( const wchar_t* _Src, char* _Dst ){ int l=WideCharToMultiByte(0,0,_Src,-1,0,0,0,0);if(l>capacity-1)l=capacity-1; WideCharToMultiByte(0,0,_Src,-1,_Dst,l,0,0); return _Dst; }
+	static __forceinline wchar_t*		__mb2wc( const char* _Src, wchar_t* _Dst, uint cp=0 ){ int l=MultiByteToWideChar(cp,0,_Src,-1,0,0);if(l>capacity-1)l=capacity-1; MultiByteToWideChar(cp,0,_Src,-1,_Dst,l); return _Dst; }
+	static __forceinline char*			__wc2mb( const wchar_t* _Src, char* _Dst, uint cp=0 ){ int l=WideCharToMultiByte(cp,0,_Src,-1,0,0,0,0);if(l>capacity-1)l=capacity-1; WideCharToMultiByte(cp,0,_Src,-1,_Dst,l,0,0); return _Dst; }
 	static __forceinline const wchar_t*	__tolower( const wchar_t* _Str, size_t l ){ wchar_t* s=(wchar_t*)memcpy(__wcsbuf(),_Str,sizeof(wchar_t)*l); s[l]=L'\0'; for(wchar_t* p=s;*p;p++) *p=towlower(*p); return s; }
 	static __forceinline const wchar_t*	__wcsistr( const wchar_t* _Str1, size_t l1, const wchar_t* _Str2, size_t l2 ){ const wchar_t *s1=__tolower(_Str1,l1), *s2=__tolower(_Str2,l2); const wchar_t* r=wcsstr(s1,s2); return r?_Str1+(r-s1):nullptr; }
 	static __forceinline const wchar_t*	__wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return __wcsistr(_Str1,wcslen(_Str1),_Str2,wcslen(_Str2)); }
