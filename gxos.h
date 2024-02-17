@@ -355,12 +355,12 @@ inline HWND find_window( const wchar_t* filter )
 }
 
 //*************************************
-// process
-__noinline bool create_process( const wchar_t* app, const wchar_t* args=nullptr,
-	bool wait=true, bool windowed=false, bool redir=false, uint* redir_count=nullptr, DWORD priority=NORMAL_PRIORITY_CLASS )
+// create process
+__noinline std::wstring __build_process_cmd( const wchar_t* const app, const wchar_t* args )
 {
 	// buffers
-	wchar_t *cmd=(wchar_t*)malloc(sizeof(wchar_t)*4096), *buf=(wchar_t*)malloc(sizeof(wchar_t)*4096);
+	std::vector<wchar_t> vcmd(4096,0);	wchar_t* cmd=vcmd.data();
+	std::vector<wchar_t> vbuf(4096,0);	wchar_t* buf=vbuf.data();
 	
 	// prioritize com against exe for no-extension apps
 	if(!app&&args&&*args!=L'\"')
@@ -373,70 +373,72 @@ __noinline bool create_process( const wchar_t* app, const wchar_t* args=nullptr,
 	*cmd=0; bool p=app&&*app,g=args&&*args;
 	if(p) wcscpy(cmd,path(app).auto_quote().c_str()); if(p&&g) wcscat(cmd,L" "); if(g) wcscat(cmd,args);
 
+	return cmd;
+}
+
+__noinline bool create_process( const wchar_t* app, const wchar_t* args=nullptr,
+	bool wait=true, bool windowed=false, DWORD priority=NORMAL_PRIORITY_CLASS )
+{
+	STARTUPINFOW si={sizeof(si)}; si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=windowed?SW_SHOW:SW_HIDE;
+	PROCESS_INFORMATION pi={};
+	if(!CreateProcessW( app, (LPWSTR)__build_process_cmd(app,args).c_str(), nullptr, nullptr, FALSE, priority, nullptr, nullptr, &si, &pi)||!pi.hProcess){ ebox(get_last_error()); return false; }
+	if(wait){ WaitForSingleObject(pi.hProcess,INFINITE); safe_close_handle( pi.hThread ); safe_close_handle( pi.hProcess ); }
+	return true;
+}
+
+__noinline bool redirect_process( const wchar_t* app, const wchar_t* args=nullptr,
+	uint* count=nullptr, DWORD priority=NORMAL_PRIORITY_CLASS )
+{
 	// startup attributes
 	STARTUPINFOW si={sizeof(si)};
 	si.dwFlags=STARTF_USESHOWWINDOW;
-	si.wShowWindow=windowed?SW_SHOW:SW_HIDE;
+	si.wShowWindow=SW_HIDE;
 
 	// prepare redirection
 	HANDLE stdout_read=INVALID_HANDLE_VALUE;	// parent process's stdout read handle
 	HANDLE stdout_write=INVALID_HANDLE_VALUE;	// child process' stdout write handle
-	if(redir)
-	{
-		static const int REDIR_BUFFER_SIZE = 1<<24;	// 16 MB should be enough for buffering; otherwise, stdout will not be written no more, which printf hangs
+	static const int REDIR_BUFFER_SIZE = 1<<24;	// 16 MB should be enough for buffering; otherwise, stdout will not be written no more, which printf hangs
 
-		SECURITY_DESCRIPTOR sd; InitializeSecurityDescriptor(&sd,SECURITY_DESCRIPTOR_REVISION); SetSecurityDescriptorDacl(&sd,true,NULL,false);
-		SECURITY_ATTRIBUTES sa={sizeof(SECURITY_ATTRIBUTES),&sd,TRUE/*inheritance*/};
-		if(!CreatePipe( &stdout_read, &stdout_write, &sa, REDIR_BUFFER_SIZE )){ printf( "[redir] CreatePipe(stdout) failed: %s\n", os::get_last_error<char>() ); return false; }
-		if(stdout_read==INVALID_HANDLE_VALUE||stdout_write==INVALID_HANDLE_VALUE){ printf( "[redir] CreatePipe(stdout) failed: %s\n", os::get_last_error<char>() ); return false; }
-		if(!SetHandleInformation(stdout_read,HANDLE_FLAG_INHERIT,0)){ printf( "[redir] SetHandleInformation() failed: %s\n", os::get_last_error<char>() ); return false; }
+	SECURITY_DESCRIPTOR sd; InitializeSecurityDescriptor(&sd,SECURITY_DESCRIPTOR_REVISION); SetSecurityDescriptorDacl(&sd,true,NULL,false);
+	SECURITY_ATTRIBUTES sa={sizeof(SECURITY_ATTRIBUTES),&sd,TRUE/*inheritance*/};
+	if(!CreatePipe( &stdout_read, &stdout_write, &sa, REDIR_BUFFER_SIZE )){ printf( "[redir] CreatePipe(stdout) failed: %s\n", os::get_last_error<char>() ); return false; }
+	if(stdout_read==INVALID_HANDLE_VALUE||stdout_write==INVALID_HANDLE_VALUE){ printf( "[redir] CreatePipe(stdout) failed: %s\n", os::get_last_error<char>() ); return false; }
+	if(!SetHandleInformation(stdout_read,HANDLE_FLAG_INHERIT,0)){ printf( "[redir] SetHandleInformation() failed: %s\n", os::get_last_error<char>() ); return false; }
 
-		// additional configuration for non-buffered IO
-		setvbuf( stdout, nullptr, _IONBF, 0 );	// absolutely needed
-		setvbuf( stderr, nullptr, _IONBF, 0 );	// absolutely needed
-		std::ios::sync_with_stdio();
+	// additional configuration for non-buffered IO
+	setvbuf( stdout, nullptr, _IONBF, 0 );	// absolutely needed
+	setvbuf( stderr, nullptr, _IONBF, 0 );	// absolutely needed
+	std::ios::sync_with_stdio();
 
-		// override startup attributes
-		si.hStdError	= INVALID_HANDLE_VALUE; // ignore stderr: was stdout_write
-		si.hStdOutput	= stdout_write;
-		si.hStdInput	= INVALID_HANDLE_VALUE;
-		si.dwFlags		= si.dwFlags|STARTF_USESTDHANDLES;
-	}
+	// override startup attributes
+	si.hStdError	= INVALID_HANDLE_VALUE; // ignore stderr: was stdout_write
+	si.hStdOutput	= stdout_write;
+	si.hStdInput	= INVALID_HANDLE_VALUE;
+	si.dwFlags		= si.dwFlags|STARTF_USESTDHANDLES;
 
 	// create process and wait if necessary
 	PROCESS_INFORMATION pi={};
-	BOOL bInheritHandles = redir?TRUE:FALSE;
-	if(!CreateProcessW( app, (LPWSTR)cmd, nullptr, nullptr, bInheritHandles, priority, nullptr, nullptr, &si, &pi )||!pi.hProcess){ ebox(get_last_error()); return false; }
+	if(!CreateProcessW( app, (LPWSTR)__build_process_cmd(app,args).c_str(), nullptr, nullptr, TRUE, priority, nullptr, nullptr, &si, &pi )||!pi.hProcess){ ebox(get_last_error()); return false; }
 
-	if(redir)
+	static char* buff=nullptr; static size_t blen=0;
+	DWORD n_avail=0, n_read=0, read_count=0;
+	while( PeekNamedPipe( stdout_read, nullptr, 0, nullptr, &n_avail, nullptr ))
 	{
-		static char* buff=nullptr; static size_t blen=0;
-		DWORD n_avail=0, n_read=0, read_count=0;
-		while( PeekNamedPipe( stdout_read, nullptr, 0, nullptr, &n_avail, nullptr ))
-		{
-			DWORD exit; GetExitCodeProcess(pi.hProcess,&exit); if(exit!=STILL_ACTIVE) break;
-			if(n_avail==0){ Sleep(1); continue; }
-			if(blen<n_avail) buff = (char*) realloc(buff,((blen=n_avail)+1)*sizeof(char));
-			if(!ReadFile(stdout_read, buff, n_avail, &n_read, nullptr)) return false; if(n_read==0) continue;
-			read_count += n_read;
-			buff[n_read]=0;
-			printf( buff );
-		}
-		if(redir_count) *redir_count = read_count;
-
-		safe_close_handle( pi.hThread );
-		safe_close_handle( pi.hProcess );
-		safe_close_handle( stdout_read );
-		safe_close_handle( stdout_write );
+		DWORD exit; GetExitCodeProcess(pi.hProcess,&exit); if(exit!=STILL_ACTIVE) break;
+		if(n_avail==0){ Sleep(1); continue; }
+		if(blen<n_avail) buff = (char*) realloc(buff,((blen=n_avail)+1)*sizeof(char));
+		if(!ReadFile(stdout_read, buff, n_avail, &n_read, nullptr)) return false; if(n_read==0) continue;
+		read_count += n_read;
+		buff[n_read]=0;
+		printf( buff );
 	}
-	else if(wait)
-	{
-		WaitForSingleObject(pi.hProcess,INFINITE);
-		safe_close_handle( pi.hThread );
-		safe_close_handle( pi.hProcess );
-	}
+	if(count) *count = read_count;
 
-	free(cmd); free(buf);
+	safe_close_handle( pi.hThread );
+	safe_close_handle( pi.hProcess );
+	safe_close_handle( stdout_read );
+	safe_close_handle( stdout_write );
+
 	return true;
 }
 
