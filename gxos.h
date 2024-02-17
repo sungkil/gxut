@@ -411,7 +411,7 @@ __noinline bool redirect_process( const wchar_t* app, const wchar_t* args=nullpt
 	std::ios::sync_with_stdio();
 
 	// override startup attributes
-	si.hStdError	= INVALID_HANDLE_VALUE; // ignore stderr: was stdout_write
+	si.hStdError	= stdout_write;
 	si.hStdOutput	= stdout_write;
 	si.hStdInput	= INVALID_HANDLE_VALUE;
 	si.dwFlags		= si.dwFlags|STARTF_USESTDHANDLES;
