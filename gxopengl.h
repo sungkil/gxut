@@ -1197,7 +1197,7 @@ namespace gl {
 		void export_shader_sources( path dir, path fxname=L"" )
 		{
 			dir = dir.to_backslash(); if(!dir.empty()&&dir.back()!=L'\\') dir=dir.dir(); dir += L"glsl\\";
-			fxname = fxname.empty() ? _name : fxname.remove_ext();
+			fxname = fxname.empty() ? _name : fxname.remove_extension();
 			for( auto* p : programs ) p->source.export_shader_sources( dir, fxname+L"."+p->name() );
 		}
 

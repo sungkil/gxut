@@ -110,7 +110,7 @@ namespace obj::cache
 		bool r = mesh_cache_path.exists()&&mesh_cache_path.delete_file(false);
 		if(r&&b_log) wprintf( L"deleted %s\n", mesh_cache_path.c_str() );
 
-		path bton_path = p_mesh?obj::cache::get_path(mtl_path).remove_ext()+L".bton":path();
+		path bton_path = p_mesh?obj::cache::get_path(mtl_path).replace_extension(L"bton"):path();
 		r = bton_path.exists()&&bton_path.delete_file(false);
 		if(r&&b_log) wprintf( L"deleted %s\n", bton_path.c_str() );
 	}

@@ -91,9 +91,12 @@ struct volume_t
 
 struct path
 {
-	typedef WIN32_FILE_ATTRIBUTE_DATA attrib_t; // auxiliary cache information from scan()
-	typedef struct _stat64 stat_t; // use "struct _stat" instead of "_stat" for C-compatibility
-
+	using value_type  = wchar_t;
+	using string_type = std::wstring;
+	using attrib_t = WIN32_FILE_ATTRIBUTE_DATA;	// auxiliary cache information from scan()
+	typedef struct _stat64 stat_t;				// use "struct _stat" instead of "_stat" for C-compatibility
+	
+	static constexpr wchar_t preferred_separator = L'\\';
 	static constexpr int max_buffers	= 4096;
 	static constexpr int capacity		= GX_MAX_PATH; // MAX_PATH == 260
 
@@ -108,22 +111,22 @@ struct path
 
 	// destructor/constuctors
 	__forceinline wchar_t* alloc(){ static constexpr size_t s=sizeof(wchar_t)*capacity+sizeof(attrib_t); _data=(wchar_t*)malloc(s); if(_data)_data[0]=0; return _data; }
-	~path() noexcept { if(_data) free(_data); }
 	path() noexcept { alloc(); clear_cache(); }
 	path( const path& p ) noexcept { wcscpy(alloc(),p); cache()=p.cache(); } // do not canonicalize for copy constructor
 	path( path&& p ) noexcept { _data=p._data; p._data=nullptr; } // cache moves as well
 	path( const wchar_t* s ) noexcept : path() { wcscpy(_data,s); }
 	path( const wchar_t* s, size_t length ) noexcept : path() { memcpy(_data,s,length*sizeof(wchar_t)); _data[length]=0; }
 	path( const char* s ) noexcept : path() { __mb2wc(s,_data); }
-	explicit path( const std::wstring& s ) noexcept : path() { wcscpy(_data,s.c_str()); }
+	explicit path( const string_type& s ) noexcept : path() { wcscpy(_data,s.c_str()); }
 	explicit path( const std::string& s ) noexcept : path() { __mb2wc(s.c_str(),_data); }
+	~path() noexcept { if(_data) free(_data); }
 
 	// operator overloading: assignment
 	path& operator=( const path& p ) noexcept { wcscpy(_data,p._data); cache()=p.cache(); return *this; }
 	path& operator=( path&& p ) noexcept { if(_data) free(_data); _data=p._data; p._data=nullptr; return *this; }
 	path& operator=( const wchar_t* s ) noexcept { wcscpy(_data,s); return *this; }
 	path& operator=( const char* s ) noexcept { __mb2wc(s,_data); return *this; }
-	path& operator=( const std::wstring& s ) noexcept { wcscpy(_data,s.c_str()); return *this; }
+	path& operator=( const string_type& s ) noexcept { wcscpy(_data,s.c_str()); return *this; }
 	path& operator=( const std::string& s ) noexcept { __mb2wc(s.c_str(),_data); return *this; }
 
 	// operator overloading: concatenations
@@ -206,7 +209,11 @@ struct path
 	inline uint crc32c() const;	// implemented in gxmemory.h
 	inline uint4 md5() const;	// implemented in gxmemory.h
 
+	// in-place transforms
+	void make_preferred()	const {	wchar_t* t=_data; for(size_t k=0,l=wcslen(t);k<l;k++,t++) if(*t==L'/') *t=L'\\'; }
+
 	// system-related: slash, backslash, unix, quote
+	path to_preferred()		const {	path p(*this); wchar_t* t=p._data; for(size_t k=0,l=wcslen(t);k<l;k++,t++) if(*t==L'/') *t=L'\\'; return p; }
 	path to_backslash()		const {	path p(*this); wchar_t* t=p._data; for(size_t k=0,l=wcslen(t);k<l;k++,t++) if(*t==L'/') *t=L'\\'; return p; }
 	path to_slash()			const {	path p(*this); wchar_t* t=p._data; for(size_t k=0,l=wcslen(t);k<l;k++,t++) if(*t==L'\\') *t=L'/'; return p; }
 	path to_dot()			const {	path p(*this); wchar_t* t=p._data; for(size_t k=0,l=wcslen(t);k<l;k++,t++) if(*t==L'\\'||*t==L'/') *t=L'.'; return p; }
@@ -236,9 +243,9 @@ struct path
 
 	// content manipulations
 	path remove_first_dot()	const { return (wcslen(_data)>2&&_data[0]==L'.'&&_data[1]==L'\\') ? path(_data+2) : *this; }
-	path remove_ext() const { split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
-	path replace_ext( const wchar_t* ext ) const { if(!ext||!ext[0])return *this;split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf(),__wcsbuf());path p;swprintf_s(p._data,capacity,L"%s%s%s%s%s",si.drive,si.dir,si.fname,ext[0]==L'.'?L"":L".",ext );return p; }
-	path replace_ext( const char* ext ) const { if(!ext||!ext[0])return *this; return replace_ext(__mb2wc(ext,__wcsbuf())); }
+	path remove_extension() const { split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
+	path replace_extension( const wchar_t* ext ) const { if(!ext||!*ext) return *this; split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf(),__wcsbuf());path p;swprintf_s(p._data,capacity,L"%s%s%s%s%s",si.drive,si.dir,si.fname,ext[0]==L'.'?L"":L".",ext );return p; }
+	path replace_extension( const char* ext ) const { return (!ext||!*ext)?*this:replace_extension(__mb2wc(ext,__wcsbuf())); }
 	std::vector<path> explode( const wchar_t* delim=L"\\") const { std::vector<path> L; if(!delim||!*delim) return L; path s=delim[0]==L'/'&&delim[1]==0?to_slash():*this; L.reserve(16); wchar_t* ctx=nullptr; for(wchar_t* t=wcstok_s(s._data,delim,&ctx);t;t=wcstok_s(0,delim,&ctx)) L.emplace_back(t); return L; }
 
 	// multi-byte path info
@@ -325,6 +332,7 @@ struct path
 	static inline path module_name( bool with_ext=true, HMODULE h_module=nullptr ){ return module_path(h_module).name(with_ext); }
 	static inline path module_dir( HMODULE h_module=nullptr ){ static path d=module_path().dir(); return h_module?module_path(h_module).dir():d; }
 	static inline path cwd(){ path p; auto* r=_wgetcwd(p._data,path::capacity); return p.absolute().add_backslash(); }	// current working dir
+	static inline path current_path(){ path p; auto* r=_wgetcwd(p._data,path::capacity); return p.absolute().add_backslash(); }	// current working dir
 	static inline path chdir( path dir ){ return dir.chdir(); }
 
 	// file content access: void (rb/wb), char (r/w), wchar_t (r/w,ccs=UTF-8)

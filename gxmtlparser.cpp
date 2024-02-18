@@ -197,7 +197,7 @@ static path get_normal_path( const path& bump_path, nocase::map<path,path>& bton
 	auto it = bton.find( bump_path );
 	if(it!=bton.end()&&is_normal_map(it->second)) return it->second;
 
-	path base = bump_path.remove_ext();
+	path base = bump_path.remove_extension();
 	path ext = bump_path.ext();
 	
 	// remove postfix for bump
