@@ -53,17 +53,20 @@ struct argument_t
 	
 protected:
 	std::string		name;
-	std::wstring	value;
 	std::string		shelp;
 	bool			optional=false;
+	std::wstring	value;
 	
 	friend struct parser_t;
 	bool value_exists() const { return !value.empty(); }
+	void clear(){ value.clear(); } // clear values
 };
 
 struct option_t
 {
 	bool empty() const { return names.empty(); }
+	void clear(){ value.clear(); others.clear(); instance=0; } // clear values
+
 	option_t& add_subarg( std::vector<std::string> constraints={} ){ subarg_count++; if(!constraints.empty()) this->constraints=constraints; return *this; }
 	option_t& add_help( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); shelp=trim(&buff[0],"\n"); va_end(a); return *this; }
 	option_t& add_break( int count=1 ){ break_count+=count; return* this; }
@@ -130,7 +133,8 @@ struct parser_t
 	template<typename... Args> option_t& add_option( Args... args ){ options.push_back(new option_t()); auto* o=options.back(); return o->add_name(args...);  }
 
 	// long functions
-	bool parse( int argc, wchar_t* argv[] ){ return parse_impl( argc, (const wchar_t**)argv ); }
+	void clear(); // clear parsing results
+	bool parse( int argc, wchar_t* argv[], bool b_validate=true );
 	bool usage( const char* alt_name=nullptr );
 	static const wchar_t* rebuild_arguments( int argc, wchar_t* argv[] );
 
@@ -174,7 +178,6 @@ protected:
 
 	option_t* find_option( const char* name ) const	{ if(!name||!name[0]) return nullptr; for( auto* o : options ) for( auto& n : o->names ) if(strcmp(name,n.c_str())==0) return o; return nullptr; }
 	void select_parser_impl( parser_t*& p, int argc, wchar_t** argv );
-	bool parse_impl( int argc, const wchar_t** argv );
 };
 
 inline bool parser_t::option_exists() const
@@ -234,15 +237,30 @@ inline void parser_t::select_parser_impl( parser_t*& p, int argc, wchar_t** argv
 	}
 }
 
-inline bool parser_t::parse_impl( int argc, const wchar_t** argv )
+inline void parser_t::clear()
 {
+	// parser attributes and clear options
+	attrib.b.help_exists = false;
+	for( auto& o : options ) o->clear();
+	for( auto it=arguments.rbegin(); it!=arguments.rend();  )
+	{
+		if(!(*it)->name.empty()){ (*it)->clear(); it++; }
+		else { safe_delete(*it); it=decltype(it)(arguments.erase( std::next(it).base())); }
+	}
+}
+
+inline bool parser_t::parse( int argc, wchar_t* argv[], bool b_validate )
+{
+	// clear values
+	clear();
+
 	// configure attributes
 	std::vector<argument_t*> required; for( auto* a : arguments ) if(!a->optional) required.push_back(a);
 	int	nr=int(required.size());
 
 	// test prerequisite
 	const int arg_begin = attrib.depth+1;
-	if(argc<=arg_begin)
+	if(b_validate&&argc<=arg_begin)
 	{
 		if(nr>0) return usage();
 		else if(!option_exists()&&!commands.empty()) return usage();
@@ -329,7 +347,7 @@ inline bool parser_t::parse_impl( int argc, const wchar_t** argv )
 	}
 
 	// check required arguments
-	if(r<nr)
+	if(r<nr&&b_validate)
 	{
 		auto* ar = r<int(required.size())?required[r]:nullptr;
 		if(ar) return exit( "argument <%s>: required\n", ar->name.c_str() );
