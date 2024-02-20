@@ -184,7 +184,7 @@ struct path
 	operator wchar_t*(){ return _data; }
 	operator const wchar_t*() const { return _data; }
 	const wchar_t* c_str() const { return _data; }
-	const char* wtoa() const { return __wc2mb(_data,__strbuf()); }
+	const char* wtoa( uint cp=0 ) const { return __wc2mb(_data,__strbuf(),cp); }
 	std::wstring str() const { return std::wstring(_data); }
 
 	// iterators
@@ -341,7 +341,6 @@ struct path
 	template <class T=void> sized_ptr_t<T> read_file() const;
 	std::wstring read_file() const;
 	bool write_file( const void* ptr, size_t size ) const;
-	bool write_file( void* ptr, size_t size ) const { return ptr&&size?write_file(ptr,size):false; }
 	bool write_file( sized_ptr_t<void> p ) const { return p.ptr&&p.size?write_file(p.ptr,p.size):false; }
 	bool write_file( const char* s ) const;
 	bool write_file( const wchar_t* s ) const;
