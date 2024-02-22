@@ -47,36 +47,36 @@ namespace gx { namespace argparse {
 struct argument_t
 {
 	argument_t& add_help( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); va_end(a); shelp=trim(&buff[0],"\n"); return *this; }
-	argument_t& set_default( const char* v ){ value=atow(v); return *this; }
-	argument_t& set_default( const wchar_t* v ){ value=v; return *this; }
+	argument_t& set_default( const char* v ){ parsed.value=atow(v); return *this; }
+	argument_t& set_default( const wchar_t* v ){ parsed.value=v; return *this; }
 	argument_t& set_optional(){ optional=true; return *this; } 
 	
 protected:
 	std::string		name;
 	std::string		shelp;
 	bool			optional=false;
-	std::wstring	value;
+	struct parsed_t { std::wstring value; void clear(){ value.clear(); } } parsed;
 	
 	friend struct parser_t;
-	bool value_exists() const { return !value.empty(); }
-	void clear(){ value.clear(); } // clear values
+	bool value_exists() const { return !parsed.value.empty(); }
+	void clear(){ parsed.clear(); } // clear values
 };
 
 struct option_t
 {
 	bool empty() const { return names.empty(); }
-	void clear(){ value.clear(); others.clear(); instance=0; } // clear values
+	void clear(){ parsed.clear(); } // clear values
 
 	option_t& add_subarg( std::vector<std::string> constraints={} ){ subarg_count++; if(!constraints.empty()) this->constraints=constraints; return *this; }
 	option_t& add_help( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); shelp=trim(&buff[0],"\n"); va_end(a); return *this; }
 	option_t& add_break( int count=1 ){ break_count+=count; return* this; }
-	option_t& set_default( const char* arg ){ value=atow(arg); return *this; }
-	option_t& set_default( const wchar_t* arg ){ value=arg; return *this; }
+	option_t& set_default( const char* arg ){ parsed.value=atow(arg); return *this; }
+	option_t& set_default( const wchar_t* arg ){ parsed.value=arg; return *this; }
 	option_t& set_hidden(){ hidden=true; return *this; } 
 
 protected:
 	friend struct parser_t;
-	bool exists() const { if(!instance) return false; return !subarg_count||!value.empty(); }
+	bool exists() const { if(!parsed.instance) return false; return !subarg_count||!parsed.value.empty(); }
 	template<typename... Args> option_t& add_name( const char* name, Args... args ){ if(name&&name[0]) names.insert(name); return add_name(args...); }
 	option_t& add_name( const char* name ){ if(name&&name[0]) names.insert(name); return *this; }
 	const char* name() const { for( auto& n : names ) if(n.size()==1) return n.c_str(); for( auto& n : names ) if(n.size()>1) return n.c_str(); return ""; }
@@ -84,7 +84,7 @@ protected:
 	std::vector<const char*> long_names() const { std::vector<const char*> v; for( auto& n : names ) if(n.size()>1) v.push_back(n.c_str()); return v; }
 	bool is_value_acceptable( const wchar_t* v ){ if(constraints.empty()) return true; std::string s=wtoa(v); for( const auto& c:constraints ) if(_stricmp(c.c_str(),s.c_str())==0) return true; return false; }
 	std::string contraints_to_str(){ if(constraints.empty()) return ""; std::string s=constraints.front(); for(size_t k=1,kn=constraints.size();k<kn;k++) s+=std::string(",")+constraints[k]; return s; }
-	bool push_back( const wchar_t* v ){ if(!is_value_acceptable(v)){ printf( "option '%s' not accepts '%s'; use one in {%s}\n", name(), wtoa(v), contraints_to_str().c_str() ); return false; } if(instance==0||value.empty())	value = v; else others.push_back(v); return true; }
+	bool push_back( const wchar_t* v ){ if(!is_value_acceptable(v)){ printf( "option '%s' not accepts '%s'; use one in {%s}\n", name(), wtoa(v), contraints_to_str().c_str() ); return false; } if(parsed.instance==0||parsed.value.empty()) parsed.value=v; else parsed.others.push_back(v); return true; }
 
 	struct lless { bool operator()(const std::string& a,const std::string& b)const{return a.size()!=b.size()?a.size()<b.size():_stricmp(a.c_str(),b.c_str())<0;}};
 	std::set<std::string,lless>	names;				// multiple names allowed for a single option
@@ -93,9 +93,14 @@ protected:
 	int							break_count=0;		// post-line breaks
 	int							subarg_count=0;		// required subarg counter
 	std::vector<std::string>	constraints;		// value constraints: allow values only in this set
-	std::wstring				value;				// found first values
-	std::vector<std::wstring>	others;				// additional excessive multiple options
-	int							instance=0;			// occurence of option and multiple instances of an option (for subarguments)
+
+	struct parsed_t
+	{
+		std::wstring				value;				// found first values
+		std::vector<std::wstring>	others;				// additional excessive multiple options
+		int							instance=0;			// occurence of option and multiple instances of an option (for subarguments)
+		void clear(){ value.clear(); others.clear(); instance=0; }
+	} parsed;
 };
 
 struct parser_t
@@ -119,7 +124,7 @@ struct parser_t
 	inline bool exists( const std::string& name ) const;
 	inline bool command_exists( const std::string& name ) const;
 	inline bool callback_exists(){ parser_t* p=this;while(p&&!p->pf_callback) p=p->parent; return p&&p->pf_callback?true:false; }
-	inline bool help_exists() const { return attrib.b.help_exists; }
+	inline bool help_exists() const { return parsed.b.help_exists; }
 
 	// subcommands
 	inline parser_t& select_parser( int argc, wchar_t* argv[] ){ parser_t* p=this; select_parser_impl(p,argc,argv); return *p; }
@@ -135,6 +140,7 @@ struct parser_t
 	// long functions
 	void clear(); // clear parsing results
 	bool parse( int argc, wchar_t* argv[], bool b_validate=true );
+	bool validate();
 	bool usage( const char* alt_name=nullptr );
 	static const wchar_t* rebuild_arguments( int argc, wchar_t* argv[] );
 
@@ -166,9 +172,22 @@ protected:
 		std::string	header, footer;
 		std::string help;		// shorter help for commands
 		int			depth=0;	// depth to commands; non-zero means sub-commands
-		struct { bool help_exists = false; } b;
-		bool		instance=false;
 	} attrib;
+
+	struct cmdline_t
+	{
+		int argc=0;
+		wchar_t** argv=nullptr;
+		void clear(){ argc=0; argv=nullptr; }
+	} cmdline;
+
+	struct parsed_t
+	{
+		bool		instance=false;
+		int			argument_count=0;	// parsed argument count
+		struct { bool help_exists = false; } b;
+		void clear(){ b.help_exists=false; argument_count=0; instance=false; }
+	} parsed;
 
 	parser_t*					parent = nullptr;
 	callback_t					pf_callback = nullptr;
@@ -178,18 +197,21 @@ protected:
 
 	option_t* find_option( const char* name ) const	{ if(!name||!name[0]) return nullptr; for( auto* o : options ) for( auto& n : o->names ) if(strcmp(name,n.c_str())==0) return o; return nullptr; }
 	void select_parser_impl( parser_t*& p, int argc, wchar_t** argv );
+
+	const int arg_begin() const { return attrib.depth+1; }
+	std::vector<argument_t*> get_required_arguments(){ std::vector<argument_t*> v; for(auto* a:arguments ) if(!a->optional) v.emplace_back(a); return v; }
 };
 
 inline bool parser_t::option_exists() const
 {
-	for( auto* o : options ) if(!o->empty()&&o->instance>0) return true;
+	for( auto* o : options ) if(!o->empty()&&o->parsed.instance>0) return true;
 	return false;
 }
 
 inline bool parser_t::exists( const std::string& name ) const
 {
-	if(name=="h"||name=="help") return attrib.b.help_exists;
-	auto* o = find_option(name.c_str()); if(o) return o->instance>0;
+	if(name=="h"||name=="help") return parsed.b.help_exists;
+	auto* o = find_option(name.c_str()); if(o) return o->parsed.instance>0;
 	for( auto* a : arguments ){ if(strcmp(a->name.c_str(),name.c_str())==0) return a->value_exists(); }
 	return false;
 }
@@ -199,22 +221,22 @@ inline bool parser_t::command_exists( const std::string& name ) const
 	for(auto* c:commands)
 	{
 		if(strcmp(c->attrib.name.c_str(),name.c_str())!=0) continue;
-		if(c->attrib.instance) return true;
+		if(c->parsed.instance) return true;
 	}
 	return false;
 }
 
 template<> inline std::wstring parser_t::get<std::wstring>( const std::string& name ) const
 {
-	for( auto* a : arguments ){ if(strcmp(a->name.c_str(),name.c_str())==0) return a->value; }
-	auto* o = find_option(name.c_str()); return o&&o->instance>0?o->value:L"";
+	for( auto* a : arguments ){ if(strcmp(a->name.c_str(),name.c_str())==0) return a->parsed.value; }
+	auto* o = find_option(name.c_str()); return o&&o->parsed.instance>0?o->parsed.value:L"";
 }
 
 inline std::vector<std::wstring> parser_t::others( const std::string& name ) const
 {
 	std::vector<std::wstring> v;
-	if(name.empty()){ for(auto& a:arguments){ if(a->name.empty()) v.push_back(a->value); } }	// unnamed arguments
-	else{ auto* o=find_option(name.c_str()); if(o&&o->instance>1) v=o->others; }				// named options
+	if(name.empty()){ for(auto& a:arguments){ if(a->name.empty()) v.push_back(a->parsed.value); } }	// unnamed arguments
+	else{ auto* o=find_option(name.c_str()); if(o&&o->parsed.instance>1) v=o->parsed.others; }				// named options
 	return v;
 }
 
@@ -227,7 +249,7 @@ inline std::vector<std::wstring> parser_t::get_values( const std::string& name )
 
 inline void parser_t::select_parser_impl( parser_t*& p, int argc, wchar_t** argv )
 {
-	p->attrib.instance=true; int next=p->attrib.depth+1; if(argc<=next) return;
+	p->parsed.instance=true; int next=p->attrib.depth+1; if(argc<=next) return;
 	const wchar_t* a=trim(argv[next]); if(!a||!*a||_wcsicmp(a,L"help")==0) return;
 	std::string arg=wtoa(a); if(arg[0]==L'-') return; // option should not precede the command
 	for(auto* c:p->commands)
@@ -240,7 +262,9 @@ inline void parser_t::select_parser_impl( parser_t*& p, int argc, wchar_t** argv
 inline void parser_t::clear()
 {
 	// parser attributes and clear options
-	attrib.b.help_exists = false;
+	cmdline.clear();
+	parsed.clear();
+
 	for( auto& o : options ) o->clear();
 	for( auto it=arguments.rbegin(); it!=arguments.rend();  )
 	{
@@ -254,21 +278,15 @@ inline bool parser_t::parse( int argc, wchar_t* argv[], bool b_validate )
 	// clear values
 	clear();
 
-	// configure attributes
-	std::vector<argument_t*> required; for( auto* a : arguments ) if(!a->optional) required.push_back(a);
-	int	nr=int(required.size());
+	cmdline.argc = argc;
+	cmdline.argv = argv;
 
-	// test prerequisite
-	const int arg_begin = attrib.depth+1;
-	if(b_validate&&argc<=arg_begin)
-	{
-		if(nr>0) return usage();
-		else if(!option_exists()&&!commands.empty()) return usage();
-	}
+	// configure attributes
+	auto required = get_required_arguments();
 
 	// start parsing
 	option_t* option_needs_subarg=nullptr;
-	int r=0; for( int k=arg_begin; k < argc; k++ )
+	for( int k=arg_begin(); k < argc; k++ )
 	{
 		const wchar_t* a = argv[k];
 		
@@ -282,12 +300,12 @@ inline bool parser_t::parse( int argc, wchar_t* argv[], bool b_validate )
 		}
 		else if(_wcsicmp(a,L"help")==0||_wcsicmp(a,L"-h")==0||_wcsicmp(a,L"--help")==0) // test whether help exists
 		{
-			attrib.b.help_exists=true;
+			parsed.b.help_exists=true;
 		}
 		else if(a[0]!=L'-'||wcscmp(a,L"-")==0) // accept stdin as argument
 		{
-			if(r>=int(arguments.size())) arguments.push_back(new argument_t()); // increase array to accept excessive arguments
-			arguments[r++]->value = a;
+			if(parsed.argument_count>=int(arguments.size())) arguments.push_back(new argument_t()); // increase array to accept excessive arguments
+			arguments[parsed.argument_count++]->parsed.value = a;
 		}
 		else if(a[1]) // in case of (not too short) option
 		{
@@ -311,19 +329,19 @@ inline bool parser_t::parse( int argc, wchar_t* argv[], bool b_validate )
 			{
 				for( auto& n : name )
 				{
-					if(n=='h'){ attrib.b.help_exists=true; continue; }
+					if(n=='h'){ parsed.b.help_exists=true; continue; }
 					char sn[2]={n,0}; option_t* p=find_option(sn);
 					if(!p) return exit( "unrecognized option: -%s in {%s}", sn, name.c_str() );
 					if(p->subarg_count) return exit( "-%s: %s is not a simple flag that can be used in combination.", name.c_str(), sn );
-					p->instance=1;
+					p->parsed.instance=1;
 				}
 				continue;
 			}
 
 			// find option by name
 			option_t* p=find_option(name.c_str()); if(!p) return exit( "unrecognized option: %s%s", name.size()>1?"--":"-", name.c_str() );
-			if( p->subarg_count )	p->instance++;
-			else {					p->instance=1; continue; }
+			if( p->subarg_count )	p->parsed.instance++;
+			else {					p->parsed.instance=1; continue; }
 
 			// find inline sub-arguments
 			if(!subarg_exists) option_needs_subarg = p;
@@ -335,22 +353,33 @@ inline bool parser_t::parse( int argc, wchar_t* argv[], bool b_validate )
 		}
 	}
 
+	// validate
+	return !b_validate || validate();
+}
+
+inline bool parser_t::validate()
+{
+	auto required = get_required_arguments();
+	int	required_count = int(required.size());
+
+	if(cmdline.argc<=arg_begin())
+	{
+		if(required_count>0) return usage();
+		else if(!option_exists()&&!commands.empty()) return usage();
+	}
+
 	// if help exists, show usage
-	if( attrib.b.help_exists ){ usage(); return false; }
+	if( parsed.b.help_exists ){ usage(); return false; }
+
+	if(parsed.argument_count<required_count)
+		return exit( "argument <%s>: required\n", required[parsed.argument_count]->name.c_str() );
 
 	// check the value provided for subargument
 	for( auto* o : options )
 	{
 		if(o->empty()||!o->subarg_count) continue;
-		if(o->instance==0&&!o->value.empty()) o->instance=1; // apply default argument
-		if(o->instance>0&&o->value.empty()) return exit( "option [%s]: subarg not exists.", o->name() );
-	}
-
-	// check required arguments
-	if(r<nr&&b_validate)
-	{
-		auto* ar = r<int(required.size())?required[r]:nullptr;
-		if(ar) return exit( "argument <%s>: required\n", ar->name.c_str() );
+		if(o->parsed.instance==0&&!o->parsed.value.empty()) o->parsed.instance=1; // apply default argument
+		if(o->parsed.instance>0&&o->parsed.value.empty()) return exit( "option [%s]: subarg not exists.", o->name() );
 	}
 
 	return true;
@@ -469,20 +498,20 @@ inline void parser_t::dump()
 {
 	// retrive things to print
 	std::vector<std::pair<std::string,std::string>> args, opts;
-	for(auto* a:arguments) if(!a->name.empty()) args.emplace_back( a->name.c_str(), wtoa(a->value.c_str()) );
+	for(auto* a:arguments) if(!a->name.empty()) args.emplace_back( a->name.c_str(), wtoa(a->parsed.value.c_str()) );
 	std::string ots; for(auto& a:others()) ots+=format( "%s ",wtoa(a.c_str())); args.emplace_back( "others", ots );
 	for(auto* o:options)
 	{
 		std::string n=o->name();
 		std::string v;
-		if(o->instance==0) v="0";
+		if(o->parsed.instance==0) v="0";
 		else
 		{
-			v=format( "%d", o->instance );
+			v=format( "%d", o->parsed.instance );
 			if(o->subarg_count)
 			{
-				v+= format( ": '%s'", wtoa(o->value.c_str()) );
-				if(o->instance>1){ for( size_t j=0; j<o->others.size();j++){auto& t=o->others[j]; v+= format(" '%s'",wtoa(t.c_str()));} }
+				v+= format( ": '%s'", wtoa(o->parsed.value.c_str()) );
+				if(o->parsed.instance>1){ for( size_t j=0; j<o->parsed.others.size();j++){auto& t=o->parsed.others[j]; v+= format(" '%s'",wtoa(t.c_str()));} }
 			}
 		}
 		opts.emplace_back(n,v);
