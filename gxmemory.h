@@ -80,17 +80,24 @@ typedef struct
 } ZIPENTRY;
 #endif
 
+struct zipentry_t : public ZIPENTRY
+{
+	size_t	size=0;
+	void*	ptr=nullptr;
+	bool is_dir() const { return (attr&FILE_ATTRIBUTE_DIRECTORY)!=0; }
+};
+
 struct izip_t	// common interface to zip, 7zip, ...
 {
-	struct entry : public ZIPENTRY { void* ptr=nullptr; size_t size=0; void* aux=nullptr; /* internal use */ bool is_dir() const { return (attr&FILE_ATTRIBUTE_DIRECTORY)!=0; }}; std::vector<entry> entries;
 	path file_path;
+	std::vector<zipentry_t> entries;
 
 	virtual ~izip_t(){}
 	virtual void release() = 0;
 	virtual bool load() = 0;
 	virtual bool extract_to_files( path dir, const wchar_t* name=nullptr ) = 0;	// if name==nullptr, extract all files. otherwise, extract a single file with the name
 	virtual bool extract_to_memory( const wchar_t* name=nullptr ) = 0;			// if name==nullptr, extract all files. otherwise, extract a single file with the name
-	virtual entry* find( const wchar_t* name ){ for(auto& e:entries){ if(_wcsicmp(e.name,name)==0) return &e; } return nullptr; }
+	virtual zipentry_t* find( const wchar_t* name ){ for(auto& e:entries){ if(_wcsicmp(e.name,name)==0) return &e; } return nullptr; }
 };
 
 #ifdef MAKEINTRESOURCEW
