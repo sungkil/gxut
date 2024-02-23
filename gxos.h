@@ -151,27 +151,26 @@ inline std::vector<path> paths()
 	return v;
 }
 
-inline void add_path( path d )
-{
-	if(d.relative()) d=d.absolute(); else d=d.canonical();
-	for( auto& f : paths() ) if(f==d) return; // skip existing dir
-	std::wstring v = std::wstring(d.c_str()) + L";";
-	v += var(L"PATH");
-	SetEnvironmentVariableW( L"PATH", v.c_str() );
-}
-
 inline void add_paths( const std::vector<path>& dirs )
 {
-	auto ps = paths();
-	std::wstring v;
-	for( auto d : dirs )
+	if(dirs.empty()) return;
+	nocase::set<path> m; for( auto& p : paths() ) m.insert(p.canonical());
+	std::wstring v; for( auto d : dirs )
 	{
-		if(d.relative()) d=d.absolute(); else d=d.canonical();
-		for( auto& f : ps ) if(f==d) continue; // skip existing dir
-		v += d; v += L';';
+		d = (d.relative()?d.absolute():d).canonical();
+		if(m.find(d)==m.end()){ v += d; v += L';'; }
 	}
-	v += var(L"PATH");
-	SetEnvironmentVariableW( L"PATH", v.c_str() );
+	SetEnvironmentVariableW( L"PATH", (v+var(L"PATH")).c_str() );
+}
+
+inline void add_path( path d )
+{
+	add_paths( std::vector<path>{d} );
+}
+
+inline bool set_dll_directory( path dir )
+{
+	return SetDllDirectoryW(dir)?true:false;
 }
 
 inline path where( path file_name )
@@ -323,7 +322,7 @@ struct dll_t
 	~dll_t(){ release(); }
 	void release(){ if(hdll){ FreeLibrary(hdll); hdll=nullptr; } }
 	path file_path(){ path f; if(hdll) GetModuleFileNameW(hdll,f,path::capacity); return f; }
-	bool load( const wchar_t* dll_path ){ return nullptr!=(hdll=LoadLibraryW(dll_path)); }
+	bool load( const wchar_t* dll_path ){ return nullptr!=(hdll=LoadLibraryExW(dll_path,nullptr,0)); }
 	template <class T> T get_proc_address( const char* name ) const { return hdll==nullptr?nullptr:(T)GetProcAddress(hdll,name); }
 	template <class T> T* get_proc_address( const char* name, T*& p ) const { return hdll==nullptr?p=nullptr:p=(T*)GetProcAddress(hdll,name); }
 	operator bool() const { return hdll!=nullptr; }
