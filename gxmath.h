@@ -89,9 +89,6 @@ template <class T,template <class> class A=tarray2> struct tvec2
 	__forceinline tvec2& operator*=(const tvec2& v) { x*=v.x; y*=v.y; return *this; }
 	__forceinline tvec2& operator/=(const tvec2& v) { x/=v.x; y/=v.y; return *this; }
 
-	// raw-level access
-	__forceinline constexpr size_t size(){ return 2; }
-
 	// norm/length/dot: floating-point only functions
 	float_memfun(U) __forceinline U length2() const { return T(x*x+y*y); }
 	float_memfun(U) __forceinline U norm2() const { return T(x*x+y*y); }
@@ -159,9 +156,6 @@ template <class T,template <class> class A=tarray3> struct tvec3
 	__forceinline tvec3& operator-=( const tvec3& v ){ x-=v.x; y-=v.y; z-=v.z; return *this; }
 	__forceinline tvec3& operator*=( const tvec3& v ){ x*=v.x; y*=v.y; z*=v.z; return *this; }
 	__forceinline tvec3& operator/=( const tvec3& v ){ x/=v.x; y/=v.y; z/=v.z; return *this; }
-
-	// raw-level access
-	__forceinline constexpr size_t size(){ return 3; }
 
 	// norm/length/dot: floating-point only functions
 	float_memfun(U) __forceinline U length2() const { return T(x*x+y*y+z*z); }
@@ -242,9 +236,6 @@ template <class T,template <class> class A=tarray4> struct tvec4
     __forceinline tvec4& operator-=( const tvec4& v){ x-=v.x; y-=v.y; z-=v.z; w-=v.w; return *this; }
     __forceinline tvec4& operator*=( const tvec4& v){ x*=v.x; y*=v.y; z*=v.z; w*=v.w; return *this; }
     __forceinline tvec4& operator/=( const tvec4& v){ x/=v.x; y/=v.y; z/=v.z; w/=v.w; return *this; }
-
-	// raw-level access
-	__forceinline constexpr size_t size(){ return 4; }
 
 	// norm/length/dot: floating-point only functions
 	float_memfun(U) __forceinline U length2() const { return T(x*x+y*y+z*z+w*w); }
@@ -359,8 +350,7 @@ __forceinline half* ftoh( const float* pf, half* ph, size_t nElements, size_t ha
 	__forceinline M& set_identity(){ return *this=M(); }\
 	__forceinline V diag() const { V f; for(int k=0;k<D;k++) f[k]=v[k][k]; return f; }\
 	__forceinline V cvec( int col ) const { V f; for(int k=0;k<D;k++) f[k]=v[k][col]; return f; }\
-	__forceinline T trace() const { T f=0; for(int k=0;k<D;k++) f+=v[k][k]; return f; }\
-	__forceinline constexpr size_t size(){ return dim; }
+	__forceinline T trace() const { T f=0; for(int k=0;k<D;k++) f+=v[k][k]; return f; }
 
 //*************************************
 template <class T> struct tmat2
