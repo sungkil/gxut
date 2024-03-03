@@ -108,7 +108,11 @@ struct path
 	static __forceinline const wchar_t*	__tolower( const wchar_t* _Str, size_t l ){ wchar_t* s=(wchar_t*)memcpy(__wcsbuf(),_Str,sizeof(wchar_t)*l); s[l]=L'\0'; for(wchar_t* p=s;*p;p++) *p=towlower(*p); return s; }
 	static __forceinline const wchar_t*	__wcsistr( const wchar_t* _Str1, size_t l1, const wchar_t* _Str2, size_t l2 ){ const wchar_t *s1=__tolower(_Str1,l1), *s2=__tolower(_Str2,l2); const wchar_t* r=wcsstr(s1,s2); return r?_Str1+(r-s1):nullptr; }
 	static __forceinline const wchar_t*	__wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return __wcsistr(_Str1,wcslen(_Str1),_Str2,wcslen(_Str2)); }
-	static __forceinline int			__strcmplogical( const wchar_t* _Str1,const wchar_t* _Str2 ){ static dll_function_t<int(*)(const wchar_t*,const wchar_t*)> f(L"shlwapi.dll","StrCmpLogicalW"); return f?f(_Str1,_Str2):_wcsicmp(_Str1,_Str2); } // wrapper to StrCmpLogicalW()
+#ifdef _INC_SHLWAPI
+	static __forceinline int			__strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ return StrCmpLogicalW( _Str1, _Str2 ); }
+#else
+	static __forceinline int			__strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ static dll_function_t<int(*)(const wchar_t*,const wchar_t*)> f(L"shlwapi.dll","StrCmpLogicalW"); return f?f(_Str1,_Str2):_wcsicmp(_Str1,_Str2); } // wrapper to StrCmpLogicalW()
+#endif
 
 	// destructor/constuctors
 	__forceinline wchar_t* alloc(){ static constexpr size_t s=sizeof(wchar_t)*capacity+sizeof(attrib_t); _data=(wchar_t*)malloc(s); if(_data)_data[0]=0; return _data; }
