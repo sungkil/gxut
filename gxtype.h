@@ -131,12 +131,9 @@ using namespace std::string_literals; // enables s-suffix for std::string litera
 	#endif
 #endif
 // pointer type with size: waiting for a C++ standard for proposal P0901R3 (std::sized_ptr_t)
-template <class T=void> struct sized_ptr_t
-{
-	T* ptr; size_t size;
-	operator T* (){ return ptr; }	operator const T* () const { return ptr; }
-	T* operator->(){ return ptr; }	const T* operator->() const { return ptr; }
-}; 
+template <class T=void> struct sized_ptr_t { T* ptr; size_t size; operator T* (){ return ptr; }	operator const T* () const { return ptr; } T* operator->(){ return ptr; }	const T* operator->() const { return ptr; } }; 
+// dll function wrapper: load from dll and operates as a function without auto dll release
+template <typename T> struct dll_function_t { HMODULE hdll=nullptr;T ptr=nullptr; dll_function_t(const wchar_t* dll,const char* func){if(hdll=LoadLibraryW(dll))ptr=T(GetProcAddress(hdll,func));} ~dll_function_t(){if(hdll){FreeLibrary(hdll);hdll=nullptr;}} operator T(){return ptr;} };
 // utility functions
 template <class T> T*& safe_free( T*& p ){if(p) free(p); return p=nullptr; }
 template <class T> T*& safe_delete( T*& p ){if(p) delete p; return p=nullptr; }

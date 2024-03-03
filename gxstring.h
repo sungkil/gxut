@@ -55,6 +55,8 @@ template <class T> inline size_t _strrspn( const T* _Str, const T* _Control ){si
 inline const char* _stristr( const char* _Str1, const char* _Str2 ){ char* s1=_strdup(_Str1);_strlwr(s1); char* s2=_strdup(_Str2);_strlwr(s2); const char* r=strstr(s1,s2); if(r)r=_Str1+(r-s1); free(s1); free(s2); return r; }
 inline const wchar_t* _wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ wchar_t* s1=_wcsdup(_Str1); _wcslwr(s1); wchar_t* s2=_wcsdup(_Str2); _wcslwr(s2); const wchar_t* r=wcsstr(s1,s2); if(r)r=_Str1+(r-s1); free(s1); free(s2); return r; }
 inline const wchar_t* _stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return _wcsistr(_Str1,_Str2); }
+inline int _strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ static dll_function_t<int(*)(const wchar_t*,const wchar_t*)> f(L"shlwapi.dll","StrCmpLogicalW"); return f?f(_Str1,_Str2):_wcsicmp(_Str1,_Str2); } // load StrCmpLogicalW(): when unavailable, fallback to wcsicmp
+inline int _strcmplogical( const char* _Str1, const char* _Str2, int cp=0 /* code page: CP_ACP=0 */){ const wchar_t* atow(const char* a, int cp); return _strcmplogical(atow(_Str1,cp),atow(_Str2,cp)); }
 
 //***********************************************
 // 1. shared circular buffers
