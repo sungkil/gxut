@@ -109,7 +109,7 @@ struct path
 	static __forceinline const wchar_t*	__wcsistr( const wchar_t* _Str1, size_t l1, const wchar_t* _Str2, size_t l2 ){ const wchar_t *s1=__tolower(_Str1,l1), *s2=__tolower(_Str2,l2); const wchar_t* r=wcsstr(s1,s2); return r?_Str1+(r-s1):nullptr; }
 	static __forceinline const wchar_t*	__wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return __wcsistr(_Str1,wcslen(_Str1),_Str2,wcslen(_Str2)); }
 #ifdef _INC_SHLWAPI
-	static __forceinline int			__strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ return StrCmpLogicalW( _Str1, _Str2 ); }
+	#define __strcmplogical( _Str1, _Str2 )	StrCmpLogicalW( (_Str1), (_Str2) )
 #else
 	static __forceinline int			__strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ static dll_function_t<int(*)(const wchar_t*,const wchar_t*)> f(L"shlwapi.dll","StrCmpLogicalW"); return f?f(_Str1,_Str2):_wcsicmp(_Str1,_Str2); } // wrapper to StrCmpLogicalW()
 #endif
@@ -677,15 +677,6 @@ namespace nocase
 	template <> struct less<path>{ bool operator()(const path& a,const path& b)const{return a<b;}};
 	template <> struct equal_to<path>{ bool operator()(const path& a,const path& b)const{return _wcsicmp(a.c_str(),b.c_str())==0;}};
 	template <> struct hash<path>{ size_t operator()(const path& p)const{ return std::hash<std::wstring>()(p.tolower().c_str());}};
-}
-
-// natural-order logical comparison (explorer style)
-namespace logical
-{
-	template <> struct less<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b) const { return path::__strcmplogical(a.c_str(),b.c_str())<0;} };
-	template <> struct less<std::string>{ bool operator()(const std::string& a,const std::string& b) const { int l=MultiByteToWideChar(0,0,a.c_str(),-1,0,0); static wchar_t* c=nullptr; c=(wchar_t*)realloc(c,sizeof(wchar_t)*l); MultiByteToWideChar(0,0,a.c_str(),-1,c,l); l=MultiByteToWideChar(0,0,b.c_str(),-1,0,0); static wchar_t* d=nullptr; d=(wchar_t*)realloc(d,sizeof(wchar_t)*l); MultiByteToWideChar(0,0,b.c_str(),-1,d,l); return path::__strcmplogical(c,d)<0; } };
-	template <class T> using			set = std::set<T,less<T>>;
-	template <class T, class V> using	map = std::map<T,V,less<T>>;
 }
 
 //***********************************************

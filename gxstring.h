@@ -55,12 +55,6 @@ template <class T> inline size_t _strrspn( const T* _Str, const T* _Control ){si
 inline const char* _stristr( const char* _Str1, const char* _Str2 ){ char* s1=_strdup(_Str1);_strlwr(s1); char* s2=_strdup(_Str2);_strlwr(s2); const char* r=strstr(s1,s2); if(r)r=_Str1+(r-s1); free(s1); free(s2); return r; }
 inline const wchar_t* _wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ wchar_t* s1=_wcsdup(_Str1); _wcslwr(s1); wchar_t* s2=_wcsdup(_Str2); _wcslwr(s2); const wchar_t* r=wcsstr(s1,s2); if(r)r=_Str1+(r-s1); free(s1); free(s2); return r; }
 inline const wchar_t* _stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return _wcsistr(_Str1,_Str2); }
-#ifdef _INC_SHLWAPI
-inline int _strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ return StrCmpLogicalW( _Str1, _Str2 ); }
-#else
-inline int _strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ static dll_function_t<int(*)(const wchar_t*,const wchar_t*)> f(L"shlwapi.dll","StrCmpLogicalW"); return f?f(_Str1,_Str2):_wcsicmp(_Str1,_Str2); } // load StrCmpLogicalW(): when unavailable, fallback to wcsicmp
-#endif
-inline int _strcmplogical( const char* _Str1, const char* _Str2, int cp=0 /* code page: CP_ACP=0 */){ const wchar_t* atow(const char* a, int cp); return _strcmplogical(atow(_Str1,cp),atow(_Str2,cp)); }
 
 //***********************************************
 // 1. shared circular buffers
@@ -89,7 +83,22 @@ inline const char* atoa( const char* src, int src_cp, int dst_cp ){ return wtoa(
 inline bool ismbs( const char* s ){ if(!s||!*s)return false;for(int k=0,kn=int(strlen(s));k<kn;k++,s++)if(*s<0)return true;return false; }
 
 //***********************************************
-// 4. case-insensitive comparison for std::map/set, std::unordered_map/set
+// 4. natural-order and case-insensitive comparison for std::sort, std::map/set, std::unordered_map/set
+#ifdef _INC_SHLWAPI
+	inline int _strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ return StrCmpLogicalW(_Str1,_Str2); }
+#else
+	inline int _strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ static dll_function_t<int(*)(const wchar_t*,const wchar_t*)> f(L"shlwapi.dll","StrCmpLogicalW"); return f?f(_Str1,_Str2):_wcsicmp(_Str1,_Str2); } // load StrCmpLogicalW(): when unavailable, fallback to wcsicmp
+#endif
+inline int _strcmplogical( const char* _Str1, const char* _Str2, int cp=0 /* code page: CP_ACP=0 */){ return _strcmplogical(atow(_Str1,cp),atow(_Str2,cp)); }
+
+namespace logical
+{
+	template <> struct less<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b) const { return _strcmplogical(a.c_str(),b.c_str())<0;} };
+	template <> struct less<std::string>{ bool operator()(const std::string& a,const std::string& b) const { return _strcmplogical(a.c_str(),b.c_str())<0;} };
+	template <class T> using			set = std::set<T,less<T>>;
+	template <class T, class V> using	map = std::map<T,V,less<T>>;
+}
+
 namespace nocase
 {
 	template <> struct less<std::string>{ bool operator()(const std::string& a,const std::string& b)const{return _stricmp(a.c_str(),b.c_str())<0;}};
