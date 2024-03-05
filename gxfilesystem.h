@@ -227,25 +227,6 @@ struct path
 	struct split_t { wchar_t *drive, *dir, *fname, *ext; };
 	__forceinline split_t split( wchar_t* drive=nullptr, wchar_t* dir=nullptr, wchar_t* fname=nullptr, wchar_t* ext=nullptr ) const { _wsplitpath_s(_data,drive,drive?_MAX_DRIVE:0,dir,dir?_MAX_DIR:0,fname,fname?_MAX_FNAME:0,ext,ext?_MAX_EXT:0); if(drive&&drive[0]) drive[0]=wchar_t(::toupper(drive[0])); return split_t{drive,dir,fname,ext}; }
 
-	// path info/operations
-	volume_t volume() const { return (is_unc()||is_rsync()||!drive().exists())?volume_t():volume_t(drive().c_str()); }
-	path drive() const { if(!*_data) return path();if(is_unc()) return unc_root();path d;_wsplitpath_s(_data,d._data,_MAX_DRIVE,0,0,0,0,0,0);return d; }
-	path dir() const { path p; wchar_t* d=__wcsbuf();if(is_unc()){path r=unc_root();size_t rl=r.length();if(length()<=rl+1){if(r._data[rl-1]!=L'\\'){r._data[rl]='\\';r._data[rl+1]=0;}return r;}} _wsplitpath_s(_data,p._data,_MAX_DRIVE,d,_MAX_DIR,0,0,0,0); size_t pl=wcslen(p._data), dl=wcslen(d); if(0==(pl+dl)) return L".\\"; if(dl){ memcpy(p._data+pl,d,dl*sizeof(wchar_t)); p._data[pl+dl]=0; } return p; }
-	path unc_root() const { if(!is_unc()) return path(); path r=*this;size_t l=wcslen(_data);for(size_t k=0;k<l;k++)if(r[k]==L'/')r[k]=L'\\'; auto* b=wcschr(r._data+2,L'\\');if(b)b[0]=0; return r; } // similar to drive (but to the root unc path without backslash)
-	path name( bool with_ext=true ) const { path p; wchar_t* ext=with_ext?__wcsbuf():nullptr; _wsplitpath_s(_data,0,0,0,0,p._data,_MAX_FNAME,ext,ext?_MAX_EXT:0); if(!ext) return p; size_t pl=wcslen(p._data), el=wcslen(ext); if(el){ memcpy(p._data+pl,ext,el*sizeof(wchar_t)); p._data[pl+el]=0; } return p; }
-	path dir_name() const { if(wcschr(_data,L'\\')) return dir().remove_backslash().name(); else if(wcschr(_data,L'/')) return dir().remove_slash().name(); else return L""; }
-	path ext() const { wchar_t e[_MAX_EXT+1]; _wsplitpath_s(_data,0,0,0,0,0,0,e,_MAX_EXT); path p; if(*e!=0) wcscpy(p._data,e+1); return p; }
-	path parent() const { return dir().remove_backslash().dir(); }
-	std::vector<path> ancestors( path root=L"" ) const { if(empty()) return std::vector<path>(); if(root._data[0]==0) root=is_unc()?unc_root():module_dir(); path d=dir(); int l=int(d.size()),rl=int(root.size()); bool r=_wcsnicmp(d._data,root._data,rl)==0; std::vector<path> a;a.reserve(4); for(int k=l-1,e=r?rl-1:0;k>=e;k--){ if(d._data[k]!=L'\\'&&d._data[k]!=L'/') continue; d._data[k+1]=0; a.emplace_back(d); } return a; }
-	path junction() const { path t; if(empty()) return t; auto& a=attributes(); if(a==INVALID_FILE_ATTRIBUTES||(a&FILE_ATTRIBUTE_DIRECTORY)==0||(a&FILE_ATTRIBUTE_REPARSE_POINT)==0) return t; HANDLE h=CreateFileW(_data,GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,0); if(h==INVALID_HANDLE_VALUE) return t; GetFinalPathNameByHandleW(h,t._data,t.capacity,FILE_NAME_NORMALIZED); CloseHandle(h); if(wcsncmp(t._data,L"\\\\?\\",4)==0) t=path(t._data+4).add_backslash(); return t; }
-
-	// content manipulations
-	path remove_first_dot()	const { return (wcslen(_data)>2&&_data[0]==L'.'&&_data[1]==L'\\') ? path(_data+2) : *this; }
-	path remove_extension() const { split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
-	path replace_extension( const wchar_t* ext ) const { if(!ext||!*ext) return *this; split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf(),__wcsbuf());path p;swprintf_s(p._data,capacity,L"%s%s%s%s%s",si.drive,si.dir,si.fname,ext[0]==L'.'?L"":L".",ext );return p; }
-	path replace_extension( const char* ext ) const { return (!ext||!*ext)?*this:replace_extension(__mb2wc(ext,__wcsbuf())); }
-	std::vector<path> explode( const wchar_t* delim=L"\\") const { std::vector<path> L; if(!delim||!*delim) return L; path s=delim[0]==L'/'&&delim[1]==0?to_slash():*this; L.reserve(16); wchar_t* ctx=nullptr; for(wchar_t* t=wcstok_s(s._data,delim,&ctx);t;t=wcstok_s(0,delim,&ctx)) L.emplace_back(t); return L; }
-
 	// multi-byte path info
 	const char* aname( bool with_ext=true ) const { return name(with_ext).wtoa(); }
 	const wchar_t* wname( bool with_ext=true ) const { return name(with_ext).c_str(); }
@@ -256,23 +237,42 @@ struct path
 	inline void		update_cache() const { auto& c=cache(); if(!GetFileAttributesExW(_data,GetFileExInfoStandard,&c)||c.dwFileAttributes==INVALID_FILE_ATTRIBUTES){ memset(&c,0,sizeof(attrib_t)); c.dwFileAttributes=INVALID_FILE_ATTRIBUTES; return; } c.ftLastWriteTime=DiscardFileTimeMilliseconds(c.ftLastWriteTime); }
 	inline void		clear_cache() const { attrib_t* a=(attrib_t*)(_data+capacity); memset(a,0,sizeof(attrib_t)); a->dwFileAttributes=INVALID_FILE_ATTRIBUTES; }
 
-	// get attributes
-	bool exists() const {		if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES; }
-	bool is_dir() const {		if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_DIRECTORY)!=0; }
-	bool is_root_dir() const {	if(!*_data) return false; size_t l=length(); return is_dir()&&l<4&&l>1&&_data[1]==L':'; }
-	bool is_hidden() const {	if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_HIDDEN)!=0; }
-	bool is_readonly() const {	if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_READONLY)!=0; }
-	bool is_system() const {	if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_SYSTEM)!=0; }
-	bool is_junction() const {	if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_REPARSE_POINT)!=0; }
-	bool is_ssh() const {		if(!*_data) return false; return wcsstr(_data+2,L":\\")!=nullptr||wcsstr(_data+2,L":/")!=nullptr; }
-	bool is_synology() const {	if(!*_data) return false; return __wcsistr(_data,L":\\volume")!=nullptr||__wcsistr(_data,L":/volume")!=nullptr; }
-	bool is_pipe() const {		if(!*_data) return false; return wcscmp(_data,L"-")==0||_wcsnicmp(_data,L"pipe:",5)==0; }
-	bool is_http_url() const {	if(!*_data) return false; return _wcsnicmp(_data,L"http://",7)==0||_wcsnicmp(_data,L"https://",8)==0; }
-
 	// set attributes
 	void set_hidden( bool h ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(_data,a=h?(a|FILE_ATTRIBUTE_HIDDEN):(a^FILE_ATTRIBUTE_HIDDEN)); }
 	void set_readonly( bool r ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(_data,a=r?(a|FILE_ATTRIBUTE_READONLY):(a^FILE_ATTRIBUTE_READONLY)); }
 	void set_system( bool s ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(_data,a=s?(a|FILE_ATTRIBUTE_SYSTEM):(a^FILE_ATTRIBUTE_SYSTEM)); }
+
+	// get attributes
+	bool exists() const {		if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES; }
+	bool is_dir() const {		if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_DIRECTORY)!=0; }
+	bool is_drive() const {		if(!*_data) return false; size_t l=length(); return is_dir()&&l<4&&l>1&&_data[1]==L':'; }
+	bool is_hidden() const {	if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_HIDDEN)!=0; }
+	bool is_readonly() const {	if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_READONLY)!=0; }
+	bool is_system() const {	if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_SYSTEM)!=0; }
+	bool is_ssh() const {		if(!*_data) return false; return wcsstr(_data+2,L":\\")!=nullptr||wcsstr(_data+2,L":/")!=nullptr; }
+	bool is_synology() const {	if(!*_data) return false; return __wcsistr(_data,L":\\volume")!=nullptr||__wcsistr(_data,L":/volume")!=nullptr; }
+	bool is_pipe() const {		if(!*_data) return false; return wcscmp(_data,L"-")==0||_wcsnicmp(_data,L"pipe:",5)==0; }
+	bool is_http_url() const {	if(!*_data) return false; return _wcsnicmp(_data,L"http://",7)==0||_wcsnicmp(_data,L"https://",8)==0; }
+	bool is_junction() const {	if(!*_data||is_drive()) return false;auto& a=attributes(); if(a==INVALID_FILE_ATTRIBUTES||(a&FILE_ATTRIBUTE_DIRECTORY)==0) return false; return ((a&FILE_ATTRIBUTE_REPARSE_POINT)!=0); }
+
+	// path info/operations
+	volume_t volume() const { return (is_unc()||is_rsync()||!drive().exists())?volume_t():volume_t(drive().c_str()); }
+	path drive() const { if(!*_data) return path();if(is_unc()) return unc_root();path d;_wsplitpath_s(_data,d._data,_MAX_DRIVE,0,0,0,0,0,0);return d; }
+	path dir() const { path p; wchar_t* d=__wcsbuf();if(is_unc()){path r=unc_root();size_t rl=r.length();if(length()<=rl+1){if(r._data[rl-1]!=L'\\'){r._data[rl]='\\';r._data[rl+1]=0;}return r;}} _wsplitpath_s(_data,p._data,_MAX_DRIVE,d,_MAX_DIR,0,0,0,0); size_t pl=wcslen(p._data), dl=wcslen(d); if(0==(pl+dl)) return L".\\"; if(dl){ memcpy(p._data+pl,d,dl*sizeof(wchar_t)); p._data[pl+dl]=0; } return p; }
+	path unc_root() const { if(!is_unc()) return path(); path r=*this;size_t l=wcslen(_data);for(size_t k=0;k<l;k++)if(r[k]==L'/')r[k]=L'\\'; auto* b=wcschr(r._data+2,L'\\');if(b)b[0]=0; return r; } // similar to drive (but to the root unc path without backslash)
+	path name( bool with_ext=true ) const { path p; wchar_t* ext=with_ext?__wcsbuf():nullptr; _wsplitpath_s(_data,0,0,0,0,p._data,_MAX_FNAME,ext,ext?_MAX_EXT:0); if(!ext) return p; size_t pl=wcslen(p._data), el=wcslen(ext); if(el){ memcpy(p._data+pl,ext,el*sizeof(wchar_t)); p._data[pl+el]=0; } return p; }
+	path dir_name() const { if(wcschr(_data,L'\\')) return dir().remove_backslash().name(); else if(wcschr(_data,L'/')) return dir().remove_slash().name(); else return L""; }
+	path ext() const { wchar_t e[_MAX_EXT+1]; _wsplitpath_s(_data,0,0,0,0,0,0,e,_MAX_EXT); path p; if(*e!=0) wcscpy(p._data,e+1); return p; }
+	path parent() const { return dir().remove_backslash().dir(); }
+	std::vector<path> ancestors( path root=L"" ) const { if(empty()) return std::vector<path>(); if(root._data[0]==0) root=is_unc()?unc_root():module_dir(); path d=dir(); int l=int(d.size()),rl=int(root.size()); bool r=_wcsnicmp(d._data,root._data,rl)==0; std::vector<path> a;a.reserve(4); for(int k=l-1,e=r?rl-1:0;k>=e;k--){ if(d._data[k]!=L'\\'&&d._data[k]!=L'/') continue; d._data[k+1]=0; a.emplace_back(d); } return a; }
+	path junction() const { path t; if(!*_data||!exists()) return t; bool b_dir=is_dir(),j=false; for(auto& d:b_dir?ancestors():dir().ancestors()){ if(d.is_drive()) break; if((d.attributes()&FILE_ATTRIBUTE_REPARSE_POINT)!=0){j=true;break;} } if(!j) return t; HANDLE h=CreateFileW(_data,GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,0); if(h==INVALID_HANDLE_VALUE) return t; GetFinalPathNameByHandleW(h,t._data,t.capacity,FILE_NAME_NORMALIZED); CloseHandle(h); if(wcsncmp(t._data,L"\\\\?\\",4)==0) t=path(t._data+4); return b_dir?t.add_backslash():t; }
+
+	// content manipulations
+	path remove_first_dot()	const { return (wcslen(_data)>2&&_data[0]==L'.'&&_data[1]==L'\\') ? path(_data+2) : *this; }
+	path remove_extension() const { split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf()); return wcscat(wcscat(si.drive,si.dir),si.fname); }
+	path replace_extension( const wchar_t* ext ) const { if(!ext||!*ext) return *this; split_t si=split(__wcsbuf(),__wcsbuf(),__wcsbuf(),__wcsbuf());path p;swprintf_s(p._data,capacity,L"%s%s%s%s%s",si.drive,si.dir,si.fname,ext[0]==L'.'?L"":L".",ext );return p; }
+	path replace_extension( const char* ext ) const { return (!ext||!*ext)?*this:replace_extension(__mb2wc(ext,__wcsbuf())); }
+	std::vector<path> explode( const wchar_t* delim=L"\\") const { std::vector<path> L; if(!delim||!*delim) return L; path s=delim[0]==L'/'&&delim[1]==0?to_slash():*this; L.reserve(16); wchar_t* ctx=nullptr; for(wchar_t* t=wcstok_s(s._data,delim,&ctx);t;t=wcstok_s(0,delim,&ctx)) L.emplace_back(t); return L; }
 
 	// directory attributes
 	bool has_file( const path& file_name ) const { return is_dir()&&operator+(file_name).exists(); }
