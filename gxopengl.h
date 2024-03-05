@@ -839,6 +839,8 @@ namespace gl {
 		std::string flatten() const
 		{
 			static const bool TRIM_LINE_DIRECTIVE=true;
+			static const bool TRIM_TRIPLE_NEWLINES=true;
+
 			std::string f;
 			for( size_t k=0; k < size(); k++ )
 			{
@@ -849,8 +851,8 @@ namespace gl {
 					f += l; f+="\n";
 				}
 			}
-			for( int k=0; k<16&&strstr(f.c_str(),"\n\n\n"); k++ )
-				f = str_replace(f.c_str(),"\n\n\n", "\n\n" );
+
+			if(TRIM_TRIPLE_NEWLINES){ for(int k=0;k<16&&strstr(f.c_str(),"\n\n\n");k++) f=str_replace(f.c_str(),"\n\n\n","\n\n"); }
 			f = str_replace(f.c_str(),";\nvoid main()\n\n{", ";\n\nvoid main()\n{" );
 			
 			return f;
@@ -1053,7 +1055,14 @@ namespace gl {
 		return buff.c_str();
 	}
 
-	struct indexed_string_t : public std::string { int index=0; }; // string with index in a source
+	// string with index in a source
+	struct indexed_string_t : public std::string
+	{
+		int index=0;
+		using std::string::string;		// inherit ctors
+		using std::string::operator=;	// inherit operator=
+	};
+
 	struct effect_source_t : public std::vector<named_string_t>
 	{
 		shader_macro_t macro; // embedded macro
@@ -1096,7 +1105,7 @@ inline std::vector<gl::indexed_string_t> gxExplodeShaderSource( const char* sour
 		const char* s = ltrim(vs[k]);
 		bool b_line = strncmp(s,"#line",5)==0;
 		int r = b_line?sscanf( s+6, "%d", &idx ):0;
-		gl::indexed_string_t i; reinterpret_cast<std::string&>(i)=vs[k]; i.index=idx;
+		gl::indexed_string_t i; i=vs[k]; i.index=idx;
 		v.emplace_back(i);
 		if(!b_line) idx++;
 	}
@@ -1107,7 +1116,7 @@ inline std::map<int,std::string> gxExplodeShaderSourceMap( const char* source, i
 {
 	std::map<int,std::string> m;
 	for( const auto& s : gxExplodeShaderSource(source,first_index) )
-		if(!strstr(s.c_str(),"#line")) m.emplace(s.index,s);//reinterpret_cast<std::string&>(s));
+		if(!strstr(s.c_str(),"#line")) m.emplace(s.index,s);
 	return m;
 }
 
@@ -1196,7 +1205,7 @@ namespace gl {
 		// shader source files
 		void export_shader_sources( path dir, path fxname=L"" )
 		{
-			dir = dir.to_backslash(); if(!dir.empty()&&dir.back()!=L'\\') dir=dir.dir(); dir += L"glsl\\";
+			dir = dir.to_backslash(); if(!dir.empty()&&!dir.ext().empty()&&dir.back()!=L'\\') dir=dir.dir(); dir += L"glsl\\";
 			fxname = fxname.empty() ? _name : fxname.remove_extension();
 			for( auto* p : programs ) p->source.export_shader_sources( dir, fxname+L"."+p->name() );
 		}
@@ -1413,11 +1422,24 @@ inline bool gxValidateProgram( const char* name, GLuint ID, bool bLog=true ) // 
 	return true;
 }
 
-namespace gl { struct directive_t { std::string version, extension, pragma, layout; }; }
-inline gl::directive_t gxExtractShaderDirectives( std::string& src, bool keep_blank=true )
+namespace gl { struct directive_t
 {
-	static const char v[]="#version", e[]="#extension", p[]="#pragma", l[]="layout";
-	constexpr size_t le=sizeof(e)-1, lp=sizeof(p)-1, lv=sizeof(v)-1, ll=sizeof(l)-1; // exclude trailing zeros
+	std::string version, extension, pragma, layout;
+	std::string merge() const { return version+extension+pragma+layout; }
+	directive_t& operator+=( const directive_t& other )
+	{
+		if(!other.version.empty())		version+=other.version;
+		if(!other.extension.empty())	extension+=other.extension;
+		if(!other.pragma.empty())		pragma+=other.pragma;
+		if(!other.layout.empty())		layout+=other.layout;
+		return *this;
+	}
+};}
+
+inline gl::directive_t gxPreprocessShaderDirectives( uint shader_type, std::string& src, bool keep_blank=true )
+{
+	static const char v[]="#version", e[]="#extension", p[]="#pragma", l[]="layout", h[]="shared";
+	constexpr size_t le=sizeof(e)-1, lp=sizeof(p)-1, lv=sizeof(v)-1, ll=sizeof(l)-1, lh=sizeof(l)-1; // exclude trailing zeros
 
 	gl::directive_t d; std::string src0=src; src.clear();
 	for( auto& j : gxExplodeShaderSource(src0.c_str()) )
@@ -1430,8 +1452,15 @@ inline gl::directive_t gxExtractShaderDirectives( std::string& src, bool keep_bl
 			else if(strncmp(s,p,lp)==0){ pd=&d.pragma; }
 			else if(strncmp(s,l,ll)==0){ pd=&d.layout; }
 		}
-		if(!pd){src+=j+'\n'; }
-		else{	*pd+=j+'\n'; if(keep_blank) src+='\n'; }
+
+		// remove erroneous per-shader directives
+		if(shader_type!=GL_COMPUTE_SHADER)
+		{
+			if(strncmp(s,h,lh)==0) j.clear(); // remove shared in non-compute shaders, while keeping index
+		}
+
+		if(pd){	*pd+=j+'\n'; if(keep_blank) src+='\n'; }
+		else{ src+=j+'\n'; }
 	}
 	return d;
 }
@@ -1445,24 +1474,16 @@ inline gl::Program* gxCreateProgram( std::string prefix, std::string name, const
 	for( auto& it : source )
 	{
 		if(it.second.empty()) continue;
-		std::string v;
-		std::string e;
-		std::string p;
-		std::string l; if(it.first==GL_FRAGMENT_SHADER) l="layout(pixel_center_integer) in vec4 gl_FragCoord;\n";
 
+		gl::directive_t directives;
+		directives.layout = it.first==GL_FRAGMENT_SHADER?"layout(pixel_center_integer) in vec4 gl_FragCoord;\n":"";
 		for( auto& f: it.second )
 		{
 			auto& s = const_cast<std::string&>(f.value); // source element
-			auto d = gxExtractShaderDirectives(s);
-
-			v += d.version;
-			e += d.extension;
-			p += d.pragma;
-			l += d.layout;
+			directives += gxPreprocessShaderDirectives(it.first,s);
 		}
-
 		auto& first = const_cast<std::string&>(it.second.front().value); // first source element
-		first = v+e+p+l+first; // merge all together
+		first = directives.merge()+first; // merge all together
 	}
 
 	// 2. trivial return for the default program
