@@ -134,13 +134,13 @@ struct path
 	path& operator+=( const char* s ){ size_t l=wcslen(_data); __atow(s,_data+l); return *this; }
 	path& operator+=( wchar_t c ){ size_t l=wcslen(_data); _data[l]=c; _data[l+1]=0; return *this; }
 	path& operator+=( char c ){ size_t l=wcslen(_data); _data[l]=wchar_t(c); _data[l+1]=0; return *this; }
-	path& operator+=( const std::wstring& s ){ return operator+=(s.c_str()); }
+	path& operator+=( const string_type& s ){ return operator+=(s.c_str()); }
 	path& operator+=( const std::string& s ){ return operator+=(s.c_str()); }
 
 	path& operator/=( const path& p ){ return *this=add_backslash()+p; }
 	path& operator/=( const wchar_t* s ){ return *this=add_backslash()+s; }
 	path& operator/=( const char* s ){ return *this=add_backslash()+s; }
-	path& operator/=( const std::wstring& s ){ return operator/=(s.c_str()); }
+	path& operator/=( const string_type& s ){ return operator/=(s.c_str()); }
 	path& operator/=( const std::string& s ){ return operator/=(s.c_str()); }
 
 	path operator+( const path& p ) const { return clone().operator+=(p); }
@@ -148,13 +148,13 @@ struct path
 	path operator+( const char* s ) const { return clone().operator+=(s); }
 	path operator+( wchar_t c ){ return clone().operator+=(c); }
 	path operator+( char c ){ return clone().operator+=(c); }
-	path operator+( const std::wstring& s ) const { return clone().operator+=(s.c_str()); }
+	path operator+( const string_type& s ) const { return clone().operator+=(s.c_str()); }
 	path operator+( const std::string& s ) const { return clone().operator+=(s.c_str()); }
 
 	path operator/( const path& p ) const { return clone().operator/=(p); }
 	path operator/( const wchar_t* s ) const { return clone().operator/=(s); }
 	path operator/( const char* s ) const { return clone().operator/=(s); }
-	path operator/( const std::wstring& s ) const { return clone().operator/=(s.c_str()); }
+	path operator/( const string_type& s ) const { return clone().operator/=(s.c_str()); }
 	path operator/( const std::string& s ) const { return clone().operator/=(s.c_str()); }
 
 	// operator overloading: comparisons
@@ -240,9 +240,9 @@ struct path
 	inline void		clear_cache() const { attrib_t* a=(attrib_t*)(_data+capacity); memset(a,0,sizeof(attrib_t)); a->dwFileAttributes=INVALID_FILE_ATTRIBUTES; }
 
 	// set attributes
-	void set_hidden( bool h ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(_data,a=h?(a|FILE_ATTRIBUTE_HIDDEN):(a^FILE_ATTRIBUTE_HIDDEN)); }
-	void set_readonly( bool r ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(_data,a=r?(a|FILE_ATTRIBUTE_READONLY):(a^FILE_ATTRIBUTE_READONLY)); }
-	void set_system( bool s ) const {	if(!exists()) return; auto& a=attributes(); SetFileAttributesW(_data,a=s?(a|FILE_ATTRIBUTE_SYSTEM):(a^FILE_ATTRIBUTE_SYSTEM)); }
+	void set_hidden( bool h ) const {	if(!*_data) return; auto& a=attributes(); if(a!=INVALID_FILE_ATTRIBUTES) SetFileAttributesW(_data,a=h?(a|FILE_ATTRIBUTE_HIDDEN):(a^FILE_ATTRIBUTE_HIDDEN)); }
+	void set_readonly( bool r ) const {	if(!*_data) return; auto& a=attributes(); if(a!=INVALID_FILE_ATTRIBUTES) SetFileAttributesW(_data,a=r?(a|FILE_ATTRIBUTE_READONLY):(a^FILE_ATTRIBUTE_READONLY)); }
+	void set_system( bool s ) const {	if(!*_data) return; auto& a=attributes(); if(a!=INVALID_FILE_ATTRIBUTES) SetFileAttributesW(_data,a=s?(a|FILE_ATTRIBUTE_SYSTEM):(a^FILE_ATTRIBUTE_SYSTEM)); }
 
 	// get attributes
 	bool exists() const {		if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES; }
@@ -331,8 +331,8 @@ struct path
 	static inline path module_path( HMODULE h_module=nullptr ){ static path m; if(!m.empty()&&!h_module) return m; path p;GetModuleFileNameW(h_module,p,path::capacity);p[0]=::toupper(p[0]); p=p.canonical(); return h_module?p:(m=p); } // 'module' conflicts with C++ modules
 	static inline path module_name( bool with_ext=true, HMODULE h_module=nullptr ){ return module_path(h_module).name(with_ext); }
 	static inline path module_dir( HMODULE h_module=nullptr ){ static path d=module_path().dir(); return h_module?module_path(h_module).dir():d; }
-	static inline path cwd(){ path p; auto* r=_wgetcwd(p._data,path::capacity); return p.absolute().add_backslash(); }	// current working dir
-	static inline path current_path(){ path p; auto* r=_wgetcwd(p._data,path::capacity); return p.absolute().add_backslash(); }	// current working dir
+	static inline path current_path(){ path p; auto* r=_wgetcwd(p._data,path::capacity); return p.absolute().add_backslash(); }	// current working directory
+	static inline path cwd(){ return current_path(); }	// current working directory
 	static inline path chdir( path dir ){ return dir.chdir(); }
 
 	// file content access: void (rb/wb), char (r/w), wchar_t (r/w,ccs=UTF-8)
