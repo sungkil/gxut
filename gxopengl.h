@@ -734,7 +734,7 @@ namespace gl {
 		Texture*	texture=nullptr;
 		GLint		binding=-1;	// only for image texture unit
 
-		template <class T> inline void set( GLuint prog, T* v, GLsizei count )
+		template <class T> void set( GLuint prog, T* v, GLsizei count )
 		{
 			if(ID==-1) return;
 			switch(type)

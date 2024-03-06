@@ -51,7 +51,7 @@ inline CWinThread* begin_thread( AFX_THREADPROC proc, void* pUserData=nullptr, i
 	return pThread;
 }
 
-template <class T> inline T* begin_thread( CRuntimeClass* pRuntimeClass, int priority=THREAD_PRIORITY_NORMAL, bool auto_delete=false )
+template <class T> T* begin_thread( CRuntimeClass* pRuntimeClass, int priority=THREAD_PRIORITY_NORMAL, bool auto_delete=false )
 {
 	CWinThread* pThread= AfxBeginThread(pRuntimeClass,priority,0,auto_delete?0:CREATE_SUSPENDED); if(!pThread) return nullptr;
 	if(!auto_delete){ pThread->m_bAutoDelete=FALSE; pThread->ResumeThread(); }

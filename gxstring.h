@@ -54,13 +54,15 @@ inline size_t strlen( const wchar_t* _Str ){ return wcslen(_Str); }
 inline const wchar_t * strpbrk( const wchar_t* _Str, const wchar_t* _Control ){ return wcspbrk(_Str,_Control); }
 inline wchar_t * strpbrk( wchar_t* _Str, const wchar_t* _Control ){ return wcspbrk(_Str,_Control); }
 // 1.1 VC extensions
-inline wchar_t* _strlwr( wchar_t* _Str ){ return _wcslwr(_Str); } 
+inline wchar_t* _strlwr( wchar_t* _Str ){ return _wcslwr(_Str); }
 inline wchar_t* _strupr( wchar_t* _Str ){ return _wcsupr(_Str); }
+inline errno_t _strlwr_s( wchar_t* _Str, size_t _Size ){ return _wcslwr_s(_Str,_Size); }
+inline errno_t _strupr_s( wchar_t* _Str, size_t _Size ){ return _wcsupr_s(_Str,_Size); }
 inline int _stricmp( const wchar_t* _Str1, const wchar_t* _Str2 ){ return _wcsicmp(_Str1,_Str2); }
 // 1.2 slee extensions
-template <class T> inline size_t _strrspn( const T* _Str, const T* _Control ){size_t L=strlen(_Str),C=strlen(_Control),k=0,j=0;for(k=0;k<L;k++){for(j=0;j<C;j++)if(_Str[L-1-k]==_Control[j])break;if(j==C)break;}return k;}
-inline const char*    _stristr( const char* _Str1, size_t l1, const char* _Str2, size_t l2 ){ char* s1=_strlwr(__tstrdup(_Str1,l1)); char* s2=_strlwr(__tstrdup(_Str2,l2)); const char* r=strstr(s1,s2); return r?(_Str1+(r-s1)):nullptr; }
-inline const wchar_t* _wcsistr( const wchar_t* _Str1, size_t l1, const wchar_t* _Str2, size_t l2 ){ wchar_t* s1=_wcslwr(__tstrdup(_Str1,l1)); wchar_t* s2=_wcslwr(__tstrdup(_Str2,l2)); const wchar_t* r=wcsstr(s1,s2); return r?(_Str1+(r-s1)):nullptr; }
+template <class T> size_t _strrspn( const T* _Str, const T* _Control ){ size_t L=strlen(_Str),C=strlen(_Control),k=0,j=0;for(k=0;k<L;k++){for(j=0;j<C;j++)if(_Str[L-1-k]==_Control[j])break;if(j==C)break;}return k; }
+inline const char*    _stristr( const char* _Str1, size_t l1, const char* _Str2, size_t l2 ){ char* s1=__tstrdup(_Str1,l1); _strlwr_s(s1,l1+1); char* s2=__tstrdup(_Str2,l2); _strlwr_s(s2,l2+1); const char* r=strstr(s1,s2); return r?(_Str1+(r-s1)):nullptr; }
+inline const wchar_t* _wcsistr( const wchar_t* _Str1, size_t l1, const wchar_t* _Str2, size_t l2 ){ wchar_t* s1=__tstrdup(_Str1,l1); _wcslwr_s(s1,l1+1); wchar_t* s2=__tstrdup(_Str2,l2); _wcslwr_s(s2,l2+1); const wchar_t* r=wcsstr(s1,s2); return r?(_Str1+(r-s1)):nullptr; }
 inline const char*    _stristr( const char* _Str1, const char* _Str2 ){ return _stristr(_Str1, strlen(_Str1), _Str2, strlen(_Str2)); }
 inline const wchar_t* _wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return _wcsistr(_Str1, wcslen(_Str1), _Str2, wcslen(_Str2)); }
 inline const wchar_t* _stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return _wcsistr(_Str1, wcslen(_Str1), _Str2, wcslen(_Str2)); }
@@ -118,8 +120,8 @@ namespace nocase
 
 //***********************************************
 // 5. case conversion
-template <class T> inline const T* tolower( const T* src ){ return _strlwr(__tstrdup(src)); }
-template <class T> inline const T* toupper( const T* src ){ return _strupr(__tstrdup(src)); }
+template <class T> const T* tolower( const T* src ){ return _strlwr(__tstrdup(src)); }
+template <class T> const T* toupper( const T* src ){ return _strupr(__tstrdup(src)); }
 inline const char* tovarname( const char* src, bool to_upper=false ){ if(!src||!*src) return ""; char *s=(char*)src,*dst=_strbuf(strlen(src)+2),*d=dst; if(!isalpha(*s)&&(*s)!='_') *(d++)='_'; for(;*s;s++,d++) *d=isalnum(*s)?(to_upper?toupper(*s):(*s)):'_'; *d='\0'; return dst; }
 inline const char* tovarname( const wchar_t* src, bool to_upper=false ){ return tovarname(wtoa(src),to_upper); }
 
@@ -159,7 +161,7 @@ inline const char* dtoa( const double4& v ){static const char* fmt="%g %g %g %g"
 
 //***********************************************
 // 6.1 bitwise conversion
-template <class T> inline const char* unpack_bits( const T& v ){ size_t n=sizeof(T)*8; char* buff=_strbuf(n); buff[n]=0; for(size_t k=0,s=0;k<n;k++,s=k%8) buff[k]=(((const char*)&v)[k>>3]&(1<<s))?'1':'0'; return buff; }
+template <class T> const char* unpack_bits( const T& v ){ size_t n=sizeof(T)*8; char* buff=_strbuf(n); buff[n]=0; for(size_t k=0,s=0;k<n;k++,s=k%8) buff[k]=(((const char*)&v)[k>>3]&(1<<s))?'1':'0'; return buff; }
 
 //***********************************************
 // 6.2 Special-purpose functions
@@ -301,28 +303,28 @@ inline const char* tohex( uint4 u ){ return tohex(&u,sizeof(u)); }
 // 11. trim: delimiters of strings or characters
 
 template <class T>
-inline const T* ltrim( const T* src, const T* delims=_strcvt<T>(" \t\r\n") )
+const T* ltrim( const T* src, const T* delims=_strcvt<T>(" \t\r\n") )
 {
 	if(!src||!src[0]) return reinterpret_cast<const T*>(L"");
 	return __tstrdup(src,strlen(src))+strspn(src,delims);
 }
 
 template <class T>
-inline const T* ltrim( const T* src, T delim )
+const T* ltrim( const T* src, T delim )
 {
 	if(!src||!src[0]) return reinterpret_cast<const T*>(L"");
 	while(*src&&*src==delim) src++; return __tstrdup(src);
 }
 
 template <class T>
-inline const T* rtrim( const T* src, const T* delims=_strcvt<T>(" \t\r\n") )
+const T* rtrim( const T* src, const T* delims=_strcvt<T>(" \t\r\n") )
 {
 	if(!src||!src[0]) return reinterpret_cast<const T*>(L"");
 	return __tstrdup(src,strlen(src)-_strrspn(src,delims));
 }
 
 template <class T>
-inline const T* rtrim( const T* src, T delim )
+const T* rtrim( const T* src, T delim )
 {
 	if(!src||!src[0]) return reinterpret_cast<const T*>(L"");
 	int l=int(strlen(src)); const T* d=src+l-1; for(int k=l-1;*d==delim&&k>=0;k--,d--);
@@ -330,14 +332,14 @@ inline const T* rtrim( const T* src, T delim )
 }
 
 template <class T>
-inline const T* trim( const T* src, const T* delims=_strcvt<T>(" \t\r\n") )
+const T* trim( const T* src, const T* delims=_strcvt<T>(" \t\r\n") )
 {
 	if(!src||!src[0]) return reinterpret_cast<const T*>(L"");
 	const T* r=rtrim(src,delims); return r+(*r?strspn(src,delims):0);
 }
 
 template <class T>
-inline const T* trim( const T* src, T delim )
+const T* trim( const T* src, T delim )
 {
 	if(!src||!src[0]) return reinterpret_cast<const T*>(L"");
 	while(*src&&*src==delim) src++; if(!src[0]) return reinterpret_cast<const T*>(__tstrdup(L""));
@@ -347,7 +349,7 @@ inline const T* trim( const T* src, T delim )
 
 // in-place trim
 template <class T>
-inline T* itrim( T* src, const T* delims=_strcvt<T>(" \t\r\n") )
+T* itrim( T* src, const T* delims=_strcvt<T>(" \t\r\n") )
 {
 	if(!src||!src[0]) return src; // return as-is
 	src += strspn(src,delims);
@@ -356,7 +358,7 @@ inline T* itrim( T* src, const T* delims=_strcvt<T>(" \t\r\n") )
 }
 
 template <class T>
-inline const T* trim_comment( const T* src, const char* marker="#" )
+const T* trim_comment( const T* src, const char* marker="#" )
 {
 	if(!src||!src[0]) return reinterpret_cast<const T*>(L"");
 	size_t slen=strlen(src),clen=strlen(marker),sc=slen-clen+1;

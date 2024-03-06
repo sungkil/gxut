@@ -30,8 +30,8 @@ struct image
 
 	inline unsigned int stride( int channel=0 ) const { bool i420=fcc==I420||fcc==YV12||fcc==IYUV; unsigned int bpp=(fcc==YUY2)?2:(i420||fcc==NV12)?1:channels; uint r=(depth>>3)*bpp*width; if(align<2) return r; return (((i420&&channel)?(r>>1):r)+align-1)&(~(align-1)); }
 	inline unsigned int size() const { bool i420=fcc==I420||fcc==YV12||fcc==IYUV; return height*(i420?(stride()+stride(1)):fcc==NV12?(stride()+stride(1)/2):stride()); }
-	template <class T> inline T* ptr( int y=0, int x=0, bool vflip=false ){ return ((T*)(data+stride()*(vflip?height-1-y:y)))+x; } // works only for RGB
-	template <class T> inline T* plane( int channel=0 ){ unsigned char* p=data; int c=channel; if(c){ p+=stride()*height; if((fcc==I420||fcc==YV12||fcc==IYUV)&&c>1) p+=stride(1)*height/2; } return (T*)p; }
+	template <class T> T* ptr( int y=0, int x=0, bool vflip=false ){ return ((T*)(data+stride()*(vflip?height-1-y:y)))+x; } // works only for RGB
+	template <class T> T* plane( int channel=0 ){ unsigned char* p=data; int c=channel; if(c){ p+=stride()*height; if((fcc==I420||fcc==YV12||fcc==IYUV)&&c>1) p+=stride(1)*height/2; } return (T*)p; }
 
 	// fourcc; YUY2==YUYV, I420==YU12==IYUV (YUV420P), YV12 (YVU420P), NV12 (YUV420SP)
 	enum fcc_t { RGB=0, YUY2='2yuy', YUYV='vyuy', I420='024i', YU12=I420, IYUV='vuyi', YV12='21vy', NV12='21vn' };
