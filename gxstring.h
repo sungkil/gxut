@@ -29,7 +29,14 @@ static const unsigned char BOM_UTF16[2]={0xFF,0xFE};			// little endian
 static const unsigned char BOM_UTF32[4]={0xFF,0xFE,0x00,0x00};	// little endian
 
 //***********************************************
-// 0. overloaded string functions for wchar_t
+// 0. shared circular buffers
+template <class T> __forceinline T* __tstrbuf( size_t len ){ static T* C[SHARED_CIRCULAR_BUFFER_SIZE]={}; static uint cid=0; cid=(++cid)%(sizeof(C)/sizeof(T*)); C[cid] = (T*)(C[cid]?realloc(C[cid],sizeof(T)*(len+1)):malloc(sizeof(T)*(len+1))); if(C[cid]) C[cid][len]=0; return C[cid]; }
+template <class T> __forceinline T* __tstrdup( const T* s,size_t len=-1 ){ if(len==-1){const T* t=s; while(*t)t++;len=t-s;} T* d=__tstrbuf<T>(len); return len?(T*)memcpy(d,s,sizeof(T)*len):d; }
+__forceinline char* _strbuf( size_t len ){ return __tstrbuf<char>(len); }
+__forceinline wchar_t* _wcsbuf( size_t len ){ return __tstrbuf<wchar_t>(len); }
+
+//***********************************************
+// 1. overloaded string functions for wchar_t
 inline wchar_t* strcpy( wchar_t* _Dest, const wchar_t* _Src ){ return wcscpy(_Dest,_Src); }
 inline wchar_t* strncpy( wchar_t* _Dest, const wchar_t* _Src, size_t _Count ){ return wcsncpy(_Dest,_Src,_Count); }
 inline wchar_t* strcat( wchar_t* _Dest, const wchar_t* _Src ){ return wcscat(_Dest,_Src);  }
@@ -46,22 +53,17 @@ inline size_t strcspn( const wchar_t* _Str, const wchar_t* _Control ){ return wc
 inline size_t strlen( const wchar_t* _Str ){ return wcslen(_Str); }
 inline const wchar_t * strpbrk( const wchar_t* _Str, const wchar_t* _Control ){ return wcspbrk(_Str,_Control); }
 inline wchar_t * strpbrk( wchar_t* _Str, const wchar_t* _Control ){ return wcspbrk(_Str,_Control); }
-// 0.1 VC extensions
-inline wchar_t* _strlwr( wchar_t* _Str ){ return _wcslwr(_Str); return _Str; } 
-inline wchar_t* _strupr( wchar_t* _Str ){ return _wcsupr(_Str); return _Str; }
+// 1.1 VC extensions
+inline wchar_t* _strlwr( wchar_t* _Str ){ return _wcslwr(_Str); } 
+inline wchar_t* _strupr( wchar_t* _Str ){ return _wcsupr(_Str); }
 inline int _stricmp( const wchar_t* _Str1, const wchar_t* _Str2 ){ return _wcsicmp(_Str1,_Str2); }
-// 0.2 slee extensions
+// 1.2 slee extensions
 template <class T> inline size_t _strrspn( const T* _Str, const T* _Control ){size_t L=strlen(_Str),C=strlen(_Control),k=0,j=0;for(k=0;k<L;k++){for(j=0;j<C;j++)if(_Str[L-1-k]==_Control[j])break;if(j==C)break;}return k;}
-inline const char* _stristr( const char* _Str1, const char* _Str2 ){ char* s1=_strdup(_Str1);_strlwr(s1); char* s2=_strdup(_Str2);_strlwr(s2); const char* r=strstr(s1,s2); if(r)r=_Str1+(r-s1); free(s1); free(s2); return r; }
-inline const wchar_t* _wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ wchar_t* s1=_wcsdup(_Str1); _wcslwr(s1); wchar_t* s2=_wcsdup(_Str2); _wcslwr(s2); const wchar_t* r=wcsstr(s1,s2); if(r)r=_Str1+(r-s1); free(s1); free(s2); return r; }
-inline const wchar_t* _stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return _wcsistr(_Str1,_Str2); }
-
-//***********************************************
-// 1. shared circular buffers
-template <class T> __forceinline T* __tstrbuf( size_t len ){ static T* C[SHARED_CIRCULAR_BUFFER_SIZE]={}; static uint cid=0; cid=(++cid)%(sizeof(C)/sizeof(T*)); C[cid] = (T*)(C[cid]?realloc(C[cid],sizeof(T)*(len+1)):malloc(sizeof(T)*(len+1))); if(C[cid]) C[cid][len]=0; return C[cid]; }
-template <class T> __forceinline T* __tstrdup( const T* s,size_t len=-1 ){ if(len==-1){const T* t=s; while(*t)t++;len=t-s;} T* d=__tstrbuf<T>(len); return len?(T*)memcpy(d,s,sizeof(T)*len):d; }
-__forceinline char* _strbuf( size_t len ){ return __tstrbuf<char>(len); }
-__forceinline wchar_t* _wcsbuf( size_t len ){ return __tstrbuf<wchar_t>(len); }
+inline const char*    _stristr( const char* _Str1, size_t l1, const char* _Str2, size_t l2 ){ char* s1=_strlwr(__tstrdup(_Str1,l1)); char* s2=_strlwr(__tstrdup(_Str2,l2)); const char* r=strstr(s1,s2); return r?(_Str1+(r-s1)):nullptr; }
+inline const wchar_t* _wcsistr( const wchar_t* _Str1, size_t l1, const wchar_t* _Str2, size_t l2 ){ wchar_t* s1=_wcslwr(__tstrdup(_Str1,l1)); wchar_t* s2=_wcslwr(__tstrdup(_Str2,l2)); const wchar_t* r=wcsstr(s1,s2); return r?(_Str1+(r-s1)):nullptr; }
+inline const char*    _stristr( const char* _Str1, const char* _Str2 ){ return _stristr(_Str1, strlen(_Str1), _Str2, strlen(_Str2)); }
+inline const wchar_t* _wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return _wcsistr(_Str1, wcslen(_Str1), _Str2, wcslen(_Str2)); }
+inline const wchar_t* _stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return _wcsistr(_Str1, wcslen(_Str1), _Str2, wcslen(_Str2)); }
 
 //***********************************************
 // 2. format
@@ -508,10 +510,10 @@ __noinline const T* str_escape( const T* _Src )
 // - posix-style **/* (subdirectory matching) is not implemented yet
 
 template <class T>
-__noinline bool glob( const T* str, const T* pattern )
+__noinline bool glob( const T* str, size_t slen, const T* pattern, size_t plen )
 {
 	static const T q=T('?'), a=T('*');
-	int n=int(strlen(str)), m=int(strlen(pattern)); if(m==0) return n==0;
+	int n=int(slen?slen:strlen(str)), m=int(plen?plen:strlen(pattern)); if(m==0) return n==0;
 	int i,j,t,p; for(i=0,j=0,t=-1,p=-1;i<n;)
 	{
 		if(str[i]==pattern[j]||(j<m&&pattern[j]==q)){i++;j++;}
@@ -521,6 +523,34 @@ __noinline bool glob( const T* str, const T* pattern )
 	}
 	while(j<m&&pattern[j]==a)j++;
 	return j==m;
+}
+
+template <class T>
+__noinline bool iglob( const T* str, size_t slen, const T* pattern, size_t plen ) // case-insensitive
+{
+	static const T q=T('?'), a=T('*');
+	int n=int(slen?slen:strlen(str)), m=int(plen?plen:strlen(pattern)); if(m==0) return n==0;
+	int i,j,t,p; for(i=0,j=0,t=-1,p=-1;i<n;)
+	{
+		if(::tolower(str[i])==::tolower(pattern[j])||(j<m&&pattern[j]==q)){i++;j++;}
+		else if(j<m&&pattern[j]==a){t=i;p=j;j++;}
+		else if(p!=-1){j=p+1;i=t+1;t++;}
+		else return false;
+	}
+	while(j<m&&pattern[j]==a)j++;
+	return j==m;
+}
+
+template <class T>
+__noinline bool glob( const T* str, const T* pattern )
+{
+	return glob<T>(str,str?strlen(str):0,pattern,pattern?strlen(pattern):0);
+}
+
+template <class T>
+__noinline bool iglob( const T* str, const T* pattern )
+{
+	return iglob<T>(str,str?strlen(str):0,pattern,pattern?strlen(pattern):0);
 }
 
 //***********************************************
