@@ -68,14 +68,7 @@ inline const wchar_t* _wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ re
 inline const wchar_t* _stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return _wcsistr(_Str1, wcslen(_Str1), _Str2, wcslen(_Str2)); }
 
 //***********************************************
-// 2. format
-inline const char* vformat( const char* fmt, va_list a ){ size_t len=size_t(_vscprintf(fmt,a)); char* buffer=_strbuf(len); vsprintf_s(buffer,len+1,fmt,a); return buffer; }
-inline const wchar_t* vformat( const wchar_t* fmt, va_list a ){ size_t len=size_t(_vscwprintf(fmt,a)); wchar_t* bufferW=_wcsbuf(len); vswprintf_s(bufferW,len+1,fmt,a); return bufferW; }
-inline const char* format( const char* fmt,... ){ va_list a; va_start(a,fmt); size_t len=size_t(_vscprintf(fmt,a)); char* buffer=_strbuf(len); vsprintf_s(buffer,len+1,fmt,a); va_end(a); return buffer; }
-inline const wchar_t* format( const wchar_t* fmt,... ){ va_list a; va_start(a,fmt); size_t len=size_t(_vscwprintf(fmt,a)); wchar_t* bufferW=_wcsbuf(len); vswprintf_s(bufferW,len+1,fmt,a); va_end(a); return bufferW; }
-
-//***********************************************
-// 3. conversion between const wchar_t* and const char*
+// 2. conversion between const wchar_t* and const char*
 #ifndef CP_ACP
 	#define CP_ACP		0           // default to ANSI code page
 	#define CP_UTF8		65001       // UTF-8 translation
@@ -85,6 +78,13 @@ inline const wchar_t* atow( const char* a, int cp=0 /* code page: CP_ACP=0 */ ){
 inline const char* wtoa( const wchar_t* w, int cp=0 /* code page: CP_ACP=0 */ ){int mblen=WideCharToMultiByte(cp,0,w,-1,0,0,0,0);char* buff=_strbuf(mblen);WideCharToMultiByte(cp,0,w,-1,buff,mblen,0,0);return buff;}
 inline const char* atoa( const char* src, int src_cp, int dst_cp ){ return wtoa(atow(src,src_cp),dst_cp); }
 inline bool ismbs( const char* s ){ if(!s||!*s)return false;for(int k=0,kn=int(strlen(s));k<kn;k++,s++)if(*s<0)return true;return false; }
+
+//***********************************************
+// 3. format and printf replacement
+inline const char* vformat( const char* fmt, va_list a ){ size_t len=size_t(_vscprintf(fmt,a)); char* buffer=_strbuf(len); vsprintf_s(buffer,len+1,fmt,a); return buffer; }
+inline const wchar_t* vformat( const wchar_t* fmt, va_list a ){ size_t len=size_t(_vscwprintf(fmt,a)); wchar_t* bufferW=_wcsbuf(len); vswprintf_s(bufferW,len+1,fmt,a); return bufferW; }
+inline const char* format( const char* fmt,... ){ va_list a; va_start(a,fmt); size_t len=size_t(_vscprintf(fmt,a)); char* buffer=_strbuf(len); vsprintf_s(buffer,len+1,fmt,a); va_end(a); return buffer; }
+inline const wchar_t* format( const wchar_t* fmt,... ){ va_list a; va_start(a,fmt); size_t len=size_t(_vscwprintf(fmt,a)); wchar_t* bufferW=_wcsbuf(len); vswprintf_s(bufferW,len+1,fmt,a); va_end(a); return bufferW; }
 
 //***********************************************
 // 4. natural-order and case-insensitive comparison for std::sort, std::map/set, std::unordered_map/set

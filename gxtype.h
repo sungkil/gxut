@@ -41,12 +41,9 @@
 #include <inttypes.h>	// defines int64_t, uint64_t
 #include <math.h>
 #include <stdarg.h>
-#if (defined(_USRDLL)||defined(GX_REDIR_IMPL))&&!defined(GX_NO_REDIR)&&defined(_MSC_VER) // printf redirection in rex with VS
-	#ifndef GX_REDIR
-		#define GX_REDIR
-	#endif
-	#if !defined(printf) && (defined(_INC_STDIO)||defined(_INC_WCHAR)||defined(_CSTDIO_)||defined(_CWCHAR_)) && !defined(GX_REDIR_IMPL)
-		#error do not include <stdio.h> or define GX_NO_REDIR before gxut headers
+#if defined(GX_PRINTF_REDIR)||defined(_REXDLL) // printf redirection with custom printf/wprintf (e.g., rex GUI printf)
+	#if (!defined(printf)&&!defined(__GX_PRINTF_REDIR__))&&(defined(_INC_STDIO)||defined(_INC_WCHAR)||defined(_CSTDIO_)||defined(_CWCHAR_))
+		#error do not include <stdio.h> before gxut headers, when defining GX_PRINTF_REDIR
 	#endif
 	#ifndef printf
 		#define	printf	__printf	// rename default printf
@@ -58,6 +55,9 @@
 	#include <cwchar>
 	#undef	printf
 	#undef	wprintf
+	#ifndef __GX_PRINTF_REDIR__
+		#define __GX_PRINTF_REDIR__
+	#endif
 	// drop-in replacement of printf, where non-rex applications fallbacks to stdout
 	int __cdecl printf( const char* fmt, ... );
 	int __cdecl wprintf( const wchar_t* fmt, ... );
