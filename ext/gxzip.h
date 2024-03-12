@@ -123,7 +123,7 @@ struct zip_t : public izip_t
 
 	static bool cmp_signature( void* ptr ){ static uchar s[4]={0x50,0x4b,0x03,0x04}; return memcmp(ptr,s,4)==0; }
 
-	virtual ~zip_t(){ release(); }
+	~zip_t(){ release(); }
 	zip_t( const path& _file_path ){ hzip=OpenZip( file_path=_file_path.absolute(), nullptr ); if(!hzip) file_path.clear(); else _zipmtime64=FileTimeToUint64(_zipmtime=file_path.mfiletime()); }
 	zip_t( void* ptr, size_t size ){ hzip=OpenZip( ptr, uint(size), nullptr ); }
 

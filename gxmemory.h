@@ -93,10 +93,10 @@ struct izip_t	// common interface to zip, 7zip, ...
 	std::vector<zipentry_t> entries;
 
 	virtual ~izip_t(){}
-	virtual void release() = 0;
-	virtual bool load() = 0;
-	virtual bool extract_to_files( path dir, const wchar_t* name=nullptr ) = 0;	// if name==nullptr, extract all files. otherwise, extract a single file with the name
-	virtual bool extract_to_memory( const wchar_t* name=nullptr ) = 0;			// if name==nullptr, extract all files. otherwise, extract a single file with the name
+	virtual void release()=0;
+	virtual bool load()=0;
+	virtual bool extract_to_files( path dir, const wchar_t* name=nullptr )=0;	// if name==nullptr, extract all files. otherwise, extract a single file with the name
+	virtual bool extract_to_memory( const wchar_t* name=nullptr )=0;			// if name==nullptr, extract all files. otherwise, extract a single file with the name
 	virtual zipentry_t* find( const wchar_t* name ){ for(auto& e:entries){ if(_wcsicmp(e.name,name)==0) return &e; } return nullptr; }
 };
 

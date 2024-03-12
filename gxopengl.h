@@ -200,6 +200,7 @@ namespace gl {
 		GLuint64 result=0;
 		Query( GLuint ID, const char* name, GLenum target ):Object(ID,name,target){}
 		~Query() override { GLuint id=ID; glDeleteQueries(1,&id); }
+
 		bool	is_available(){ GLint available; glGetQueryObjectiv(ID,GL_QUERY_RESULT_AVAILABLE, &available); return available!=0; }
 		void	finish(){ glGetQueryObjectui64v(ID,GL_QUERY_RESULT,&result); } // use GL_QUERY_RESULT_NO_WAIT for async query download
 		void	begin(){ glBeginQuery(target,ID); }
@@ -209,6 +210,8 @@ namespace gl {
 	struct TimeElapsed : public Query
 	{
 		TimeElapsed():Query(gxCreateQuery(GL_TIME_ELAPSED),"GL_TIME_ELAPSED",GL_TIME_ELAPSED){}
+		~TimeElapsed(){}
+
 		inline double	delta(){ return double(result)/1000000.0; }
 	};
 

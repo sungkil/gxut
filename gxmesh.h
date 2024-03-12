@@ -376,6 +376,8 @@ struct bvh_t : public acc_t // two-level hierarchy: mesh or geometry
 		__forceinline bool is_leaf() const { return axis==3; }
 	};
 	std::vector<node> nodes;
+
+	~bvh_t(){}
 	virtual void release()=0;
 	virtual bool intersect( ray r, isect& h ) const;
 	virtual bool has_prims() const;
