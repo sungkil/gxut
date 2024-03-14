@@ -630,6 +630,8 @@ struct guid_t : public GUID
 
 	operator GUID (){ return *this; }
 	operator const GUID () const { return *this; }
+	operator const std::string () const { return wtoa(); }
+	operator const std::wstring () const { return c_str(); }
 	operator bool() const { static decltype(Data4) z={}; return Data1||Data2||Data3||memcmp(Data4,&z,sizeof(z))!=0; }
 	const wchar_t* c_str() const { wchar_t* b=_wcsbuf(64); auto* d=Data4; swprintf_s( b, 64, L"{%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}", Data1,Data2,Data3,d[0],d[1],d[2],d[3],d[4],d[5],d[6],d[7] ); return b; }
 	const char* wtoa() const { char* b=_strbuf(64); auto* d=Data4; sprintf_s( b, 64, "{%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}", Data1,Data2,Data3,d[0],d[1],d[2],d[3],d[4],d[5],d[6],d[7] ); return b; }
