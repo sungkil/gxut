@@ -18,10 +18,10 @@
 #ifndef __GX_MEMORY_H__
 #define __GX_MEMORY_H__
 
-#if defined(__has_include)&&__has_include( "gxfilesystem.h" )
+#if defined(__has_include)&&__has_include("gxfilesystem.h")
 	#include "gxfilesystem.h"
 #endif
-#if defined(__has_include)&&__has_include( "gxmath.h" )
+#if defined(__has_include)&&__has_include("gxmath.h")
 	#include "gxmath.h"
 #endif
 #if defined(__has_include)&&__has_include(<intrin.h>)&&__has_include(<nmmintrin.h>)

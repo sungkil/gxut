@@ -32,42 +32,51 @@
 		#ifndef GLEW_STATIC
 			#define GLEW_STATIC
 		#endif
-		#if __has_include( <GL/glew.h> )
+		#if __has_include(<GL/glew.h>)
 			#include <GL/glew.h>
-		#elif __has_include( "glew.h" )
+		#elif __has_include("glew.h")
 			#include "glew.h"
 		#endif
 		#pragma comment( lib, "glew32s.lib" )	// explicit linking to static glew32 x64
 		#pragma comment( lib, "OpenGL32.lib" )	// explicit linking to system OpenGL
 		#define gxHasExtension(name)	GLEW_ARB_##name
 	#elif defined(GX_OPENGL_GLAD)
-		#if __has_include( <GL/glad/gl.h> )
+		#if __has_include(<GL/glad/gl.h>)
 			#include <GL/glad/gl.h>
-		#elif __has_include( <GL/glad.h> )
+		#elif __has_include(<GL/glad.h>)
 			#include <GL/glad.h>
-		#elif __has_include( "glad.h" )
+		#elif __has_include("glad.h")
 			#include "glad.h"
 		#endif
 		#define gxHasExtension(name)	GLAD_GL_ARB_##name
 	#else
-		#if __has_include( <gxut/gxcorearb.h> )
+		#if __has_include(<gxut/gxcorearb.h>)
 			#include <gxut/gxcorearb.h>
-		#elif __has_include( <GL/gxcorearb.h> )
+		#elif __has_include(<GL/gxcorearb.h>)
 			#include <GL/gxcorearb.h>
-		#elif __has_include( "gxcorearb.h" )
+		#elif __has_include("gxcorearb.h")
 			#include "gxcorearb.h"
 		#endif
 		#define gxHasExtension(name)	GX_ARB_##name
 	#endif
 	
 	#ifdef GX_OPENGL_GLFX
-		#if __has_include( <GL/glfx.h> )
+		#if __has_include(<GL/glfx.h>)
 			#include <GL/glfx.h>
-		#elif __has_include( <glfx/glfx.h> )
+		#elif __has_include(<glfx/glfx.h>)
 			#include <glfx/glfx.h>
-		#elif __has_include( "glfx.h" )
+		#elif __has_include("glfx.h")
 			#include "glfx.h"
 		#endif
+	#endif
+
+	#ifdef GX_CUDA_GL_INTEROP
+		#pragma warning( push )
+		#pragma warning( disable: 4819 )	// disable waring on the foreign codepage
+		#if __has_include(<cuda_gl_interop.h>)
+			#include <cuda_gl_interop.h>	// this should be located after glew/glad/gxcorearb.h
+		#endif
+		#pragma warning( pop )
 	#endif
 #endif
 

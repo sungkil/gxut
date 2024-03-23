@@ -184,6 +184,9 @@ inline path where( path file_name )
 	return path();
 }
 
+// particular variables
+inline path windir(){ return path(os::env::var(L"WINDIR")).add_backslash(); }
+
 //***********************************************
 } // namespace env
 //***********************************************
