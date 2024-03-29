@@ -29,7 +29,7 @@ struct auto_lock_t
 };
 
 struct file_time_t { int s,m,h,d,M,y; };	// sec, min, hour, day, month, year: aligned by the struct tm
-using dictionary_t = nocase::map<std::string,entry_t*>;
+using dictionary_t = logical::map<std::string,entry_t*>;
 
 struct parser_t
 {
