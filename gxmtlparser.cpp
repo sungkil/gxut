@@ -356,7 +356,10 @@ std::vector<mtl_section_t> parse_mtl( path file_path )
 		if(vs.size()<2){ b_dirty=true; continue; } // cull no-value lines
 		const std::string& key = vs[0];
 		
-		if(_stricmp(key.c_str(),"newmtl")==0) v.emplace_back(mtl_section_t(vs[1]));
+		if(_stricmp(key.c_str(),"newmtl")==0)
+		{
+			v.emplace_back(mtl_section_t(vs[1]));
+		}
 		else
 		{
 			mtl_item_t t(key); for(size_t k=1;k<vs.size();k++) t.tokens.emplace_back(vs[k]);
@@ -415,10 +418,14 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 
 	// pre-parse raw lines
 	std::vector<mtl_section_t> sections = std::move(parse_mtl(file_path)); if(sections.empty()) return false;
-
+	
 	// default material for light source (mat_index==0 or emissive>0)
 	materials.clear();
-	create_light_material( materials );
+
+	// no light is found create light material
+	bool light_source_exists = false;
+	for( auto& s : sections ){ if(!s.empty()&&_strnicmp(s.name.c_str(),"light",5)==0){ light_source_exists=true; break; } }
+	if(!light_source_exists) create_light_material( materials );
 
 	// preprocessing only for fresh loading
 	float opt_time = with_cache ? 0.0f : optimize_textures( file_path, sections );
@@ -447,6 +454,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 		materials.emplace_back(material_impl(uint(materials.size())+1));
 		auto& m = materials.back();
 		strcpy( m.name, section.name.c_str() );
+		if(_strnicmp(m.name,"light",5)==0) m.emissive = 1.0f;
 
 		for( auto& t: section.items )
 		{
