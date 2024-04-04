@@ -398,14 +398,14 @@ void create_default_material( std::vector<material_impl>& materials )
 	m.color = vec4(0.7f,0.7f,0.7f,1.0f);
 }
 
-void create_light_material( std::vector<material_impl>& materials )
+material_impl create_light_material( uint ID )
 {
-	materials.emplace_back(material_impl(uint(materials.size())));
-	auto& m = materials.back();
+	material_impl m(ID);
 	strcpy(m.name,"light");
 	m.color = vec4(1.0f,1.0f,1.0f,1.0f);
 	m.metal = 0.0f;
 	m.emissive = 1.0f;
+	return m;
 }
 
 bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_cache )
@@ -425,7 +425,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 	// no light is found create light material
 	bool light_source_exists = false;
 	for( auto& s : sections ){ if(!s.empty()&&_strnicmp(s.name.c_str(),"light",5)==0){ light_source_exists=true; break; } }
-	if(!light_source_exists) create_light_material( materials );
+	if(!light_source_exists) materials.emplace_back(create_light_material(uint(materials.size())));
 
 	// preprocessing only for fresh loading
 	float opt_time = with_cache ? 0.0f : optimize_textures( file_path, sections );
@@ -451,7 +451,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 	{
 		if(section.empty()) continue;
 
-		materials.emplace_back(material_impl(uint(materials.size())+1));
+		materials.emplace_back(material_impl(uint(materials.size())));
 		auto& m = materials.back();
 		strcpy( m.name, section.name.c_str() );
 		if(_strnicmp(m.name,"light",5)==0) m.emissive = 1.0f;

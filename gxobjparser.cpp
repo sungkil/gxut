@@ -591,8 +591,11 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	}
 
 	// force light-source material to emissive
-	for( auto& g : p_mesh->geometries )	if(_stricmp(g.name(),"light")==0||_stricmp(g.name(),"lights")==0) p_mesh->materials[g.material_index].emissive = 1.0f; // force to light source material
-	for( auto& m : p_mesh->materials )	if(_stricmp(m.name,"light")==0||_stricmp(m.name,"lights")==0) m.emissive = 1.0f; // force to light source material
+	for( auto& g : p_mesh->geometries )
+	{
+		if(_strnicmp(g.name(),"light",5)!=0) continue;
+		p_mesh->materials[g.material_index].emissive = 1.0f; // force to light source material
+	}
 
 	// save content to cache for faster loading at next time
 	if(flush_messages) flush_messages(nullptr);
