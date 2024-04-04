@@ -456,6 +456,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 		strcpy( m.name, section.name.c_str() );
 		if(_strnicmp(m.name,"light",5)==0) m.emissive = 1.0f;
 
+		vec4 emit=vec4(0);
 		for( auto& t: section.items )
 		{
 			std::string key = tolower(t.key.c_str());
@@ -465,7 +466,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 			else if(key=="kd")
 			{
 				if(t.size()<3){ wprintf(L"Kd size < 3\n"); return false; }
-				m.color[0] = t.value();
+				m.color[0] = t.value(0);
 				m.color[1] = t.value(1);
 				m.color[2] = t.value(2);
 				m.color[3] = 1.0f;
@@ -481,8 +482,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 			else if(key=="map_d"||key=="map_opacity"){ m.path["alpha"] = t.token(); }
 			else if(key=="bump")
 			{
-				if(m.path.find("bump")==m.path.end()) // only for new entry
-					m.path["bump"] = t.tokens.back();
+				if(m.path.find("bump")==m.path.end()) m.path["bump"] = t.tokens.back(); // only for new entry
 			}
 			else if(key=="refl")	// reflection map
 			{
@@ -493,7 +493,13 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 			else if(key=="d")	m.color.a = t.value();
 			else if(key=="tr")	m.color.a = 1.0f-t.value(); // transparency
 			// PBR extensions: http://exocortex.com/blog/extending_wavefront_mtl_to_support_pbr
-			else if(key=="ke"){ m.emissive = 1.0f; }
+			else if(key=="ke")
+			{
+				emit[0] = t.value(0);
+				emit[1] = t.value(1);
+				emit[2] = t.value(2);
+				if(emit.r>0||emit.g>0||emit.b>0) emit[3]=m.emissive=1.0f;
+			}
 			else if(key=="pr"){ if(m.rough>0) m.rough = t.value(); } // only for non-reflection
 			else if(key=="map_ke"){ m.path["emissive"] = t.token(); }
 			else if(key=="map_pr"){ m.path["rough"] = t.token(); }
@@ -515,6 +521,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 		}
 
 		// per-material postprocessing
+		if(emit.a>0) m.color.rgb = emit.rgb;
 		m.metal = clamp(m.color.r/m.specular,0.0f,1.0f); // convert to metallic from specular
 	}
 

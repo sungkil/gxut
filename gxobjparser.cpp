@@ -182,8 +182,13 @@ namespace obj::cache
 
 		// get the mtl name
 		char mtl_name[1024]; fgets(buff,8192,fp); sscanf( buff, "mtllib = %s\n", mtl_name );
-		path mtl_path = path(file_path).dir()+atow(mtl_name);
-		if(!mtl_path.exists()&&mtl_path!=L"default"){ fclose(fp); return nullptr; } // mtl not exists
+		path mtl_path0=path(file_path).dir() + atow(mtl_name), mtl_path=mtl_path0;
+		if(!mtl_path.exists()&&mtl_path!=L"default")
+		{
+			mtl_path = file_path.replace_extension(L"mtl");
+			if(!mtl_path.exists()){ fclose(fp); return nullptr; } // mtl not exists
+			printf("%s is used instead of missing %s\n", mtl_path.name().wtoa(), mtl_path0.name().wtoa());
+		}
 
 		// now create mesh
 		mesh* p_mesh = new mesh();
@@ -366,7 +371,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	auto log_begin = [&]()
 	{
 		if(!b_log_begin) return; b_log_begin=false;
-		wprintf( L"Loading %s ", target_file_path.name().c_str() );
+		wprintf( L"Loading %s ...", target_file_path.name().c_str() );
 	};
 
 	FILE* fp = _wfopen( target_file_path, L"rb" ); if(fp==nullptr){ wprintf(L"Unable to open %s", file_path.c_str()); return nullptr; }
@@ -511,8 +516,13 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 		{
 			if(!p_mesh->mtl_path[0]) // load material only once
 			{
-				path mtl_path = path(file_path).dir() + atow(trim(buff));
-				if(!mtl::load_mtl(mtl_path, p_mesh->materials)){ printf("unable to load material file: %s\n",wtoa(mtl_path)); return nullptr; }
+				path mtl_path0=path(file_path).dir() + atow(trim(buff)), mtl_path=mtl_path0;
+				if(!mtl_path.exists())
+				{
+					mtl_path = file_path.replace_extension(L"mtl");
+					if(mtl_path.exists()) printf("%s is used instead of missing %s\n", mtl_path.name().wtoa(), mtl_path0.name().wtoa());
+				}
+				if(!mtl::load_mtl(mtl_path, p_mesh->materials)){ printf("unable to load %s\n",mtl_path0.to_slash().wtoa()); return nullptr; }
 				wcscpy( p_mesh->mtl_path, mtl_path.relative(path(file_path).dir()) );
 				
 				// postprocessing

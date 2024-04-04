@@ -474,7 +474,7 @@ template <class T> struct tmat4
 	__forceinline tmat4& set_scale( const V3& v ){ set_identity(); _11=v.x; _22=v.y; _33=v.z; return *this; }
 	__forceinline tmat4& set_scale( T x,T y,T z ){ set_identity(); _11=x; _22=y; _33=z; return *this; }
 	__forceinline tmat4& set_shear( const V2& yz, const V2& zx, const V2& xy ){ set_identity(); _12=yz.x; _13=yz.y; _21=zx.y; _23=zx.x; _31=xy.x; _32=xy.y; return *this; }
-	tmat4& set_rotate_vec_to_vec( const V3& from, const V3& to ){ T d=max(min(from.dot(to),T(1)),T(-1)); if(d>T(0.999999)) return set_identity(); V3 x=from.cross(to); return set_rotate( normalize(x), acos(d) ); }
+	tmat4& set_rotate_vec_to_vec( const V3& from, const V3& to ){ T d=max(min(from.dot(to),T(1)),T(-1)); if(d>T(0.999999)) return set_identity(); else if(d<T(-0.999999)) return set_scale(-1,-1,-1); V3 x=from.cross(to); return set_rotate(normalize(x), acos(d)); }
 	tmat4& set_rotate( const V3& axis, T angle );
 
 	// viewport, lookat, projection
