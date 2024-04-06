@@ -764,14 +764,29 @@ template <class T> T bezier( T v0, T v1, T v2, T v3, double t )
 #pragma warning( default: 4244 )
 
 //*************************************
+// vector/range helper for built-in rand()
+__forceinline float randf(){ return rand()/float(RAND_MAX); }
+__forceinline vec2 randf2(){ return vec2(randf(),randf()); }
+__forceinline vec3 randf3(){ return vec3(randf(),randf(),randf()); }
+__forceinline vec4 randf4(){ return vec4(randf(),randf(),randf(),randf()); }
+__forceinline float randf( float fmin, float fmax ){ return randf()*(fmax-fmin)+fmin; }
+__forceinline vec2 randf2( float fmin, float fmax ){ return randf2()*(fmax-fmin)+fmin; }
+__forceinline vec3 randf3( float fmin, float fmax ){ return randf3()*(fmax-fmin)+fmin; }
+__forceinline vec4 randf4( float fmin, float fmax ){ return randf4()*(fmax-fmin)+fmin; }
+
+//*************************************
 // pseudo random number generator
 __forceinline uint& pseed(){ static uint seed=0; return seed; }
 __forceinline void sprand( uint seed ){ pseed()=seed; }
 __forceinline uint urand(){ pseed() = pseed()*214013L+2531011L; return ((pseed()>>16)&0x7fff); }
-__forceinline float prand( float fmin=0, float fmax=1.0f ){ return fmin+(fmax-fmin)*(urand()/float(RAND_MAX)); }
-__forceinline vec2 prand2( float fmin=0, float fmax=1.0f ){ return vec2(prand(fmin,fmax),prand(fmin,fmax)); }
-__forceinline vec3 prand3( float fmin=0, float fmax=1.0f ){ return vec3(prand(fmin,fmax),prand(fmin,fmax),prand(fmin,fmax)); }
-__forceinline vec4 prand4( float fmin=0, float fmax=1.0f ){ return vec4(prand(fmin,fmax),prand(fmin,fmax),prand(fmin,fmax),prand(fmin,fmax)); }
+__forceinline float prand(){ return urand()/float(RAND_MAX); }
+__forceinline vec2 prand2(){ return vec2(prand(),prand()); }
+__forceinline vec3 prand3(){ return vec3(prand(),prand(),prand()); }
+__forceinline vec4 prand4(){ return vec4(prand(),prand(),prand(),prand()); }
+__forceinline float prand( float fmin, float fmax ){ return prand()*(fmax-fmin)+fmin; }
+__forceinline vec2 prand2( float fmin, float fmax ){ return prand2()*(fmax-fmin)+fmin; }
+__forceinline vec3 prand3( float fmin, float fmax ){ return prand3()*(fmax-fmin)+fmin; }
+__forceinline vec4 prand4( float fmin, float fmax ){ return prand4()*(fmax-fmin)+fmin; }
 
 //*************************************
 // CRC32 with 4-batch parallel construction (from zlib)
