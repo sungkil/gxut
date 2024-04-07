@@ -78,7 +78,7 @@ inline font_engine::font_engine( const wchar_t* face, int point_size, uchar3 col
 	const_cast<int&>(TY)=pt.y;
 	const_cast<int&>(TX)=TY/2;
 
-	if(hDC) bitmap = CreateCompatibleBitmap(hDC,TY,TY); // compatible(monochrome) bitmap
+	if(hDC) bitmap = CreateCompatibleBitmap(hDC,TY,TY); // compatible (monochrome) bitmap
 	LOGFONT lf={}; lf.lfHeight=-TY; lf.lfCharSet=DEFAULT_CHARSET;wcscpy(lf.lfFaceName,face);hFont=CreateFontIndirectW(&lf);
 	buffer		= rex::create_image(TY,TY,8,4);
 	bitmap_info	= create_font_bitmap_info(TY,TY,1);
