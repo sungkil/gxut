@@ -60,11 +60,11 @@ struct tsampler_t : public isampler_t
 	const value_type*	data() const { return _data.data(); }
 	const value_type*	begin() const { return &_data[0]; }
 	const value_type*	end() const { return begin() + n; }
-	const value_type&	operator[]( ptrdiff_t i ) const { return _data[i]; }
-	const value_type&	at( ptrdiff_t i ) const { return _data[i]; }
+	const value_type&	operator[]( ptrdiff_t i ) const { return _data[i%n]; }
+	const value_type&	at( ptrdiff_t i ) const { return _data[i%n]; }
 	void				resize( size_t size, bool b_resample=false ){ const_cast<uint&>(n)=uint(size<_capacity?size:_capacity); if(b_resample) resample(); }
 	void				rewind(){ index=0; }
-	const value_type&	next(){ index=(++index)%n; return _data[index]; } // only for fixed sequence; needs to be improved for sequential sampling
+	const value_type&	next(){ return _data[index=(index+1)%n]; } // only for fixed sequence; needs to be improved for sequential sampling
 	uint				resample(); // return the number of generated samples
 	
 protected:
@@ -126,21 +126,6 @@ inline void tsampler_t<_capacity>::reshape( surface_t dst )
 	}
 }
 
-// forward declarations
-uint hammersley_square(vec4*,uint);
-uint halton_cube(vec4*,uint);
-uint simple_square(vec4*,uint);
-uint poisson_disk(vec4*,uint,bool,uint);
-
-template <size_t _capacity>
-__noinline void tsampler_t<_capacity>::generate( vec4* v, uint n )
-{
-	if(model==HAMMERSLEY)	hammersley_square(v,n);
-	else if(model==HALTON)	halton_cube(v,n);
-	else if(model==POISSON)	poisson_disk(v,n,surface==CIRCLE,seed);
-	else					simple_square(v,n);
-}
-
 template <size_t _capacity>
 __noinline uint tsampler_t<_capacity>::resample()
 {
@@ -159,20 +144,34 @@ __noinline uint tsampler_t<_capacity>::resample()
 }
 
 //*************************************
-// late implementations
+// per-method implementations
 __noinline uint simple_square( vec4* v, uint n ){ for(uint k=0;k<n;k++,v++) v->xyz=vec3{prand2()*2.0f-1.0f,0.0f}; return n; }
 __noinline uint hammersley_square( vec4* v, uint n ){ const float nf=1.0f/float(n); for(uint k=0;k<n;k++,v++) v->xy=vec2(k*nf,float(bitswap(k)>>8)/float(1<<24))*2.0f-1.0f; return n; } // with radical inverse
-__noinline uint halton_cube( vec4* v, uint n )
+template<int p2=3>
+__noinline vec2 halton( uint index )
 {
-	static const int	p1=2, p2=7, p3=11;
-	static const float	ip1=1/float(p1), ip2=1/float(p2), ip3=1/float(p3);
-	for(uint k=0,kk,a;k<n;k++,v++)
-	{
-		float x=0;kk=k;for(float p=ip1;kk;p*=ip1,kk>>=1) if(kk&1) x+=p;
-		float y=0;kk=k;for(float p=ip2;kk;p*=ip2,kk/=p2) if(a=kk%p2) y+=float(a)*p;
-		float z=0;kk=k;for(float p=ip3;kk;p*=ip3,kk/=p3) if(a=kk%p3) z+=float(a)*p;
-		v->xyz = vec3(x,y,z)*2.0f-1.0f;
-	}
+	static const float ip1=0.5f, ip2=1/float(p2);
+	uint kk=index;	float x=0;for(float p=ip1;kk;p*=ip1,kk>>=1) if(kk&1) x+=p;
+	uint a;kk=index;float y=0;for(float p=ip2;kk;p*=ip2,kk/=p2) if(a=kk%p2) y+=float(a)*p;
+	return vec2(x,y);
+}
+template<int p2=3>
+__noinline uint halton( vec4* v, uint n )
+{
+	for(uint k=0;k<n;k++) v[k].xyz = halton<p2>(k)*2.0f-1.0f;
+	return n;
+}
+template<int p2=7,int p3=11>
+__noinline vec3 halton3( uint index )
+{
+	static const float ip3=1/float(p3);
+	uint a,kk=index;float z=0;for(float p=ip3;kk;p*=ip3,kk/=p3) if(a=kk%p3) z+=float(a)*p;
+	return vec3(halton<p2>(index),z);
+}
+template<int p2=7,int p3=11>
+__noinline uint halton3( vec4* v, uint n )
+{
+	for(uint k=0;k<n;k++) v[k].xyz = halton3<p2,p3>(k)*2.0f-1.0f;
 	return n;
 }
 
@@ -323,6 +322,15 @@ __noinline uint poisson_disk( vec4* v, uint _count, bool circular, uint seed )
 	if(count>=int(_count)) poisson_disk_save( v, _count, circular, seed );
 
 	return count;
+}
+
+template <size_t _capacity>
+__noinline void tsampler_t<_capacity>::generate( vec4* v, uint n )
+{
+	if(model==HAMMERSLEY)	hammersley_square(v,n);
+	else if(model==HALTON)	halton3<>(v,n);
+	else if(model==POISSON)	poisson_disk(v,n,surface==CIRCLE,seed);
+	else					simple_square(v,n);
 }
 
 #endif // __GX_SAMPLER_H__
