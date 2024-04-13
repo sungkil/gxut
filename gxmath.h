@@ -783,7 +783,7 @@ __forceinline vec3 randf3( float fmin, float fmax ){ return randf3()*(fmax-fmin)
 __forceinline vec4 randf4( float fmin, float fmax ){ return randf4()*(fmax-fmin)+fmin; }
 
 //*************************************
-// pseudo random number generator
+// pseudo random number generator based on Windows rand()
 __forceinline uint& pseed(){ static uint seed=0; return seed; }
 __forceinline void sprand( uint seed ){ pseed()=seed; }
 __forceinline uint urand(){ pseed() = pseed()*214013L+2531011L; return ((pseed()>>16)&0x7fff); }
@@ -795,6 +795,18 @@ __forceinline float prand( float fmin, float fmax ){ return prand()*(fmax-fmin)+
 __forceinline vec2 prand2( float fmin, float fmax ){ return prand2()*(fmax-fmin)+fmin; }
 __forceinline vec3 prand3( float fmin, float fmax ){ return prand3()*(fmax-fmin)+fmin; }
 __forceinline vec4 prand4( float fmin, float fmax ){ return prand4()*(fmax-fmin)+fmin; }
+
+//*************************************
+// xorshift-based random number generator: https://en.wikipedia.org/wiki/Xorshift
+__forceinline uint  xorshift32( uint& x ){ x^=x<<13;x^=x>>17;x^=x<<5;return x; }
+__forceinline float xrand(  uint& x ){ return float(x=xorshift32(x))*2.3283064e-10f; }
+__forceinline vec2  xrand2( uint& x ){ return vec2(xrand(x),xrand(x)); }
+__forceinline vec3  xrand3( uint& x ){ return vec3(xrand(x),xrand(x),xrand(x)); }
+__forceinline vec4  xrand4( uint& x ){ return vec4(xrand(x),xrand(x),xrand(x),xrand(x)); }
+__forceinline float xrand(  uint& x, float fmin, float fmax ){ return xrand(x)*(fmax-fmin)+fmin; }
+__forceinline vec2  xrand2( uint& x, float fmin, float fmax ){ return xrand2(x)*(fmax-fmin)+fmin; }
+__forceinline vec3  xrand3( uint& x, float fmin, float fmax ){ return xrand3(x)*(fmax-fmin)+fmin; }
+__forceinline vec4  xrand4( uint& x, float fmin, float fmax ){ return xrand4(x)*(fmax-fmin)+fmin; }
 
 //*************************************
 // CRC32 with 4-batch parallel construction (from zlib)
