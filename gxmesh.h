@@ -288,30 +288,37 @@ struct camera : public camera_t
 	frustum_t	frustum;			// view frustum for culling
 	stereo_t	stereo;				// stereo rendering attributes
 	
-	bool	cull( const bbox_t& b ) const { return frustum.cull(b); }
-	void	update_view_frustum(){ frustum.update(projection_matrix*view_matrix); }
-	void	update_stereo(){ if(!stereo.model) return; float s=0.5f*stereo.ipd, o=s*dnear/df, t=dnear*tanf(0.5f*fovy*(fovy<PI<float>?1.0f:PI<float>/180.0f)), R=t*aspect; vec3 stereo_dir = normalize(cross(dir,up))*s; auto& l=stereo.left; memcpy(&l,this,sizeof(l)); l.eye-=stereo_dir; l.center-=stereo_dir; l.view_matrix=mat4::look_at(l.eye, l.center, l.up); l.projection_matrix=mat4::perspective_off_center(-R+o, R+o, t, -t, dnear, dfar); auto& r=stereo.right; memcpy(&r,this,sizeof(r)); r.eye+=stereo_dir; r.center+=stereo_dir; r.view_matrix=mat4::look_at(r.eye,r.center,r.up); r.projection_matrix=mat4::perspective_off_center(-R-o, R-o, t, -t, dnear, dfar);}
+	bool cull( const bbox_t& b ) const { return frustum.cull(b); }
+	void update_view_frustum(){ frustum.update(projection_matrix*view_matrix); }
+	void update_stereo(){ if(!stereo.model) return; float s=0.5f*stereo.ipd, o=s*dnear/df, t=dnear*tanf(0.5f*fovy*(fovy<PI<float>?1.0f:PI<float>/180.0f)), R=t*aspect; vec3 stereo_dir = normalize(cross(dir,up))*s; auto& l=stereo.left; memcpy(&l,this,sizeof(l)); l.eye-=stereo_dir; l.center-=stereo_dir; l.view_matrix=mat4::look_at(l.eye, l.center, l.up); l.projection_matrix=mat4::perspective_off_center(-R+o, R+o, t, -t, dnear, dfar); auto& r=stereo.right; memcpy(&r,this,sizeof(r)); r.eye+=stereo_dir; r.center+=stereo_dir; r.view_matrix=mat4::look_at(r.eye,r.center,r.up); r.projection_matrix=mat4::perspective_off_center(-R-o, R-o, t, -t, dnear, dfar);}
 };
 
+// late implementations of frustum
 __forceinline frustum_t& frustum_t::update( camera_t& c ){ return update(c.projection_matrix*c.view_matrix); }
+
+// utilities for camera
+inline float focal_to_fovy( float focal, float height ){ return focal==0?0:atan2(height*0.5f,focal)*2.0f; }
+inline float fovy_to_focal( float fovy, float height ){ return fovy==0?0:height*0.5f/tan(fovy*0.5f); }
 
 //*************************************
 // material definition (std140 layout, aligned at 16-byte/vec4 boundaries)
 #ifndef __cplusplus
-struct material { vec4 color; float metal, rough, emissive, beta, specular, n; uvec2 TEX, NRM, PBR; };
+struct material { vec4 color; uint bsdf; float metal, rough, beta, specular, n; uvec2 TEX, NRM, PBR; };
 #else
+// gloss (specular, rough conductor), dielectric (glass)
+enum bsdf_t { BSDF_EMISSIVE=0, BSDF_DIFFUSE=1, BSDF_GLOSS=2, BSDF_MIRROR=4, BSDF_DIELECTRIC=8, BSDF_FRESNEL=16 };
 struct material
 {
-	vec4		color={};		// albedo or Blinn-Phong diffuse; color.a=opacity=1-transmittance
-	float		metal=0.0f;		// metallic: mapped to specular intensity
-	float		rough=0.2f;		// roughness: mapped to specular power; zero means mirror-reflective (used for ray tracing)
-	float		emissive=0.0f;	// 1 only for light sources; if an object is named "light*", its material is forced to be emissive
-	float		beta=48.0f;		// specular power of Phong model
-	float		specular=1.0f;	// specular intensity
-	float		n=1.0f;			// refractive index
-	uint64_t	TEX=0;			// GPU handle to (albedo,alpha) texture; RGBA format indicates the presence of alpha/opacity channel
-	uint64_t	NRM=0;			// GPU handle to normal map
-	uint64_t	PBR=0;			// GPU handle to PBR texture: (ambient occlusion,roughness,metallic), where RM follows glTF spec
+	vec4		color={};			// albedo or Blinn-Phong diffuse; color.a=opacity=1-transmittance
+	uint		bsdf=BSDF_DIFFUSE;	// bitwise combination: diffuse by default
+	float		metal=0.0f;			// metallic: mapped to specular intensity
+	float		rough=0.2f;			// roughness: mapped to specular power; zero means mirror-reflective (used for ray tracing)
+	float		beta=48.0f;			// specular power of Phong model
+	float		specular=1.0f;		// specular intensity
+	float		n=1.0f;				// refractive index
+	uint64_t	TEX=0;				// GPU handle to (albedo,alpha) texture; RGBA format indicates the presence of alpha/opacity channel
+	uint64_t	NRM=0;				// GPU handle to normal map
+	uint64_t	PBR=0;				// GPU handle to PBR texture: (ambient occlusion,roughness,metallic), where RM follows glTF spec
 };
 static_assert(sizeof(material)%16==0, "struct material must be aligned at a 16-byte boundary");
 #endif

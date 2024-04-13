@@ -32,6 +32,7 @@ struct mtl_item_t
 	std::string str() const { return tokens.empty()?"":(key.empty()?std::string():(key+" "))+join(tokens); }
 	const char* token( int index=0 ) const { return tokens[index].c_str(); }
 	float value( int index=0 ) const { return float(fast::atof(tokens[index].c_str())); }
+	int	valuei( int index=0 ) const { return int(fast::atoi(tokens[index].c_str())); }
 
 	bool is_map_type() const { return b_map_type; }
 	path map_path();
@@ -404,7 +405,7 @@ material_impl create_light_material( uint ID )
 	strcpy(m.name,"light");
 	m.color = vec4(1.0f,1.0f,1.0f,1.0f);
 	m.metal = 0.0f;
-	m.emissive = 1.0f;
+	m.bsdf = BSDF_EMISSIVE;
 	return m;
 }
 
@@ -434,7 +435,6 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 	static nocase::set<std::string> passtags
 	{
 		"ka",		// ambient materials
-		"illum",	// illumination model
 		"map_ks",	// specular map
 		"map_ns",	// specular power map
 		"disp",		// displacement map
@@ -454,7 +454,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 		materials.emplace_back(material_impl(uint(materials.size())));
 		auto& m = materials.back();
 		strcpy( m.name, section.name.c_str() );
-		if(_strnicmp(m.name,"light",5)==0) m.emissive = 1.0f;
+		if(_strnicmp(m.name,"light",5)==0) m.bsdf = BSDF_EMISSIVE;
 
 		vec4 emit=vec4(0);
 		for( auto& t: section.items )
@@ -463,6 +463,21 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 
 			if(key.empty()||t.empty()) continue;
 			else if(key=="newmtl"); // already processed
+			else if(key=="illum")
+			{
+				int i=t.valuei(); // https://paulbourke.net/dataformats/mtl/
+				//if(i==0)		m.bsdf = BSDF_DIFFUSE;					// Color on and Ambient off
+				//if(i==1)		m.bsdf = BSDF_DIFFUSE;					// Color on and Ambient on
+					 if(i==2)	m.bsdf = BSDF_DIFFUSE|BSDF_GLOSS;		// Highlight on
+				else if(i==3)	m.bsdf = BSDF_MIRROR;					// Reflection on and Ray trace on
+				else if(i==4)	m.bsdf = BSDF_MIRROR|BSDF_DIELECTRIC;	// Transparency: Glass on, Reflection: Ray trace on
+				else if(i==5)	m.bsdf = BSDF_MIRROR|BSDF_FRESNEL;		// Reflection: Fresnel on and Ray trace on
+				else if(i==6)	m.bsdf = BSDF_DIELECTRIC;				// Transparency: Refraction on, Reflection: Fresnel off and Ray trace on
+				else if(i==7)	m.bsdf = BSDF_DIELECTRIC|BSDF_FRESNEL;	// Transparency: Refraction on, Reflection: Fresnel on and Ray trace on
+				else if(i==8)	m.bsdf = BSDF_DIFFUSE|BSDF_GLOSS;		// Reflection on and Ray trace off
+				else if(i==9)	m.bsdf = BSDF_DIELECTRIC;				// Transparency: Glass on, Reflection: Ray trace off
+				//else if(i==10);										// Cast shadows onto invisible surfaces
+			}
 			else if(key=="kd")
 			{
 				if(t.size()<3){ wprintf(L"Kd size < 3\n"); return false; }
@@ -488,20 +503,36 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 			{
 				if(_stristr(t.token(),"metal")) m.path["metal"] = t.token(); // some mtl uses refl for map_pm for legacy compatibility
 				else if(!t.empty())	m.rough = 0.0f; 	// ignore the reflection map and use the global env map
+				m.bsdf = BSDF_MIRROR;
 			}
-			else if(key=="ni")	m.n = t.value(); // refractive index
+			else if(key=="ni")
+			{
+				m.n = t.value(); // refractive index
+			}
 			else if(key=="d")	m.color.a = t.value();
-			else if(key=="tr")	m.color.a = 1.0f-t.value(); // transparency
+			else if(key=="tr")
+			{
+				m.color.a = 1.0f-t.value(); // transparency
+				if(m.color.a<1.0f) m.bsdf = BSDF_DIELECTRIC;
+			}
 			// PBR extensions: http://exocortex.com/blog/extending_wavefront_mtl_to_support_pbr
 			else if(key=="ke")
 			{
 				emit[0] = t.value(0);
 				emit[1] = t.value(1);
 				emit[2] = t.value(2);
-				if(emit.r>0||emit.g>0||emit.b>0) emit[3]=m.emissive=1.0f;
+				if(emit.r>0||emit.g>0||emit.b>0)
+				{
+					emit[3]=1.0f;
+					m.bsdf = BSDF_EMISSIVE;
+				}
 			}
 			else if(key=="pr"){ if(m.rough>0) m.rough = t.value(); } // only for non-reflection
-			else if(key=="map_ke"){ m.path["emissive"] = t.token(); }
+			else if(key=="map_ke")
+			{
+				m.path["emissive"] = t.token();
+				m.bsdf = BSDF_EMISSIVE;
+			}
 			else if(key=="map_pr"){ m.path["rough"] = t.token(); }
 			else if(key=="map_pm"){ m.path["metal"] = t.token(); }
 			else if(key=="map_ps"){ m.path["sheen"] = t.token(); }
