@@ -1252,13 +1252,13 @@ inline gl::Query* gxCreateQuery( const char* name, GLenum target=GL_TIME_ELAPSED
 	return new gl::Query(ID,name,target);
 }
 
-inline gl::Buffer* gxCreateBuffer( const char* name, GLenum target, GLsizeiptr size, GLenum usage, const void* data=nullptr, GLbitfield storage_flags=GL_MAP_READ_BIT|GL_MAP_WRITE_BIT|GL_DYNAMIC_STORAGE_BIT, bool persitent=false )
+inline gl::Buffer* gxCreateBuffer( const char* name, GLenum target, GLsizeiptr size, GLenum usage, const void* data=nullptr, GLbitfield storage_flags=GL_MAP_READ_BIT|GL_MAP_WRITE_BIT|GL_DYNAMIC_STORAGE_BIT, bool persistent=false )
 {
 	// glCreateBuffers() also initializes objects, while glGenBuffers() do not initialze until bind() is called
 	GLuint ID; if(glCreateBuffers) glCreateBuffers(1,&ID); else glGenBuffers(1,&ID); if(ID==0){ printf( "%s(): unable to create buffer %s\n", __func__, name ); return nullptr; }
 	
 	gl::Buffer* buffer = new gl::Buffer(ID,name,target,size);
-	if(persitent) storage_flags |= GL_MAP_PERSISTENT_BIT|GL_MAP_COHERENT_BIT;
+	if(persistent) storage_flags |= GL_MAP_PERSISTENT_BIT|GL_MAP_COHERENT_BIT;
 	if(glNamedBufferStorage) glNamedBufferStorage(ID,size,data,storage_flags);
 	else if(glBufferStorage){ GLuint b0=buffer->bind(); glBufferStorage(target,size,data,storage_flags); glBindBuffer(target,b0); }
 	else if(glNamedBufferData) glNamedBufferData(ID,size,data,usage);
@@ -1266,6 +1266,9 @@ inline gl::Buffer* gxCreateBuffer( const char* name, GLenum target, GLsizeiptr s
 
 	return buffer;
 }
+
+template <class T> gl::Buffer* gxCreateBuffer(const char* name, GLenum target, const std::vector<T>& data, GLenum usage, GLbitfield storage_flags=GL_MAP_READ_BIT|GL_MAP_WRITE_BIT|GL_DYNAMIC_STORAGE_BIT, bool persistent=false){ return gxCreateBuffer(name,target,GLsizeiptr(data.size()*sizeof(T)),usage,(const void*)data.data(),storage_flags,persistent); }
+template <class T, size_t N> gl::Buffer* gxCreateBuffer(const char* name, GLenum target, const std::array<T,N>& data, GLenum usage, GLbitfield storage_flags=GL_MAP_READ_BIT|GL_MAP_WRITE_BIT|GL_DYNAMIC_STORAGE_BIT, bool persistent=false){ return gxCreateBuffer(name,target,GLsizeiptr(N*sizeof(T)),usage,(const void*)data.data(),storage_flags,persistent); }
 
 inline gl::VertexArray* gxCreateVertexArray( const char* name, const vertex* p_vertices, size_t vertex_count, const uint* p_indices=nullptr, size_t index_count=0, GLenum usage=GL_STATIC_DRAW )
 {

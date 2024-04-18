@@ -21,6 +21,8 @@
 #include "gxtype.h"
 #include <limits.h>
 #include <float.h>
+#include <numeric>	// for std::iota
+#include <random>	// for std::shuffle
 
 using std::min;
 using std::max;
@@ -770,6 +772,20 @@ template <class T> T bezier( T v0, T v1, T v2, T v3, double t )
 	return v0*a[0]+v1*a[1]+v2*a[2]+v3*a[3];
 }
 #pragma warning( default: 4244 )
+
+//*************************************
+// alternative wrappers for deprecated std::random_shuffle
+template <class RandomIt>
+void random_shuffle( RandomIt first, RandomIt last ){ std::random_device d; std::mt19937 e(d()); std::shuffle(first,last,e); }
+
+template <class T=uint>
+std::vector<T> random_shuffle_indices( size_t count, T value=0 )
+{
+	std::vector<T> v; v.resize(count);
+	std::iota( v.begin(), v.end(), value );
+	random_shuffle( v.begin(), v.end() );
+	return v;
+}
 
 //*************************************
 // vector/range helper for built-in rand()
