@@ -33,146 +33,74 @@
 // sampler interface (for lens/rays): vec4(x,y,z,weight) in a unit surface
 struct isampler_t
 {
-	enum model_t { HAMMERSLEY, HALTON, POISSON };
+	enum model_t { SIMPLE, POISSON, HALTON, HAMMERSLEY };
 	enum surface_t { SQUARE, CIRCLE, HEMISPHERE, COSHEMI, SPHERE, CYLINDER }; // COSHEMI: cosine-weighted hemisphere
+	static std::vector<std::string> model_names(){ return {"simple","Poisson","Halton","Hammersley"}; }
+	static std::vector<std::string> surface_names(){ return {"square","circle","hemisphere","coshemi","sphere","cylinder"}; }
 	
-	model_t			model=POISSON;
-	surface_t		surface=CIRCLE;
-	uint			seed=0;		// random seed
-	const uint		n=1;
+	model_t		model=POISSON;
+	surface_t	surface=CIRCLE;
+	uint		seed=5489u; // std::mt19937::default_seed
+	const uint	n=1;
+
+	bool		empty() const { return n==0; }
+	size_t		size() const { return size_t(n); }
 };
 
-template <size_t _capacity=4096> // up to 4K samples by default
-struct tsampler_t : public isampler_t
+struct sampler_t : public isampler_t
 {
-	typedef vec4	value_type;
+	typedef vec4		value_type;
+	typedef const vec4*	iterator;	// actually, const_iterator
+	typedef const vec4&	reference;	// actually, const_reference
 
 	uint			crc;		// crc32c to detect the change of samples
 	uint			index=0;	// index for sequential sampling
 
-	tsampler_t()	= default;
-	tsampler_t( size_t size, bool b_resample=true ){ resize(size,b_resample); }
+	sampler_t(){ _data.reserve(4096); } // reserve up to 4K samples by default
+	sampler_t( size_t size, bool b_resample=true, float fmin=-1.0f, float fmax=1.0f ){ _data.reserve(4096); _data.resize(const_cast<uint&>(n)=uint(size)); if(b_resample) resample(fmin,fmax); }
 
-	constexpr uint		capacity() { return _capacity; }
-	bool				empty() const { return n==0; }
-	bool				dirty() const { return crc!=tcrc32<>(&model,sizeof(isampler_t)); }
-	uint				size() const { return n; }
-	const value_type*	data() const { return _data.data(); }
-	const value_type*	begin() const { return &_data[0]; }
-	const value_type*	end() const { return begin() + n; }
-	const value_type&	operator[]( ptrdiff_t i ) const { return _data[i%n]; }
-	const value_type&	at( ptrdiff_t i ) const { return _data[i%n]; }
-	void				resize( size_t size, bool b_resample=false ){ const_cast<uint&>(n)=uint(size<_capacity?size:_capacity); if(b_resample) resample(); }
-	void				rewind(){ index=0; }
-	const value_type&	next(){ return _data[index=(index+1)%n]; } // only for fixed sequence; needs to be improved for sequential sampling
-	uint				resample(); // return the number of generated samples
+	bool		dirty() const { return crc!=tcrc32(&model,sizeof(isampler_t)); }
+	iterator	data() const { return _data.data(); }
+	iterator	begin() const { return _data.data(); }
+	iterator	end() const { return _data.data()+n; }
+	reference	front() const { return _data.front(); }
+	reference	back() const { return _data.back(); }
+	reference	operator[]( ptrdiff_t i ) const { return _data[i%n]; }
+	reference	at( ptrdiff_t i ) const { return _data[i%n]; }
+	void		rewind(){ index=0; }
+	reference	current(){ return _data[index]; }
+	reference	next(){ return _data[index=(index+1)%n]; } // only for fixed sequence; needs to be improved for sequential sampling
+
+	void		resize( size_t size, float fmin=-1.0f, float fmax=1.0f ){ _data.resize(const_cast<uint&>(n)=uint(size)); resample(fmin,fmax); }
+	uint		resample( float fmin=-1.0f, float fmax=1.0f ); // return the number of generated samples
 	
 protected:
-	virtual void	generate( vec4* v, uint n );
-	void			normalize();
-	void			reshape( surface_t dst );
+	void		_make_centered();
+	void		_reshape( surface_t dst );
 
-	std::vector<value_type> _data = std::move(std::vector<value_type>(_capacity));
+	std::vector<value_type> _data;
 };
-
-using sampler_t = tsampler_t<>;
-
-// make the center position of samples to the origin
-template <size_t _capacity>
-inline void tsampler_t<_capacity>::normalize()
-{
-	if(empty()||surface==HEMISPHERE||surface==SPHERE||surface==CYLINDER) return;
-	dvec3 m=dvec3(0,0,0); vec4* v=_data.data(); for(size_t k=0;k<n;k++) m+=dvec3(v[k].x,v[k].y,v[k].z); m/=double(n);
-	vec3 f=vec3(float(-m.x),float(-m.y),float(-m.z));
-	for(size_t k=0,kn=size();k<kn;k++)v[k].xyz+=f;
-} 
-
-template <size_t _capacity>
-inline void tsampler_t<_capacity>::reshape( surface_t dst )
-{
-	vec4* d=_data.data();
-
-	if(empty()||dst==surface_t::SQUARE) return;
-	else if(dst==surface_t::CYLINDER&&model!=sampler_t::HALTON){printf("[Sampler] cylindrical sampling supports only Halton sequences\n" );return;}
-	else if(dst==surface_t::CIRCLE||dst==surface_t::CYLINDER||dst==surface_t::COSHEMI)	// cylinder only for Halton sampling
-	{
-		bool coshemi=dst==surface_t::COSHEMI; // apply Nusselt analog: 2D uniform is top view of cosine-weighted hemisphere
-		float r, t, qpi=PI<float>*0.25f;
-		for(uint k=0;k<n;k++,d++)
-		{
-			auto& v=d->xyz; if(v.x==0||v.y==0) continue; // no transform requird on the axis samples
-			else if(v.x*v.x>v.y*v.y){ r=fabs(v.x); t=(v.x<v.y?4.0f:0.0f)+(v.y/v.x); } else { r=fabs(v.y); t=(v.x<v.y?2.0f:6.0f)-(v.x/v.y); }
-			v.xy = vec2(cos(qpi*t),sin(qpi*t))*r;
-			if(coshemi) v.z=sqrt( 1-v.xy.dot(v.xy));
-		}
-	}
-	else if(dst==surface_t::HEMISPHERE)
-	{
-		for(uint k=0;k<n;k++,d++)
-		{
-			vec3& v = d->xyz;
-			float phi=PI<float>*v.x, y=(1.0f-v.y)*0.5f, theta=acos(y); // [-1,1] to [-PI,PI], [-1,1] to [1,0], [1,0] to [0,PI/2]
-			v = vec3(vec2(cos(phi),sin(phi))*sin(theta),cos(theta));
-		}
-	}
-	else if(dst==surface_t::SPHERE)
-	{
-		for(uint k=0;k<n;k++,d++)
-		{
-			vec3& v = d->xyz;
-			float phi=PI<float>*v.x, s=sqrtf(1-v.y*v.y); // [-1,1] to [-PI,PI], [-1,1] to [0,1]
-			v = vec3(vec2(cos(phi),sin(phi))*s,v.y);
-		}
-	}
-}
-
-template <size_t _capacity>
-__noinline uint tsampler_t<_capacity>::resample()
-{
-	if(surface==surface_t::CYLINDER&&model!=sampler_t::HALTON){ printf("[Sampler] cylinder sampling is supported only in Halton sampling\n" ); return 0; }
-
-	auto* v = _data.data();
-	sprand(seed);
-	generate(v,n);
-	if(surface!=SQUARE&&(model!=POISSON||surface!=CIRCLE)) reshape(surface); // reshape to circle, hemisphere, sphere, ...
-	if(surface==SQUARE||surface==CIRCLE) for(uint k=0;k<n;k++) v[k].z=0.0f; // set zero at non-used z-component
-	float nrf=1.0f/float(n); for(uint k=0;k<n;k++) v[k].w = nrf; // weight
-	if(surface==SQUARE||surface==CIRCLE) normalize();
-	crc = tcrc32<>(&model,sizeof(isampler_t));	// to detect format change (equivalent to the detection of data change)
-	rewind(); // rewind the index
-	return n;
-}
 
 //*************************************
 // per-method implementations
-__noinline uint simple_square( vec4* v, uint n ){ for(uint k=0;k<n;k++,v++) v->xyz=vec3{prand2()*2.0f-1.0f,0.0f}; return n; }
-__noinline uint hammersley_square( vec4* v, uint n ){ const float nf=1.0f/float(n); for(uint k=0;k<n;k++,v++) v->xy=vec2(k*nf,float(bitswap(k)>>8)/float(1<<24))*2.0f-1.0f; return n; } // with radical inverse
-template<int p2=3>
-__noinline vec2 halton( uint index )
+__forceinline vec2 hammersley( uint k, float n_inverse )
 {
-	static const float ip1=0.5f, ip2=1/float(p2);
+	return vec2(k*n_inverse,float(bitswap(k)>>8)/float(1<<24)); // with radical inverse
+}
+
+__noinline vec2 halton( uint index, uint p2=3 )
+{
+	const float ip1=0.5f, ip2=1/float(p2);
 	uint kk=index;	float x=0;for(float p=ip1;kk;p*=ip1,kk>>=1) if(kk&1) x+=p;
 	uint a;kk=index;float y=0;for(float p=ip2;kk;p*=ip2,kk/=p2) if(a=kk%p2) y+=float(a)*p;
 	return vec2(x,y);
 }
-template<int p2=3>
-__noinline uint halton( vec4* v, uint n )
-{
-	for(uint k=0;k<n;k++) v[k].xyz = halton<p2>(k)*2.0f-1.0f;
-	return n;
-}
-template<int p2=7,int p3=11>
-__noinline vec3 halton3( uint index )
+
+__noinline vec3 halton3( uint index, uint p2=7, uint p3=11 )
 {
 	static const float ip3=1/float(p3);
 	uint a,kk=index;float z=0;for(float p=ip3;kk;p*=ip3,kk/=p3) if(a=kk%p3) z+=float(a)*p;
-	return vec3(halton<p2>(index),z);
-}
-template<int p2=7,int p3=11>
-__noinline uint halton3( vec4* v, uint n )
-{
-	for(uint k=0;k<n;k++) v[k].xyz = halton3<p2,p3>(k)*2.0f-1.0f;
-	return n;
+	return vec3(halton(index,p2),z);
 }
 
 struct bridson_t
@@ -200,9 +128,16 @@ struct bridson_t
 	int generate( const int count, float radius );
 };
 
-__noinline path poisson_disk_cache_path( uint count, bool circular, uint seed )
+struct _poisson_disk_cache_t
 {
-	static path cache_dir = path::temp(false)+L"global\\sampler\\poisson\\";
+	static ::path path( uint count, bool circular, uint seed );
+	static bool load( std::vector<vec2>& v, uint count, bool circular, uint seed );
+	static void save( const std::vector<vec2>& v, bool circular, uint seed );
+};
+
+__noinline ::path _poisson_disk_cache_t::path( uint count, bool circular, uint seed )
+{
+	static ::path cache_dir = ::path::temp(false)+L"global\\sampler\\poisson\\";
 	static uint hash0 = tcrc32<>(__TIMESTAMP__,sizeof(char)*strlen(__TIMESTAMP__));
 	uint hash = hash0;
 	hash = tcrc32<>(&count, sizeof(count), hash );
@@ -212,22 +147,23 @@ __noinline path poisson_disk_cache_path( uint count, bool circular, uint seed )
 	return cache_dir+b;
 }
 
-__noinline bool poisson_disk_cache( vec4* v, uint count, bool circular, uint seed )
+__noinline bool _poisson_disk_cache_t::load( std::vector<vec2>& v, uint count, bool circular, uint seed )
 {
-	path cache_path = poisson_disk_cache_path(count,circular,seed); if(!cache_path.exists()) return false;
+	auto cache_path = path(count,circular,seed); if(!cache_path.exists()) return false;
 	if(cache_path.file_size()!=sizeof(vec4)*count) return false;
 	FILE* fp = _wfopen( cache_path.c_str(), L"rb" ); if(!fp) return false;
-	size_t read_count = fread( v, sizeof(vec4), count, fp );
+	size_t read_count = fread( v.data(), sizeof(vec2), count, fp);
 	fclose(fp);
 	return read_count==count;
 }
 
-__noinline void poisson_disk_save( vec4* v, uint count, bool circular, uint seed )
+__noinline void _poisson_disk_cache_t::save( const std::vector<vec2>& v, bool circular, uint seed )
 {
-	path cache_path = poisson_disk_cache_path(count,circular,seed);
+	if(v.empty()) return;
+	auto cache_path = path(uint(v.size()), circular, seed);
 	if(!cache_path.dir().exists()) cache_path.dir().mkdir();
 	FILE* fp = _wfopen( cache_path.c_str(), L"wb" ); if(!fp){ printf("unable to open %s\n",cache_path.wtoa()); return; }
-	fwrite( v, sizeof(vec4), count, fp );
+	fwrite( v.data(), sizeof(vec2), v.size(), fp);
 	fclose(fp);
 }
 
@@ -281,9 +217,10 @@ __noinline int bridson_t::generate( const int count, float radius )
 	return int(samples.size());
 }
 
-__noinline uint poisson_disk( vec4* v, uint _count, bool circular, uint seed )
+__noinline std::vector<vec2> poisson_disk( uint _count, bool circular, uint seed )
 {
-	if(poisson_disk_cache(v,_count,circular,seed)) return _count;
+	std::vector<vec2> v;
+	if(_poisson_disk_cache_t::load(v,_count,circular,seed)) return v;
 
 	int			count = _count;
 	bridson_t	b(circular);
@@ -316,21 +253,101 @@ __noinline uint poisson_disk( vec4* v, uint _count, bool circular, uint seed )
 	if(k==kn||n.y<count) printf( "[Sampler] (%d): undersampling (last=%d) in [%d,%d])\n", count, n.z, n.x, n.y );
 
 	// now copy the result
-	for(k=0,kn=min(count,int(b.samples.size()));k<kn;k++) v[k].xy=b.samples[k]*2.0f-1.0f;
+	v.reserve(count);
+	for(k=0,kn=min(count,int(b.samples.size()));k<kn;k++) v.emplace_back(b.samples[k]);
 
 	// save cache
-	if(count>=int(_count)) poisson_disk_save( v, _count, circular, seed );
+	if(count>=int(_count))
+	{
+		v.resize(_count);
+		_poisson_disk_cache_t::save( v, circular, seed );
+	}
 
-	return count;
+	return v;
 }
 
-template <size_t _capacity>
-__noinline void tsampler_t<_capacity>::generate( vec4* v, uint n )
+__noinline uint sampler_t::resample( float fmin, float fmax )
 {
-	if(model==HAMMERSLEY)	hammersley_square(v,n);
-	else if(model==HALTON)	halton3<>(v,n);
-	else if(model==POISSON)	poisson_disk(v,n,surface==CIRCLE,seed);
-	else					simple_square(v,n);
+	if(surface==surface_t::CYLINDER&&model!=sampler_t::HALTON){ printf("[Sampler] cylinder sampling is supported only in Halton sampling\n" ); return 0; }
+
+	auto* v = _data.data();
+	for(uint k=0;k<n;k++) v[k].z=0.0f; // reset z=zero
+
+	// generate samples
+	sprand(seed);
+	float delta = (fmax-fmin), nrf=1.0f/float(n);
+	if(model==POISSON)
+	{
+		auto pd = std::move(poisson_disk(n,surface==CIRCLE,seed));
+		for(uint k=0;k<n;k++) v[k].xy = pd[k]*delta+fmin;
+	}
+	else if(model==HALTON)
+	{
+		if(surface==CYLINDER)	for(uint k=0;k<n;k++) v[k].xyz=halton3(k)*delta+fmin;
+		else					for(uint k=0;k<n;k++) v[k].xy=halton(k)*delta+fmin;
+	}
+	else if(model==HAMMERSLEY)
+	{
+		for(uint k=0;k<n;k++) v[k].xy=hammersley(k,nrf)*delta+fmin;
+	}
+	else
+	{
+		for(uint k=0;k<n;k++) v[k].xy=prand2()*delta+fmin;
+	}
+
+	if(surface!=SQUARE&&(model!=POISSON||surface!=CIRCLE)) _reshape(surface); // reshape to circle, hemisphere, sphere, ...
+	for(uint k=0;k<n;k++) v[k].w=nrf; // weight
+	if(surface==SQUARE||surface==CIRCLE) _make_centered();
+	crc = tcrc32(&model,sizeof(isampler_t));	// to detect format change (equivalent to the detection of data change)
+	rewind(); // rewind the index
+	return n;
+}
+
+// make the center position of samples to the origin
+inline void sampler_t::_make_centered()
+{
+	if(empty()||surface==HEMISPHERE||surface==SPHERE||surface==CYLINDER) return;
+	dvec3 m=dvec3(0,0,0); vec4* v=_data.data(); for(size_t k=0;k<n;k++) m+=dvec3(v[k].x,v[k].y,v[k].z); m/=double(n);
+	vec3 f=vec3(float(-m.x),float(-m.y),float(-m.z));
+	for(size_t k=0,kn=size();k<kn;k++)v[k].xyz+=f;
+}
+
+inline void sampler_t::_reshape( surface_t dst )
+{
+	vec4* v=_data.data();
+
+	if(empty()||dst==surface_t::SQUARE) return;
+	else if(dst==surface_t::CYLINDER&&model!=sampler_t::HALTON){printf("[Sampler] cylindrical sampling supports only Halton sequences\n" );return;}
+	else if(dst==surface_t::CIRCLE||dst==surface_t::CYLINDER||dst==surface_t::COSHEMI)	// cylinder only for Halton sampling
+	{
+		bool coshemi=dst==surface_t::COSHEMI; // apply Nusselt analog: 2D uniform is top view of cosine-weighted hemisphere
+		float r, t, qpi=PI<float>*0.25f;
+		for(uint k=0;k<n;k++,v++)
+		{
+			auto& s=v->xyz; if(s.x==0||s.y==0) continue; // no transform requird on the axis samples
+			else if(s.x*s.x>s.y*s.y){ r=fabs(s.x); t=(s.x<s.y?4.0f:0.0f)+(s.y/s.x); } else { r=fabs(s.y); t=(s.x<s.y?2.0f:6.0f)-(s.x/s.y); }
+			s.xy = vec2(cos(qpi*t),sin(qpi*t))*r;
+			if(coshemi) s.z=sqrt( 1-s.x*s.x-s.y*s.y );
+		}
+	}
+	else if(dst==surface_t::HEMISPHERE)
+	{
+		for(uint k=0;k<n;k++,v++)
+		{
+			vec3& s = v->xyz;
+			float phi=PI<float>*s.x, y=(1.0f-s.y)*0.5f, theta=acos(y); // [-1,1] to [-PI,PI], [-1,1] to [1,0], [1,0] to [0,PI/2]
+			s = vec3(vec2(cos(phi),sin(phi))*sin(theta),cos(theta));
+		}
+	}
+	else if(dst==surface_t::SPHERE)
+	{
+		for(uint k=0;k<n;k++,v++)
+		{
+			vec3& s = v->xyz;
+			float phi=PI<float>*s.x, r=sqrtf(1-s.y*s.y); // [-1,1] to [-PI,PI], [-1,1] to [0,1]
+			s = vec3(vec2(cos(phi),sin(phi))*r,s.y);
+		}
+	}
 }
 
 #endif // __GX_SAMPLER_H__
