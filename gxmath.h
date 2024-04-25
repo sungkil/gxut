@@ -774,57 +774,6 @@ template <class T> T bezier( T v0, T v1, T v2, T v3, double t )
 #pragma warning( default: 4244 )
 
 //*************************************
-// alternative wrappers for deprecated std::random_shuffle
-template <class RandomIt>
-void random_shuffle( RandomIt first, RandomIt last ){ std::random_device d; std::mt19937 e(d()); std::shuffle(first,last,e); }
-
-template <class T=uint>
-std::vector<T> random_shuffle_indices( size_t count, T value=0 )
-{
-	std::vector<T> v; v.resize(count);
-	std::iota( v.begin(), v.end(), value );
-	random_shuffle( v.begin(), v.end() );
-	return v;
-}
-
-//*************************************
-// vector/range helper for built-in rand()
-__forceinline float randf(){ return rand()/float(RAND_MAX); }
-__forceinline vec2 randf2(){ return vec2(randf(),randf()); }
-__forceinline vec3 randf3(){ return vec3(randf(),randf(),randf()); }
-__forceinline vec4 randf4(){ return vec4(randf(),randf(),randf(),randf()); }
-__forceinline float randf( float fmin, float fmax ){ return randf()*(fmax-fmin)+fmin; }
-__forceinline vec2 randf2( float fmin, float fmax ){ return randf2()*(fmax-fmin)+fmin; }
-__forceinline vec3 randf3( float fmin, float fmax ){ return randf3()*(fmax-fmin)+fmin; }
-__forceinline vec4 randf4( float fmin, float fmax ){ return randf4()*(fmax-fmin)+fmin; }
-
-//*************************************
-// pseudo random number generator based on Windows rand()
-__forceinline uint& pseed(){ static uint seed=0; return seed; }
-__forceinline void sprand( uint seed ){ pseed()=seed; }
-__forceinline uint urand(){ pseed() = pseed()*214013L+2531011L; return ((pseed()>>16)&0x7fff); }
-__forceinline float prand(){ return urand()/float(RAND_MAX); }
-__forceinline vec2 prand2(){ return vec2(prand(),prand()); }
-__forceinline vec3 prand3(){ return vec3(prand(),prand(),prand()); }
-__forceinline vec4 prand4(){ return vec4(prand(),prand(),prand(),prand()); }
-__forceinline float prand( float fmin, float fmax ){ return prand()*(fmax-fmin)+fmin; }
-__forceinline vec2 prand2( float fmin, float fmax ){ return prand2()*(fmax-fmin)+fmin; }
-__forceinline vec3 prand3( float fmin, float fmax ){ return prand3()*(fmax-fmin)+fmin; }
-__forceinline vec4 prand4( float fmin, float fmax ){ return prand4()*(fmax-fmin)+fmin; }
-
-//*************************************
-// xorshift-based random number generator: https://en.wikipedia.org/wiki/Xorshift
-__forceinline uint  xorshift32( uint& x ){ x^=x<<13;x^=x>>17;x^=x<<5;return x; }
-__forceinline float xrand(  uint& x ){ return float(x=xorshift32(x))*2.3283064e-10f; }
-__forceinline vec2  xrand2( uint& x ){ return vec2(xrand(x),xrand(x)); }
-__forceinline vec3  xrand3( uint& x ){ return vec3(xrand(x),xrand(x),xrand(x)); }
-__forceinline vec4  xrand4( uint& x ){ return vec4(xrand(x),xrand(x),xrand(x),xrand(x)); }
-__forceinline float xrand(  uint& x, float fmin, float fmax ){ return xrand(x)*(fmax-fmin)+fmin; }
-__forceinline vec2  xrand2( uint& x, float fmin, float fmax ){ return xrand2(x)*(fmax-fmin)+fmin; }
-__forceinline vec3  xrand3( uint& x, float fmin, float fmax ){ return xrand3(x)*(fmax-fmin)+fmin; }
-__forceinline vec4  xrand4( uint& x, float fmin, float fmax ){ return xrand4(x)*(fmax-fmin)+fmin; }
-
-//*************************************
 // CRC32 with 4-batch parallel construction (from zlib)
 #pragma warning( disable: 6011 )
 template <unsigned int poly=0x82f63b78UL> // defaulted to crc32c
@@ -839,6 +788,71 @@ __noinline unsigned int tcrc32( const void* buff, size_t size, unsigned int crc0
 	return ~c;
 }
 #pragma warning( default: 6011 )
+
+//*************************************
+namespace gx {
+//*************************************
+struct random_t
+{
+	uint			seed=std::mt19937::default_seed;
+	std::mt19937	engine; // Mersenne Twister with period of (2^19937-1)
+	std::uniform_real_distribution<float> distf=std::uniform_real_distribution<float>(0.0f,1.0f);
+	float operator()(){ return distf(engine); }
+	static random_t& singleton(){ static random_t* r=new random_t(); return *r; }
+};
+//*************************************
+} // end namespace gx
+//*************************************
+
+// pseudo random number generator
+__forceinline void	sprand( uint seed ){ static auto& r=gx::random_t::singleton(); r.engine.seed(r.seed=seed); }
+__forceinline uint	urand(){ static auto& s=gx::random_t::singleton().seed; s=s*214013L+2531011L; return ((s>>16)&0x7fff); }
+
+// vector/range helper based on Windows legacy rand()
+__forceinline float	randf(){ return rand()/float(RAND_MAX); }
+__forceinline vec2	randf2(){ return vec2(randf(),randf()); }
+__forceinline vec3	randf3(){ return vec3(randf(),randf(),randf()); }
+__forceinline vec4	randf4(){ return vec4(randf(),randf(),randf(),randf()); }
+__forceinline float	randf( float fmin, float fmax ){ return randf()*(fmax-fmin)+fmin; }
+__forceinline vec2	randf2( float fmin, float fmax ){ return randf2()*(fmax-fmin)+fmin; }
+__forceinline vec3	randf3( float fmin, float fmax ){ return randf3()*(fmax-fmin)+fmin; }
+__forceinline vec4	randf4( float fmin, float fmax ){ return randf4()*(fmax-fmin)+fmin; }
+
+// pseudo random number generator based on mt199737
+__forceinline float	prand(){ static auto& r=gx::random_t::singleton(); return r(); }
+__forceinline vec2	prand2(){ return vec2(prand(),prand()); }
+__forceinline vec3	prand3(){ return vec3(prand(),prand(),prand()); }
+__forceinline vec4	prand4(){ return vec4(prand(),prand(),prand(),prand()); }
+__forceinline float	prand( float fmin, float fmax ){ return prand()*(fmax-fmin)+fmin; }
+__forceinline vec2	prand2( float fmin, float fmax ){ return prand2()*(fmax-fmin)+fmin; }
+__forceinline vec3	prand3( float fmin, float fmax ){ return prand3()*(fmax-fmin)+fmin; }
+__forceinline vec4	prand4( float fmin, float fmax ){ return prand4()*(fmax-fmin)+fmin; }
+
+//*************************************
+// xorshift-based random number generator: https://en.wikipedia.org/wiki/Xorshift
+__forceinline uint  xorshift32( uint& x ){ x^=x<<13;x^=x>>17;x^=x<<5;return x; }
+__forceinline float xrand(  uint& x ){ return float(x=xorshift32(x))*2.3283064e-10f; }
+__forceinline vec2  xrand2( uint& x ){ return vec2(xrand(x),xrand(x)); }
+__forceinline vec3  xrand3( uint& x ){ return vec3(xrand(x),xrand(x),xrand(x)); }
+__forceinline vec4  xrand4( uint& x ){ return vec4(xrand(x),xrand(x),xrand(x),xrand(x)); }
+__forceinline float xrand(  uint& x, float fmin, float fmax ){ return xrand(x)*(fmax-fmin)+fmin; }
+__forceinline vec2  xrand2( uint& x, float fmin, float fmax ){ return xrand2(x)*(fmax-fmin)+fmin; }
+__forceinline vec3  xrand3( uint& x, float fmin, float fmax ){ return xrand3(x)*(fmax-fmin)+fmin; }
+__forceinline vec4  xrand4( uint& x, float fmin, float fmax ){ return xrand4(x)*(fmax-fmin)+fmin; }
+
+//*************************************
+// alternative wrappers for deprecated std::random_shuffle
+template <class RandomIt>
+void random_shuffle( RandomIt first, RandomIt last, uint seed=0 ){ std::mt19937 e=seed?std::mt19937(seed):std::mt19937(std::random_device()()); std::shuffle(first,last,e); }
+
+template <class T=uint>
+std::vector<T> random_shuffle_indices( size_t count, uint seed=0 )
+{
+	std::vector<T> v; v.resize(count);
+	std::iota( v.begin(), v.end(), 0 );
+	random_shuffle( v.begin(), v.end(), seed );
+	return v;
+}
 
 //*************************************
 #endif // __GX_MATH__
