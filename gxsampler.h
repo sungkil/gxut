@@ -57,7 +57,7 @@ struct sampler_t : public isampler_t
 	uint			index=0;	// index for sequential sampling
 
 	sampler_t(){ _data.reserve(4096); } // reserve up to 4K samples by default
-	sampler_t( size_t size, bool b_resample=true, float fmin=-1.0f, float fmax=1.0f ){ _data.reserve(4096); _data.resize(const_cast<uint&>(n)=uint(size)); if(b_resample) resample(fmin,fmax); }
+	sampler_t( size_t size, bool b_resample=true ){ _data.reserve(4096); _data.resize(const_cast<uint&>(n)=uint(size)); if(b_resample) resample(); }
 
 	bool		dirty() const { return crc!=tcrc32(&model,sizeof(isampler_t)); }
 	iterator	data() const { return _data.data(); }
@@ -71,8 +71,8 @@ struct sampler_t : public isampler_t
 	reference	current(){ return _data[index]; }
 	reference	next(){ return _data[index=(index+1)%n]; } // only for fixed sequence; needs to be improved for sequential sampling
 
-	void		resize( size_t size, float fmin=-1.0f, float fmax=1.0f ){ _data.resize(const_cast<uint&>(n)=uint(size)); resample(fmin,fmax); }
-	uint		resample( float fmin=-1.0f, float fmax=1.0f ); // return the number of generated samples
+	void		resize( size_t size ){ _data.resize(const_cast<uint&>(n)=uint(size)); resample(); }
+	uint		resample(); // return the number of generated samples
 	
 protected:
 	void		_make_centered();
@@ -266,7 +266,7 @@ __noinline std::vector<vec2> poisson_disk( uint _count, bool circular, uint seed
 	return v;
 }
 
-__noinline uint sampler_t::resample( float fmin, float fmax )
+__noinline uint sampler_t::resample()
 {
 	if(surface==surface_t::CYLINDER&&model!=sampler_t::HALTON){ printf("[Sampler] cylinder sampling is supported only in Halton sampling\n" ); return 0; }
 
@@ -275,48 +275,44 @@ __noinline uint sampler_t::resample( float fmin, float fmax )
 
 	// generate samples
 	sprand(seed);
-	float delta = (fmax-fmin), nrf=1.0f/float(n);
+	float nrf =1.0f/float(n);
 	if(model==POISSON)
 	{
 		auto pd = std::move(poisson_disk(n,surface==CIRCLE,seed));
-		for(uint k=0;k<n;k++) v[k].xy = pd[k]*delta+fmin;
+		for(uint k=0;k<n;k++) v[k].xy = pd[k];
 	}
 	else if(model==HALTON)
 	{
-		if(surface==CYLINDER)	for(uint k=0;k<n;k++) v[k].xyz=halton3(k)*delta+fmin;
-		else					for(uint k=0;k<n;k++) v[k].xy=halton(k)*delta+fmin;
+		if(surface==CYLINDER)	for(uint k=0;k<n;k++) v[k].xyz=halton3(k);
+		else					for(uint k=0;k<n;k++) v[k].xy=halton(k);
 	}
 	else if(model==HAMMERSLEY)
 	{
-		for(uint k=0;k<n;k++) v[k].xy=hammersley(k,nrf)*delta+fmin;
+		for(uint k=0;k<n;k++) v[k].xy=hammersley(k,nrf);
 	}
 	else
 	{
-		for(uint k=0;k<n;k++) v[k].xy=prand2()*delta+fmin;
+		for(uint k=0;k<n;k++) v[k].xy=prand2();
 	}
 
-	if(surface!=SQUARE&&(model!=POISSON||surface!=CIRCLE)) _reshape(surface); // reshape to circle, hemisphere, sphere, ...
-	for(uint k=0;k<n;k++) v[k].w=nrf; // weight
-	if(surface==SQUARE||surface==CIRCLE) _make_centered();
+	_reshape(surface); // reshape to circle, hemisphere, sphere, ...
+	for(uint k=0;k<n;k++) v[k].w=nrf;			// weight
+	if(surface==CIRCLE) _make_centered();
 	crc = tcrc32(&model,sizeof(isampler_t));	// to detect format change (equivalent to the detection of data change)
 	rewind(); // rewind the index
 	return n;
 }
 
-// make the center position of samples to the origin
-inline void sampler_t::_make_centered()
-{
-	if(empty()||surface==HEMISPHERE||surface==SPHERE||surface==CYLINDER) return;
-	dvec3 m=dvec3(0,0,0); vec4* v=_data.data(); for(size_t k=0;k<n;k++) m+=dvec3(v[k].x,v[k].y,v[k].z); m/=double(n);
-	vec3 f=vec3(float(-m.x),float(-m.y),float(-m.z));
-	for(size_t k=0,kn=size();k<kn;k++)v[k].xyz+=f;
-}
-
 inline void sampler_t::_reshape( surface_t dst )
 {
-	vec4* v=_data.data();
-
 	if(empty()||dst==surface_t::SQUARE) return;
+	
+	// normalize to [-1,1]
+	vec4* v=_data.data();
+	if(surface==CYLINDER)	for(uint k=0;k<n;k++) v[k].xyz = v[k].xyz*2.0f-1.0f;
+	else 					for(uint k=0;k<n;k++) v[k].xy = v[k].xy*2.0f-1.0f;
+	
+	if(model==POISSON&&surface==CIRCLE) return;
 	else if(dst==surface_t::CYLINDER&&model!=sampler_t::HALTON){printf("[Sampler] cylindrical sampling supports only Halton sequences\n" );return;}
 	else if(dst==surface_t::CIRCLE||dst==surface_t::CYLINDER||dst==surface_t::COSHEMI)	// cylinder only for Halton sampling
 	{
@@ -348,6 +344,15 @@ inline void sampler_t::_reshape( surface_t dst )
 			s = vec3(vec2(cos(phi),sin(phi))*r,s.y);
 		}
 	}
+}
+
+// make the center position of samples to the origin
+inline void sampler_t::_make_centered()
+{
+	if(empty()||surface==SQUARE||surface==HEMISPHERE||surface==SPHERE||surface==CYLINDER) return;
+	dvec3 m=dvec3(0,0,0); vec4* v=_data.data(); for(size_t k=0;k<n;k++) m+=dvec3(v[k].x,v[k].y,v[k].z); m/=double(n);
+	vec3 f=vec3(float(-m.x),float(-m.y),float(-m.z));
+	for(size_t k=0,kn=size();k<kn;k++)v[k].xyz+=f;
 }
 
 #endif // __GX_SAMPLER_H__

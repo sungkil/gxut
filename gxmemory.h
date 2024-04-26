@@ -126,7 +126,6 @@ struct resource_t : public mem_t
 #endif // MAKEINTRESOURCEW
 
 //***********************************************
-// CRC32 implementations
 // regular crc32 wrappers
 inline unsigned int crc32( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0xedb88320UL>(buff,size,crc0); }
 inline unsigned int crc32( sized_ptr_t<void> p, unsigned int crc0=0 ){ return crc32((const void*)p.ptr,p.size); }

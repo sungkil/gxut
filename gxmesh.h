@@ -56,11 +56,8 @@ struct camera_t;
 //*************************************
 // 16-byte aligned light for direct lights
 #ifndef __cplusplus // std140 definition for shaders
-struct light_t
-{
-	vec4	pos, color, normal;		// normal: use only normal.xyz
-};
-
+struct light_t { vec4 pos, color, normal; }		// normal: use only normal.xyz
+struct area_light_t { vec4 pos, color, normal; vec3 u, v; }; // uv: scaled basis vectors to sample points with [-0.5,0.5]
 struct vpl_t
 {
 	vec4	pos, color, normal;		// normal: use only normal.xyz
@@ -83,10 +80,11 @@ struct light_t
 	float	theta() const { return acos(dir().z); }					// angle between outgoing light direction and the optical axis
 };
 
-// area light source
+// area light type
 struct area_light_t : public light_t
 {
-	float	radius;		// world-space radius as a sphere
+	alignas(16) vec3 u, v; // uv: scaled basis vectors to sample points with [-0.5,0.5]
+	vec3	get_sample( vec2 subpixel ) const { vec2 s=subpixel-0.5f; return pos.xyz + u*s.x + v*s.y + normal*0.001f; } // subpixel in [0,1], add slight margin to avoid self-intersection
 };
 
 // light as camera: use for VPLs and shadows (actually, including real lights as well)
@@ -101,6 +99,7 @@ struct vpl_t : public light_t
 };
 
 static_assert(sizeof(light_t)%16==0, "size of struct light_t should be aligned at 16-byte boundaries");
+static_assert(sizeof(area_light_t)%16==0, "size of struct area_light_t should be aligned at 16-byte boundaries");
 static_assert(sizeof(vpl_t)%16==0,	 "size of struct vpl_t should be aligned at 16-byte boundaries");
 #endif
 
@@ -557,12 +556,13 @@ struct mesh
 	void release(){ vertices.clear(); indices.clear(); geometries.clear(); objects.clear(); materials.clear(); shrink_to_fit(); }
 	mesh* shrink_to_fit(){ vertices.shrink_to_fit(); indices.shrink_to_fit(); geometries.shrink_to_fit(); objects.shrink_to_fit(); if(materials.capacity()>materials.size()){ decltype(materials) t=materials; materials.swap(t); } return this; }
 
-	// face/object/geometry/proxy/material helpers
+	// face/object/geometry/proxy/material/light helpers
 	uint face_count() const { uint f=0; for(const auto& g:geometries) f+=g.count; return f/3; }
 	uint vertex_count() const { return uint(vertices.size())*instance_count; }
 	object* create_object( const char* name ){ objects.emplace_back(object(this, uint(objects.size()), name)); return &objects.back(); }
 	object*	find_object( const char* name ){ for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) return &objects[k]; return nullptr; }
 	std::vector<object*> find_objects( const char* name ){ std::vector<object*> v; for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) v.push_back(&objects[k]); return v; }
+	std::vector<area_light_t> find_area_lights() const;
 	mesh* create_proxy( bool double_sided=false, bool use_quads=false );	// proxy mesh helpers: e.g., bounding box
 	void update_proxy();													// update existing proxy with newer matrices
 	std::vector<material> pack_materials() const { std::vector<material> p; auto& m=materials; p.resize(m.size()); for(size_t k=0,kn=p.size();k<kn;k++) p[k]=m[k]; return p; }
@@ -679,6 +679,49 @@ __noinline int mesh::find_up_vector() const
 	if(d[0]>0&&d[0]>d[2]) a=0;
 	if(d[1]>0&&d[1]>d[a]) a=1;
 	return a;
+}
+
+__noinline std::vector<area_light_t> mesh::find_area_lights() const
+{
+	std::vector<area_light_t> lights;
+	for( const auto& g : geometries )
+	{
+		const auto& m = materials[g.material_index]; if(m.bsdf!=BSDF_EMISSIVE) continue;
+		if(g.count!=6){ printf("%s(%s): no support other than two-triangle quads\n", __func__, g.name() ); continue; }
+		
+		// first find the indices of shared edge and isolated vertices
+		std::map<uint,uint> c; // index counter
+		for( uint k=g.first_index, kn=k+g.count; k<kn; k++ ){ auto i=indices[k]; auto it=c.find(i); c[i]=1+(it==c.end()?0:it->second); }
+		ivec2 shared={-1,-1}, isolated={-1,-1}; uint s=0, i=0; for(auto [k,n]:c){ if(s<2&&n>1) shared[s++]=k; if(i<2&&n==1) isolated[i++]=k; }
+		if(shared.x<0||shared.y<0){ printf("%s(%s): no shared edge found\n", __func__, g.name() ); continue; }
+		if(isolated.x<0||isolated.y<0){ printf("%s(%s): no isolated vertices found\n", __func__, g.name() ); continue; }
+
+		// take the min index as the origin
+		vec3 o = vertices[shared.x].pos;
+		vec3 u = vertices[isolated.x].pos-o;
+		vec3 v = vertices[isolated.y].pos-o;
+		vec3 n = normalize(cross(u,v));
+
+		// find the first normal
+		vec3 a0 = vertices[indices[g.first_index+1]].pos-vertices[indices[g.first_index]].pos;
+		vec3 b0 = vertices[indices[g.first_index+2]].pos-vertices[indices[g.first_index]].pos;
+		vec3 n0 = cross(a0,b0);
+
+		// take the correct isolated indices by comparing normals
+		area_light_t l;
+		l.color = m.color;
+		l.bounce = 0;
+		l.mouse = 0;
+		l.bind = 0;
+		l.object_index = g.object_index;
+
+		// fill the half uv and normal
+		if(dot(n,n0)>0){ l.u=u; l.v=v; l.normal=n; } else { l.u=v; l.v=u; l.normal=-n; }
+		l.pos = vec4( o + (l.u+l.v)*0.5f, 1.0f ); // take the center as pos
+		lights.emplace_back(l);
+	}
+
+	return lights;
 }
 
 __noinline std::vector<uint> get_box_indices( bool double_sided, bool quads )

@@ -83,10 +83,10 @@ using namespace std::string_literals; // enable s-suffix for std::string literal
 	#include <type_traits>
 	#include <unordered_map>
 	#include <unordered_set>
-	#if (__cplusplus>=201703L)||(defined(_MSVC_LANG)&&_MSVC_LANG>=201703L)
+	#if (__cplusplus>=201703L)||(defined(_MSVC_LANG)&&_MSVC_LANG>=201703L)||(defined(_HAS_CXX17)&&_HAS_CXX17)
 		#include <string_view>
 	#endif
-	#if (__cplusplus>=202002L)||(defined(_MSVC_LANG)&&_MSVC_LANG>=202002L)
+	#if (__cplusplus>=202002L)||(defined(_MSVC_LANG)&&_MSVC_LANG>=202002L)||(defined(_HAS_CXX20)&&_HAS_CXX20)
 		#include <span>
 	#endif
 #endif
