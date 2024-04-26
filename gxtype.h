@@ -75,7 +75,7 @@
 #include <map>
 #include <set>
 #include <string>
-using namespace std::string_literals; // enables s-suffix for std::string literals
+using namespace std::string_literals; // enable s-suffix for std::string literals
 #include <vector>
 // C++11 (c++14/17/20: 201402L, 201703L, 202002L, ...)
 #if (__cplusplus>199711L)||(defined(_MSVC_LANG)&&_MSVC_LANG>199711L) // MSVC define not  __cplusplus but _MSVC_LANG
@@ -83,6 +83,12 @@ using namespace std::string_literals; // enables s-suffix for std::string litera
 	#include <type_traits>
 	#include <unordered_map>
 	#include <unordered_set>
+	#if (__cplusplus>=201703L)||(defined(_MSVC_LANG)&&_MSVC_LANG>=201703L)
+		#include <string_view>
+	#endif
+	#if (__cplusplus>=202002L)||(defined(_MSVC_LANG)&&_MSVC_LANG>=202002L)
+		#include <span>
+	#endif
 #endif
 
 // Windows

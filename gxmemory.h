@@ -126,10 +126,14 @@ struct resource_t : public mem_t
 #endif // MAKEINTRESOURCEW
 
 //***********************************************
-// CRC32C SSE4.2 implementation up to 8-batch parallel construction (https://github.com/Voxer/sse4_crc32)
+// CRC32 implementations
+// regular crc32 wrappers
+inline unsigned int crc32( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0xedb88320UL>(buff,size,crc0); }
+inline unsigned int crc32( sized_ptr_t<void> p, unsigned int crc0=0 ){ return crc32((const void*)p.ptr,p.size); }
 #if !defined(_MSC_VER)||defined(__clang__)
 inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0x82f63b78UL>(buff,size,crc0); }
 #else
+// CRC32C SSE4.2 implementation up to 8-batch parallel construction (https://github.com/Voxer/sse4_crc32)
 __noinline unsigned int crc32c_hw( const void* buff, size_t size, unsigned int crc0 )
 {
 	if(!buff||!size) return crc0; const unsigned char* b = (const unsigned char*) buff;
@@ -150,13 +154,13 @@ inline bool has_sse42(){ static bool b=false,h=true; if(b) return h; b=true; int
 inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ static unsigned int(*pcrc32c)(const void*,size_t,unsigned int)=has_sse42()?crc32c_hw:tcrc32<0x82f63b78UL>; return pcrc32c(buff,size,crc0); }
 #endif
 
-// regular crc32 wrappers
-inline unsigned int crc32( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0xedb88320UL>(buff,size,crc0); }
-inline unsigned int crc32( sized_ptr_t<void> p, unsigned int crc0=0 ){ return crc32((const void*)p.ptr,p.size); }
-// crc32c wrappers
 inline unsigned int crc32c( sized_ptr_t<void> p, unsigned int crc0=0 ){ return crc32c((const void*)p.ptr,p.size,crc0); }
-inline unsigned int crc32c( const char* s ){ return crc32c(s,strlen(s)); }
-inline unsigned int crc32c( const wchar_t* s ){ return crc32c(s,wcslen(s)*sizeof(wchar_t)); }
+inline unsigned int crc32c( const char* s ){ return crc32c((const void*)s,strlen(s)); }
+inline unsigned int crc32c( const wchar_t* s ){ return crc32c((const void*)s,wcslen(s)*sizeof(wchar_t)); }
+template <class T> inline unsigned int crc32c( const std::vector<T>& v, unsigned int crc0=0 ){ return v.empty()?crc0:crc32c(v.data(),v.size()*sizeof(T),crc0); }
+template <class T> inline unsigned int crc32c( const std::vector<T>* v, unsigned int crc0=0 ){ return !v||v->empty()?crc0:crc32c(v->data(),v->size()*sizeof(T),crc0); }
+template <class T, size_t N> inline unsigned int crc32c( const std::array<T,N>& v, unsigned int crc0=0 ){ return v.empty()?crc0:crc32c(v.data(),v.size()*sizeof(T),crc0); }
+template <class T, size_t N> inline unsigned int crc32c( const std::array<T,N>* v, unsigned int crc0=0 ){ return !v||v->empty()?crc0:crc32c(v.data(),v.size()*sizeof(T),crc0); }
 
 //***********************************************
 // MD5 implementation
