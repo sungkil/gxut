@@ -423,11 +423,6 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 	// default material for light source (mat_index==0 or emissive>0)
 	materials.clear();
 
-	// no light is found create light material
-	bool light_source_exists = false;
-	for( auto& s : sections ){ if(!s.empty()&&_strnicmp(s.name.c_str(),"light",5)==0){ light_source_exists=true; break; } }
-	if(!light_source_exists) materials.emplace_back(create_light_material(uint(materials.size())));
-
 	// preprocessing only for fresh loading
 	float opt_time = with_cache ? 0.0f : optimize_textures( file_path, sections );
 
@@ -457,7 +452,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 		if(_strnicmp(m.name,"light",5)==0) m.bsdf = BSDF_EMISSIVE;
 
 		vec4 emit=vec4(0);
-		for( auto& t: section.items )
+		for(auto& t: section.items)
 		{
 			std::string key = tolower(t.key.c_str());
 
@@ -468,7 +463,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 				int i=t.valuei(); // https://paulbourke.net/dataformats/mtl/
 				//if(i==0)		m.bsdf = BSDF_DIFFUSE;					// Color on and Ambient off
 				//if(i==1)		m.bsdf = BSDF_DIFFUSE;					// Color on and Ambient on
-					 if(i==2)	m.bsdf = BSDF_DIFFUSE|BSDF_GLOSS;		// Highlight on
+				if(i==2)	m.bsdf = BSDF_DIFFUSE|BSDF_GLOSS;		// Highlight on
 				else if(i==3)	m.bsdf = BSDF_MIRROR;					// Reflection on and Ray trace on
 				else if(i==4)	m.bsdf = BSDF_MIRROR|BSDF_DIELECTRIC;	// Transparency: Glass on, Reflection: Ray trace on
 				else if(i==5)	m.bsdf = BSDF_MIRROR|BSDF_FRESNEL;		// Reflection: Fresnel on and Ray trace on
@@ -501,7 +496,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 			}
 			else if(key=="refl")	// reflection map
 			{
-				if(_stristr(t.token(),"metal")) m.path["metal"] = t.token(); // some mtl uses refl for map_pm for legacy compatibility
+				if(_stristr(t.token(), "metal")) m.path["metal"] = t.token(); // some mtl uses refl for map_pm for legacy compatibility
 				else if(!t.empty())	m.rough = 0.0f; 	// ignore the reflection map and use the global env map
 				m.bsdf = BSDF_MIRROR;
 			}
@@ -545,15 +540,23 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 			else if(key=="map_rma"){ m.path["rma"] = t.token(); } // (roughness, metalness, ambient occlusion)
 			else if(key=="map_orm"){ m.path["orm"] = t.token(); } // (ambient occlusion, roughness, metalness)
 			// unrecognized keys
-			else if( passtags.find(key)==passtags.end() )
+			else if(passtags.find(key)==passtags.end())
 			{
-				printf("[%s] %s: unrecognized key: '%s'\n",file_path.name().wtoa(),section.name.c_str(),key.c_str()); return false;
+				printf("[%s] %s: unrecognized key: '%s'\n", file_path.name().wtoa(), section.name.c_str(), key.c_str()); return false;
 			}
 		}
 
 		// per-material postprocessing
 		if(emit.a>0) m.color.rgb = emit.rgb;
-		m.metal = clamp(m.color.r/m.specular,0.0f,1.0f); // convert to metallic from specular
+		m.metal = clamp(m.color.r/m.specular, 0.0f, 1.0f); // convert to metallic from specular
+	}
+
+	// no light is found create light material
+	auto light_source_exists = [](auto& materials)->bool { for(auto& m:materials) if(m.bsdf==BSDF_EMISSIVE) return true; return false; };
+	if(!light_source_exists(materials))
+	{
+		for(auto& m:materials) const_cast<uint&>(m.ID)++;
+		materials.insert(materials.begin(),create_light_material(0));
 	}
 
 	// update file after bump_as_normal

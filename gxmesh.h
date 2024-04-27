@@ -67,14 +67,14 @@ struct vpl_t
 #else
 struct light_t
 {
-	vec4	pos;				// directional light (position.a==0) ignores normal
-	vec4	color;				// shared for diffuse/specular; color.a = specular scale
-	vec3	normal;				// direction (the negated vector of position for directional light)
-	uint	bounce:6;			// zero means direct light
-	uint	mouse:1;			// dynamic binding to the mouse?
-	uint	bind:1;				// dynamic binding to an object
-	uint	object_index:24;	// ID of object bound to this light
+	vec4	pos;			// directional light (position.a==0) ignores normal
+	vec4	color;			// shared for diffuse/specular; color.a = specular scale
+	vec3	normal;			// direction (the negated vector of position for directional light)
+	uint	bounce:6;		// zero means emissive light; non-zero means VPLs
+	uint	mouse:1;		// dynamic binding to the mouse?
+	uint	geometry:25;	// ID of the geometry that is bound to this light
 
+	light_t(){ normal=vec3(0); bounce=0; mouse=0; geometry=0xffffffff; }
 	vec3	dir() const { return normalize(pos.xyz); }				// directions and angles against view vector
 	float	phi() const { vec3 d=dir(); return atan2(d.y,d.x); }	// angle on the xy plane orthogonal to the optical axis
 	float	theta() const { return acos(dir().z); }					// angle between outgoing light direction and the optical axis
@@ -104,7 +104,7 @@ static_assert(sizeof(vpl_t)%16==0,	 "size of struct vpl_t should be aligned at 1
 #endif
 
 // overloading light transformations to camera space
-inline light_t operator*( const mat4& view_matrix, const light_t& light ){ return light_t{ light.pos.a==0?vec4(mat3(view_matrix)*light.pos.xyz,0):view_matrix*light.pos, light.color, mat3(view_matrix)*light.normal }; }
+inline light_t operator*( const mat4& view_matrix, const light_t& light ){ light_t l=light; l.pos.xyz=l.pos.a==0?(mat3(view_matrix)*l.pos.xyz):(view_matrix*l.pos).xyz; l.normal=mat3(view_matrix)*light.normal; return l; }
 inline std::vector<light_t> operator*( const mat4& view_matrix, const std::vector<light_t>& lights ){ std::vector<light_t> v; if(lights.empty()) return v; v.reserve(lights.size()); for( const auto& l : lights ) v.emplace_back(view_matrix*l); return v; }
 inline std::vector<light_t> operator*( const mat4& view_matrix, const std::vector<light_t>* lights ){ std::vector<light_t> v; if(!lights||lights->empty()) return v; v.reserve(lights->size()); for(auto& l:*lights) v.emplace_back(view_matrix*l); return v; }
 
@@ -340,6 +340,7 @@ struct material_impl : public material
 	std::map<std::string,path> path;	// <key,path>: albedo, alpha, normal, ambient, rough, metal, emissive, ...
 
 	material_impl( uint id ):ID(id){}
+	material_impl& operator=(const material_impl& other){ memcpy(this,&other,sizeof(material)); const_cast<uint&>(ID)=other.ID; strcpy(name,other.name); texture=other.texture; path=other.path; return *this; }
 };
 
 //*************************************
@@ -466,7 +467,7 @@ struct object
 	char				name[_MAX_PATH]={};
 	mesh*				root=nullptr;
 	bbox				box;
-	std::vector<uint>	children;				// indices to child geometries
+	std::vector<uint>	geometries;					// child geometry indices
 	struct {bool dynamic=false,bg=false;} attrib;	// dynamic: potential matrix changes; background: backdrops such as floor/ground; set in other plugins (e.g., AnimateMesh)
 
 	object() = delete;  // no default ctor to enforce to assign parent
@@ -474,8 +475,8 @@ struct object
 	object( mesh* p_mesh, uint id, const char* name ):ID(id), root(p_mesh){ strcpy(this->name, name); }
 
 	// query and attributes
-	inline bool empty() const { return children.empty(); }
-	inline uint size() const { return uint(children.size()); }
+	inline bool empty() const { return geometries.empty(); }
+	inline uint size() const { return uint(geometries.size()); }
 	inline uint face_count() const { uint n=0; for( auto& g : *this ) n+=g.face_count(); return n; }
 	inline bbox update_bound(){ box.clear(); for( auto& g : *this ) box.expand(g.mtx*g.box); return box; }
 
@@ -523,6 +524,7 @@ struct mesh
 	std::vector<object>			objects;
 	std::vector<geometry>		geometries;
 	std::vector<material_impl>	materials;
+	std::vector<light_t>		lights;		// built-in object lights
 
 	// volitile spaces for GPU buffers
 	union buffers_t {
@@ -619,7 +621,7 @@ inline geometry* object::create_geometry( size_t first_index, size_t index_count
 {
 	auto& v = root->geometries; uint gid=uint(v.size());
 	v.emplace_back(geometry(root, gid, this->ID, uint(first_index), uint(index_count), box, uint(mat_index)));
-	children.emplace_back(gid);
+	geometries.emplace_back(gid);
 	return &v.back();
 }
 
@@ -627,13 +629,13 @@ inline geometry* object::create_geometry( const geometry& other )
 {
 	auto& v = root->geometries; uint gid=uint(v.size());
 	v.emplace_back(other);
-	auto* g=&v.back(); g->ID=gid; children.emplace_back(gid); return g;
+	auto* g=&v.back(); g->ID=gid; geometries.emplace_back(gid); return g;
 }
 
-inline object::iterator::reference object::iterator::operator*(){ auto g=root->objects[parent].children[index]; return root->geometries[g]; }
-inline object::iterator::pointer object::iterator::operator->(){ auto g=root->objects[parent].children[index]; return &root->geometries[g]; }
-inline geometry& object::front(){ return root->geometries[children.front()]; }
-inline geometry& object::back(){ return root->geometries[children.back()]; }
+inline object::iterator::reference object::iterator::operator*(){ auto g=root->objects[parent].geometries[index]; return root->geometries[g]; }
+inline object::iterator::pointer object::iterator::operator->(){ auto g=root->objects[parent].geometries[index]; return &root->geometries[g]; }
+inline geometry& object::front(){ return root->geometries[geometries.front()]; }
+inline geometry& object::back(){ return root->geometries[geometries.back()]; }
 inline geometry& object::operator[]( size_t i ){ return root->geometries[i]; }
 
 //*************************************
@@ -712,8 +714,7 @@ __noinline std::vector<area_light_t> mesh::find_area_lights() const
 		l.color = m.color;
 		l.bounce = 0;
 		l.mouse = 0;
-		l.bind = 0;
-		l.object_index = g.object_index;
+		l.geometry = g.ID;
 
 		// fill the half uv and normal
 		if(dot(n,n0)>0){ l.u=u; l.v=v; l.normal=n; } else { l.u=v; l.v=u; l.normal=-n; }

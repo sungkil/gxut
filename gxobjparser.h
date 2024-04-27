@@ -8,6 +8,7 @@ namespace obj
 {
 	// mesh loader (with material)
 	mesh* load( path file_path, float* pLoadingTime=nullptr, void(*flush_messages)(const char*)=nullptr );
+	bool update_object_lights( mesh* p_mesh );
 }
 
 namespace mtl

@@ -228,7 +228,7 @@ namespace obj::cache
 			vec3 &m=g.box.m, &M=g.box.M;
 			fgets(buff,8192,fp); sscanf(buff,"g[%d] %d %d %d %d %f %f %f %f %f %f\n", &g.ID, &g.object_index, &g.material_index, &g.first_index, &g.count, &m[0],&m[1],&m[2],&M[0],&M[1],&M[2] );
 			p_mesh->geometries.emplace_back(g);
-			p_mesh->objects[g.object_index].children.emplace_back(g.ID);
+			p_mesh->objects[g.object_index].geometries.emplace_back(g.ID);
 		}
 
 		// meaningless empty line for sepration
@@ -237,6 +237,9 @@ namespace obj::cache
 		// load vertices and indices
 		p_mesh->vertices.resize(vertex_count);	fread( &p_mesh->vertices[0], sizeof(vertex), vertex_count, fp );
 		p_mesh->indices.resize(index_count);	fread( &p_mesh->indices[0], sizeof(uint), index_count, fp );
+
+		// update object lights
+		update_object_lights( p_mesh );
 
 		// close file
 		fclose(fp);
@@ -552,8 +555,8 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	}
 
 	// update child geometries once again after removing empty geometries
-	for( auto& obj : p_mesh->objects )	obj.children.clear();
-	for( auto& g : p_mesh->geometries )	p_mesh->objects[g.object_index].children.emplace_back(g.ID);
+	for( auto& obj : p_mesh->objects )	obj.geometries.clear();
+	for( auto& g : p_mesh->geometries )	p_mesh->objects[g.object_index].geometries.emplace_back(g.ID);
 
 	// clear all temporary large-memory buffers
 	obj::pos.clear();	obj::pos.shrink_to_fit();
@@ -590,12 +593,8 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 		for( auto& g: p_mesh->geometries ) g.material_index = 0;
 	}
 
-	// force light-source material to emissive
-	for( auto& g : p_mesh->geometries )
-	{
-		if(_strnicmp(g.name(),"light",5)!=0) continue;
-		p_mesh->materials[g.material_index].bsdf = BSDF_EMISSIVE; // force to light source material
-	}
+	// create lights based on the materials
+	update_object_lights( p_mesh );
 
 	// save content to cache for faster loading at next time
 	if(flush_messages) flush_messages(nullptr);
@@ -612,6 +611,30 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 
 	if(flush_messages) flush_messages(nullptr);
 	return p_mesh;
+}
+
+bool update_object_lights( mesh* p_mesh )
+{
+	if(!p_mesh) return false;
+	p_mesh->lights.clear();
+	for( auto& g : p_mesh->geometries )
+	{
+		auto& m = p_mesh->materials[g.material_index];
+		if(_stricmp(g.name(),"light")==0) m.bsdf = BSDF_EMISSIVE; // force to "light" source material
+		if(m.bsdf!=BSDF_EMISSIVE) continue;
+
+		// directly create a sunlight
+		light_t l;
+		l.pos = vec4( g.box.center(), 1.0f );
+		l.color = m.color;
+		l.normal = vec3(0,0,0);
+		l.bounce = 0;
+		l.mouse = 0;	// no mouse binding
+		l.geometry = g.ID;
+		p_mesh->lights.emplace_back(l);
+	}
+
+	return !p_mesh->lights.empty();
 }
 
 //*************************************
