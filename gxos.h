@@ -444,11 +444,13 @@ __noinline bool redirect_process( const wchar_t* app, const wchar_t* args=nullpt
 	return true;
 }
 
-__noinline std::wstring read_process( std::wstring cmd, uint cp=0 ) // provide CP_UTF8 for some apps
+__noinline std::wstring read_process( std::wstring cmd, uint cp=0, const wchar_t* trims=L" \t\r\n") // provide CP_UTF8 for some apps
 {
 	FILE* pp=_wpopen( cmd.c_str(), L"r" ); if(!pp) return L"";
 	std::string b; char buff[256]={}; while( fgets(buff,sizeof(buff)/sizeof(buff[0]),pp) ) b+= buff;
-	return trim(atow(b.c_str(),cp),L" \t\r\n");
+	bool b_eof= feof(pp); if(!b_eof) printf("%s(%s): broken pipe\n", __func__,wtoa(cmd.c_str()));
+	_pclose(pp);
+	return trim(atow(b.c_str(),cp),trims);
 }
 
 #ifdef _INC_SHELLAPI
