@@ -68,15 +68,15 @@ struct sampler_t : public isampler_t
 	reference	operator[]( ptrdiff_t i ) const { return _data[i%n]; }
 	reference	at( ptrdiff_t i ) const { return _data[i%n]; }
 	void		rewind(){ index=0; }
-	reference	current(){ return _data[index]; }
-	reference	next(){ return _data[index=(index+1)%n]; } // only for fixed sequence; needs to be improved for sequential sampling
+	reference&	operator++(){ return _data[index=(index+1)%n]; }						// prefix increment
+	reference&	operator++(int){ uint i=index; index=(index+1)%n; return _data[i]; }	// postfix increment
 
 	void		resize( size_t size ){ _data.resize(const_cast<uint&>(n)=uint(size)); resample(); }
 	uint		resample(); // return the number of generated samples
 	
 protected:
+	void		_reshape( vec4* v, surface_t dst );
 	void		_make_centered();
-	void		_reshape( surface_t dst );
 
 	std::vector<value_type> _data;
 };
@@ -278,7 +278,8 @@ __noinline uint sampler_t::resample()
 	float nrf =1.0f/float(n);
 	if(model==POISSON)
 	{
-		auto pd = std::move(poisson_disk(n,surface==CIRCLE,seed));
+		bool b_circle = surface==CIRCLE||surface==COSHEMI||surface==CYLINDER;
+		auto pd = std::move(poisson_disk(n,b_circle,seed));
 		for(uint k=0;k<n;k++) v[k].xy = pd[k];
 	}
 	else if(model==HALTON)
@@ -295,7 +296,7 @@ __noinline uint sampler_t::resample()
 		for(uint k=0;k<n;k++) v[k].xy=prand2();
 	}
 
-	_reshape(surface); // reshape to circle, hemisphere, sphere, ...
+	_reshape(_data.data(),surface); // reshape to circle, hemisphere, sphere, ...
 	for(uint k=0;k<n;k++) v[k].w=nrf;			// weight
 	if(surface==CIRCLE) _make_centered();
 	crc = tcrc32(&model,sizeof(isampler_t));	// to detect format change (equivalent to the detection of data change)
@@ -303,44 +304,41 @@ __noinline uint sampler_t::resample()
 	return n;
 }
 
-inline void sampler_t::_reshape( surface_t dst )
+inline void sampler_t::_reshape( vec4* v, surface_t dst )
 {
-	if(empty()||dst==surface_t::SQUARE) return;
+	if(empty()||dst==SQUARE) return; // square in [0,1]
+	if(dst==CYLINDER&&model!=HALTON) return void(printf("[Sampler] cylindrical sampling supports only Halton sequences\n" ));  // cylinder only for Halton sampling
 	
-	// normalize to [-1,1]
-	vec4* v=_data.data();
-	if(surface==CYLINDER)	for(uint k=0;k<n;k++) v[k].xyz = v[k].xyz*2.0f-1.0f;
-	else 					for(uint k=0;k<n;k++) v[k].xy = v[k].xy*2.0f-1.0f;
-	
-	if(model==POISSON&&surface==CIRCLE) return;
-	else if(dst==surface_t::CYLINDER&&model!=sampler_t::HALTON){printf("[Sampler] cylindrical sampling supports only Halton sequences\n" );return;}
-	else if(dst==surface_t::CIRCLE||dst==surface_t::CYLINDER||dst==surface_t::COSHEMI)	// cylinder only for Halton sampling
+	if(dst==CIRCLE||dst==COSHEMI||dst==CYLINDER)
 	{
-		bool coshemi=dst==surface_t::COSHEMI; // apply Nusselt analog: 2D uniform is top view of cosine-weighted hemisphere
-		float r, t, qpi=PI<float>*0.25f;
-		for(uint k=0;k<n;k++,v++)
+		// coshemi: apply Nusselt analog (2D uniform is top view of cosine-weighted hemisphere)
+		// cylinder: keep z in [0,1]
+		if(model==POISSON)
 		{
-			auto& s=v->xyz; if(s.x==0||s.y==0) continue; // no transform requird on the axis samples
-			else if(s.x*s.x>s.y*s.y){ r=fabs(s.x); t=(s.x<s.y?4.0f:0.0f)+(s.y/s.x); } else { r=fabs(s.y); t=(s.x<s.y?2.0f:6.0f)-(s.x/s.y); }
-			s.xy = vec2(cos(qpi*t),sin(qpi*t))*r;
-			if(coshemi) s.z=sqrt( 1-s.x*s.x-s.y*s.y );
+			for(uint k=0;k<n;k++) v[k].xy=v[k].xy*2.0f-1.0f;
 		}
-	}
-	else if(dst==surface_t::HEMISPHERE)
-	{
-		for(uint k=0;k<n;k++,v++)
+		else
 		{
-			vec3& s = v->xyz;
-			float phi=PI<float>*s.x, y=(1.0f-s.y)*0.5f, theta=acos(y); // [-1,1] to [-PI,PI], [-1,1] to [1,0], [1,0] to [0,PI/2]
+			for(uint k=0;k<n;k++){ float t=PI<float>*2.0f*v[k].y; v[k].xy=vec2(cos(t),sin(t))*sqrt(v[k].x); }
+		}
+		
+		if(dst==COSHEMI) for(uint k=0;k<n;k++) v[k].z = sqrt( 1-v[k].x*v[k].x-v[k].y*v[k].y );
+	}
+	else if(dst==HEMISPHERE)
+	{
+		for(uint k=0;k<n;k++)
+		{
+			vec3& s = v[k].xyz;
+			float phi=PI<float>*(s.x*2.0f-1.0f), theta=acos(1.0f-s.y); // [0,1] to [-PI,PI], [0,1] to [1,0] to [0,PI/2]
 			s = vec3(vec2(cos(phi),sin(phi))*sin(theta),cos(theta));
 		}
 	}
 	else if(dst==surface_t::SPHERE)
 	{
-		for(uint k=0;k<n;k++,v++)
+		for(uint k=0;k<n;k++)
 		{
-			vec3& s = v->xyz;
-			float phi=PI<float>*s.x, r=sqrtf(1-s.y*s.y); // [-1,1] to [-PI,PI], [-1,1] to [0,1]
+			vec3& s = v[k].xyz;
+			float phi=PI<float>*(s.x*2.0f-1.0f), r=sqrtf(4.0f*(1-s.y)*s.y); // [0,1] to [-PI,PI], [0,1] to [0,1]
 			s = vec3(vec2(cos(phi),sin(phi))*r,s.y);
 		}
 	}
