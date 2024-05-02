@@ -454,7 +454,7 @@ template <class T> struct tmat4
 	__forceinline static tmat4 scale( const V3& v ){ return tmat4().set_scale(v); }
 	__forceinline static tmat4 scale( T x, T y, T z ){ return tmat4().set_scale(x,y,z); }
 	__forceinline static tmat4 shear( const V2& yz, const V2& zx, const V2& xy ){ return tmat4().set_shear(yz,zx,xy); }
-	__forceinline static tmat4 rotate_vec_to_vec( const V3& v0, V3 v1 ){ return tmat4().set_rotate_vec_to_vec(v0,v1); }
+	__forceinline static tmat4 rotate( const V3& from, const V3& to ){ return tmat4().set_rotate(from,to); }
 	__forceinline static tmat4 rotate( const V3& axis, T angle ){ return tmat4().set_rotate(axis,angle); }
 
 	__forceinline static tmat4 viewport( int width, int height ){ return tmat4().set_viewport(width,height); }
@@ -476,14 +476,14 @@ template <class T> struct tmat4
 	__forceinline tmat4& set_scale( const V3& v ){ set_identity(); _11=v.x; _22=v.y; _33=v.z; return *this; }
 	__forceinline tmat4& set_scale( T x,T y,T z ){ set_identity(); _11=x; _22=y; _33=z; return *this; }
 	__forceinline tmat4& set_shear( const V2& yz, const V2& zx, const V2& xy ){ set_identity(); _12=yz.x; _13=yz.y; _21=zx.y; _23=zx.x; _31=xy.x; _32=xy.y; return *this; }
-	tmat4& set_rotate_vec_to_vec( const V3& from, const V3& to ){ T d=max(min(from.dot(to),T(1)),T(-1)); if(d>T(0.999999)) return set_identity(); else if(d<T(-0.999999)) return set_scale(-1,-1,-1); V3 x=from.cross(to); return set_rotate(normalize(x), acos(d)); }
+	tmat4& set_rotate( V3 from, V3 to );
 	tmat4& set_rotate( const V3& axis, T angle );
 
 	// viewport, lookat, projection
 	__forceinline tmat4& set_viewport( int width, int height ){ set_identity(); _11=width*T(0.5); _22=-height*T(0.5); _14=width*T(0.5); _24=height*T(0.5); return *this; }
 	__forceinline tmat4& set_look_at( const V3& eye, const V3& center, const V3& up ){ V3 n=(eye-center).normalize(), u=(up.cross(n)).normalize(), v=n.cross(u); return *this = tmat4{u.x,u.y,u.z,-u.dot(eye),v.x,v.y,v.z,-v.dot(eye),n.x,n.y,n.z,-n.dot(eye),0,0,0,T(1.0)}; }
 	__forceinline tmat4& set_look_at_inverse( const V3& eye, const V3& center, const V3& up ){ V3 n=(eye-center).normalize(), u=(up.cross(n)).normalize(), v=n.cross(u); return *this = tmat4{u.x,v.x,n.x,eye.x,u.y,v.y,n.y,eye.y,u.z,v.z,n.z,eye.z,0,0,0,T(1.0)}; }
-	__forceinline V3  look_at_eye() const { const V3 &u=v[0].xyz,&V=v[1].xyz,&n=v[2].xyz,uv=u.cross(V),vn=V.cross(n),nu=n.cross(u); return (vn*_14+nu*_24+uv*_34)/(-u.dot(vn)); }
+	__forceinline V3	 look_at_eye() const { const V3 &u=v[0].xyz,&V=v[1].xyz,&n=v[2].xyz,uv=u.cross(V),vn=V.cross(n),nu=n.cross(u); return (vn*_14+nu*_24+uv*_34)/(-u.dot(vn)); }
 	__forceinline tmat4  look_at_inverse() const { V3 eye=look_at_eye(); return tmat4{_11,_21,_31,eye.x,_12,_22,_32,eye.y,_13,_23,_33,eye.z,0,0,0,T(1)}; }
 
 	// Canonical view volume in OpenGL: [-1,1]^3
@@ -498,6 +498,15 @@ template <class T> struct tmat4
 	__forceinline tmat4& set_ortho_dx( T width, T height, T dn, T df ){ set_ortho( width, height, dn, df ); _33*=T(0.5); _34=dn/(dn-df); return *this; }
 	__forceinline tmat4& set_ortho_off_center_dx( T left, T right, T top, T bottom, T dn, T df ){ set_ortho_off_center( left, right, top, bottom, dn, df ); _33*=T(0.5); _34=dn/(dn-df); return *this; }
 };
+
+template <class T>
+__noinline tmat4<T>& tmat4<T>::set_rotate( V3 from, V3 to )
+{
+	from=from.normalize(); to=to.normalize();
+	T d=T(from.dot(to)); if(d>T(0.999999)) return set_identity(); else if(d<T(-0.999999)) return set_scale(-1,-1,-1);
+	V3 n=from.cross(to); T l=T(n.length());
+	return set_rotate(n/l, asin(l));
+}
 
 template <class T>
 __noinline tmat4<T>& tmat4<T>::set_rotate( const tvec3<T>& axis, T angle )

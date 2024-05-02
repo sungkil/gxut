@@ -68,8 +68,8 @@ struct sampler_t : public isampler_t
 	reference	operator[]( ptrdiff_t i ) const { return _data[i%n]; }
 	reference	at( ptrdiff_t i ) const { return _data[i%n]; }
 	void		rewind(){ index=0; }
-	reference&	operator++(){ return _data[index=(index+1)%n]; }						// prefix increment
-	reference&	operator++(int){ uint i=index; index=(index+1)%n; return _data[i]; }	// postfix increment
+	reference	operator++(){ return _data[(++index)%n]; }						// prefix increment
+	reference	operator++(int){ uint i=index; index=(++index)%n; return _data[i]; }	// postfix increment
 
 	void		resize( size_t size ){ _data.resize(const_cast<uint&>(n)=uint(size)); resample(); }
 	uint		resample(); // return the number of generated samples
@@ -268,7 +268,7 @@ __noinline std::vector<vec2> poisson_disk( uint _count, bool circular, uint seed
 
 __noinline uint sampler_t::resample()
 {
-	if(surface==surface_t::CYLINDER&&model!=sampler_t::HALTON){ printf("[Sampler] cylinder sampling is supported only in Halton sampling\n" ); return 0; }
+	if(surface==CYLINDER&&model!=HALTON){ printf("[Sampler] cylindrical sampling supports only Halton sequences\n" ); return 0; }
 
 	auto* v = _data.data();
 	for(uint k=0;k<n;k++) v[k].z=0.0f; // reset z=zero
@@ -311,18 +311,11 @@ inline void sampler_t::_reshape( vec4* v, surface_t dst )
 	
 	if(dst==CIRCLE||dst==COSHEMI||dst==CYLINDER)
 	{
-		// coshemi: apply Nusselt analog (2D uniform is top view of cosine-weighted hemisphere)
+		// coshemi: apply Nusselt analog (2D uniform is a top view of cosine-weighted hemisphere)
 		// cylinder: keep z in [0,1]
-		if(model==POISSON)
-		{
-			for(uint k=0;k<n;k++) v[k].xy=v[k].xy*2.0f-1.0f;
-		}
-		else
-		{
-			for(uint k=0;k<n;k++){ float t=PI<float>*2.0f*v[k].y; v[k].xy=vec2(cos(t),sin(t))*sqrt(v[k].x); }
-		}
-		
-		if(dst==COSHEMI) for(uint k=0;k<n;k++) v[k].z = sqrt( 1-v[k].x*v[k].x-v[k].y*v[k].y );
+		if(model==POISSON) for(uint k=0;k<n;k++){ auto& s=v[k].xy; s=s*2.0f-1.0f; }
+		else { for(uint k=0;k<n;k++){ auto& s=v[k].xy; float r=sqrt(s.x), t=PI<float>*2.0f*s.y; s=vec2(cos(t),sin(t))*r; } }
+		if(dst==COSHEMI) for(uint k=0;k<n;k++) v[k].z = sqrt( 1.0f-v[k].xy.length() ); 
 	}
 	else if(dst==HEMISPHERE)
 	{
