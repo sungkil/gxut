@@ -639,6 +639,25 @@ __forceinline uint bitswap( uint n ){ n=((n&0x55555555)<<1)|((n&0xaaaaaaaa)>>1);
 __forceinline float triangle_area( vec2 a, vec2 b, vec2 c ){ return abs(a.x*b.y+b.x*c.y+c.x*a.y-a.x*c.y-c.x*b.y-b.x*a.y)*0.5f; }
 
 //*************************************
+// TBN (tangent-binormal-normal) matrix
+
+template <bool bump_flavor=false> mat3 tbn_matrix( vec3 normal );
+template <> __forceinline mat3 tbn_matrix<false>( vec3 normal ) // used in ray tracer
+{
+	vec3 t = normalize(cross(abs(normal.x)>0.0f?vec3(0,1,0):vec3(1,0,0),normal)); // tangent: typical choice in path tracer
+	vec3 b = normalize(cross(normal,t)); // binormal
+	return mat3{t.x,b.x,normal.x,t.y,b.y,normal.y,t.z,b.z,normal.z};
+}
+template <> __forceinline mat3 tbn_matrix<true>( vec3 normal ) // used in normal/bump mapping
+{
+	// http://www.ozone3d.net/tutorials/mesh_deformer_p2.php#tangent_space
+	vec3 c = cross(normal,vec3(0,0,1)), d = cross(normal,vec3(0,1,0));
+	vec3 t = normalize(length(c)>length(d)?c:d); // tangent
+	vec3 b = normalize(cross(normal,t)); // binormal
+	return mat3{t.x,b.x,normal.x,t.y,b.y,normal.y,t.z,b.z,normal.z};
+}
+
+//*************************************
 // viewport helpers
 __forceinline ivec4 effective_viewport( int width, int height, double aspect_to_keep ){ int w=int(height*aspect_to_keep), h=int(width/aspect_to_keep); if((width*h)==(height*w)) return ivec4{0,0,width,height}; return width>w?ivec4{(width-w)/2,0,w,height}:ivec4{0,(height-h)/2,width,h}; }
 __forceinline ivec4 effective_viewport( int width, int height, int width_to_keep, int height_to_keep ){ return (width*height_to_keep)==(height*width_to_keep)?ivec4{0,0,width,height}:effective_viewport(width,height,width_to_keep/double(height_to_keep)); }
