@@ -35,35 +35,18 @@ static const char* __GX_MESH_H_TIMESTAMP__ = _strdup(__TIMESTAMP__);
 #ifndef GL_TRIANGLES
 	#define GL_TRIANGLES 0x0004
 #endif
-namespace gl
-{
-	struct Buffer;
-	struct VertexArray;
-	struct Texture;
-} 
+namespace gl { struct Buffer; struct VertexArray; struct Texture; } 
 // D3DX forward decl.
-struct ID3D10Buffer;
-struct ID3D11Buffer;
-struct ID3D10ShaderResourceView;
-struct ID3D11ShaderResourceView;
+struct ID3D10Buffer; struct ID3D10ShaderResourceView; struct ID3D11Buffer; struct ID3D11ShaderResourceView;
 // mesh forward decl.
-struct geometry;
-struct object;
-struct mesh;
-// camera
-struct camera_t;
+struct mesh; struct object;
+// acceleration structure types defined in <gxrt.h>
+struct acc_t; struct bvh_t; struct kdtree_t;
 
 //*************************************
 // 16-byte aligned light for direct lights
 #ifndef __cplusplus // std140 definition for shaders
 struct light_t { vec4 pos, color, normal; }		// normal: use only normal.xyz
-struct area_light_t { vec4 pos, color, normal; vec3 u, v; }; // uv: scaled basis vectors to sample points with [-0.5,0.5]
-struct vpl_t
-{
-	vec4	pos, color, normal;		// normal: use only normal.xyz
-	mat4	view_matrix, projection_matrix;
-	float	fovy, aspect, dnear, dfar;
-};
 #else
 struct light_t
 {
@@ -79,28 +62,7 @@ struct light_t
 	float	phi() const { vec3 d=dir(); return atan2(d.y,d.x); }	// angle on the xy plane orthogonal to the optical axis
 	float	theta() const { return acos(dir().z); }					// angle between outgoing light direction and the optical axis
 };
-
-// area light type
-struct area_light_t : public light_t
-{
-	alignas(16) vec3 u, v; // uv: scaled basis vectors to sample points with [-0.5,0.5]
-	vec3	get_sample( vec2 subpixel ) const { vec2 s=subpixel-0.5f; return pos.xyz + u*s.x + v*s.y + normal*0.001f; } // subpixel in [0,1], add slight margin to avoid self-intersection
-};
-
-// light as camera: use for VPLs and shadows (actually, including real lights as well)
-struct vpl_t : public light_t
-{
-	mat4	view_matrix;		// view matrix to render shadow map
-	mat4	projection_matrix;	// projection matrix to render shadow map
-	float	fovy;				// vertical field of view
-	float	aspect;				// aspect ratio
-	float	dnear;				// near clip for projection
-	float	dfar;				// far clip for projection
-};
-
 static_assert(sizeof(light_t)%16==0, "size of struct light_t should be aligned at 16-byte boundaries");
-static_assert(sizeof(area_light_t)%16==0, "size of struct area_light_t should be aligned at 16-byte boundaries");
-static_assert(sizeof(vpl_t)%16==0,	 "size of struct vpl_t should be aligned at 16-byte boundaries");
 #endif
 
 // overloading light transformations to camera space
@@ -110,14 +72,13 @@ inline std::vector<light_t> operator*( const mat4& view_matrix, const std::vecto
 
 //*************************************
 // ray for ray tracing
-template <class T> struct tray // defined as a template to avoid "a constructor in aggregate struct
+struct ray
 {
-	union { struct { tvec3<T> pos, dir; tvec4<T> tex; }; struct { tvec3<T> o, d; T t, tfar, time; int depth; }; }; // lens system rays (with texcoord) or pbrt-like rays (tnear/tfar = parameters of the nearest/farthest intersections)
-	tray(): t(0), tfar(T(FLT_MAX)), time(0), depth(0){}
-	tray(const vec3& _pos, const vec3& _dir, float _tnear=0.0f, float _tfar=FLT_MAX): tray(){ pos=_pos; dir=_dir; t=_tnear; tfar=_tfar; }
-	tray(const vec3& _pos, const vec3& _dir, const vec4& _tex): tray(){ pos=_pos; dir=_dir; tex=_tex; }
+	union { struct { vec3 pos, dir; vec4 tex; }; struct { vec3 o, d; float t, tfar, time; int depth; }; }; // lens system rays (with texcoord) or pbrt-like rays (tnear/tfar = parameters of the nearest/farthest intersections)
+	ray(): t(0), tfar(FLT_MAX), time(0), depth(0){}
+	ray(const vec3& _pos, const vec3& _dir, float _tnear=0.0f, float _tfar=FLT_MAX): ray(){ pos=_pos; dir=_dir; t=_tnear; tfar=_tfar; }
+	ray(const vec3& _pos, const vec3& _dir, const vec4& _tex): ray(){ pos=_pos; dir=_dir; tex=_tex; }
 };
-using ray = tray<float>;
 
 //*************************************
 // intersection
@@ -146,7 +107,7 @@ struct bbox : public bbox_t
 	bbox( const vec3& v0, const vec3& v1 ){ m=vec3(min(v0.x, v1.x), min(v0.y, v1.y), min(v0.z, v1.z)); M=vec3(max(v0.x, v1.x), max(v0.y, v1.y), max(v0.z, v1.z)); }
 	bbox( const vec3& v0, const vec3& v1, const vec3& v2 ){ m=vec3(min(min(v0.x, v1.x), v2.x), min(min(v0.y, v1.y), v2.y), min(min(v0.z, v1.z), v2.z)); M=vec3(max(max(v0.x, v1.x), v2.x), max(max(v0.y, v1.y), v2.y), max(max(v0.z, v1.z), v2.z)); }
 	bbox( const bbox& b0, const bbox& b1 ){ m=vec3(min(b0.m.x, b1.m.x), min(b0.m.y, b1.m.y), min(b0.m.z, b1.m.z)); M=vec3(max(b0.M.x, b1.M.x), max(b0.M.y, b1.M.y), max(b0.M.z, b1.M.z)); }
-	inline void clear(){ M=-(m=FLT_MAX); }
+	void clear(){ M=-(m=FLT_MAX); }
 
 	// assignment
 	bbox& operator=( bbox&& b ) noexcept { m=b.m; M=b.M; return *this; }
@@ -200,8 +161,8 @@ struct bbox : public bbox_t
 	inline mat4 model_matrix() const { return mat4::translate(center())*mat4::scale(size()*0.5f); }
 
 	// intersection
-	inline bool intersect( ray r );
-	inline bool intersect( ray r, isect& h );
+	bool intersect( ray r );
+	bool intersect( ray r, isect& h );
 };
 
 inline bbox operator*(const mat4& m, const bbox& b){ return bbox(b).expand(m); }
@@ -213,7 +174,7 @@ struct sphere
 {
 	vec3	pos;
 	float	radius;
-	inline bool intersect( ray r, isect& h );
+	bool	intersect( ray r, isect& h );
 };
 
 //*************************************
@@ -224,14 +185,10 @@ struct frustum_t : public std::array<vec4, 6> // left, right, top, bottom, near,
 	__forceinline frustum_t( frustum_t&& ) = default;
 	__forceinline frustum_t( const frustum_t& ) = default;
 	__forceinline frustum_t( const mat4& view_projection_matrix ){ update(view_projection_matrix); }
-	__forceinline frustum_t( camera_t& c ){ update(c); }
-	__forceinline frustum_t( vpl_t& c ){ update(c); }
 	__forceinline frustum_t& operator=( frustum_t&& ) = default;
 	__forceinline frustum_t& operator=( const frustum_t& ) = default;
 
-	__forceinline frustum_t& update( const mat4& view_projection_matrix ){ auto* planes = data(); for(int k=0;k<6;k++){planes[k]=view_projection_matrix[k>>1]*float(1-(k&1)*2)+view_projection_matrix[3];planes[k]/=planes[k].xyz.length();} return *this; }
-	__forceinline frustum_t& update( camera_t& c );
-	__forceinline frustum_t& update( vpl_t& c ){ return update(c.projection_matrix*c.view_matrix); }
+	__forceinline frustum_t& update( const mat4& view_projection_matrix ){ auto* planes=data(); for(int k=0;k<6;k++){planes[k]=view_projection_matrix[k>>1]*float(1-(k&1)*2)+view_projection_matrix[3];planes[k]/=planes[k].xyz.length();} return *this; }
 	__forceinline bool cull( const bbox_t&  b) const { vec4 pv={}; pv.w=1.0f; for(int k=0;k<6;k++){ const vec4& plane=operator[](k); for(int j=0;j<3;j++)pv[j]=plane[j]>0?b.M[j]:b.m[j]; if(pv.dot(plane)<0)return true;} return false; }
 };
 
@@ -291,9 +248,6 @@ struct camera : public camera_t
 	void update_view_frustum(){ frustum.update(projection_matrix*view_matrix); }
 	void update_stereo(){ if(!stereo.model) return; float s=0.5f*stereo.ipd, o=s*dnear/df, t=dnear*tanf(0.5f*fovy*(fovy<PI<float>?1.0f:PI<float>/180.0f)), R=t*aspect; vec3 stereo_dir = normalize(cross(dir,up))*s; auto& l=stereo.left; memcpy(&l,this,sizeof(l)); l.eye-=stereo_dir; l.center-=stereo_dir; l.view_matrix=mat4::look_at(l.eye, l.center, l.up); l.projection_matrix=mat4::perspective_off_center(-R+o, R+o, t, -t, dnear, dfar); auto& r=stereo.right; memcpy(&r,this,sizeof(r)); r.eye+=stereo_dir; r.center+=stereo_dir; r.view_matrix=mat4::look_at(r.eye,r.center,r.up); r.projection_matrix=mat4::perspective_off_center(-R-o, R-o, t, -t, dnear, dfar);}
 };
-
-// late implementations of frustum
-__forceinline frustum_t& frustum_t::update( camera_t& c ){ return update(c.projection_matrix*c.view_matrix); }
 
 // utilities for camera
 inline float focal_to_fovy( float focal, float height ){ return focal==0?0:atan2(height*0.5f,focal)*2.0f; }
@@ -358,60 +312,6 @@ struct cull_t
 };
 
 //*************************************
-// acceleration structures
-struct acc_t
-{
-	enum model_t { NONE, BVH, KDTREE } model = NONE;
-	enum method_t { SAH, MIDDLE, EQUAL_COUNTS };
-	mesh* p_mesh = nullptr;	// should be set to source mesh
-	mesh* proxy = nullptr;	// mesh of transform-baked bounding boxes; release only where this is created
-
-	virtual ~acc_t(){}			// should be virtual to enforce to call inherited destructors
-	virtual void release()=0;
-	virtual bool intersect( ray r, isect& h ) const=0;
-};
-
-//*************************************
-// Bounding volume hierarchy
-struct bvh_t : public acc_t // two-level hierarchy: mesh or geometry
-{
-	struct node
-	{
-		vec3 m=FLT_MAX; uint second_or_index;		// second: offset to right child of interior node; index: primitive index in index buffer
-		vec3 M=-FLT_MAX; uint parent:30, axis:2;
-		const bbox& box() const { return reinterpret_cast<const bbox&>(*this); }
-		__forceinline bool is_leaf() const { return axis==3; }
-	};
-	std::vector<node> nodes;
-
-	~bvh_t(){}
-	virtual void release()=0;
-	virtual bool intersect( ray r, isect& h ) const;
-	virtual bool has_prims() const;
-
-	uint geometry_node_count() const;
-	mesh* create_proxy( bool double_sided=false, bool quads=false ); // create meshes of bounding boxes of all the nodes; may include primitives or not
-	void update_proxy();
-};
-
-//*************************************
-// KDtree
-struct kdtree_t : public acc_t // single-level hierarchy
-{
-	struct node
-	{
-		union { float pos; uint count; };
-		uint second_or_index;
-		uint geometry;
-		uint parent:30, axis:2;
-		__forceinline bool is_leaf() const { return axis==3; }
-	};
-	std::vector<node>	nodes;
-	std::vector<ivec2>	prims; // ordered primitives (face index, geometry index)
-	virtual bool intersect( ray r, isect& h ) const;
-};
-
-//*************************************
 // geometry: 144-bytes aligned; differentiated by material and grouping
 #ifndef __cplusplus
 struct geometry // std430 layout for OpenGL shader storage buffers
@@ -446,13 +346,13 @@ struct geometry
 	geometry(mesh* p_mesh, uint id, uint obj_index, uint start_index, uint index_count, const bbox* box, uint mat_index): count(index_count), first_index(start_index), ID(id), material_index(mat_index), object_index(obj_index), root(p_mesh){ if(box) this->box=*box; }
 	geometry& operator=( const geometry& other ){ memcpy(this,&other,sizeof(geometry)); return *this; }
 
-	inline object*		parent() const;
-	inline const char*	name() const;
-	inline void*		offset() const { return (void*)(sizeof(geometry)*ID); } // for rendering commands
-	inline uint			face_count() const { return count/3; }
-	inline float		surface_area() const;
-	inline bool			intersect( ray r, isect& h ) const; // linear intersection
-	inline bool			acc_empty() const { return acc_prim_count==0; }
+	object*		parent() const;
+	const char*	name() const;
+	void*		offset() const { return (void*)(sizeof(geometry)*ID); } // for rendering commands
+	uint		face_count() const { return count/3; }
+	float		surface_area() const;
+	bool		intersect( ray r, isect& h ) const; // linear intersection
+	bool		acc_empty() const { return acc_prim_count==0; }
 };
 static_assert(sizeof(geometry)%16==0,	"sizeof(geometry) should be multiple of 16-byte");
 static_assert(sizeof(geometry)==144,	"sizeof(geometry) should be 144, when aligned correctly");
@@ -481,8 +381,8 @@ struct object
 	inline bbox update_bound(){ box.clear(); for( auto& g : *this ) box.expand(g.mtx*g.box); return box; }
 
 	// create helpers
-	inline geometry* create_geometry( size_t first_index, size_t index_count=0, const bbox* box=nullptr, size_t mat_index=-1 );
-	inline geometry* create_geometry( const geometry& other );
+	geometry* create_geometry( size_t first_index, size_t index_count=0, const bbox* box=nullptr, size_t mat_index=-1 );
+	geometry* create_geometry( const geometry& other );
 
 	// iterator types
 	struct iterator
@@ -564,7 +464,6 @@ struct mesh
 	object* create_object( const char* name ){ objects.emplace_back(object(this, uint(objects.size()), name)); return &objects.back(); }
 	object*	find_object( const char* name ){ for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) return &objects[k]; return nullptr; }
 	std::vector<object*> find_objects( const char* name ){ std::vector<object*> v; for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) v.push_back(&objects[k]); return v; }
-	std::vector<area_light_t> find_area_lights() const;
 	mesh* create_proxy( bool double_sided=false, bool use_quads=false );	// proxy mesh helpers: e.g., bounding box
 	void update_proxy();													// update existing proxy with newer matrices
 	std::vector<material> pack_materials() const { std::vector<material> p; auto& m=materials; p.resize(m.size()); for(size_t k=0,kn=p.size();k<kn;k++) p[k]=m[k]; return p; }
@@ -573,7 +472,6 @@ struct mesh
 	// bound, dynamic, intersection
 	inline bool is_dynamic() const { for(size_t k=0, kn=objects.size()/instance_count; k<kn; k++) if(objects[k].attrib.dynamic) return true; return false; }
 	void update_bound( bool b_recalc_tris=false );
-	int find_up_vector() const;
 	bool intersect( ray r, isect& h, bool use_acc=true ) const;
 
 	// opengl draw functions (implemented in gxopengl.h)
@@ -595,7 +493,7 @@ struct mesh
 };
 
 //*************************************
-// Volume data format
+// volume data format
 struct volume
 {
 	wchar_t	file_path[_MAX_PATH]={};
@@ -662,67 +560,6 @@ __noinline void mesh::update_bound( bool b_recalc_tris )
 	box.clear();
 	for( auto& obj : objects )
 		box.expand(obj.update_bound());
-}
-
-__noinline int mesh::find_up_vector() const
-{
-	if(box.max_extent()>(box.min_extent()*4.0f)) return box.min_axis();
-
-	vec3 d=0;
-	for(auto f:{"floor","ground","ceil","terrain","plane"})
-		for(auto& o:objects)
-		{
-			char buff[4096]; strcpy(buff,o.name);
-			if(!strstr(_strlwr(buff),f)||o.box.max_extent()<(o.box.min_extent()*4.0f)) continue;
-			d[o.box.min_axis()] += 1.0; break;
-		}
-	
-	int a=2;
-	if(d[0]>0&&d[0]>d[2]) a=0;
-	if(d[1]>0&&d[1]>d[a]) a=1;
-	return a;
-}
-
-__noinline std::vector<area_light_t> mesh::find_area_lights() const
-{
-	std::vector<area_light_t> lights;
-	for( const auto& g : geometries )
-	{
-		const auto& m = materials[g.material_index]; if(m.bsdf!=BSDF_EMISSIVE) continue;
-		if(g.count!=6){ printf("%s(%s): no support other than two-triangle quads\n", __func__, g.name() ); continue; }
-		
-		// first find the indices of shared edge and isolated vertices
-		std::map<uint,uint> c; // index counter
-		for( uint k=g.first_index, kn=k+g.count; k<kn; k++ ){ auto i=indices[k]; auto it=c.find(i); c[i]=1+(it==c.end()?0:it->second); }
-		ivec2 shared={-1,-1}, isolated={-1,-1}; uint s=0, i=0; for(auto [k,n]:c){ if(s<2&&n>1) shared[s++]=k; if(i<2&&n==1) isolated[i++]=k; }
-		if(shared.x<0||shared.y<0){ printf("%s(%s): no shared edge found\n", __func__, g.name() ); continue; }
-		if(isolated.x<0||isolated.y<0){ printf("%s(%s): no isolated vertices found\n", __func__, g.name() ); continue; }
-
-		// take the min index as the origin
-		vec3 o = vertices[shared.x].pos;
-		vec3 u = vertices[isolated.x].pos-o;
-		vec3 v = vertices[isolated.y].pos-o;
-		vec3 n = normalize(cross(u,v));
-
-		// find the first normal
-		vec3 a0 = vertices[indices[g.first_index+1]].pos-vertices[indices[g.first_index]].pos;
-		vec3 b0 = vertices[indices[g.first_index+2]].pos-vertices[indices[g.first_index]].pos;
-		vec3 n0 = cross(a0,b0);
-
-		// take the correct isolated indices by comparing normals
-		area_light_t l;
-		l.color = m.color;
-		l.bounce = 0;
-		l.mouse = 0;
-		l.geometry = g.ID;
-
-		// fill the half uv and normal
-		if(dot(n,n0)>0){ l.u=u; l.v=v; l.normal=n; } else { l.u=v; l.v=u; l.normal=-n; }
-		l.pos = vec4( o + (l.u+l.v)*0.5f, 1.0f ); // take the center as pos
-		lights.emplace_back(l);
-	}
-
-	return lights;
 }
 
 __noinline std::vector<uint> get_box_indices( bool double_sided, bool quads )
@@ -816,198 +653,6 @@ __noinline void mesh::update_proxy()
 }
 
 //*************************************
-// late implementations for BVH
-inline uint bvh_t::geometry_node_count() const
-{
-	if(!p_mesh) return 0; auto& g=p_mesh->geometries; if(g.empty()) return 0;
-	return has_prims()? g[0].acc_prim_index : uint(nodes.size());
-}
-
-__noinline mesh* bvh_t::create_proxy( bool double_sided, bool quads )
-{
-	proxy = new mesh();
-
-	// direct copy from source mesh
-	proxy->materials.clear();	// proxy not use materials
-	proxy->instance_count = 1;	// proxy instantiates all simultaneously
-	proxy->box = p_mesh->box;
-	proxy->acc = this;			// set this bvh
-
-	// create objects for triangles and lines
-	auto* tris = proxy->create_object("tris");
-	auto* lines = proxy->create_object("lines");
-
-	// vertex/index definitions of a default box
-	const auto corners = bbox(-1.0f, 1.0f).corners();
-	const auto tri_indices = get_box_indices(double_sided,quads);
-		
-	// create vertices/indices for triangles
-	auto& i = proxy->indices;
-	auto& v = proxy->vertices;
-	uint vof=0;
-	for(auto& n : nodes)
-	{
-		auto& b = n.box();
-		tris->create_geometry(i.size(),tri_indices.size(),&b);
-		for(auto j:tri_indices) i.emplace_back(j+vof);
-		mat4 m=mat4::translate(b.center())*mat4::scale(b.size()*0.5f);
-		for(auto& c:corners) v.emplace_back(vertex{(m*c).xyz,c,vec2(0)}); // world pos, local pos
-		vof+=uint(corners.size()); // increment by the corner count
-	}
-
-	return proxy;
-}
-
-__noinline void bvh_t::update_proxy()
-{
-	if(!proxy) return;
-
-	proxy->box = p_mesh->box;
-	proxy->acc = this; // set this bvh
-
-	for( auto& g : proxy->geometries )
-	{
-		auto& n = nodes[g.ID];
-		mat4 m = mat4::translate(n.box().center())*mat4::scale(n.box().size()*0.5f);
-		for(uint k=0; k<8; k++){ auto& v = proxy->vertices[size_t(8llu*g.ID+k)]; v.pos = (m*vec4(v.norm,1.0f)).xyz; }
-	}
-}
-
-//*************************************
-// intersection implementations
-
-// primary ray
-__noinline ray gen_primary_ray( camera* cam, float x, float y )	// (x,y) in [0,1]
-{
-	const vec3& eye=cam->eye.xyz, center=cam->center.xyz, up=cam->up.xyz;
-	float fh=tan(cam->fovy*0.5f)*2.0f, fw=fh*cam->aspect;		// frustum height/width in NDC
-	vec3 dst=normalize(vec3(fw*(x-0.5f),fh*(y-0.5f),-1.0f));	// target pixel position at d=-1: make sure to have negative depth
-	mat4 I = mat4::look_at_inverse(eye,center,up);				// inverse view matrix
-	ray r; r.t=0.0f; r.tfar=FLT_MAX; r.o=eye; r.d=mat3(I)*dst;  return r;
-}
-
-// triangle intersection: isect=(pos,t), bc=(s,t)
-__noinline bool intersect( ray r, vec3 v0, vec3 v1, vec3 v2, isect& h )
-{
-	// http://geomalgorithms.com/a06-_intersect-2.html#intersect3D_RayTriangle
-	vec3 u=v1-v0, v=v2-v0, n=u.cross(v); if(n.length2()<0.000001f) return false;	// degenerate case: non-triangle
-	float b=dot(n,r.dir); if(b>-0.000001f) return false;							// skip backfaces or rays lying on the plane
-	float t=dot(n,v0-r.pos)/b; if(t<r.t||t>r.tfar) return false;					// out of range of [tnear,tfar]
-	vec3 ipos=r.pos+r.dir*t, w=ipos-v0;
-
-	// test on barycentric coordinate
-	float uu=dot(u,u),uv=dot(u,v),vv=dot(v,v),wu=dot(w,u),wv=dot(w,v),D=uv*uv-uu*vv;
-	float bs=(uv*wv-vv*wu)/D; if(bs<0||bs>1.0f)		return false;
-	float bt=(uv*wu-uu*wv)/D; if(bt<0||bs+bt>1.0f)	return false;
-
-	h.pos = ipos;
-	h.norm = normalize(n);
-	h.tc = vec2(bs, bt); // temporaily store texcoord
-	h.t = t;
-	h.tfar = t;
-	return true;
-}
-
-// ray-ray intersection: find the closest points on two 3D rays, which may skew in space
-__noinline vec2 intersect_rays( vec3 ro, vec3 rd, vec3 po, vec3 pd )
-{
-	vec3 a=rd, b=pd, c=(po-ro);
-	vec3 ab=cross(a,b), ca=cross(c,a), cb=cross(c,b);
-	float l=dot(ab,ab); if(l==0) return vec2(0,0); // parallel lines
-	//if(dot(c,ab)!=0) return 0.0f; // non-coplanar rays, which mostly happens due to limited floating-point precision
-	return vec2(dot(cb,ab),dot(ca,ab))/l; // t of the closest point on (r,p)
-}
-
-// box intersection
-__noinline bool bbox::intersect( ray r )
-{
-	float t0=r.t, t1=r.tfar;
-	for( int k=0; k<3; k++ )
-	{
-		float i = 1.0f/r.d[k];
-		if(i<0){t0=max(t0,(M[k]-r.o[k])*i);t1=min(t1,(m[k]-r.o[k])*i*1.00000024f); } // epsilon by 4 ulps
-		else{	t0=max(t0,(m[k]-r.o[k])*i);t1=min(t1,(M[k]-r.o[k])*i*1.00000024f); } // epsilon by 4 ulps
-		if(t0>t1) return false;
-	}
-	return t1>0;
-}
-
-__noinline bool bbox::intersect( ray r, isect& h )
-{
-	float t0=r.t, t1=r.tfar;
-	for( int k=0; k<3; k++ )
-	{
-		float i = 1.0f/r.d[k];
-		if(i<0){t0=max(t0,(M[k]-r.o[k])*i);t1=min(t1,(m[k]-r.o[k])*i*1.00000024f); } // epsilon by 4 ulps
-		else{	t0=max(t0,(m[k]-r.o[k])*i);t1=min(t1,(M[k]-r.o[k])*i*1.00000024f); } // epsilon by 4 ulps
-		if(t0>t1) return false;
-	}
-
-	h.t=t0; h.tfar=t1;
-	return t1>0;
-}
-
-__noinline bool intersect( bbox_t b, ray r ){ return reinterpret_cast<bbox&>(b).intersect(r); }
-__noinline bool intersect( bbox_t b, ray r, isect& h ){ return reinterpret_cast<bbox&>(b).intersect(r,h); }
-
-// sphere intersection
-__noinline bool sphere::intersect( ray r, isect& h )
-{
-	vec3 pc = r.pos - pos;
-	float B = dot(pc, r.dir);
-	float C = dot(pc, pc) - radius * radius;
-	float B2C = B*B-C; if(B2C < 0.0f) return false; // no surface hit
-
-	h.t = sqrt(B2C)*sign(radius*r.dir.z) - B;
-	h.pos = r.dir*h.t + r.pos;	// update intersection point
-	h.norm = normalize(h.pos - pos); h.norm *= -sign(dot(h.norm, r.dir));
-	h.theta = acos(dot(-r.dir, h.norm)); if(h.theta < 0) h.theta = 0.0f;	// incident angle: preclude division by zero
-
-	return true;
-}
-
-__noinline bool geometry::intersect( ray r, isect& h ) const
-{
-	const vertex* V = &root->vertices[0];
-	const uint* I = &root->indices[first_index];
-	h.g = 0xffffffff;
-
-	for( uint k=0, kn=count/3; k<kn; k++, I+=3 )
-	{
-		const vertex &v0=V[I[0]], &v1=V[I[1]], &v2=V[I[2]];
-		isect i; if(!::intersect(r,mtx*v0.pos,mtx*v1.pos,mtx*v2.pos,i)||i.t>h.t) continue;
-		h=i; h.g=ID;
-		reinterpret_cast<uvec3&>(h.vnorm) = uvec3{I[0],I[1],I[2]};
-	}
-
-	if(h.g!=0xffffffff)
-	{
-		uvec3 i = reinterpret_cast<uvec3&>(h.vnorm);
-		const vertex& v0=V[i.x], &v1=V[i.y], &v2=V[i.z];
-		vec3 bc=vec3(1-h.tc.x-h.tc.y,h.tc);
-		h.vnorm=v0.norm*bc.x+v1.norm*bc.y+v2.norm*bc.z;
-		h.tc=v0.tex*bc.x+v1.tex*bc.y+v2.tex*bc.z;
-	}
-
-	return h.g!=0xffffffff;
-}
-
-__noinline bool mesh::intersect( ray r, isect& h, bool use_acc ) const
-{
-	if(acc&&use_acc) return acc->intersect(r,h);
-
-	h.g=0xffffffff;
-	h.t=FLT_MAX;
-	for( auto& g : geometries )
-	{
-		if(!(g.mtx*g.box).intersect(r)) continue;
-		isect i; if(!g.intersect(r,i)||i.t>h.t) continue;
-		h=i; h.g=g.ID;
-	}
-	return h.g!=0xffffffff;
-}
-
-//*************************************
 // utility
 #ifdef __GX_FILESYSTEM_H__
 inline void mesh::dump_binary( const wchar_t* _dir )
@@ -1021,25 +666,5 @@ inline void mesh::dump_binary( const wchar_t* _dir )
 	fp = _wfopen(index_bin_path, L"wb");  fwrite(&indices[0], sizeof(uint), indices.size(), fp); fclose(fp);
 }
 #endif
-
-//*************************************
-// line clipping by Liang Barsky algorithm
-__noinline bool clip_line( vec2 p, vec2 q, vec2 lb, vec2 rt, vec2* p1=nullptr, vec2* q1=nullptr )
-{
-	vec2 d = q - p, t = vec2(0, 1);
-	vec2 vs[4] = { {-d.x,p.x-lb.x}, {d.x,rt.x-p.x}, {-d.y,p.y-lb.y}, {d.y,rt.y-p.y} };
-	for(int k = 0; k < 4; k++)
-	{
-		vec2 v = vs[k];
-		float f = v.y / v.x;
-		if(v.x<0){ if(f>t.y) return true; if(f>t.x) t.x=f; }
-		else if(v.x>0){ if(f<t.x) return true; if(f<t.y) t.y=f; }
-		else if(v.x==0 && v.y<0) return true;
-	}
-
-	if(p1&&t.x > 0.0f) *p1 = lerp(p, q, t.x);		// new p
-	if(q1&&t.y < 1.0f) *q1 = lerp(p, q, t.y);		// new q
-	return false;
-}
 
 #endif // __GX_MESH_H__
