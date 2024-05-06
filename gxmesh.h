@@ -53,11 +53,11 @@ struct light_t
 	vec4	pos;			// directional light (position.a==0) ignores normal
 	vec4	color;			// shared for diffuse/specular; color.a = specular scale
 	vec3	normal;			// direction (the negated vector of position for directional light)
-	uint	bounce:6;		// zero means emissive light; non-zero means VPLs
-	uint	mouse:1;		// dynamic binding to the mouse?
-	uint	geometry:25;	// ID of the geometry that is bound to this light
+	uint	geometry:24;	// [00:23] ID of the geometry that is bound to this light
+	uint	bounce:7;		// [24:30] zero means emissive light; non-zero means VPLs
+	uint	mouse:1;		// [31:31] dynamic binding to the mouse?
 
-	light_t(){ normal=vec3(0); bounce=0; mouse=0; geometry=0xffffffff; }
+	light_t(){ normal=vec3(0); geometry=0xffffffff; bounce=0; mouse=0;  }
 	vec3	dir() const { return normalize(pos.xyz); }				// directions and angles against view vector
 	float	phi() const { vec3 d=dir(); return atan2(d.y,d.x); }	// angle on the xy plane orthogonal to the optical axis
 	float	theta() const { return acos(dir().z); }					// angle between outgoing light direction and the optical axis

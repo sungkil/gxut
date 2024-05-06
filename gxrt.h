@@ -62,6 +62,11 @@ static_assert(sizeof(area_light_t)%16==0, "size of struct area_light_t should be
 static_assert(sizeof(vpl_t)%16==0,	 "size of struct vpl_t should be aligned at 16-byte boundaries");
 #endif
 
+// overloading light transformations to camera space
+inline area_light_t operator*( const mat4& view_matrix, const area_light_t& light ){ area_light_t l=light; l.pos.xyz=l.pos.a==0?(mat3(view_matrix)*l.pos.xyz):(view_matrix*l.pos).xyz; mat3 rotation_matrix=mat3(view_matrix); l.normal=rotation_matrix*light.normal; l.u=rotation_matrix*light.u; l.v=rotation_matrix*light.v; return l; }
+inline std::vector<area_light_t> operator*( const mat4& view_matrix, const std::vector<area_light_t>& lights ){ std::vector<area_light_t> v; if(lights.empty()) return v; v.reserve(lights.size()); for( const auto& l : lights ) v.emplace_back(view_matrix*l); return v; }
+inline std::vector<area_light_t> operator*( const mat4& view_matrix, const std::vector<area_light_t>* lights ){ std::vector<area_light_t> v; if(!lights||lights->empty()) return v; v.reserve(lights->size()); for(auto& l:*lights) v.emplace_back(view_matrix*l); return v; }
+
 //*************************************
 // acceleration structures
 struct acc_t

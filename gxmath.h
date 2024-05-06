@@ -734,12 +734,17 @@ __forceinline vec4 unpackSnorm4x8( uint u ){ vec4 v={}; for(int k=0;k<4;k++) v[k
 #ifndef __GXMATH_NO_HALF__
 __forceinline vec2 unpackHalf2x16( uint u ){ return htof(reinterpret_cast<half2&>(u)); }
 #endif
-__forceinline uint packUint4x8( uint4 v ){ return (v.x&0xff)+((v.y&0xff)<<8)+((v.z&0xff)<<16)+((v.w&0xff)<<24); }
+__forceinline uint  packUint4x8( uint4 v ){ return (v.x&0xff)+((v.y&0xff)<<8)+((v.z&0xff)<<16)+((v.w&0xff)<<24); }
 __forceinline uvec4 unpackUint4x8( uint u ){ return uvec4(u&0xff,(u>>8)&0xff,(u>>16)&0xff,(u>>24)&0xff); }
-__forceinline uint floatBitsToUint( float f ){ return reinterpret_cast<uint&>(f); }
-__forceinline int floatBitsToInt( float f ){ return reinterpret_cast<int&>(f); }
+__forceinline uint  floatBitsToUint( float f ){ return reinterpret_cast<uint&>(f); }
+__forceinline int   floatBitsToInt( float f ){ return reinterpret_cast<int&>(f); }
 __forceinline float intBitsToFloat( int i ){ return reinterpret_cast<float&>(i); }
 __forceinline float uintBitsToFloat( uint u ){ return reinterpret_cast<float&>(u); }
+__forceinline uint  bitfieldExtract( uint  u, int offset, int bits ){ return (u>>offset)&(~(0xffffffff<<bits)); }
+__forceinline uvec2 bitfieldExtract( uvec2 u, int offset, int bits ){ return uvec2{bitfieldExtract(u.x,offset,bits),bitfieldExtract(u.y,offset,bits)}; }
+__forceinline uvec3 bitfieldExtract( uvec3 u, int offset, int bits ){ return uvec3{bitfieldExtract(u.x,offset,bits),bitfieldExtract(u.y,offset,bits),bitfieldExtract(u.z,offset,bits)}; }
+__forceinline uvec4 bitfieldExtract( uvec4 u, int offset, int bits ){ return uvec4{bitfieldExtract(u.x,offset,bits),bitfieldExtract(u.y,offset,bits),bitfieldExtract(u.z,offset,bits),bitfieldExtract(u.w,offset,bits)}; }
+
 // casting for normalized vec3 in [0,1]
 __forceinline vec2 normVec3BitsToVec2( vec3 v )
 {
