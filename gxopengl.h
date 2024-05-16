@@ -545,6 +545,7 @@ namespace gl {
 	{
 		struct depth_key_t { union { struct {uint width:16, height:16, multisamples:8, layers:16, renderbuffer:1, dummy:7;}; uint64_t value; }; depth_key_t():value(0){} };
 		static const GLint MAX_COLOR_ATTACHMENTS=8;
+		static Framebuffer*& instance();
 
 		Framebuffer( GLuint ID, const char* name ) : Object(ID,name,GL_FRAMEBUFFER){ memset(_active_targets,0,sizeof(_active_targets)); glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA ); }
 		~Framebuffer() override { glBindFramebuffer(GL_FRAMEBUFFER,0); glBindRenderbuffer(GL_RENDERBUFFER,0);memset(_active_targets,0,sizeof(_active_targets)); GLuint id=ID; if(ID) glDeleteFramebuffers(1,&id); for(auto& it:_depth_buffers){const depth_key_t& key=reinterpret_cast<const depth_key_t&>(it.first); if(key.renderbuffer) glDeleteRenderbuffers(1,&it.second); else glDeleteTextures(1,&it.second); } _depth_buffers.clear(); }
@@ -1681,6 +1682,11 @@ inline gl::Framebuffer* gxCreateFramebuffer( const char* name=nullptr )
 	if(!name){ printf( "%s(): name==nullptr\n", __func__ ); return nullptr; }
 	GLuint ID=0; if(glCreateFramebuffers) glCreateFramebuffers( 1, &ID ); else glGenFramebuffers(1,&ID); if(ID==0){ printf( "%s(): unable to create buffer[%s]", __func__, name ); return nullptr; }
 	return new gl::Framebuffer(ID,name&&name[0]?name:"");	// if name is nullptr, return default FBO
+}
+
+inline gl::Framebuffer*& gl::Framebuffer::instance()
+{
+	static gl::Framebuffer* f=gxCreateFramebuffer("FBO"); if(!f) printf("%s(): fbo==nullptr",__func__); return f;
 }
 
 inline gl::TransformFeedback* gxCreateTransformFeedback( const char* name )

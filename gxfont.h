@@ -2,6 +2,10 @@
 #ifndef __GXFONT_H__
 #define __GXFONT_H__
 
+#if defined(__has_include)&&__has_include(<gxut/gxrex.h>)
+#include <gxut/gxrex.h> // rex image functions
+#endif
+
 //*************************************
 namespace gx {
 //*************************************

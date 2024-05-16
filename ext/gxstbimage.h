@@ -14,30 +14,6 @@
 	#endif
 #endif
 
-#ifndef __GX_IMAGE_DECL__
-#define __GX_IMAGE_DECL__
-struct image
-{
-	unsigned char*	data;
-	unsigned int	width;
-	unsigned int	height;
-	unsigned int	depth;		// should be one of 8=IPL_DEPTH_8U, and 32=IPL_DEPTH_32F
-	unsigned int	channels;	// should be one of 1, 2, 3, and 4
-	unsigned int	fcc=0;		// color space fourcc: accepts only RGB, YUY2, YV12
-	unsigned int	crc=0;		// image data crc
-	int				index;		// signed image index
-	const unsigned	align=4;	// byte alignment for rows; can be overriden for YUV (e.g., 64)
-
-	inline unsigned int stride( int channel=0 ) const { bool i420=fcc==I420||fcc==YV12||fcc==IYUV; unsigned int bpp=(fcc==YUY2)?2:(i420||fcc==NV12)?1:channels; uint r=(depth>>3)*bpp*width; if(align<2) return r; return (((i420&&channel)?(r>>1):r)+align-1)&(~(align-1)); }
-	inline unsigned int size() const { bool i420=fcc==I420||fcc==YV12||fcc==IYUV; return height*(i420?(stride()+stride(1)):fcc==NV12?(stride()+stride(1)/2):stride()); }
-	template <class T> T* ptr( int y=0, int x=0, bool vflip=false ){ return ((T*)(data+stride()*(vflip?height-1-y:y)))+x; } // works only for RGB
-	template <class T> T* plane( int channel=0 ){ unsigned char* p=data; int c=channel; if(c){ p+=stride()*height; if((fcc==I420||fcc==YV12||fcc==IYUV)&&c>1) p+=stride(1)*height/2; } return (T*)p; }
-
-	// fourcc; YUY2==YUYV, I420==YU12==IYUV (YUV420P), YV12 (YVU420P), NV12 (YUV420SP)
-	enum fcc_t { RGB=0, YUY2='2yuy', YUYV='vyuy', I420='024i', YU12=I420, IYUV='vuyi', YV12='21vy', NV12='21vn' };
-};
-#endif // __GX_IMAGE_DECL__
-
 //*************************************
 namespace gx {
 //*************************************
