@@ -188,8 +188,6 @@ using std::wstring;
 using std::vector;
 
 // image type declaration
-#ifndef __GX_IMAGE_DECL__
-#define __GX_IMAGE_DECL__
 struct image
 {
 	unsigned char*	data;
@@ -210,6 +208,5 @@ struct image
 	// fourcc; YUY2==YUYV, I420==YU12==IYUV (YUV420P), YV12 (YVU420P), NV12 (YUV420SP)
 	enum fcc_t { RGB=0, YUY2='2yuy', YUYV='vyuy', I420='024i', YU12=I420, IYUV='vuyi', YV12='21vy', NV12='21vn' };
 };
-#endif // __GX_IMAGE_DECL__
 
 #endif // __GX_TYPE_H__

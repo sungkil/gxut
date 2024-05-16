@@ -711,11 +711,19 @@ __forceinline float sign( float f ){ return f>0.0f?1.0f:f<0.0f?-1.0f:0; }
 __forceinline vec2 sign( const vec2& v ){ return vec2(sign(v.x),sign(v.y)); }
 __forceinline vec3 sign( const vec3& v ){ return vec3(sign(v.x),sign(v.y),sign(v.z)); }
 __forceinline vec4 sign( const vec4& v ){ return vec4(sign(v.x),sign(v.y),sign(v.z),sign(v.w)); }
-__forceinline float smoothstep( float t ){ t=saturate(t); return t*t*(3-2*t); }							// C1-continuity
+__forceinline float smoothstep(float edge0, float edge1, float t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*(3-2*t); } // C1-continuity
+__forceinline vec2 smoothstep( float edge0, float edge1, vec2 t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*(3.0f-t*2.0f); }
+__forceinline vec3 smoothstep( float edge0, float edge1, vec3 t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*(3.0f-t*2.0f); }
+__forceinline vec4 smoothstep( float edge0, float edge1, vec4 t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*(3.0f-t*2.0f); }
+__forceinline float smoothstep( float t ){ t=saturate(t); return t*t*(3-2*t); } // C1-continuity
 __forceinline vec2 smoothstep( const vec2& t ){ return vec2(smoothstep(t.x),smoothstep(t.y)); }
 __forceinline vec3 smoothstep( const vec3& t ){ return vec3(smoothstep(t.x),smoothstep(t.y),smoothstep(t.z)); }
 __forceinline vec4 smoothstep( const vec4& t ){ return vec4(smoothstep(t.x),smoothstep(t.y),smoothstep(t.z),smoothstep(t.w)); }
-__forceinline float smootherstep( float t ){ t=saturate(t); return t*t*t*(6.0f*t*t-15.0f*t+10.0f); }		// C2-continuity (by Ken Perlin)
+__forceinline float smootherstep( float edge0, float edge1, float t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*t*(6.0f*t*t-15.0f*t+10.0f); } // C2-continuity (by Ken Perlin)
+__forceinline vec2 smootherstep( float edge0, float edge1, vec2 t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*t*(6.0f*t*t-15.0f*t+10.0f); }
+__forceinline vec3 smootherstep( float edge0, float edge1, vec3 t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*t*(6.0f*t*t-15.0f*t+10.0f); }
+__forceinline vec4 smootherstep( float edge0, float edge1, vec4 t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*t*(6.0f*t*t-15.0f*t+10.0f); }
+__forceinline float smootherstep( float t ){ t=saturate(t); return t*t*t*(6.0f*t*t-15.0f*t+10.0f); } // C2-continuity (by Ken Perlin)
 __forceinline vec2 smootherstep( const vec2& t ){ return vec2(smootherstep(t.x),smootherstep(t.y)); }
 __forceinline vec3 smootherstep( const vec3& t ){ return vec3(smootherstep(t.x),smootherstep(t.y),smootherstep(t.z)); }
 __forceinline vec4 smootherstep( const vec4& t ){ return vec4(smootherstep(t.x),smootherstep(t.y),smootherstep(t.z),smootherstep(t.w)); }
