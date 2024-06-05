@@ -277,7 +277,7 @@ struct path
 	std::vector<path> explode( const wchar_t* delim=L"\\") const { std::vector<path> L; if(!delim||!*delim) return L; path s=delim[0]==L'/'&&delim[1]==0?to_slash():*this; L.reserve(16); wchar_t* ctx=nullptr; for(wchar_t* t=wcstok_s(s._data,delim,&ctx);t;t=wcstok_s(0,delim,&ctx)) L.emplace_back(t); return L; }
 
 	// directory attributes
-	bool has_file( const path& file_name ) const { return is_dir()&&operator+(file_name).exists(); }
+	bool has_file( const path& file_name ) const { return is_dir()&&operator/(file_name).exists(); }
 
 	// chdir/make/copy/delete file/dir operations
 	path chdir() const { path old=cwd(); int r=is_dir()?_wchdir(_data):0; return old; } // return old working directory
