@@ -162,6 +162,17 @@ inline const char* gxGetErrorString( GLenum e ){ if(e==GL_NO_ERROR) return ""; i
 inline bool		gxHasMultidraw(){ return gxHasExtension(bindless_texture)&&gxHasExtension(shader_draw_parameters); }
 
 //***********************************************
+// type-to-internalformat mapper
+template <class T>		GLenum gxTypeToInternalFormat();
+template <> constexpr	GLenum gxTypeToInternalFormat<bool>(){	return GL_R8UI; }
+template <> constexpr	GLenum gxTypeToInternalFormat<char>(){	return GL_R8I; }
+template <> constexpr	GLenum gxTypeToInternalFormat<uchar>(){	return GL_R8UI; }
+template <> constexpr	GLenum gxTypeToInternalFormat<int>(){	return GL_R32I; }
+template <> constexpr	GLenum gxTypeToInternalFormat<uint>(){	return GL_R32UI; }
+template <> constexpr	GLenum gxTypeToInternalFormat<half>(){	return GL_R16F; }
+template <> constexpr	GLenum gxTypeToInternalFormat<float>(){	return GL_R32F; }
+
+//***********************************************
 // forward declarations
 namespace gl { struct Texture; struct Buffer; struct Program; struct VertexArray; }
 namespace fx { struct metadata_t; }
@@ -278,12 +289,12 @@ namespace gl {
 		template <class T> void set_data( T data ){ set_sub_data(&data,GLsizeiptr(sizeof(T)),0); }
 		template <class T> void set_data( const std::vector<T>& data ){ set_sub_data(data.data(),GLsizeiptr(sizeof(T)*data.size()),0); }
 		template <class T, size_t N> void set_data( const std::array<T,N>& data ){ set_sub_data(data.data(),GLsizeiptr(sizeof(T)*N),0); }
+		void copy_data( Buffer* write_buffer, GLsizeiptr size=0 ){ copy_sub_data( write_buffer, size?size:this->size() ); }
+		void copy_sub_data( Buffer* write_buffer, GLsizeiptr size, GLintptr read_offset=0, GLintptr write_offset=0 ){ if(glCopyNamedBufferSubData) glCopyNamedBufferSubData(ID,write_buffer->ID,read_offset,write_offset,size); else printf("Buffer::copySubData(): glCopyNamedBufferSubData==nullptr (only supports named mode)\n" ); }
+		template <class T> void clear( const T value ){ constexpr GLenum iformat=gxTypeToInternalFormat<T>(); static GLenum format=gxGetTextureFormat(iformat), type=gxGetTextureType(iformat); if(glClearNamedBufferData) glClearNamedBufferData(ID,iformat,format,type,&value); else if(glClearBufferData){ GLuint b0=bind(); glClearBufferData(target,iformat,format,type,&value); bind(b0); } }
 		void get_sub_data( GLvoid* data, GLsizeiptr size, GLintptr offset=0 ){ if(glGetNamedBufferSubData) glGetNamedBufferSubData(ID,offset,size?size:this->size(),data); else if(glGetBufferSubData){ GLuint b0=bind(); glGetBufferSubData(target,offset,size?size:this->size(),data); glBindBuffer(target,b0); } }
 		template <class T> T get_data(){ T v=0; get_sub_data(&v,sizeof(T),0); return v; }
 		template <class T> std::vector<T> get_data( GLsizeiptr count ){ std::vector<T> v; v.resize(count); get_sub_data(v.data(),sizeof(T)*count,0); return v; }
-		void copy_data( Buffer* write_buffer, GLsizeiptr size=0 ){ copy_sub_data( write_buffer, size?size:this->size() ); }
-		void copy_sub_data( Buffer* write_buffer, GLsizeiptr size, GLintptr read_offset=0, GLintptr write_offset=0 ){ if(glCopyNamedBufferSubData) glCopyNamedBufferSubData(ID,write_buffer->ID,read_offset,write_offset,size); else printf("Buffer::copySubData(): glCopyNamedBufferSubData==nullptr (only supports named mode)\n" ); }
-		void clear_data( GLenum internalformat, GLenum format, GLenum type, const void* data, GLintptr offset=0, GLsizeiptr size=0 ){ if(!glClearBufferData||!glClearBufferSubData) return; if(!size&&!offset){ GLuint b0=bind(true); glClearBufferData(target,internalformat,format,type,data); bind(b0); return; } GLuint b0=bind(true); glClearBufferSubData(target,internalformat,offset,size?size:parameteriv(GL_BUFFER_SIZE),format,type,data); bind(b0); }
 		void* map( GLenum access=GL_READ_ONLY, GLenum target=0 ){ if(target==0) return glMapNamedBuffer(ID,access); bind(); return glMapBuffer(target,access); }
 		void* map_range( GLintptr offset, GLsizeiptr length, GLenum access=GL_MAP_READ_BIT, GLenum target=0 ){ if(is_map_persistent()) access|=GL_MAP_PERSISTENT_BIT|GL_MAP_COHERENT_BIT; if(target==0) return glMapNamedBufferRange(ID,offset,length,access); bind(); return glMapBufferRange(target,offset,length,access); }
 		void unmap( GLenum target=0 ){ if(target==0&&glUnmapNamedBuffer) glUnmapNamedBuffer(ID); else glUnmapBuffer(target); }
