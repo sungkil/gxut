@@ -610,10 +610,10 @@ struct key_t
 	{
 		std::vector<BYTE> v; DWORD t; if(!_query( name, &v, &t )) return L"";
 		if(t==REG_SZ)		return std::wstring((wchar_t*)v.data());
-		if(t==REG_DWORD){ wchar_t b[256]; swprintf(b,L"%u",*((DWORD*)v.data())); return b; }
+		if(t==REG_DWORD){ wchar_t b[256]; swprintf_s(b,L"%u",*((DWORD*)v.data())); return b; }
 		return L"";
 	}
-
+	template <> inline path get<path>( const wchar_t* name ){ return path(get<std::wstring>()); }
 	template <> inline DWORD get<DWORD>( const wchar_t* name )
 	{
 		std::vector<BYTE> v; DWORD t; if(!_query( name, &v, &t )) return 0;
