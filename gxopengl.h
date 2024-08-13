@@ -351,8 +351,12 @@ namespace gl {
 	//***********************************************
 	struct Texture : public Object
 	{
-		Texture( GLuint ID, const char* name, GLenum target, GLenum InternalFormat, GLenum Format, GLenum Type, uint64_t crtheap=_get_heap_handle() ):Object(ID,name,target),_internal_format(InternalFormat),_type(Type),_format(Format),_channels(gxGetTextureChannels(InternalFormat)),_bpp(gxGetTextureBPP(InternalFormat)),_crtheap(crtheap){}
-		~Texture() override { if(_next){ _next->~Texture(); HeapFree((void*)_next->_crtheap,0,_next); } make_resident(false); glDeleteTextures(1,(GLuint*)&ID); b_texture_deleted()=true; } // use HeapFree() for views
+		Texture( GLuint ID, const char* name, GLenum target, GLenum InternalFormat, GLenum Format, GLenum Type, uint64_t heap=_get_heap_handle() ):Object(ID,name,target),_internal_format(InternalFormat),_type(Type),_format(Format),_channels(gxGetTextureChannels(InternalFormat)),_bpp(gxGetTextureBPP(InternalFormat)),_crtheap(heap){}
+		~Texture() override { delete_views(_next); make_resident(false); glDeleteTextures(1,(GLuint*)&ID); invalidated()=true; }
+
+		// delete texture views and query to check whether dirty/deleted textures exist
+		static void delete_views( Texture*& v ){ if(!v) return; delete_views(v->_next); v->make_resident(false); glDeleteTextures(1,(GLuint*)&v->ID); HeapFree((void*)v->_crtheap,0,(Texture*)v); v=nullptr; invalidated()=true; } // use HeapFree() for views
+		static bool& invalidated(){ static bool b=true; return b; }
 
 		GLuint bind( bool b_bind=true ){ GLuint b0=gxGetIntegerv(_target_binding); if(!b_bind||ID!=b0) glBindTexture( target, b_bind?ID:0 ); return b0; }
 		void bind_image_texture( GLuint unit, GLenum access=GL_READ_ONLY /* or GL_WRITE_ONLY or GL_READ_WRITE */ , GLint level=0, GLenum format=0, bool bLayered=false, GLint layer=0 ){ glBindImageTexture( unit, ID, level, bLayered?GL_TRUE:GL_FALSE, layer, access, format?format:internal_format() ); }
@@ -431,9 +435,6 @@ namespace gl {
 		inline Texture* clone( const char* name );
 		inline bool copy( Texture* dst, GLint level=0 );
 
-		// static query to check whether there are dirty/deleted textures
-		static bool& b_texture_deleted(){ static bool bDeleted=true; return bDeleted; }
-
 		// view-related function: wrapper to createTextureView
 		inline static uint crc( GLuint min_level, GLuint levels, GLuint min_layer, GLuint layers, GLenum target, bool force_array ){ struct info { GLuint min_level, levels, min_layer, layers; GLenum target; bool force_array; }; info i={min_level,levels,min_layer,layers,target,force_array}; return gl::crc32c(&i,sizeof(i)); }
 		inline Texture* view( GLuint min_level, GLuint levels, GLuint min_layer=0, GLuint layers=1, GLenum target=0 ){ return gxCreateTextureView(this,min_level,levels,min_layer,layers,target,false); } // view support (> OpenGL 4.3)
@@ -470,9 +471,9 @@ namespace gl {
 		GLsizei		_multisamples=1;
 
 		// view-related
-		uint		_key=0;			// key of the current view
-		Texture*	_next=nullptr;	// next view node: a node of linked list, starting from the parent node
-		uint64_t	_crtheap=0;		// heap handle to the parent, require to allocate view across DLL boundaries
+		uint			_key=0;			// key of the current view
+		Texture*		_next=nullptr;	// next view node: a node of linked list, starting from the parent node
+		const uint64_t	_crtheap=0;		// heap handle to the parent, require to allocate view across DLL boundaries
 	};
 
 	inline void Texture::set_image( GLvoid* pixels, GLint level, GLsizei width, GLsizei height, GLsizei depth, GLint x, GLint y, GLint z )
@@ -1006,7 +1007,7 @@ namespace gl {
 	inline GLuint Program::bind( bool b_bind )
 	{
 		GLuint b0=binding(); if(!b_bind||b0!=ID) glUseProgram(b_bind?ID:0); if(!b_bind) return b0;
-		if(_uniform_cache.empty()) update_uniform_cache(); else if( Texture::b_texture_deleted() ){std::set<Program*>& s=get_instances();for(auto it:s)it->update_uniform_cache();Texture::b_texture_deleted()=false;}
+		if(_uniform_cache.empty()) update_uniform_cache(); else if(Texture::invalidated()){std::set<Program*>& s=get_instances();for(auto it:s)it->update_uniform_cache();Texture::invalidated()=false;}
 		for(auto& it:_uniform_cache)
 		{
 			auto& n=it.first; auto& u=it.second;
@@ -1990,9 +1991,8 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLu
 	GLint min_filter		= src->get_texture_parameteriv( GL_TEXTURE_MIN_FILTER );
 	GLint mag_filter		= src->get_texture_parameteriv( GL_TEXTURE_MAG_FILTER );
 
-	// allocate the new texture using the initial crt heap
-	gl::Texture* t1 = (gl::Texture*) HeapAlloc((void*)src->_crtheap,0,sizeof(gl::Texture));
-	new(t1) gl::Texture(ID1,name1,target,internal_format,src->format(),src->type(),src->_crtheap);
+	// allocate a new texture using the heap of the parent
+	gl::Texture* t1=new(HeapAlloc((void*)src->_crtheap,0,sizeof(gl::Texture))) gl::Texture(ID1,name1,target,internal_format,src->format(),src->type(),src->_crtheap);
 	t1->_key = key;
 
 	// correct min_filter, mag_filter
