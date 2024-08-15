@@ -1699,7 +1699,8 @@ inline gl::Framebuffer* gxCreateFramebuffer( const char* name=nullptr )
 
 inline gl::Framebuffer*& gl::Framebuffer::instance()
 {
-	static gl::Framebuffer* f=gxCreateFramebuffer("FBO"); if(!f) printf("%s(): fbo==nullptr",__func__); return f;
+	struct auto_fbo_t { gl::Framebuffer* ptr=gxCreateFramebuffer("FBO"); ~auto_fbo_t(){ if(ptr) delete ptr; } };
+	static auto_fbo_t f; if(!f.ptr) printf("%s(): fbo==nullptr",__func__); return f.ptr;
 }
 
 inline gl::TransformFeedback* gxCreateTransformFeedback( const char* name )
