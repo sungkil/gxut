@@ -1186,16 +1186,16 @@ namespace gl {
 		bool append( gl::effect_source_t source );
 		template <class... Ts> bool append( Ts... args ){ gl::effect_source_t source; source.append_r(args...); return append(source); }
 
-		Uniform* get_uniform( const char* name ){ if(!active_program) return nullptr; return active_program->get_uniform(name); }
-		void set_uniform( const char* name, Texture* t ){ if(!active_program) return; active_program->set_uniform(name,t); }
+		Uniform* get_uniform( const char* name ){ if(!active_program){ printf("%s(%s): no active program is bound.\n",__func__,name); return nullptr; } return active_program->get_uniform(name); }
+		void set_uniform( const char* name, Texture* t ){ if(!active_program) return void(printf("%s(%s): no active program is bound.\n",__func__,name)); active_program->set_uniform(name,t); }
 		template <class T> void set_uniform( const char* name, const T& v, GLsizei count=1 )
 		{
-			if(!active_program) return; auto* u=active_program->get_uniform(name); if(!u) return; if(u->block_index==-1) active_program->set_uniform(name,v,count);
+			if(!active_program) return void(printf("%s(%s): no active program is bound.\n",__func__,name)); auto* u=active_program->get_uniform(name); if(!u) return; if(u->block_index==-1) active_program->set_uniform(name, v, count);
 			if(!u->block_name[0]||u->block_offset==-1) return; auto* b=get_uniform_buffer(u->block_name); if(!b) return; b->set_sub_data(&v,sizeof(T)*count,u->block_offset);
 		}
 		template <class T> void set_uniform( const char* name, T* v, GLsizei count=1 )
 		{
-			if(!active_program) return; auto* u=active_program->get_uniform(name); if(!u) return; if(u->block_index==-1) active_program->set_uniform(name,v,count);
+			if(!active_program) return void(printf("%s(%s): no active program is bound.\n",__func__,name)); auto* u=active_program->get_uniform(name); if(!u) return; if(u->block_index==-1) active_program->set_uniform(name,v,count);
 			if(!u->block_name[0]||u->block_offset==-1) return; auto* b=get_uniform_buffer(u->block_name); if(!b) return; if(v) b->set_sub_data(v,sizeof(T)*count,u->block_offset);
 		}
 		
