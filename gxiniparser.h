@@ -47,7 +47,7 @@ protected:
 	std::pair<const char*,const char*> split_section_key( const char* seckey ){ char *sk=__tstrdup(seckey),*colon=(char*)strchr(&sk[0],':');if(colon==nullptr)return std::make_pair("",sk);else{colon[0]=0;return std::make_pair(sk,colon+1);} }
 
 public:
-	~parser_t(){ for(auto& it:dic)if(it.second!=nullptr){delete it.second;} dic.clear(); DeleteCriticalSection(&cs); }
+	virtual ~parser_t(){ for(auto& it:dic)if(it.second!=nullptr){delete it.second;} dic.clear(); DeleteCriticalSection(&cs); }
 	parser_t(){ InitializeCriticalSectionAndSpinCount(&cs,2000); }
 	parser_t( path file_path ):parser_t(){ set_path(file_path); }
 
