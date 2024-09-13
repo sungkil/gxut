@@ -111,9 +111,7 @@ struct kdtree_t : public acc_t // single-level hierarchy
 	struct node
 	{
 		union { float pos; uint count; };
-		uint second_or_index;
-		uint geometry;
-		uint parent:30, axis:2;
+		uint second_or_index:30, axis:2;
 		__forceinline bool is_leaf() const { return axis==3; }
 	};
 	std::vector<node>	nodes;
