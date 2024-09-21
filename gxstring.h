@@ -386,7 +386,7 @@ template <class T>
 __noinline const T* join( std::vector<std::basic_string<T,std::char_traits<T>,std::allocator<T>>> v, const T* delim=_strcvt<T>(" ") )
 {
 	std::basic_string<T,std::char_traits<T>,std::allocator<T>> s;
-	for( size_t k=0, kn=v.size(); k<kn; k++ ){ if(k>0) s+=decltype(s)(delim); s+=v[k]; }
+	for( const auto& k : v ){ if(k.empty()) continue; if(!s.empty()) s+=decltype(s)(delim); s+=k; }
 	return __tstrdup(s.c_str());
 }
 
