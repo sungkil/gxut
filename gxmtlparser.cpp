@@ -451,19 +451,16 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 		strcpy( m.name, section.name.c_str() );
 		if(_strnicmp(m.name,"light",5)==0) m.bsdf = BSDF_EMISSIVE;
 
-		vec4 emit=vec4(0);
+		// preprocess illum
 		for(auto& t: section.items)
 		{
 			std::string key = tolower(t.key.c_str());
-
-			if(key.empty()||t.empty()) continue;
-			else if(key=="newmtl"); // already processed
-			else if(key=="illum")
+			if(key=="illum")
 			{
 				int i=t.valuei(); // https://paulbourke.net/dataformats/mtl/
 				//if(i==0)		m.bsdf = BSDF_DIFFUSE;					// Color on and Ambient off
 				//if(i==1)		m.bsdf = BSDF_DIFFUSE;					// Color on and Ambient on
-				if(i==2)	m.bsdf = BSDF_DIFFUSE|BSDF_GLOSS;		// Highlight on
+				if(i==2)		m.bsdf = BSDF_DIFFUSE|BSDF_GLOSS;		// Highlight on
 				else if(i==3)	m.bsdf = BSDF_MIRROR;					// Reflection on and Ray trace on
 				else if(i==4)	m.bsdf = BSDF_MIRROR|BSDF_DIELECTRIC;	// Transparency: Glass on, Reflection: Ray trace on
 				else if(i==5)	m.bsdf = BSDF_MIRROR|BSDF_FRESNEL;		// Reflection: Fresnel on and Ray trace on
@@ -473,6 +470,16 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 				else if(i==9)	m.bsdf = BSDF_DIELECTRIC;				// Transparency: Glass on, Reflection: Ray trace off
 				//else if(i==10);										// Cast shadows onto invisible surfaces
 			}
+		}
+
+		vec4 emit=vec4(0);
+		for(auto& t: section.items)
+		{
+			std::string key = tolower(t.key.c_str());
+
+			if(key.empty()||t.empty()) continue;
+			else if(key=="newmtl"); // already processed
+			else if(key=="illum"); // already processed
 			else if(key=="kd")
 			{
 				if(t.size()<3){ wprintf(L"Kd size < 3\n"); return false; }
