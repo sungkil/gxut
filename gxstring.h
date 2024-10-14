@@ -159,31 +159,39 @@ inline const char* dtoa( const double2& v ){static const char* fmt="%g %g";size_
 inline const char* dtoa( const double3& v ){static const char* fmt="%g %g %g";size_t size=size_t(_scprintf(fmt,v.x,v.y,v.z));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v.x,v.y,v.z);return buff;}
 inline const char* dtoa( const double4& v ){static const char* fmt="%g %g %g %g";size_t size=size_t(_scprintf(fmt,v.x,v.y,v.z,v.w));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v.x,v.y,v.z,v.w);return buff;}
 
-//***********************************************
-// 6.1 bitwise conversion
-template <class T> const char* unpack_bits( const T& v ){ size_t n=sizeof(T)*8; char* buff=_strbuf(n); buff[n]=0; for(size_t k=0,s=0;k<n;k++,s=k%8) buff[k]=(((const char*)&v)[k>>3]&(1<<s))?'1':'0'; return buff; }
-
-//***********************************************
-// 6.2 Special-purpose functions
-
-// conversion int to string with commas
-__noinline const char* itoasep( int n )
-{
-	if(n<1000&&n>-1000) return itoa(n);
-	const char* s=itoa(n>0?n:-n); size_t len=strlen(s);
-	std::vector<char> v; v.resize(len+1); memcpy(&v[0],s,len+1);
-	for( uint idx=(len%3?len%3:3); idx<len; idx+=4,len++ ) v.emplace(v.begin()+idx,',');
-	return format("%s%s",n>0?"":"-",&v[0]);
-}
-
-__noinline const char* illtoasep( int64_t n )
-{
-	if(n<1000&&n>-1000) return illtoa(n);
-	const char* s=illtoa(n>0?n:-n); size_t len=strlen(s);
-	std::vector<char> v; v.resize(len+1); memcpy(&v[0],s,len+1);
-	for( uint idx=(len%3?len%3:3); idx<len; idx+=4,len++ ) v.emplace(v.begin()+idx,',');
-	return format("%s%s",n>0?"":"-",&v[0]);
-}
+// templated generic conversion
+template <class T> const char* vtoa( T v );
+template<> inline const char* vtoa<bool>( bool v ){ return btoa(v); }
+template<> inline const char* vtoa<int>( int v ){ return itoa(v); }
+template<> inline const char* vtoa<uint>( uint v ){ return utoa(v); }
+template<> inline const char* vtoa<float>( float v ){ return ftoa(v); }
+template<> inline const char* vtoa<double>( double v ){ return dtoa(v); }
+template<> inline const char* vtoa<int64_t>( int64_t v ){ return illtoa(v); }
+template<> inline const char* vtoa<uint64_t>( uint64_t v ){ return ulltoa(v); }
+template<> inline const char* vtoa<int2>( int2 v ){ return itoa(v); }
+template<> inline const char* vtoa<int3>( int3 v ){ return itoa(v); }
+template<> inline const char* vtoa<int4>( int4 v ){ return itoa(v); }
+template<> inline const char* vtoa<short2>( short2 v ){ return itoa(v); }
+template<> inline const char* vtoa<short3>( short3 v ){ return itoa(v); }
+template<> inline const char* vtoa<short4>( short4 v ){ return itoa(v); }
+template<> inline const char* vtoa<char2>( char2 v ){ return itoa(v); }
+template<> inline const char* vtoa<char3>( char3 v ){ return itoa(v); }
+template<> inline const char* vtoa<char4>( char4 v ){ return itoa(v); }
+template<> inline const char* vtoa<uint2>( uint2 v ){ return utoa(v); }
+template<> inline const char* vtoa<uint3>( uint3 v ){ return utoa(v); }
+template<> inline const char* vtoa<uint4>( uint4 v ){ return utoa(v); }
+template<> inline const char* vtoa<ushort2>( ushort2 v ){ return utoa(v); }
+template<> inline const char* vtoa<ushort3>( ushort3 v ){ return utoa(v); }
+template<> inline const char* vtoa<ushort4>( ushort4 v ){ return utoa(v); }
+template<> inline const char* vtoa<uchar2>( uchar2 v ){ return utoa(v); }
+template<> inline const char* vtoa<uchar3>( uchar3 v ){ return utoa(v); }
+template<> inline const char* vtoa<uchar4>( uchar4 v ){ return utoa(v); }
+template<> inline const char* vtoa<float2>( float2 v ){ return ftoa(v); }
+template<> inline const char* vtoa<float3>( float3 v ){ return ftoa(v); }
+template<> inline const char* vtoa<float4>( float4 v ){ return ftoa(v); }
+template<> inline const char* vtoa<double2>( double2 v ){ return dtoa(v); }
+template<> inline const char* vtoa<double3>( double3 v ){ return dtoa(v); }
+template<> inline const char* vtoa<double4>( double4 v ){ return dtoa(v); }
 
 //***********************************************
 // 7. conversion to wstring types
@@ -218,6 +226,66 @@ inline const wchar_t* ftow( const float4& v ){	return atow(ftoa(v)); }
 inline const wchar_t* dtow( const double2& v ){	return atow(dtoa(v)); }
 inline const wchar_t* dtow( const double3& v ){	return atow(dtoa(v)); }
 inline const wchar_t* dtow( const double4& v ){	return atow(dtoa(v)); }
+
+// templated generic conversion
+template <class T> const wchar_t* vtow( T v );
+template<> inline const wchar_t* vtow<bool>( bool v ){ return btow(v); }
+template<> inline const wchar_t* vtow<int>( int v ){ return itow(v); }
+template<> inline const wchar_t* vtow<uint>( uint v ){ return utow(v); }
+template<> inline const wchar_t* vtow<float>( float v ){ return ftow(v); }
+template<> inline const wchar_t* vtow<double>( double v ){ return dtow(v); }
+template<> inline const wchar_t* vtow<int64_t>( int64_t v ){ return illtow(v); }
+template<> inline const wchar_t* vtow<uint64_t>( uint64_t v ){ return ulltow(v); }
+template<> inline const wchar_t* vtow<int2>( int2 v ){ return itow(v); }
+template<> inline const wchar_t* vtow<int3>( int3 v ){ return itow(v); }
+template<> inline const wchar_t* vtow<int4>( int4 v ){ return itow(v); }
+template<> inline const wchar_t* vtow<short2>( short2 v ){ return itow(v); }
+template<> inline const wchar_t* vtow<short3>( short3 v ){ return itow(v); }
+template<> inline const wchar_t* vtow<short4>( short4 v ){ return itow(v); }
+template<> inline const wchar_t* vtow<char2>( char2 v ){ return itow(v); }
+template<> inline const wchar_t* vtow<char3>( char3 v ){ return itow(v); }
+template<> inline const wchar_t* vtow<char4>( char4 v ){ return itow(v); }
+template<> inline const wchar_t* vtow<uint2>( uint2 v ){ return utow(v); }
+template<> inline const wchar_t* vtow<uint3>( uint3 v ){ return utow(v); }
+template<> inline const wchar_t* vtow<uint4>( uint4 v ){ return utow(v); }
+template<> inline const wchar_t* vtow<ushort2>( ushort2 v ){ return utow(v); }
+template<> inline const wchar_t* vtow<ushort3>( ushort3 v ){ return utow(v); }
+template<> inline const wchar_t* vtow<ushort4>( ushort4 v ){ return utow(v); }
+template<> inline const wchar_t* vtow<uchar2>( uchar2 v ){ return utow(v); }
+template<> inline const wchar_t* vtow<uchar3>( uchar3 v ){ return utow(v); }
+template<> inline const wchar_t* vtow<uchar4>( uchar4 v ){ return utow(v); }
+template<> inline const wchar_t* vtow<float2>( float2 v ){ return ftow(v); }
+template<> inline const wchar_t* vtow<float3>( float3 v ){ return ftow(v); }
+template<> inline const wchar_t* vtow<float4>( float4 v ){ return ftow(v); }
+template<> inline const wchar_t* vtow<double2>( double2 v ){ return dtow(v); }
+template<> inline const wchar_t* vtow<double3>( double3 v ){ return dtow(v); }
+template<> inline const wchar_t* vtow<double4>( double4 v ){ return dtow(v); }
+
+//***********************************************
+// 7.1 bitwise conversion
+template <class T> const char* unpack_bits( const T& v ){ size_t n=sizeof(T)*8; char* buff=_strbuf(n); buff[n]=0; for(size_t k=0,s=0;k<n;k++,s=k%8) buff[k]=(((const char*)&v)[k>>3]&(1<<s))?'1':'0'; return buff; }
+
+//***********************************************
+// 7.2 Special-purpose functions
+
+// conversion int to string with commas
+__noinline const char* itoasep( int n )
+{
+	if(n<1000&&n>-1000) return itoa(n);
+	const char* s=itoa(n>0?n:-n); size_t len=strlen(s);
+	std::vector<char> v; v.resize(len+1); memcpy(&v[0],s,len+1);
+	for( uint idx=(len%3?len%3:3); idx<len; idx+=4,len++ ) v.emplace(v.begin()+idx,',');
+	return format("%s%s",n>0?"":"-",&v[0]);
+}
+
+__noinline const char* illtoasep( int64_t n )
+{
+	if(n<1000&&n>-1000) return illtoa(n);
+	const char* s=illtoa(n>0?n:-n); size_t len=strlen(s);
+	std::vector<char> v; v.resize(len+1); memcpy(&v[0],s,len+1);
+	for( uint idx=(len%3?len%3:3); idx<len; idx+=4,len++ ) v.emplace(v.begin()+idx,',');
+	return format("%s%s",n>0?"":"-",&v[0]);
+}
 
 //***********************************************
 // 8. fast manual conversion from string to int/float (3x--4x faster than CRT atoi/atof)
