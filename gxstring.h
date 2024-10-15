@@ -127,7 +127,7 @@ inline const char* tovarname( const wchar_t* src, bool to_upper=false ){ return 
 
 //***********************************************
 // 6. conversion to string types
-inline const char* btoa( bool b ){ return b?"1":"0"; }
+inline const char* btoa( bool b ){ return b?"true":"false"; }
 inline const char* itoa( int i ){static const char* fmt="%d";size_t size=size_t(_scprintf(fmt,i));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,i);return buff;}
 inline const char* utoa( uint u ){static const char* fmt="%u";size_t size=size_t(_scprintf(fmt,u));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,u);return buff;}
 inline const char* ftoa( float f ){if(fabs(f)<0.00000001f)return "0";static const char* fmt="%g";size_t size=size_t(_scprintf(fmt,f));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,f); return buff; }
@@ -160,42 +160,42 @@ inline const char* dtoa( const double3& v ){static const char* fmt="%g %g %g";si
 inline const char* dtoa( const double4& v ){static const char* fmt="%g %g %g %g";size_t size=size_t(_scprintf(fmt,v.x,v.y,v.z,v.w));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,v.x,v.y,v.z,v.w);return buff;}
 
 // templated generic conversion
-template <class T> const char* vtoa( T v );
-template<> inline const char* vtoa<bool>( bool v ){ return btoa(v); }
-template<> inline const char* vtoa<int>( int v ){ return itoa(v); }
-template<> inline const char* vtoa<uint>( uint v ){ return utoa(v); }
-template<> inline const char* vtoa<float>( float v ){ return ftoa(v); }
-template<> inline const char* vtoa<double>( double v ){ return dtoa(v); }
-template<> inline const char* vtoa<int64_t>( int64_t v ){ return illtoa(v); }
-template<> inline const char* vtoa<uint64_t>( uint64_t v ){ return ulltoa(v); }
-template<> inline const char* vtoa<int2>( int2 v ){ return itoa(v); }
-template<> inline const char* vtoa<int3>( int3 v ){ return itoa(v); }
-template<> inline const char* vtoa<int4>( int4 v ){ return itoa(v); }
-template<> inline const char* vtoa<short2>( short2 v ){ return itoa(v); }
-template<> inline const char* vtoa<short3>( short3 v ){ return itoa(v); }
-template<> inline const char* vtoa<short4>( short4 v ){ return itoa(v); }
-template<> inline const char* vtoa<char2>( char2 v ){ return itoa(v); }
-template<> inline const char* vtoa<char3>( char3 v ){ return itoa(v); }
-template<> inline const char* vtoa<char4>( char4 v ){ return itoa(v); }
-template<> inline const char* vtoa<uint2>( uint2 v ){ return utoa(v); }
-template<> inline const char* vtoa<uint3>( uint3 v ){ return utoa(v); }
-template<> inline const char* vtoa<uint4>( uint4 v ){ return utoa(v); }
-template<> inline const char* vtoa<ushort2>( ushort2 v ){ return utoa(v); }
-template<> inline const char* vtoa<ushort3>( ushort3 v ){ return utoa(v); }
-template<> inline const char* vtoa<ushort4>( ushort4 v ){ return utoa(v); }
-template<> inline const char* vtoa<uchar2>( uchar2 v ){ return utoa(v); }
-template<> inline const char* vtoa<uchar3>( uchar3 v ){ return utoa(v); }
-template<> inline const char* vtoa<uchar4>( uchar4 v ){ return utoa(v); }
-template<> inline const char* vtoa<float2>( float2 v ){ return ftoa(v); }
-template<> inline const char* vtoa<float3>( float3 v ){ return ftoa(v); }
-template<> inline const char* vtoa<float4>( float4 v ){ return ftoa(v); }
-template<> inline const char* vtoa<double2>( double2 v ){ return dtoa(v); }
-template<> inline const char* vtoa<double3>( double3 v ){ return dtoa(v); }
-template<> inline const char* vtoa<double4>( double4 v ){ return dtoa(v); }
+template <class T> const char* ntoa( T v );
+template<> inline const char* ntoa<bool>( bool v ){ return btoa(v); }
+template<> inline const char* ntoa<int>( int v ){ return itoa(v); }
+template<> inline const char* ntoa<uint>( uint v ){ return utoa(v); }
+template<> inline const char* ntoa<float>( float v ){ return ftoa(v); }
+template<> inline const char* ntoa<double>( double v ){ return dtoa(v); }
+template<> inline const char* ntoa<int64_t>( int64_t v ){ return illtoa(v); }
+template<> inline const char* ntoa<uint64_t>( uint64_t v ){ return ulltoa(v); }
+template<> inline const char* ntoa<int2>( int2 v ){ return itoa(v); }
+template<> inline const char* ntoa<int3>( int3 v ){ return itoa(v); }
+template<> inline const char* ntoa<int4>( int4 v ){ return itoa(v); }
+template<> inline const char* ntoa<short2>( short2 v ){ return itoa(v); }
+template<> inline const char* ntoa<short3>( short3 v ){ return itoa(v); }
+template<> inline const char* ntoa<short4>( short4 v ){ return itoa(v); }
+template<> inline const char* ntoa<char2>( char2 v ){ return itoa(v); }
+template<> inline const char* ntoa<char3>( char3 v ){ return itoa(v); }
+template<> inline const char* ntoa<char4>( char4 v ){ return itoa(v); }
+template<> inline const char* ntoa<uint2>( uint2 v ){ return utoa(v); }
+template<> inline const char* ntoa<uint3>( uint3 v ){ return utoa(v); }
+template<> inline const char* ntoa<uint4>( uint4 v ){ return utoa(v); }
+template<> inline const char* ntoa<ushort2>( ushort2 v ){ return utoa(v); }
+template<> inline const char* ntoa<ushort3>( ushort3 v ){ return utoa(v); }
+template<> inline const char* ntoa<ushort4>( ushort4 v ){ return utoa(v); }
+template<> inline const char* ntoa<uchar2>( uchar2 v ){ return utoa(v); }
+template<> inline const char* ntoa<uchar3>( uchar3 v ){ return utoa(v); }
+template<> inline const char* ntoa<uchar4>( uchar4 v ){ return utoa(v); }
+template<> inline const char* ntoa<float2>( float2 v ){ return ftoa(v); }
+template<> inline const char* ntoa<float3>( float3 v ){ return ftoa(v); }
+template<> inline const char* ntoa<float4>( float4 v ){ return ftoa(v); }
+template<> inline const char* ntoa<double2>( double2 v ){ return dtoa(v); }
+template<> inline const char* ntoa<double3>( double3 v ){ return dtoa(v); }
+template<> inline const char* ntoa<double4>( double4 v ){ return dtoa(v); }
 
 //***********************************************
 // 7. conversion to wstring types
-inline const wchar_t* btow( bool b ){			return atow(btoa(b)); }
+inline const wchar_t* btow( bool b ){			return b?L"true":L"false"; }
 inline const wchar_t* itow( int i ){			return atow(itoa(i)); }
 inline const wchar_t* utow( uint u ){			return atow(utoa(u)); }
 inline const wchar_t* ftow( float f ){			return atow(ftoa(f)); }
@@ -228,38 +228,38 @@ inline const wchar_t* dtow( const double3& v ){	return atow(dtoa(v)); }
 inline const wchar_t* dtow( const double4& v ){	return atow(dtoa(v)); }
 
 // templated generic conversion
-template <class T> const wchar_t* vtow( T v );
-template<> inline const wchar_t* vtow<bool>( bool v ){ return btow(v); }
-template<> inline const wchar_t* vtow<int>( int v ){ return itow(v); }
-template<> inline const wchar_t* vtow<uint>( uint v ){ return utow(v); }
-template<> inline const wchar_t* vtow<float>( float v ){ return ftow(v); }
-template<> inline const wchar_t* vtow<double>( double v ){ return dtow(v); }
-template<> inline const wchar_t* vtow<int64_t>( int64_t v ){ return illtow(v); }
-template<> inline const wchar_t* vtow<uint64_t>( uint64_t v ){ return ulltow(v); }
-template<> inline const wchar_t* vtow<int2>( int2 v ){ return itow(v); }
-template<> inline const wchar_t* vtow<int3>( int3 v ){ return itow(v); }
-template<> inline const wchar_t* vtow<int4>( int4 v ){ return itow(v); }
-template<> inline const wchar_t* vtow<short2>( short2 v ){ return itow(v); }
-template<> inline const wchar_t* vtow<short3>( short3 v ){ return itow(v); }
-template<> inline const wchar_t* vtow<short4>( short4 v ){ return itow(v); }
-template<> inline const wchar_t* vtow<char2>( char2 v ){ return itow(v); }
-template<> inline const wchar_t* vtow<char3>( char3 v ){ return itow(v); }
-template<> inline const wchar_t* vtow<char4>( char4 v ){ return itow(v); }
-template<> inline const wchar_t* vtow<uint2>( uint2 v ){ return utow(v); }
-template<> inline const wchar_t* vtow<uint3>( uint3 v ){ return utow(v); }
-template<> inline const wchar_t* vtow<uint4>( uint4 v ){ return utow(v); }
-template<> inline const wchar_t* vtow<ushort2>( ushort2 v ){ return utow(v); }
-template<> inline const wchar_t* vtow<ushort3>( ushort3 v ){ return utow(v); }
-template<> inline const wchar_t* vtow<ushort4>( ushort4 v ){ return utow(v); }
-template<> inline const wchar_t* vtow<uchar2>( uchar2 v ){ return utow(v); }
-template<> inline const wchar_t* vtow<uchar3>( uchar3 v ){ return utow(v); }
-template<> inline const wchar_t* vtow<uchar4>( uchar4 v ){ return utow(v); }
-template<> inline const wchar_t* vtow<float2>( float2 v ){ return ftow(v); }
-template<> inline const wchar_t* vtow<float3>( float3 v ){ return ftow(v); }
-template<> inline const wchar_t* vtow<float4>( float4 v ){ return ftow(v); }
-template<> inline const wchar_t* vtow<double2>( double2 v ){ return dtow(v); }
-template<> inline const wchar_t* vtow<double3>( double3 v ){ return dtow(v); }
-template<> inline const wchar_t* vtow<double4>( double4 v ){ return dtow(v); }
+template <class T> const wchar_t* ntow( T v );
+template<> inline const wchar_t* ntow<bool>( bool v ){ return btow(v); }
+template<> inline const wchar_t* ntow<int>( int v ){ return itow(v); }
+template<> inline const wchar_t* ntow<uint>( uint v ){ return utow(v); }
+template<> inline const wchar_t* ntow<float>( float v ){ return ftow(v); }
+template<> inline const wchar_t* ntow<double>( double v ){ return dtow(v); }
+template<> inline const wchar_t* ntow<int64_t>( int64_t v ){ return illtow(v); }
+template<> inline const wchar_t* ntow<uint64_t>( uint64_t v ){ return ulltow(v); }
+template<> inline const wchar_t* ntow<int2>( int2 v ){ return itow(v); }
+template<> inline const wchar_t* ntow<int3>( int3 v ){ return itow(v); }
+template<> inline const wchar_t* ntow<int4>( int4 v ){ return itow(v); }
+template<> inline const wchar_t* ntow<short2>( short2 v ){ return itow(v); }
+template<> inline const wchar_t* ntow<short3>( short3 v ){ return itow(v); }
+template<> inline const wchar_t* ntow<short4>( short4 v ){ return itow(v); }
+template<> inline const wchar_t* ntow<char2>( char2 v ){ return itow(v); }
+template<> inline const wchar_t* ntow<char3>( char3 v ){ return itow(v); }
+template<> inline const wchar_t* ntow<char4>( char4 v ){ return itow(v); }
+template<> inline const wchar_t* ntow<uint2>( uint2 v ){ return utow(v); }
+template<> inline const wchar_t* ntow<uint3>( uint3 v ){ return utow(v); }
+template<> inline const wchar_t* ntow<uint4>( uint4 v ){ return utow(v); }
+template<> inline const wchar_t* ntow<ushort2>( ushort2 v ){ return utow(v); }
+template<> inline const wchar_t* ntow<ushort3>( ushort3 v ){ return utow(v); }
+template<> inline const wchar_t* ntow<ushort4>( ushort4 v ){ return utow(v); }
+template<> inline const wchar_t* ntow<uchar2>( uchar2 v ){ return utow(v); }
+template<> inline const wchar_t* ntow<uchar3>( uchar3 v ){ return utow(v); }
+template<> inline const wchar_t* ntow<uchar4>( uchar4 v ){ return utow(v); }
+template<> inline const wchar_t* ntow<float2>( float2 v ){ return ftow(v); }
+template<> inline const wchar_t* ntow<float3>( float3 v ){ return ftow(v); }
+template<> inline const wchar_t* ntow<float4>( float4 v ){ return ftow(v); }
+template<> inline const wchar_t* ntow<double2>( double2 v ){ return dtow(v); }
+template<> inline const wchar_t* ntow<double3>( double3 v ){ return dtow(v); }
+template<> inline const wchar_t* ntow<double4>( double4 v ){ return dtow(v); }
 
 //***********************************************
 // 7.1 bitwise conversion
@@ -317,7 +317,7 @@ namespace fast
 //***********************************************
 // 9. conversion from string to user types
 
-inline bool atob( const char* a ){		return _stricmp(a,"true")==0||fast::atoi(a)!=0; }
+inline bool atob( const char* a ){		return a&&*a&&(_stricmp(a,"true")==0||fast::atoi(a)!=0); }
 inline uint atou( const char* a ){		char* e=nullptr;uint v=(uint)strtoul(a,&e,10); return v; }
 inline uint atou( const wchar_t* w ){	wchar_t* e=nullptr;uint v=(uint)wcstoul(w,&e,10); return v; }
 inline int64_t atoill( const char* a ){	char* e=nullptr;int64_t v=strtoll(a,&e,10); return v; }
@@ -337,9 +337,7 @@ inline double4 atod4( const char* a ){	double4 v={};char* e=nullptr;for(int k=0;
 
 //***********************************************
 // 10. conversion from wstring to user types
-inline int atoi( const wchar_t* w ){		return fast::atoi(wtoa(w)); }
-inline double atof( const wchar_t* w ){		return fast::atof(wtoa(w)); }
-inline bool wtob( const wchar_t* w ){		return w&&w[0]&&(_wcsicmp(w,L"true")==0||_wtoi(w)!=0); }
+inline bool wtob( const wchar_t* w ){		return w&&*w&&(_wcsicmp(w,L"true")==0||_wtoi(w)!=0); }
 inline uint wtou( const wchar_t* w ){		return atou(wtoa(w)); }
 inline int64_t wtoill( const wchar_t* w ){	return atoill(wtoa(w)); }
 inline uint64_t wtoull( const wchar_t* w ){	return atoull(wtoa(w)); }
@@ -355,6 +353,9 @@ inline float4 wtof4( const wchar_t* w ){	return atof4(wtoa(w)); }
 inline double2 wtod2( const wchar_t* w ){	return atod2(wtoa(w)); }
 inline double3 wtod3( const wchar_t* w ){	return atod3(wtoa(w)); }
 inline double4 wtod4( const wchar_t* w ){	return atod4(wtoa(w)); }
+
+inline int atoi( const wchar_t* w ){		return fast::atoi(wtoa(w)); }
+inline double atof( const wchar_t* w ){		return fast::atof(wtoa(w)); }
 
 // hexadecimanal conversion
 inline const char* tohex( void* ptr, size_t size ){ unsigned char* u=(unsigned char*)ptr; char *buff=_strbuf(size*2), *b=buff; for(size_t k=0;k<size;k++,u++,b+=2) sprintf(b,"%02x",*u); buff[size*2]=0; return buff; }

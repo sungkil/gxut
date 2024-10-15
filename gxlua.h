@@ -91,7 +91,7 @@ struct lua_state_t
 	operator lua_State*(){ return L; }
 
 	// library
-	inline static int print( lua_State* L ){ std::string s; for(int i=1, nargs=lua_gettop(L);i<=nargs;i++){ if(lua_isstring(L, i)) s+=lua_tolstring(L,i,0); else if(lua_isnumber(L,i)) s+=dtoa(lua_tonumberx(L,i,0)); else if(lua_isinteger(L,i)) s+=itoa((int)lua_tointegerx(L,i,0)); else if(lua_isuserdata(L,i)) s+=format("0x%p",lua_topointer(L,i)); else if(lua_type(L,i)==LUA_TBOOLEAN)	s+=lua_toboolean(L,i)?"true":"false"; } printf("%s",s.c_str()); return 0; }
+	inline static int print( lua_State* L ){ std::string s; for(int i=1, nargs=lua_gettop(L);i<=nargs;i++){ if(lua_isstring(L, i)) s+=lua_tolstring(L,i,0); else if(lua_isnumber(L,i)) s+=dtoa(lua_tonumberx(L,i,0)); else if(lua_isinteger(L,i)) s+=itoa((int)lua_tointegerx(L,i,0)); else if(lua_type(L,i)==LUA_TBOOLEAN)	s+=btoa(lua_toboolean(L,i)); else if(lua_isuserdata(L,i)) s+=format("0x%p",lua_topointer(L,i)); } printf("%s",s.c_str()); return 0; }
 	inline static void register_default_lib( lua_State* L ){ static const struct luaL_Reg libs[]={{"print",print},{0,0}}; lua_getglobal(L,"_G");luaL_newlib(L,libs);lua_settop(L,-3); }
 	void require_c( const char* name, lua_CFunction func ){ luaL_requiref(L,name,func,0); }
 	void require_string( const char* name, const char* src ){ luaL_getsubtable(L,LUA_REGISTRYINDEX,"_LOADED"); lua_getfield(L,-1,name ); if(!lua_toboolean(L,-1)){ do_string(src); lua_setfield(L,-3,name); } lua_settop(L,-3); /*restore the stack*/ } // equivalent to : package.loaded[name] = load(src)() in Lua code
@@ -138,13 +138,11 @@ struct state : public sol::state
 
 	// utilities
 	void set_log( bool b_log=true ){ b.log=b_log; }
-	template <class T> bool get_value( const char* name, T& dst ){	if(!_get_value(name,dst)) return false; if(b.log){ if(!prefix.empty()) printf( "[%s] ", prefix.c_str() ); printf( "%s = %s\n", name, vtoa<T>(dst) ); } return true; }
-	template<> bool get_value<bool>( const char* name, bool& dst ){	if(!_get_value(name,dst)) return false; if(b.log){ if(!prefix.empty()) printf( "[%s] ", prefix.c_str() ); printf( "%s = %s\n", name, dst?"true":"false" ); } return true; }
+	template <class T> bool get_value( const char* name, T& dst ){ auto t=this->operator[](name); if(!t.valid()) return false; T v=t.get<T>(); if(v==dst) return false; dst=v; if(b.log){ if(!prefix.empty()) printf( "[%s] ", prefix.c_str() ); printf( "%s = %s\n", name, ntoa<T>(dst) ); } return true; }
 
 protected:
 	std::string prefix;
 	struct { bool log=true; } b;
-	template <class T> bool _get_value( const char* name, T& dst ){ auto t=this->operator[](name); if(!t.valid()) return false; T v=t.get<T>(); if(v==dst) return false; dst=v; return true; }
 };
 
 __noinline bool state::load_script( const char* src, const wchar_t* _prefix, bool b_safe, bool b_log )

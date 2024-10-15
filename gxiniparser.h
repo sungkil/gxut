@@ -160,7 +160,7 @@ __noinline bool parser_t::save( const path& file_path )
 // template specializations for get()
 template<> __noinline std::string parser_t::get<std::string>(const char* key){	auto* v=get(key); return *v==0?"":std::string(wtoa(v)); }
 template<> __noinline path parser_t::get<path>( const char* key ){				auto* v=get(key); return *v==0?path():path(v); }
-template<> __noinline bool parser_t::get<bool>( const char* key ){				auto* v=get(key); return *v==0?false:_wcsicmp(v,L"true")==0?true:(_wtoi(v)!=0); }
+template<> __noinline bool parser_t::get<bool>( const char* key ){				auto* v=get(key); return *v==0?false:wtob(v); }
 template<> __noinline int parser_t::get<int>( const char* key ){				auto* v=get(key); return *v==0?0:_wtoi(v); }
 template<> __noinline uint parser_t::get<uint>( const char* key ){				return uint(get<int>(key)); }
 template<> __noinline int64_t parser_t::get<int64_t>( const char* key ){		auto* v=get(key); return *v==0?0:_wtoi64(v); }

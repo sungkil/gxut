@@ -1,6 +1,9 @@
 #pragma once
-#include <gxut/gxfilesystem.h>
-#include <gxut/gxmesh.h>
+
+#if defined(__has_include) && __has_include(<gxut/gxfilesystem.h>) && __has_include(<gxut/gxmesh.h>)
+	#include <gxut/gxfilesystem.h>
+	#include <gxut/gxmesh.h>
+#endif
 
 static const char* __GX_OBJPARSER_H_TIMESTAMP__ = __TIMESTAMP__;
 
