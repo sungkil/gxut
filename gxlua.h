@@ -159,7 +159,7 @@ bool get_dirty_value( const T& proxy, std::string key, V& dst )
 
 struct state : public sol::state
 {
-	state( bool b_open_default_libs=true, bool b_default_exception_handler=true ){ if(b_default_exception_handler) set_exception_handler(&_exception_handler); if(b_open_default_libs) open_default_libraries(); }
+	state( std::string _prefix="", bool b_open_default_libs=true, bool b_default_exception_handler=true ){ prefix=_prefix; if(b_default_exception_handler) set_exception_handler(&_exception_handler); if(b_open_default_libs) open_default_libraries(); }
 	void open_default_libraries(){ open_libraries(sol::lib::base,sol::lib::math); }
 	bool load_script( const char* src, bool b_safe=true, bool b_log=true );
 	template <class V> bool get_dirty_value( std::string key, V& dst ){ auto t=this->operator[](key); V v; if(!t.valid()||(v=t)==dst) return false; dst=v; log_dirty_value(key,dst); return true; }
