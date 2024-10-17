@@ -5,9 +5,9 @@
 //***********************************************
 // slee's macro for lib
 #ifdef CAIRO_WIN32_STATIC_BUILD
-	#pragma comment( lib, "cairos.lib" )	// static lib
+	#pragma comment( lib, "cairos" )	// static lib
 #else
-	#pragma comment( lib, "cairo.lib" )		// with cairo.dll
+	#pragma comment( lib, "cairo" )		// with cairo.dll
 #endif
 
 //***********************************************

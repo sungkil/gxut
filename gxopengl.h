@@ -37,8 +37,8 @@
 		#elif __has_include("glew.h")
 			#include "glew.h"
 		#endif
-		#pragma comment( lib, "glew32s.lib" )	// explicit linking to static glew32 x64
-		#pragma comment( lib, "OpenGL32.lib" )	// explicit linking to system OpenGL
+		#pragma comment( lib, "glew32s" )	// explicit linking to static glew32 x64
+		#pragma comment( lib, "OpenGL32" )	// explicit linking to system OpenGL
 		#define gxHasExtension(name)	GLEW_ARB_##name
 	#elif defined(GX_OPENGL_GLAD)
 		#if __has_include(<GL/glad/gl.h>)

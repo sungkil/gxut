@@ -20,9 +20,9 @@
 #include <ws2tcpip.h>
 #include <wininet.h>
 #include <future> // std::async
-#pragma comment( lib, "ws2_32.lib" )
-#pragma comment( lib, "wininet.lib" )
-#pragma comment( lib, "Dnsapi.lib" )
+#pragma comment( lib, "ws2_32" )
+#pragma comment( lib, "wininet" )
+#pragma comment( lib, "Dnsapi" )
 
 //***********************************************
 namespace gx { namespace inet {

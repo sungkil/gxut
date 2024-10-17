@@ -16,7 +16,7 @@
 	#elif __has_include(<sol/sol.hpp>)
 		#include <sol/sol.hpp>
 	#elif // no sol is defined: fallback to regular lua
-		#pragma comment( lib, "lua.lib" )
+		#pragma comment( lib, "lua" )
 		#include "Lua/lua.h"
 		#include "Lua/lauxlib.h"
 		#include "Lua/lualib.h"

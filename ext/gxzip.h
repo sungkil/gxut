@@ -14,7 +14,7 @@
 #endif
 
 // automatically link static lib
-#pragma comment( lib, "gxzip.lib" )
+#pragma comment( lib, "gxzip" )
 
 // to be compatible with zip_utils
 #ifndef _unzip_H

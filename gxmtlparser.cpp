@@ -6,7 +6,7 @@
 #include <gxut/gxmemory.h>
 #include <gxut/gxobjparser.h>
 #include <gximage/gximage.h>
-#pragma comment( lib, "shlwapi.lib" )
+#pragma comment( lib, "shlwapi" )
 
 // common local attributes
 const char* __GX_MTLPARSER_CPP_TIMESTAMP__ = __TIMESTAMP__;
