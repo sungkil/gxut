@@ -23,6 +23,11 @@
 	#endif
 #endif
 
+// automatic linking
+#ifndef NO_LINK_LUA_LIB
+	#pragma comment( lib, "lua547s" )
+#endif
+
 //*************************************
 namespace lua {
 //*************************************
@@ -130,27 +135,40 @@ __noinline int _exception_handler( lua_State* L, sol::optional<const std::except
 	return sol::stack::push(L,m);
 }
 
+// prefix for enabling logging
+inline std::string prefix;
+
+template <class V>
+void log_dirty_value( const std::string& key, const V& dst )
+{
+	if(prefix.empty()) return;
+	printf( "[%s] ", prefix.c_str() );
+	if(!key.empty()) printf( "%s = ", key.c_str() );
+	printf( "%s\n", ntoa<V>(dst) );
+}
+
+template <class T, class V>
+bool get_dirty_value( const T& proxy, std::string key, V& dst )
+{
+	if(!proxy.valid()) return false;
+	V v; if(!strchr(key.c_str(),'.')){ auto t=proxy[key]; if(!t.valid()||(v=t)==dst) return false; }
+	else { auto k=explode(key.c_str(),"."); if(k.empty()) return false; auto t=proxy[k.back()]; if(!t.valid()||(v=t)==dst) return false; }
+	dst=v; log_dirty_value(key,dst);
+	return true;
+}
+
 struct state : public sol::state
 {
 	state( bool b_open_default_libs=true, bool b_default_exception_handler=true ){ if(b_default_exception_handler) set_exception_handler(&_exception_handler); if(b_open_default_libs) open_default_libraries(); }
 	void open_default_libraries(){ open_libraries(sol::lib::base,sol::lib::math); }
-	bool load_script( const char* src, const wchar_t* _prefix=nullptr, bool b_safe=true, bool b_log=true );
-
-	// utilities
-	void set_log( bool b_log=true ){ b.log=b_log; }
-	template <class T> bool get_value( const char* name, T& dst ){ auto t=this->operator[](name); if(!t.valid()) return false; T v=t.get<T>(); if(v==dst) return false; dst=v; if(b.log){ if(!prefix.empty()) printf( "[%s] ", prefix.c_str() ); printf( "%s = %s\n", name, ntoa<T>(dst) ); } return true; }
-
-protected:
-	std::string prefix;
-	struct { bool log=true; } b;
+	bool load_script( const char* src, bool b_safe=true, bool b_log=true );
+	template <class V> bool get_dirty_value( std::string key, V& dst ){ auto t=this->operator[](key); V v; if(!t.valid()||(v=t)==dst) return false; dst=v; log_dirty_value(key,dst); return true; }
 };
 
-__noinline bool state::load_script( const char* src, const wchar_t* _prefix, bool b_safe, bool b_log )
+__noinline bool state::load_script( const char* src, bool b_safe, bool b_log )
 {
-	if(_prefix) prefix=wtoa(_prefix);
-	sol::protected_function_result r=b_safe?safe_script( src, &sol::script_pass_on_error ):script(src,&sol::script_pass_on_error);
-	if(r.valid()) return true;
-	if(b_log){ sol::error e=r; if(!prefix.empty()) printf( "[%s] ", prefix.c_str() ); printf("%s\n",e.what()); }
+	sol::protected_function_result r=b_safe?safe_script( src, &sol::script_pass_on_error ):script(src,&sol::script_pass_on_error); if(r.valid()) return true;
+	if(b_log){ sol::error e=r; if(!prefix.empty()){ printf("[%s] ",prefix.c_str()); printf("%s\n",e.what()); } }
 	return false;
 }
 
