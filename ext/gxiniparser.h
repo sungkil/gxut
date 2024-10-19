@@ -40,11 +40,12 @@ protected:
 	file_time_t			mtime = {};
 	CRITICAL_SECTION	cs;			// for load/save
 	dictionary_t		dic;		// case-insensitive dictionary map
-	static const size_t	buffer_capacity=4096;
-	wchar_t				buffer[buffer_capacity+1]={};
+	wchar_t				buffer[4096+1]={};
+	static const size_t	buffer_capacity = std::extent<decltype(buffer)>::value-1;
 
 	entry_t* get_or_create_entry( const char* seckey ){ if(seckey==nullptr||seckey[0]==L'\0') return nullptr; auto it=dic.find(seckey); if(it!=dic.end())return it->second; auto ss=split_section_key(seckey); return dic[seckey]=new entry_t(dic.size(),ss.first,ss.second); }
 	std::pair<const char*,const char*> split_section_key( const char* seckey ){ char *sk=__tstrdup(seckey),*colon=(char*)strchr(&sk[0],':');if(colon==nullptr)return std::make_pair("",sk);else{colon[0]=0;return std::make_pair(sk,colon+1);} }
+	void read_line( wchar_t* line, wchar_t* sec );
 
 public:
 	virtual ~parser_t(){ for(auto& it:dic)if(it.second!=nullptr){delete it.second;} dic.clear(); DeleteCriticalSection(&cs); }
@@ -52,7 +53,7 @@ public:
 	parser_t( path file_path ):parser_t(){ set_path(file_path); }
 
 	// query and retrieval
-	void set_path( const path& file_path ){ this->file_path = file_path; }
+	void set_path( const path& file_path ){ this->file_path = file_path.absolute(); }
 	const path& get_path() const { return file_path; }
 	bool key_exists( const char* key ) const { if(key==nullptr||key[0]=='\0') return false; return dic.find(key)!=dic.end(); }
 	bool key_exists( const char* sec, const char* key ) const { if(!key||!*key) return false; if(!sec||!*sec) return key_exists(key); char sk[4096]; sprintf_s(sk,4096,"%s:%s",sec,key); return dic.find(sk)!=dic.end(); }
@@ -69,10 +70,11 @@ public:
 	// load/save
 	void begin_update(){ b_batch=true; }
 	void end_update(){ b_batch=false; }
-	bool load(){ return load(file_path); }
-	bool load( const path& file_path );
-	bool save(){ return save(file_path); }
-	bool save( const path& file_path );
+	bool load();
+	bool load( const wchar_t* source );
+	bool load( const char* source ){ return load(atow(source)); }
+	bool save(){ return save_as(file_path); }
+	bool save_as( const path& file_path );
 
 	// get
 	__forceinline const wchar_t* operator()( const char* key ){	return get(key); }
@@ -87,7 +89,31 @@ public:
 	template<class T> void set( const char* sec, const char* key, T value ){ char sk[257]; sprintf_s(sk,256,"%s:%s",sec,key); set<T>(sk,value); }
 };
 
-__noinline bool parser_t::load( const path& file_path )
+__noinline void parser_t::read_line( wchar_t* line, wchar_t* sec )
+{
+	wchar_t seckey[512];
+	wchar_t* b=itrim(line); if(!*b||*b==L'#'||*b==L';') return; // skip comment only in the first character
+	while(b) // split by the right bracket or semicolon (for single-line multistatements)
+	{
+		wchar_t* e=b; while(*e&&*e!=L']'&&*e!=L';')e++;bool eol=(*e==0);*e=0;
+		auto* t=itrim(b); b=eol?0:itrim(e+1);
+
+		int l=int(wcslen(t)); if(l<2) continue;
+		if(t[0]==L'['){ wcscpy(sec,itrim(t+1)); continue; } // assign section
+		wchar_t* v=0; for(int k=0;k<l;k++)if(t[k]==L'='){t[k]=0;v=t+k+1;break;} if(!t||!v) continue; t=itrim(t); if(!*t) continue;
+		swprintf_s(seckey,L"%s:%s",sec,t);get_or_create_entry(wtoa(seckey))->value=itrim(v);
+	}
+}
+
+__noinline bool parser_t::load( const wchar_t* source )
+{
+	auto_lock_t lock(cs);
+	for(auto& it:dic){if(it.second!=nullptr){delete it.second;}} dic.clear(); // clear dictionary and buffer
+	wchar_t sec[512]; for( auto& buff: explode( source, L"\r\n" ) ) read_line( (wchar_t*)buff.c_str(), sec ); // read lines
+	return true;
+}
+
+__noinline bool parser_t::load()
 {
 	if(file_path.empty()) return false;
 	struct _stat s; if(_wstat(file_path,&s)!=0) return false;
@@ -97,36 +123,20 @@ __noinline bool parser_t::load( const path& file_path )
 	if(memcmp(&mtime,&mt,sizeof(file_time_t))==0) return true; mtime = mt;
 
 	// open now
-	auto_lock_t lock(cs);
 	FILE* fp=file_path.fopen(L"r",true);if(fp==nullptr){ printf("Unable to open %s",file_path.wtoa()); return false; }
+	auto_lock_t lock(cs);
 
-	// clear dictionary
+	// clear dictionary and buffer
 	for(auto& it:dic){if(it.second!=nullptr){delete it.second;}} dic.clear();
-
-	wchar_t sec[512],seckey[512];
 	memset(buffer,0,sizeof(buffer));
-	while(fgetws(buffer,buffer_capacity,fp))
-	{
-		wchar_t* b=itrim(buffer); if(!*b||*b==L'#'||*b==L';') continue; // skip comment only in the first character
-		while(b) // split by the right bracket or semicolon (for single-line multistatements)
-		{
-			wchar_t* e=b; while(*e&&*e!=L']'&&*e!=L';')e++;bool eol=(*e==0);*e=0;
-			auto* t=itrim(b); b=eol?0:itrim(e+1);
 
-			int l=int(wcslen(t)); if(l<2) continue;
-			if(t[0]==L'['){ wcscpy(sec,itrim(t+1)); continue; } // assign section
-			wchar_t* v=0; for(int k=0;k<l;k++)if(t[k]==L'='){t[k]=0;v=t+k+1;break;} if(!t||!v) continue; t=itrim(t); if(!*t) continue;
-			swprintf_s(seckey,L"%s:%s",sec,t);get_or_create_entry(wtoa(seckey))->value=itrim(v);
-		}
-	}
-	
+	// read lines
+	wchar_t sec[512]; while(fgetws(buffer,buffer_capacity,fp)) read_line(buffer,sec);
 	fclose(fp);
-	this->file_path=file_path.absolute();
-
 	return true;
 }
 
-__noinline bool parser_t::save( const path& file_path )
+__noinline bool parser_t::save_as( const path& file_path )
 {
 	if(b_batch) return false;
 	if(file_path.empty()){ printf( "%s(): file_path is empty\n", __func__ ); return false; }

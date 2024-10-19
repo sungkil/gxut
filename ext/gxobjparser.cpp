@@ -4,7 +4,7 @@
 #include <gxut/gxfilesystem.h>
 #include <gxut/gxos.h>
 #include <gxut/ext/gxzip.h>
-#include <gxut/gxobjparser.h>
+#include <gxut/ext/gxobjparser.h>
 #include <future> // std::async
 #if defined(__has_include) && __has_include(<fgets_sse2/fgets_sse2_slee.h>)
 	#include <fgets_sse2/fgets_sse2_slee.h>

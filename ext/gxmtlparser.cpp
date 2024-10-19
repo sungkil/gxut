@@ -4,7 +4,7 @@
 #include <gxut/gxos.h>
 #include <gxut/gxfilesystem.h>
 #include <gxut/gxmemory.h>
-#include <gxut/gxobjparser.h>
+#include <gxut/ext/gxobjparser.h>
 #include <gximage/gximage.h>
 #pragma comment( lib, "shlwapi" )
 
