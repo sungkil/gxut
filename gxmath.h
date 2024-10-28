@@ -51,7 +51,6 @@ template <class T,template <class> class A=tarray2> struct tvec2
 
 	// extended constructors with explicit casting
 	template <class X> __forceinline tvec2( tvec2<X,tarray2> v ){x=T(v.x);y=T(v.y);}
-	template <class X> __forceinline tvec2( X a ){x=y=T(a);}
 	template <class X,class Y> __forceinline tvec2( X a, Y b ){x=T(a);y=T(b);}
 
 	// assignment operators
@@ -69,7 +68,7 @@ template <class T,template <class> class A=tarray2> struct tvec2
 	// unary operators
 	__forceinline tvec2& operator+(){ return *this; }
 	__forceinline const tvec2& operator+() const { return *this; }
-	signed_memfun(U) __forceinline tvec2<U> operator-() const { return tvec2(-x,-y); }
+	__forceinline tvec2 operator-() const { return tvec2(-x,-y); }
 
 	// binary operators
 	__forceinline tvec2 operator+( T a ) const { return tvec2(x+a, y+a); }
@@ -117,7 +116,6 @@ template <class T,template <class> class A=tarray3> struct tvec3
 
 	// extended constructors with explicit casting
 	template <class X> __forceinline tvec3( tvec3<X,tarray3> v ){x=T(v.x);y=T(v.y);z=T(v.z);}
-	template <class X> __forceinline tvec3( X a ){x=y=z=T(a);}
 	template <class X,class Y,class Z> __forceinline tvec3( X a, Y b, Z c ){x=T(a);y=T(b);z=T(c);}
 	template <class X,class Z> __forceinline tvec3( tvec2<X,tarray2> v, Z c ){x=T(v.x);y=T(v.y);z=T(c);}
 	template <class X,class Y> __forceinline tvec3( X a, tvec2<Y,tarray2> v ){x=a;y=T(v.x);z=T(v.y);}
@@ -137,7 +135,7 @@ template <class T,template <class> class A=tarray3> struct tvec3
 	// unary operators
 	__forceinline tvec3& operator+(){ return *this; }
 	__forceinline const tvec3& operator+() const { return *this; }
-	signed_memfun(U) __forceinline tvec3<U> operator-() const { return tvec3(-x,-y,-z); }
+	__forceinline tvec3 operator-() const { return tvec3(-x,-y,-z); }
 
 	// binary operators
 	__forceinline tvec3 operator+( T a ) const { return tvec3(x+a, y+a, z+a); }
@@ -193,7 +191,6 @@ template <class T,template <class> class A=tarray4> struct tvec4
 
 	// extended constructors with explicit casting
 	template <class X> __forceinline tvec4( tvec4<X,tarray4> v ){x=T(v.x);y=T(v.y);z=T(v.z);w=T(v.w);}
-	template <class X> __forceinline tvec4( X a ){x=y=z=w=T(a);}
 	template <class X,class Y,class Z,class W> __forceinline tvec4( X a, Y b, Z c, W d ){x=T(a);y=T(b);z=T(c);w=T(d);}
 	template <class X,class Y,class W> __forceinline tvec4( X a, tvec2<Y,tarray2> v, W d ){x=T(a);y=T(v.x);z=T(v.y);w=T(d);}
 	template <class X,class Y> __forceinline tvec4( X a, tvec3<Y,tarray3> v ){x=T(a);y=T(v.x);z=T(v.y);w=T(v.z);}
@@ -217,7 +214,7 @@ template <class T,template <class> class A=tarray4> struct tvec4
 	// unary operators
 	__forceinline tvec4& operator+(){ return *this; }
 	__forceinline const tvec4& operator+() const { return *this; }
-	signed_memfun(U) __forceinline tvec4<U> operator-() const { return tvec4(-x,-y,-z,-w); }
+	__forceinline tvec4 operator-() const { return tvec4(-x,-y,-z,-w); }
 
     // binary operators
     __forceinline tvec4 operator+( T a ) const { return tvec4(x+a,y+a,z+a,w+a); }
@@ -672,9 +669,9 @@ __forceinline float lerp( float v1, float v2, float t ){ return v1*(1.0f-t)+v2*t
 __forceinline vec2 lerp( const vec2& y1, const vec2& y2, float t ){ return y1*(-t+1.0f)+y2*t; }
 __forceinline vec3 lerp( const vec3& y1, const vec3& y2, float t ){ return y1*(-t+1.0f)+y2*t; }
 __forceinline vec4 lerp( const vec4& y1, const vec4& y2, float t ){ return y1*(-t+1.0f)+y2*t; }
-__forceinline vec2 lerp( const vec2& y1, const vec2& y2, const vec2& t ){ return y1*(-t+1.0f)+y2*t; }
-__forceinline vec3 lerp( const vec3& y1, const vec3& y2, const vec3& t ){ return y1*(-t+1.0f)+y2*t; }
-__forceinline vec4 lerp( const vec4& y1, const vec4& y2, const vec4& t ){ return y1*(-t+1.0f)+y2*t; }
+__forceinline vec2 lerp( const vec2& y1, const vec2& y2, const vec2& t ){ return y1*(1.0f-t)+y2*t; }
+__forceinline vec3 lerp( const vec3& y1, const vec3& y2, const vec3& t ){ return y1*(1.0f-t)+y2*t; }
+__forceinline vec4 lerp( const vec4& y1, const vec4& y2, const vec4& t ){ return y1*(1.0f-t)+y2*t; }
 __forceinline double lerp( double v1, double v2, double t ){ return v1*(1.0-t)+v2*t; }
 __forceinline double lerp( double v1, double v2, float t ){ return v1*(1.0-double(t))+v2*t; }
 __forceinline dvec2 lerp( const dvec2& y1, const dvec2& y2, double t ){ return y1*(-t+1.0)+y2*t; }
@@ -688,9 +685,9 @@ __forceinline float mix( float v1, float v2, float t ){ return v1*(1.0f-t)+v2*t;
 __forceinline vec2 mix( const vec2& y1, const vec2& y2, float t ){ return y1*(-t+1.0f)+y2*t; }
 __forceinline vec3 mix( const vec3& y1, const vec3& y2, float t ){ return y1*(-t+1.0f)+y2*t; }
 __forceinline vec4 mix( const vec4& y1, const vec4& y2, float t ){ return y1*(-t+1.0f)+y2*t; }
-__forceinline vec2 mix( const vec2& y1, const vec2& y2, const vec2& t ){ return y1*(-t+1.0f)+y2*t; }
-__forceinline vec3 mix( const vec3& y1, const vec3& y2, const vec3& t ){ return y1*(-t+1.0f)+y2*t; }
-__forceinline vec4 mix( const vec4& y1, const vec4& y2, const vec4& t ){ return y1*(-t+1.0f)+y2*t; }
+__forceinline vec2 mix( const vec2& y1, const vec2& y2, const vec2& t ){ return y1*(1.0f-t)+y2*t; }
+__forceinline vec3 mix( const vec3& y1, const vec3& y2, const vec3& t ){ return y1*(1.0f-t)+y2*t; }
+__forceinline vec4 mix( const vec4& y1, const vec4& y2, const vec4& t ){ return y1*(1.0f-t)+y2*t; }
 __forceinline double mix( double v1, double v2, double t ){ return v1*(1.0-t)+v2*t; }
 __forceinline double mix( double v1, double v2, float t ){ return v1*(1.0-double(t))+v2*t; }
 __forceinline dvec2 mix( const dvec2& y1, const dvec2& y2, double t ){ return y1*(-t+1.0)+y2*t; }

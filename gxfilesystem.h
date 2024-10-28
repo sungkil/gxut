@@ -466,14 +466,14 @@ __noinline bool path::write_file( const void* ptr, size_t size ) const
 __noinline bool path::write_file( const char* s ) const
 {
 	FILE* fp=fopen(L"w"); if(!fp) return false;
-	int ret = s?fputs(s,fp):0; fclose(fp);
+	int ret = s&&*s?fputs(s,fp):0; fclose(fp);
 	return ret>=0;
 }
 
 __noinline bool path::write_file( const wchar_t* s ) const
 {
 	FILE* fp=fopen(L"w",true); if(!fp) return false;
-	int ret = s?fputws(s,fp):0; fclose(fp);
+	int ret = s&&*s?fputws(s,fp):0; fclose(fp);
 	return ret>=0;
 }
 

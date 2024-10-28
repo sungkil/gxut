@@ -2,6 +2,8 @@
 #ifndef __GX_LUA_H__
 #define __GX_LUA_H__
 
+#include <functional>
+
 #ifdef __has_include
 	#if __has_include("sol/sol.hpp")
 		#include "sol/sol.hpp"
@@ -151,30 +153,126 @@ template <class T, class V>
 bool get_dirty_value( const T& proxy, std::string key, V& dst )
 {
 	if(!proxy.valid()) return false;
-	V v; if(!strchr(key.c_str(),'.')){ auto t=proxy[key]; if(!t.valid()||(v=t)==dst) return false; }
-	else { auto k=explode(key.c_str(),"."); if(k.empty()) return false; auto t=proxy[k.back()]; if(!t.valid()||(v=t)==dst) return false; }
+	V v; if(!strchr(key.c_str(),'.')){ auto t=proxy[key]; if(!t.valid()||(v=V(t))==dst) return false; }
+	else { auto k=explode(key.c_str(),"."); if(k.empty()) return false; auto t=proxy[k.back()]; if(!t.valid()||(v=V(t))==dst) return false; }
 	dst=v; log_dirty_value(key,dst);
 	return true;
 }
 
 struct state : public sol::state
 {
-	state( std::string _prefix="", bool b_open_default_libs=true, bool b_default_exception_handler=true ){ prefix=_prefix; if(b_default_exception_handler) set_exception_handler(&_exception_handler); if(b_open_default_libs) open_default_libraries(); }
+	state( std::string _prefix="", bool b_open_default_libs=true, bool b_default_exception_handler=true );
 	void open_default_libraries(){ open_libraries(sol::lib::base,sol::lib::math); }
-	bool load_script( const char* src, bool b_safe=true, bool b_log=true );
+	bool script( const char* src, bool b_safe=true, bool b_log=true ); // override default script
 	template <class V> bool get_dirty_value( std::string key, V& dst ){ auto t=this->operator[](key); V v; if(!t.valid()||(v=t)==dst) return false; dst=v; log_dirty_value(key,dst); return true; }
+	std::vector<std::string> get_object_names(){ std::vector<std::string> v; for( const auto& [key,value] : *this ){ auto it=_default_objects.find(key.as<string>()); /*if(it!=_default_objects.end()) continue;*/ v.emplace_back(key.as<string>()); } return v; }
+protected:
+	std::set<string> _default_objects;
 };
 
-__noinline bool state::load_script( const char* src, bool b_safe, bool b_log )
+__noinline state::state( std::string _prefix, bool b_open_default_libs, bool b_default_exception_handler )
 {
-	sol::protected_function_result r=b_safe?safe_script( src, &sol::script_pass_on_error ):script(src,&sol::script_pass_on_error); if(r.valid()) return true;
+	prefix=_prefix;
+	if(b_default_exception_handler) set_exception_handler(&_exception_handler);
+	if(b_open_default_libs) open_default_libraries();
+	for(const auto& [key,value]:*this) _default_objects.insert(key.as<string>());
+}
+
+__noinline bool state::script( const char* src, bool b_safe, bool b_log )
+{
+	sol::protected_function_result r=b_safe?safe_script( src, &sol::script_pass_on_error ):__super::script(src,&sol::script_pass_on_error); if(r.valid()) return true;
 	if(b_log){ sol::error e=r; if(!prefix.empty()){ printf("[%s] ",prefix.c_str()); printf("%s\n",e.what()); } }
 	return false;
+}
+
+__noinline bool __lprint_impl( lua_State* L, std::string& r )
+{
+	// refer to: luaB_print in lbaselib.c
+	int kn=lua_gettop(L);
+	lua_getglobal(L, "tostring");
+	for( int k=1;k<=kn;k++)
+	{
+		lua_pushvalue(L,-1);  // function to be called
+		lua_pushvalue(L,k);   // value to print
+		lua_call(L, 1, 1);
+		const char* s = lua_tostring(L,-1); if(!s) return false;
+		if(k>1) r+=" "; r+=s;
+		lua_pop(L, 1);
+	}
+	lua_pop(L, 2);
+	return true;
+}
+
+__noinline int lprint( lua_State* L ){	std::string r; if(!__lprint_impl(L,r)) return luaL_error(L, format("%s(): tostring must return a string\n",__func__) ); ::printf("%s\n",r.c_str()); return 0; }
+__noinline int ltprint( lua_State* L ){	std::string r; if(!__lprint_impl(L,r)) return luaL_error(L, format("%s(): tostring must return a string\n",__func__) ); ::tprintf("%s\n",r.c_str()); return 0; }
+
+// gxlua libraries
+__noinline int lprintf( lua_State *L )
+{
+	lua_pushvalue(L,lua_upvalueindex(1)); lua_insert(L, 1);	// string.format>[args...]
+	lua_call(L, lua_gettop(L)-1, 1);		// string.format(args)
+	::printf( "%s", lua_tostring(L, 1) );	// print output on the stack top
+	lua_pop(L,1);							// pop output
+	return 0;
+}
+
+__noinline int ltprintf( lua_State *L )
+{
+	lua_pushvalue(L,lua_upvalueindex(1)); lua_insert(L, 1);	// string.format>[args...]
+	lua_call(L, lua_gettop(L)-1, 1);		// string.format(args)
+	::tprintf( "%s", lua_tostring(L, 1) );	// print output on the stack top
+	lua_pop(L,1);							// pop output
+	return 0;
+}
+
+__noinline int register_printf( lua::state& t )
+{
+	t.set_function( "print", lprint );
+	t.set_function( "tprint", ltprint );
+
+	auto* L = t.lua_state();
+	lua_getglobal(L, "string");			// [string]
+	lua_pushstring(L, "format");		// [string, "format"]
+	lua_gettable(L, -2);				// [string, string.format]
+	lua_pushcclosure(L, lprintf, 1);	// [string, string.format, lprintf]
+	lua_setglobal(L, "printf");			// [string]
+	lua_pushstring(L, "format");		// [string, "format"]
+	lua_gettable(L, -2);				// [string, string.format]
+	lua_pushcclosure(L, ltprintf, 1);	// [string, string.format, ltprintf]
+	lua_setglobal(L, "tprintf");		// [string]
+	lua_pop(L,1);						// []
+
+	return 0;
 }
 
 //*************************************
 } // end namespace lua
 //*************************************
 
+// conveninent macros
+#define SOL_DEMANGLE_ONCE(T) \
+	template <> inline std::string demangle_once<T>() { return #T; }\
+	template <> inline std::string short_demangle_once<T>() { return #T; }
+
+#define SOL_DEMANGLE_ONCE2(T,N) \
+	template <> inline std::string demangle_once<T>() { return #N; }\
+	template <> inline std::string short_demangle_once<T>() { return #N; }
+
+//*************************************
+namespace sol::detail {
+//*************************************
+SOL_DEMANGLE_ONCE(vec2)
+SOL_DEMANGLE_ONCE(vec3)
+SOL_DEMANGLE_ONCE(vec4)
+SOL_DEMANGLE_ONCE(ivec2)
+SOL_DEMANGLE_ONCE(ivec3)
+SOL_DEMANGLE_ONCE(ivec4)
+SOL_DEMANGLE_ONCE(uvec2)
+SOL_DEMANGLE_ONCE(uvec3)
+SOL_DEMANGLE_ONCE(uvec4)
+//*************************************
+} // namespace sol::detail
+//*************************************
+// 
 //*************************************
 #endif __GX_LUA_H__
