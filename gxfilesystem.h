@@ -222,8 +222,8 @@ struct path
 	path remove_backslash()	const { path p(*this); size_t l=wcslen(p._data); if(l&&(p._data[l-1]=='\\'||p._data[l-1]=='/')) p._data[l-1]=L'\0'; return p; }
 	path remove_slash()		const { path p(*this); size_t l=wcslen(p._data); if(l&&(p._data[l-1]=='\\'||p._data[l-1]=='/')) p._data[l-1]=L'\0'; return p; }
 	path auto_quote()		const { if(!*_data||(_data[0]==L'\"'&&_data[wcslen(_data)-1]==L'\"')) return *this; auto* t=__wcsbuf(); size_t l=wcslen(_data); memcpy(t,_data,l*sizeof(wchar_t)); if(t[l]==L' '||t[l]==L'\t'||t[l]==L'\n') t[l]=0; if(t[0]==L' '||t[0]==L'\t'||t[0]==L'\n') t++; if(t[0]!=L'-'&&!wcschr(t,L' ')&&!wcschr(t,L'\t')&&!wcschr(t,L'\n')&&!wcschr(t,L'|')&&!wcschr(t,L'&')&&!wcschr(t,L'<')&&!wcschr(t,L'>')) return *this; path p; p[0]=L'\"'; memcpy(p._data+1,_data,l*sizeof(wchar_t)); p[l+1]=L'\"'; p[l+2]=0; return p; }
-	path unix()				const {	path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; if(p._data[1]==L':'){ p._data[1]=wchar_t(::tolower(p._data[0])); p._data[0]=L'/'; } return p; }
-	path cygwin()			const { path p(*this); p.canonicalize(); p=p.to_slash(); size_t len=p.length(); if(len<2||p.is_relative()||p.is_unc()||p.is_rsync()) return p; path p2; swprintf_s( p2, capacity, L"/cygdrive/%c%s", ::tolower(p[0]), p._data+2 ); return p2; }
+	path unix()				const {	path p(*this); p.canonicalize(); p=p.to_slash(); if(p.length()<2||p.is_relative()||p.is_unc()||p.is_rsync()||p.is_remote()) return p; if(p._data[1]==L':'){ p._data[1]=wchar_t(::tolower(p._data[0])); p._data[0]=L'/'; } return p; }
+	path cygwin()			const { path p(*this); p.canonicalize(); p=p.to_slash(); if(p.length()<2||p.is_relative()||p.is_unc()||p.is_rsync()||p.is_remote()) return p; path p2; swprintf_s( p2, capacity, L"/cygdrive/%c%s", ::tolower(p[0]), p._data+2 ); return p2; }
 
 	// split path
 	struct split_t { wchar_t *drive, *dir, *fname, *ext; };
@@ -251,14 +251,27 @@ struct path
 	bool is_hidden() const {	if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_HIDDEN)!=0; }
 	bool is_readonly() const {	if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_READONLY)!=0; }
 	bool is_system() const {	if(!*_data) return false; auto& a=attributes(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_SYSTEM)!=0; }
-	bool is_ssh() const {		if(!*_data) return false; return wcsstr(_data+2,L":\\")!=nullptr||wcsstr(_data+2,L":/")!=nullptr; }
-	bool is_synology() const {	if(!*_data) return false; return _wcsistr(_data,L":\\volume")!=nullptr||_wcsistr(_data,L":/volume")!=nullptr; }
-	bool is_pipe() const {		if(!*_data) return false; return wcscmp(_data,L"-")==0||_wcsnicmp(_data,L"pipe:",5)==0; }
-	bool is_http_url() const {	if(!*_data) return false; return _wcsnicmp(_data,L"http://",7)==0||_wcsnicmp(_data,L"https://",8)==0; }
 	bool is_junction() const {	if(!*_data||is_drive()) return false;auto& a=attributes(); if(a==INVALID_FILE_ATTRIBUTES||(a&FILE_ATTRIBUTE_DIRECTORY)==0) return false; return ((a&FILE_ATTRIBUTE_REPARSE_POINT)!=0); }
+	
+	// non-local attributes
+	bool is_unc() const {		return (_data[0]==L'\\'&&_data[1]==L'\\')||(_data[0]==L'/'&&_data[1]==L'/'); }
+	bool is_pipe() const {		if(!*_data) return false; return wcscmp(_data,L"-")==0||_wcsnicmp(_data,L"pipe:",5)==0; }
+	bool is_rsync() const {		auto* p=wcsstr(_data,L":\\"); if(!p) p=wcsstr(_data,L":/"); return p!=nullptr&&p>_data+1; }
+	bool is_http_url() const {	if(!*_data) return false; return _wcsnicmp(_data,L"http://",7)==0||_wcsnicmp(_data,L"https://",8)==0; }
+	bool is_ssh() const {		if(!*_data) return false; return wcsstr(_data+2,L":\\")!=nullptr||wcsstr(_data+2,L":/")!=nullptr; }
+	bool is_synology() const {	if(!is_ssh()) return false; return _wcsistr(_data,L":\\volume")!=nullptr||_wcsistr(_data,L":/volume")!=nullptr; }
+	bool is_remote() const {	return is_http_url()||is_ssh(); }
+
+	// relative/absolute path
+	inline bool is_subdir( const path& ancestor ) const { return _wcsnicmp(_data,ancestor._data,ancestor.size())==0; } // do not check existence
+	inline bool is_absolute() const { if(!*_data) return false; return _data[1]==L':'||is_unc()||is_rsync()||is_remote(); }
+	inline bool is_relative() const { return !is_pipe()&&!is_absolute(); }
+	inline path absolute( const wchar_t* base=L"" ) const { return is_absolute()?*this:_wfullpath(__wcsbuf(),(!*base||is_absolute())?_data:wcscat(wcscpy(__wcsbuf(),path(base).add_backslash()),_data),capacity); }	// do not directly return for non-canonicalized path
+	inline path relative( const wchar_t* from=L"", bool first_dot=false ) const;
+	inline path canonical() const { if(is_pipe()) return *this; if(is_rsync()||is_remote()) return to_slash(); path p(*this); p.canonicalize(); return p; } // not necessarily absolute: return relative path as well
 
 	// path info/operations
-	volume_t volume() const { return (is_unc()||is_rsync()||!drive().exists())?volume_t():volume_t(drive().c_str()); }
+	volume_t volume() const { return (is_unc()||is_rsync()||is_remote()||!drive().exists())?volume_t():volume_t(drive().c_str()); }
 	path drive() const { if(!*_data) return path();if(is_unc()) return unc_root();path d;_wsplitpath_s(_data,d._data,_MAX_DRIVE,0,0,0,0,0,0);return d; }
 	path dir() const { path p; wchar_t* d=__wcsbuf();if(is_unc()){path r=unc_root();size_t rl=r.length();if(length()<=rl+1){if(r._data[rl-1]!=L'\\'){r._data[rl]='\\';r._data[rl+1]=0;}return r;}} _wsplitpath_s(_data,p._data,_MAX_DRIVE,d,_MAX_DIR,0,0,0,0); size_t pl=wcslen(p._data), dl=wcslen(d); if(0==(pl+dl)) return L".\\"; if(dl){ memcpy(p._data+pl,d,dl*sizeof(wchar_t)); p._data[pl+dl]=0; } return p; }
 	path unc_root() const { if(!is_unc()) return path(); path r=*this;size_t l=wcslen(_data);for(size_t k=0;k<l;k++)if(r[k]==L'/')r[k]=L'\\'; auto* b=wcschr(r._data+2,L'\\');if(b)b[0]=0; return r; } // similar to drive (but to the root unc path without backslash)
@@ -299,16 +312,6 @@ struct path
 	void open( const wchar_t* args=nullptr, bool b_show_window=true ) const { path cmd;swprintf(cmd,capacity,L"\"%s\"",_data);ShellExecuteW(GetDesktopWindow(),L"Open",cmd,args,nullptr,b_show_window?SW_SHOW:SW_HIDE); }
 	void open_dir() const { dir().open(nullptr,true); }
 #endif
-
-	// relative/absolute path
-	inline bool is_absolute() const { return (_data[0]!=0&&_data[1]==L':')||memcmp(_data,L"\\\\",sizeof(wchar_t)*2)==0||memcmp(_data,L"//",sizeof(wchar_t)*2)==0||wcsstr(_data,L":\\")!=nullptr||wcsstr(_data,L":/")!=nullptr; }
-	inline bool is_relative() const { return !is_absolute(); }
-	inline bool is_unc() const { return (_data[0]==L'\\'&&_data[1]==L'\\')||(_data[0]==L'/'&&_data[1]==L'/'); }
-	inline bool is_rsync() const { auto* p=wcsstr(_data,L":\\"); if(!p) p=wcsstr(_data,L":/"); return p!=nullptr&&p>_data+1; }
-	inline bool is_subdir( const path& ancestor ) const { return _wcsnicmp(_data,ancestor._data,ancestor.size())==0; } // do not check existence
-	inline path absolute( const wchar_t* base=L"" ) const { if(!*_data||is_pipe()||is_http_url()) return *this; return _wfullpath(__wcsbuf(),(!*base||is_absolute())?_data:wcscat(wcscpy(__wcsbuf(),path(base).add_backslash()),_data),capacity); }	// do not directly return for non-canonicalized path
-	inline path relative( const wchar_t* from=L"", bool first_dot=false ) const;
-	inline path canonical() const { path p(*this); if(p.is_pipe()||p.is_http_url()) return p; p.canonicalize(); return p; } // not necessarily absolute: return relative path as well
 
 	// time stamp
 	static const char* timestamp( const struct tm* t ){char* buff=__strbuf();sprintf(buff,"%04d%02d%02d%02d%02d%02d",t->tm_year+1900,t->tm_mon+1,t->tm_mday,t->tm_hour,t->tm_min,t->tm_sec);return buff;}
@@ -576,7 +579,7 @@ __noinline path path::temp( bool local, path local_dir )
 
 __noinline path path::relative( const wchar_t* from, bool first_dot ) const
 {
-	if(is_pipe()||is_http_url()) return *this;
+	if(is_pipe()||is_rsync()||is_remote()) return *this;
 	if(is_relative()) return !first_dot?this->remove_first_dot():*this;
 
 	path from_dir = (!from||!from[0]) ? path::cwd() : path(from).dir().absolute();
