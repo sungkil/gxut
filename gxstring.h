@@ -171,6 +171,9 @@ template<> inline const char* ntoa<uint64_t>( uint64_t v ){ return ulltoa(v); }
 template<> inline const char* ntoa<int2>( int2 v ){ return itoa(v); }
 template<> inline const char* ntoa<int3>( int3 v ){ return itoa(v); }
 template<> inline const char* ntoa<int4>( int4 v ){ return itoa(v); }
+template<> inline const char* ntoa<ivec2>( ivec2 v ){ return itoa(v); }
+template<> inline const char* ntoa<ivec3>( ivec3 v ){ return itoa(v); }
+template<> inline const char* ntoa<ivec4>( ivec4 v ){ return itoa(v); }
 template<> inline const char* ntoa<short2>( short2 v ){ return itoa(v); }
 template<> inline const char* ntoa<short3>( short3 v ){ return itoa(v); }
 template<> inline const char* ntoa<short4>( short4 v ){ return itoa(v); }
@@ -180,6 +183,9 @@ template<> inline const char* ntoa<char4>( char4 v ){ return itoa(v); }
 template<> inline const char* ntoa<uint2>( uint2 v ){ return utoa(v); }
 template<> inline const char* ntoa<uint3>( uint3 v ){ return utoa(v); }
 template<> inline const char* ntoa<uint4>( uint4 v ){ return utoa(v); }
+template<> inline const char* ntoa<uvec2>( uvec2 v ){ return utoa(v); }
+template<> inline const char* ntoa<uvec3>( uvec3 v ){ return utoa(v); }
+template<> inline const char* ntoa<uvec4>( uvec4 v ){ return utoa(v); }
 template<> inline const char* ntoa<ushort2>( ushort2 v ){ return utoa(v); }
 template<> inline const char* ntoa<ushort3>( ushort3 v ){ return utoa(v); }
 template<> inline const char* ntoa<ushort4>( ushort4 v ){ return utoa(v); }
@@ -189,9 +195,15 @@ template<> inline const char* ntoa<uchar4>( uchar4 v ){ return utoa(v); }
 template<> inline const char* ntoa<float2>( float2 v ){ return ftoa(v); }
 template<> inline const char* ntoa<float3>( float3 v ){ return ftoa(v); }
 template<> inline const char* ntoa<float4>( float4 v ){ return ftoa(v); }
+template<> inline const char* ntoa<vec2>( vec2 v ){ return ftoa(v); }
+template<> inline const char* ntoa<vec3>( vec3 v ){ return ftoa(v); }
+template<> inline const char* ntoa<vec4>( vec4 v ){ return ftoa(v); }
 template<> inline const char* ntoa<double2>( double2 v ){ return dtoa(v); }
 template<> inline const char* ntoa<double3>( double3 v ){ return dtoa(v); }
 template<> inline const char* ntoa<double4>( double4 v ){ return dtoa(v); }
+template<> inline const char* ntoa<dvec2>( dvec2 v ){ return dtoa(v); }
+template<> inline const char* ntoa<dvec3>( dvec3 v ){ return dtoa(v); }
+template<> inline const char* ntoa<dvec4>( dvec4 v ){ return dtoa(v); }
 
 //***********************************************
 // 7. conversion to wstring types
