@@ -2,9 +2,13 @@
 #ifndef __GX_LUA_H__
 #define __GX_LUA_H__
 
-#include <functional>
-
-#ifdef __has_include
+#if defined(__has_include)
+	#if !defined(__GXUT_H__) && __has_include(<gxut/gxut.h>)
+		#include <gxut/gxut.h>
+	#endif
+	#if !defined(__REX_H__) && __has_include(<rex.h>)
+		#include <rex.h>
+	#endif
 	#if __has_include("sol/sol.hpp")
 		#include "sol/sol.hpp"
 	#elif __has_include("../lua/sol/sol.hpp")
@@ -163,9 +167,10 @@ struct state : public sol::state
 {
 	state( std::string _prefix="", bool b_open_default_libs=true, bool b_default_exception_handler=true );
 	void open_default_libraries(){ open_libraries(sol::lib::base,sol::lib::math); }
+	void open_gxmath();
 	bool script( const char* src, bool b_safe=true, bool b_log=true ); // override default script
 	template <class V> bool get_dirty_value( std::string key, V& dst ){ auto t=this->operator[](key); V v; if(!t.valid()||(v=t)==dst) return false; dst=v; log_dirty_value(key,dst); return true; }
-	std::vector<std::string> get_object_names(){ std::vector<std::string> v; for( const auto& [key,value] : *this ){ auto it=_default_objects.find(key.as<string>()); /*if(it!=_default_objects.end()) continue;*/ v.emplace_back(key.as<string>()); } return v; }
+	void gc(){ lua_gc( this->lua_state(), LUA_GCCOLLECT, 0 ); }
 protected:
 	std::set<string> _default_objects;
 };
@@ -203,8 +208,18 @@ __noinline bool __lprint_impl( lua_State* L, std::string& r )
 	return true;
 }
 
-__noinline int lprint( lua_State* L ){	std::string r; if(!__lprint_impl(L,r)) return luaL_error(L, format("%s(): tostring must return a string\n",__func__) ); ::printf("%s\n",r.c_str()); return 0; }
-__noinline int ltprint( lua_State* L ){	std::string r; if(!__lprint_impl(L,r)) return luaL_error(L, format("%s(): tostring must return a string\n",__func__) ); ::tprintf("%s\n",r.c_str()); return 0; }
+__noinline int lprint( lua_State* L )
+{
+	std::string r; if(!__lprint_impl(L,r)) return luaL_error(L, format("%s(): tostring must return a string\n",__func__) );
+	::printf("%s\n",r.c_str());
+	return 0;
+}
+
+__noinline int ltprint( lua_State* L )
+{
+	std::string r; if(!__lprint_impl(L,r)) return luaL_error(L, format("%s(): tostring must return a string\n",__func__) );
+	::tprintf("%s\n",r.c_str()); return 0;
+}
 
 // gxlua libraries
 __noinline int lprintf( lua_State *L )
@@ -249,7 +264,7 @@ __noinline int register_printf( lua::state& t )
 } // end namespace lua
 //*************************************
 
-// conveninent macros
+// type helper macros
 #define SOL_DEMANGLE_ONCE(T) \
 	template <> inline std::string demangle_once<T>() { return #T; }\
 	template <> inline std::string short_demangle_once<T>() { return #T; }
@@ -258,21 +273,4 @@ __noinline int register_printf( lua::state& t )
 	template <> inline std::string demangle_once<T>() { return #N; }\
 	template <> inline std::string short_demangle_once<T>() { return #N; }
 
-//*************************************
-namespace sol::detail {
-//*************************************
-SOL_DEMANGLE_ONCE(vec2)
-SOL_DEMANGLE_ONCE(vec3)
-SOL_DEMANGLE_ONCE(vec4)
-SOL_DEMANGLE_ONCE(ivec2)
-SOL_DEMANGLE_ONCE(ivec3)
-SOL_DEMANGLE_ONCE(ivec4)
-SOL_DEMANGLE_ONCE(uvec2)
-SOL_DEMANGLE_ONCE(uvec3)
-SOL_DEMANGLE_ONCE(uvec4)
-//*************************************
-} // namespace sol::detail
-//*************************************
-// 
-//*************************************
 #endif __GX_LUA_H__
