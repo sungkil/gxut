@@ -2,6 +2,11 @@
 #ifndef __GX_LUA_H__
 #define __GX_LUA_H__
 
+// sol configuration
+#define SOL_SAFE_USERTYPE	1
+#define SOL_SAFE_REFERENCES	1
+#define SOL_SAFE_FUNCTION	1
+
 #if defined(__has_include)
 	#if !defined(__GXUT_H__) && __has_include(<gxut/gxut.h>)
 		#include <gxut/gxut.h>
@@ -135,12 +140,6 @@ struct lua_state_t
 	bool next( int idx ){ return lua_next(L,idx)!=0; }
 };
 
-__noinline int _exception_handler( lua_State* L, sol::optional<const std::exception&> maybe_exception, sol::string_view desc )
-{
-	std::string m=maybe_exception?maybe_exception->what():std::string(desc.data(),static_cast<std::streamsize>(desc.size()));
-	return sol::stack::push(L,m);
-}
-
 // prefix for enabling logging
 inline std::string prefix;
 
@@ -165,29 +164,44 @@ bool get_dirty_value( const T& proxy, std::string key, V& dst )
 
 struct state : public sol::state
 {
-	state( std::string _prefix="", bool b_open_default_libs=true, bool b_default_exception_handler=true );
+	state( std::string _prefix="", bool b_open_default_libs=true );
 	void open_default_libraries(){ open_libraries(sol::lib::base,sol::lib::math); }
 	void open_gxmath();
-	bool script( const char* src, bool b_safe=true, bool b_log=true ); // override default script
+	void open_printf();
+
+	bool script( const char* src, bool b_safe=true ); // override default script
 	template <class V> bool get_dirty_value( std::string key, V& dst ){ auto t=this->operator[](key); V v; if(!t.valid()||(v=t)==dst) return false; dst=v; log_dirty_value(key,dst); return true; }
 	void gc(){ lua_gc( this->lua_state(), LUA_GCCOLLECT, 0 ); }
 protected:
 	std::set<string> _default_objects;
 };
 
-__noinline state::state( std::string _prefix, bool b_open_default_libs, bool b_default_exception_handler )
+// lua internal exception handler
+__noinline int lua_exception_handler( lua_State* L, sol::optional<const std::exception&> maybe_exception, sol::string_view desc )
+{
+	std::string m=maybe_exception?maybe_exception->what():std::string(desc.data(),static_cast<std::streamsize>(desc.size()));
+	return sol::stack::push(L,m);
+}
+
+__noinline state::state( std::string _prefix, bool b_open_default_libs )
 {
 	prefix=_prefix;
-	if(b_default_exception_handler) set_exception_handler(&_exception_handler);
 	if(b_open_default_libs) open_default_libraries();
+	// set_exception_handler(&lua_exception_handler); // handle exceptions in host instead of lua internals
 	for(const auto& [key,value]:*this) _default_objects.insert(key.as<string>());
 }
 
-__noinline bool state::script( const char* src, bool b_safe, bool b_log )
+__noinline sol::protected_function_result _exception_handler( lua_State* L, sol::protected_function_result result )
 {
-	sol::protected_function_result r=b_safe?safe_script( src, &sol::script_pass_on_error ):__super::script(src,&sol::script_pass_on_error); if(r.valid()) return true;
-	if(b_log){ sol::error e=r; if(!prefix.empty()){ printf("[%s] ",prefix.c_str()); printf("%s\n",e.what()); } }
-	return false;
+	printf("[%s] %s\n", prefix.c_str(), result.operator std::string().c_str());
+	return result;
+};
+
+__noinline bool state::script( const char* src, bool b_safe )
+{
+	sol::protected_function_result r=!b_safe?safe_script( src, _exception_handler /*&sol::script_pass_on_error*/ ):
+		__super::script( src, _exception_handler /*&sol::script_pass_on_error*/ );
+	return r.valid();
 }
 
 __noinline bool __lprint_impl( lua_State* L, std::string& r )
@@ -240,12 +254,12 @@ __noinline int ltprintf( lua_State *L )
 	return 0;
 }
 
-__noinline int register_printf( lua::state& t )
+__noinline void state::open_printf()
 {
-	t.set_function( "print", lprint );
-	t.set_function( "tprint", ltprint );
+	set_function( "print", lprint );
+	set_function( "tprint", ltprint );
 
-	auto* L = t.lua_state();
+	auto* L = lua_state();
 	lua_getglobal(L, "string");			// [string]
 	lua_pushstring(L, "format");		// [string, "format"]
 	lua_gettable(L, -2);				// [string, string.format]
@@ -256,8 +270,30 @@ __noinline int register_printf( lua::state& t )
 	lua_pushcclosure(L, ltprintf, 1);	// [string, string.format, ltprintf]
 	lua_setglobal(L, "tprintf");		// [string]
 	lua_pop(L,1);						// []
+}
 
-	return 0;
+__noinline std::string __call_tostring( sol::stack_object v, sol::this_state L )
+{
+	sol::type t = v.get_type();
+	if(t==sol::type::boolean)	return v.as<bool>()?"true":"false";
+	if(t==sol::type::number)	return dtoa(v.as<double>());
+	if(t==sol::type::string)	return v.as<std::string>();
+	if(t==sol::type::userdata)
+	{
+		lua_getglobal(L, "tostring"); lua_pushvalue(L,-1); lua_pushvalue(L,v.stack_index());  // [tosring, function to be called, value to print]
+		lua_call(L, 1, 1); const char* s=lua_tostring(L,-1); std::string r=s?s:"";
+		lua_pop(L, 2); // pop [output,string]
+		return r;
+	}
+	return "";
+}
+
+__noinline sol::object concat( sol::stack_object left, sol::stack_object right, sol::this_state L )
+{
+	std::string l=__call_tostring(left,L);
+	std::string r=__call_tostring(right,L);
+	lua_pop(L, 2); // pop [left, right]
+	return sol::object( L, sol::in_place, l+r );
 }
 
 //*************************************

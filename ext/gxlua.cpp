@@ -39,7 +39,8 @@ auto register_tvec2( lua::state& t )
 	auto u=t.new_usertype<V>(sol::detail::demangle_once<V>(), ctor);
 	u["x"] = &V::x;	u["r"] = &V::x;
 	u["y"] = &V::y;	u["g"] = &V::y;
-	u[sol::meta_function::to_string] = []( const V& v ){ return std::string(ntoa(reinterpret_cast<tarray2<T>&>(const_cast<V&>(v)))); };
+	u[sol::meta_function::to_string] = []( const V& v ){ return std::string(ntoa(v)); };
+	u[sol::meta_function::concatenation] = &lua::concat;
 	register_operators<V>( u );
 	return std::move(u);
 }
@@ -52,7 +53,8 @@ auto register_tvec3( lua::state& t )
 	u["x"] = &V::x;	u["r"] = &V::x;
 	u["y"] = &V::y;	u["g"] = &V::y;
 	u["z"] = &V::z;	u["b"] = &V::z;
-	u[sol::meta_function::to_string] = []( const V& v ){ return std::string(ntoa(reinterpret_cast<tarray3<T>&>(const_cast<V&>(v)))); };
+	u[sol::meta_function::to_string] = []( const V& v ){ return std::string(ntoa(v)); };
+	u[sol::meta_function::concatenation] = &lua::concat;
 	register_operators<V>( u );
 	return std::move(u);
 }
@@ -66,9 +68,8 @@ auto register_tvec4( lua::state& t )
 	u["y"] = &V::y;	u["g"] = &V::y;
 	u["z"] = &V::z;	u["b"] = &V::z;
 	u["w"] = &V::w;	u["a"] = &V::w;
-	u[sol::meta_function::to_string] = []( const V& v ){ return std::string(ntoa(reinterpret_cast<tarray4<T>&>(const_cast<V&>(v)))); };
-	u[sol::meta_function::concatenation] = []( const V& v ){ return std::string(ntoa(reinterpret_cast<tarray4<T>&>(const_cast<V&>(v)))); };
-
+	u[sol::meta_function::to_string] = []( const V& v ){ return std::string(ntoa(v)); };
+	u[sol::meta_function::concatenation] = &lua::concat;
 	register_operators<V>( u );
 	return std::move(u);
 }
