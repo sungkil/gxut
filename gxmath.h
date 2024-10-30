@@ -39,27 +39,29 @@ template <class T> using enable_float_t	 = typename std::enable_if_t<std::is_flo
 #define float_memfun(U)	 template <class X=T, typename U=enable_float_t<X>>
 
 //*************************************
-template <class T,template <class> class A=tarray2> struct tvec2
+// legacy: template <class T,template <class> class A=tarray2> struct tvec2 (template argument for template)
+template <class T> struct tvec2
 {
+	using A = tarray2<T>;
 	__default_array_impl(2,T,tvec2);
-	union{struct{T x,y;};struct{T r,g;};A<T> xy,rg;};
+	union{struct{T x,y;};struct{T r,g;};A xy,rg;};
 
 	// basic constructors
-	__forceinline tvec2( A<T> v ){x=v.x;y=v.y;}
+	__forceinline tvec2( A v ){x=v.x;y=v.y;}
 	__forceinline tvec2( T a ){x=y=a;}
 	__forceinline tvec2( T a, T b ){x=a;y=b;}
 
 	// extended constructors with explicit casting
-	template <class X> __forceinline tvec2( tvec2<X,tarray2> v ){x=T(v.x);y=T(v.y);}
+	template <class X> __forceinline tvec2( tvec2<X> v ){x=T(v.x);y=T(v.y);}
 	template <class X,class Y> __forceinline tvec2( X a, Y b ){x=T(a);y=T(b);}
 
 	// assignment operators
-	__forceinline tvec2& operator=( A<T>&& v ){ memmove(this,&v,sizeof(v)); return *this; }
-	__forceinline tvec2& operator=( const A<T>& v ){ memcpy(this,&v,sizeof(v)); return *this; }
+	__forceinline tvec2& operator=( A&& v ){ memmove(this,&v,sizeof(v)); return *this; }
+	__forceinline tvec2& operator=( const A& v ){ memcpy(this,&v,sizeof(v)); return *this; }
 
 	// casting operators
-	__forceinline operator A<T>&(){ return reinterpret_cast<A<T>&>(*this); }
-	__forceinline operator const A<T>&() const { return reinterpret_cast<const A<T>&>(*this); }
+	__forceinline operator A&(){ return reinterpret_cast<A&>(*this); }
+	__forceinline operator const A&() const { return reinterpret_cast<const A&>(*this); }
 
 	// comparison operators
 	__forceinline bool operator!=(const tvec2& v) const { return !operator==(v); }
@@ -99,34 +101,35 @@ template <class T,template <class> class A=tarray2> struct tvec2
 	float_memfun(U) __forceinline tvec2<U> normalize() const { return operator/(length()); }
 };
 
-template <class T,template <class> class A=tarray3> struct tvec3
+template <class T> struct tvec3
 {
+	using A = tarray3<T>;
 	__default_array_impl(3,T,tvec3);
 	
 	using V2 = tvec2<T>;
 
-	union{struct{T x,y,z;};struct{T r,g,b;};union{V2 xy,rg;};struct{T _x;union{V2 yz,gb;};};A<T> xyz,rgb;};
+	union{struct{T x,y,z;};struct{T r,g,b;};union{V2 xy,rg;};struct{T _x;union{V2 yz,gb;};};A xyz,rgb;};
 
 	// constructors
-	__forceinline tvec3( A<T> v ){x=v.x;y=v.y;z=v.z;}
+	__forceinline tvec3( A v ){x=v.x;y=v.y;z=v.z;}
 	__forceinline tvec3( T a ){x=y=z=a;}
 	__forceinline tvec3( T a, T b, T c ){x=a;y=b;z=c;}
 	__forceinline tvec3( V2 v, T c ){x=v.x;y=v.y;z=c;}
 	__forceinline tvec3( T a, V2 v ){x=a;y=v.x;z=v.y;}
 
 	// extended constructors with explicit casting
-	template <class X> __forceinline tvec3( tvec3<X,tarray3> v ){x=T(v.x);y=T(v.y);z=T(v.z);}
+	template <class X> __forceinline tvec3( tvec3<X> v ){x=T(v.x);y=T(v.y);z=T(v.z);}
 	template <class X,class Y,class Z> __forceinline tvec3( X a, Y b, Z c ){x=T(a);y=T(b);z=T(c);}
-	template <class X,class Z> __forceinline tvec3( tvec2<X,tarray2> v, Z c ){x=T(v.x);y=T(v.y);z=T(c);}
-	template <class X,class Y> __forceinline tvec3( X a, tvec2<Y,tarray2> v ){x=a;y=T(v.x);z=T(v.y);}
+	template <class X,class Z> __forceinline tvec3( tvec2<X> v, Z c ){x=T(v.x);y=T(v.y);z=T(c);}
+	template <class X,class Y> __forceinline tvec3( X a, tvec2<Y> v ){x=a;y=T(v.x);z=T(v.y);}
 
 	// assignment operators
-	__forceinline tvec3& operator=( A<T>&& v ){ memmove(this,&v,sizeof(v)); return *this; }
-	__forceinline tvec3& operator=( const A<T>& v ){ memcpy(this,&v,sizeof(v)); return *this; }
+	__forceinline tvec3& operator=( A&& v ){ memmove(this,&v,sizeof(v)); return *this; }
+	__forceinline tvec3& operator=( const A& v ){ memcpy(this,&v,sizeof(v)); return *this; }
 
 	// casting operators
-	__forceinline operator A<T>&(){ return reinterpret_cast<A<T>&>(*this); }
-	__forceinline operator const A<T>&() const { return reinterpret_cast<const A<T>&>(*this); }
+	__forceinline operator A&(){ return reinterpret_cast<A&>(*this); }
+	__forceinline operator const A&() const { return reinterpret_cast<const A&>(*this); }
 
 	// comparison operators
 	__forceinline bool operator==(const tvec3& v) const { return x==v.x&&y==v.y&&z==v.z; }
@@ -169,17 +172,18 @@ template <class T,template <class> class A=tarray3> struct tvec3
 	float_memfun(U) __forceinline tvec3<U> cross( const tvec3& v ) const { return tvec3( y*v.z-z*v.y, z*v.x-x*v.z, x*v.y-y*v.x ); }
 };
 
-template <class T,template <class> class A=tarray4> struct tvec4
+template <class T> struct tvec4
 {
+	using A = tarray4<T>;
 	__default_array_impl(4,T,tvec4);
 
 	using V2 = tvec2<T>;
 	using V3 = tvec3<T>;
 
-	union{struct{T x,y,z,w;};struct{T r,g,b,a;};struct{union{V2 xy,rg;};union{V2 zw,ba;};};union{V3 xyz,rgb;};struct{T _x;union{V3 yzw,gba;V2 yz,gb;};};A<T> xyzw,rgba;};
+	union{struct{T x,y,z,w;};struct{T r,g,b,a;};struct{union{V2 xy,rg;};union{V2 zw,ba;};};union{V3 xyz,rgb;};struct{T _x;union{V3 yzw,gba;V2 yz,gb;};};A xyzw,rgba;};
 
 	// basic constructors
-	__forceinline tvec4( A<T> v ){x=v.x;y=v.y;z=v.z;w=v.w;}
+	__forceinline tvec4( A v ){x=v.x;y=v.y;z=v.z;w=v.w;}
 	__forceinline tvec4( T a ){x=y=z=w=a;}
 	__forceinline tvec4( T a, T b, T c, T d ){x=a;y=b;z=c;w=d;}
 	__forceinline tvec4( T a, V2 v, T d ){x=a;y=v.x;z=v.y;w=d;}
@@ -190,22 +194,22 @@ template <class T,template <class> class A=tarray4> struct tvec4
 	__forceinline tvec4( V3 v, T d ){x=v.x;y=v.y;z=v.z;w=d;}
 
 	// extended constructors with explicit casting
-	template <class X> __forceinline tvec4( tvec4<X,tarray4> v ){x=T(v.x);y=T(v.y);z=T(v.z);w=T(v.w);}
+	template <class X> __forceinline tvec4( tvec4<X> v ){x=T(v.x);y=T(v.y);z=T(v.z);w=T(v.w);}
 	template <class X,class Y,class Z,class W> __forceinline tvec4( X a, Y b, Z c, W d ){x=T(a);y=T(b);z=T(c);w=T(d);}
-	template <class X,class Y,class W> __forceinline tvec4( X a, tvec2<Y,tarray2> v, W d ){x=T(a);y=T(v.x);z=T(v.y);w=T(d);}
-	template <class X,class Y> __forceinline tvec4( X a, tvec3<Y,tarray3> v ){x=T(a);y=T(v.x);z=T(v.y);w=T(v.z);}
-	template <class X,class Y,class Z> __forceinline tvec4( X a, Y b, tvec2<Z,tarray2> v ){x=T(a);y=T(b);z=T(v.x);w=T(v.y);}
-	template <class X,class Z,class W> __forceinline tvec4( tvec2<X,tarray2> v, Z c, W d ){x=T(v.x);y=T(v.y);z=T(c);w=T(d);}
-	template <class X,class Z> __forceinline tvec4( tvec2<X,tarray2> v, tvec2<Z,tarray2> u ){x=T(v.x);y=T(v.y);z=T(u.x);w=T(u.y);}
-	template <class X,class W> __forceinline tvec4( tvec3<X,tarray3> v, W d ){x=T(v.x);y=T(v.y);z=T(v.z);w=T(d);}
+	template <class X,class Y,class W> __forceinline tvec4( X a, tvec2<Y> v, W d ){x=T(a);y=T(v.x);z=T(v.y);w=T(d);}
+	template <class X,class Y> __forceinline tvec4( X a, tvec3<Y> v ){x=T(a);y=T(v.x);z=T(v.y);w=T(v.z);}
+	template <class X,class Y,class Z> __forceinline tvec4( X a, Y b, tvec2<Z> v ){x=T(a);y=T(b);z=T(v.x);w=T(v.y);}
+	template <class X,class Z,class W> __forceinline tvec4( tvec2<X> v, Z c, W d ){x=T(v.x);y=T(v.y);z=T(c);w=T(d);}
+	template <class X,class Z> __forceinline tvec4( tvec2<X> v, tvec2<Z> u ){x=T(v.x);y=T(v.y);z=T(u.x);w=T(u.y);}
+	template <class X,class W> __forceinline tvec4( tvec3<X> v, W d ){x=T(v.x);y=T(v.y);z=T(v.z);w=T(d);}
 
 	// assignment operators
-	__forceinline tvec4& operator=( A<T>&& v ){ memmove(this,&v,sizeof(v)); return *this; }
-	__forceinline tvec4& operator=( const A<T>& v ){ memcpy(this,&v,sizeof(v)); return *this; }
+	__forceinline tvec4& operator=( A&& v ){ memmove(this,&v,sizeof(v)); return *this; }
+	__forceinline tvec4& operator=( const A& v ){ memcpy(this,&v,sizeof(v)); return *this; }
 
 	// casting operators
-	__forceinline operator A<T>&(){ return reinterpret_cast<A<T>&>(*this); }
-	__forceinline operator const A<T>&() const { return reinterpret_cast<const A<T>&>(*this); }
+	__forceinline operator A&(){ return reinterpret_cast<A&>(*this); }
+	__forceinline operator const A&() const { return reinterpret_cast<const A&>(*this); }
 
 	// comparison operators
 	__forceinline bool operator==(const tvec4& v) const { return x==v.x&&y==v.y&&z==v.z&&w==v.w; }
