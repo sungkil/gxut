@@ -116,6 +116,4 @@ void lua::state::open_gxmath()
 	register4(t,sign);
 	register4(t,smoothstep);
 	register4(t,smootherstep);
-	
-	// register matrix
 }
