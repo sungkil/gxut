@@ -100,6 +100,44 @@ struct izip_t	// common interface to zip, 7zip, ...
 	virtual zipentry_t* find( const wchar_t* name ){ for(auto& e:entries){ if(_wcsicmp(e.name,name)==0) return &e; } return nullptr; }
 };
 
+// signature detection
+inline bool is_7zip_signature( void* ptr, size_t size=0 )
+{
+	static unsigned char szip[]={'7','z',0xBC,0xAF,0x27,0x1C};
+	if(size&&size<sizeof(szip)) return false;
+	return memcmp(ptr,szip,sizeof(szip))==0;
+}
+
+inline bool is_zip_signature( void* ptr, size_t size=0 )
+{
+	static unsigned char pk[]		={0x50,0x4b,0x03,0x04};
+	static unsigned char pklite[]	={0x50,0x4B,0x4C,0x49,0x54,0x45};
+	static unsigned char pksfx[]	={0x50,0x4B,0x53,0x70,0x58};
+	static unsigned char winzip[]	={0x57,0x69,0x6E,0x5A,0x69,0x70};
+	if(size&&size<6) return false;
+	if(memcmp(ptr,pk,sizeof(pk))==0)			return true;
+	if(memcmp(ptr,pklite,sizeof(pklite))==0)	return true;
+	if(memcmp(ptr,pksfx,sizeof(pksfx))==0)		return true;
+	if(memcmp(ptr,winzip,sizeof(winzip))==0)	return true;
+	return false;
+}
+
+inline bool is_7zip_file( const path& file_path )
+{
+	FILE* fp = _wfopen(file_path.c_str(),L"rb"); if(!fp) return false;
+	_fseeki64(fp,0,SEEK_END); size_t size=_ftelli64(fp); _fseeki64(fp,0,SEEK_SET);
+	unsigned char t[6]={}; if(size>=sizeof(t)) fread(t,1,sizeof(t),fp); fclose(fp);
+	return is_7zip_signature(t,size);
+}
+
+inline bool is_zip_file( const path& file_path )
+{
+	FILE* fp = _wfopen(file_path.c_str(),L"rb"); if(!fp) return false;
+	_fseeki64(fp,0,SEEK_END); size_t size=_ftelli64(fp); _fseeki64(fp,0,SEEK_SET);
+	unsigned char t[6]={}; if(size>=sizeof(t)) fread(t,1,sizeof(t),fp); fclose(fp);
+	return is_zip_signature(t,size);
+}
+
 #ifdef MAKEINTRESOURCEW
 struct resource_t : public mem_t
 {

@@ -121,8 +121,6 @@ struct zip_t : public izip_t
 {
 	HZIP hzip=nullptr;
 
-	static bool cmp_signature( void* ptr ){ static uchar s[4]={0x50,0x4b,0x03,0x04}; return memcmp(ptr,s,4)==0; }
-
 	~zip_t(){ release(); }
 	zip_t( const path& _file_path ){ hzip=OpenZip( file_path=_file_path.absolute(), nullptr ); if(!hzip) file_path.clear(); else _zipmtime64=FileTimeToUint64(_zipmtime=file_path.mfiletime()); }
 	zip_t( void* ptr, size_t size ){ hzip=OpenZip( ptr, uint(size), nullptr ); }
@@ -159,7 +157,6 @@ struct szip_t : public izip_t
 	virtual bool extract_to_files( path dir, const wchar_t* name=nullptr ){uchar* ob=nullptr;uint bl=-1;for(size_t k=0,kn=entries.size(),of=0,obs=0,os=0;k<kn;k++){auto& e=entries[k];if(e.is_dir()||(name&&_wcsicmp(name,e.name)!=0)) continue; path p=dir+e.name; if(!p.dir().exists()) p.dir().mkdir(); if(SZ_OK!=SzArEx_Extract(&db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){wprintf(L"unable to SzArEx_Extract(%s)\n",e.name);return false;} FILE* fp=_wfopen(p,L"wb"); if(!fp){wprintf( L"unable to fopen(%s)\n",p.c_str()); return false; } fwrite(ob+of,os,1,fp );fclose(fp); if(e.attr) SetFileAttributesW(p,e.attr); p.set_filetime(nullptr,nullptr,&e.mtime); } if(ob) alloc_impl.Free(&alloc_impl,ob); return true; }
 	virtual bool extract_to_memory( const wchar_t* name=nullptr ){if(!look_in_stream())return false;uchar* ob=nullptr;uint bl=-1;for(size_t k=0,kn=entries.size(),of=0,obs=0,os=0;k<kn;k++){auto& e=entries[k];if(e.is_dir()||e.ptr||(name&&_wcsicmp(name,e.name)!=0)) continue;if(SZ_OK!=SzArEx_Extract(&db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){wprintf(L"unable to SzArEx_Extract(%s)\n",e.name);return false;} e.ptr=malloc(os); if(e.ptr) memcpy(e.ptr,ob+of,e.size=os); } if(ob) alloc_impl.Free(&alloc_impl,ob); return true; }
 
-	static bool cmp_signature( void* ptr ){ static uchar s[6]={'7','z',0xBC,0xAF,0x27,0x1C}; return memcmp(ptr,s,6)==0; }
 	static void crc_generate_table(){ static bool b=false; if(b) return; CrcGenerateTable(); b=true; }
 	ILookInStream* look_in_stream(){ return mem_stream?&mem_stream->s:(file_stream&&look_stream)?&look_stream->vt:nullptr; }
 };
@@ -172,9 +169,9 @@ inline izip_t* resource_t::load_zip()
 {
 	if(!load()||!ptr||size<6) return nullptr;
 	zip=nullptr;
-	if(!zip&&zip_t::cmp_signature(ptr))		zip=new zip_t(ptr,size);
+	if(!zip&&is_zip_signature(ptr,size))	zip=new zip_t(ptr,size);	// is_zip_signature in gxmemory.h
 #ifdef __7ZIP_H__
-	if(!zip&&szip_t::cmp_signature(ptr))	zip=new szip_t(ptr,size);
+	if(!zip&&is_7zip_signature(ptr,size))	zip=new szip_t(ptr,size);	// is_7zip_signature in gxmemory.h
 #endif
 	if(zip&&!zip->load()){delete zip;zip=nullptr;} return zip;
 }
