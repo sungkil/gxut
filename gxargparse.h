@@ -67,6 +67,7 @@ struct option_t
 	bool empty() const { return names.empty(); }
 	void clear(){ parsed.clear(); } // clear values
 
+	option_t& add_name( const char* name ){ if(name&&name[0]) names.insert(name); return *this; }
 	option_t& add_subarg( std::vector<std::string> constraints={} ){ subarg_count++; if(!constraints.empty()) this->constraints=constraints; return *this; }
 	option_t& add_help( const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(_vscprintf(fmt,a)+1); vsprintf_s(&buff[0],buff.size(),fmt,a); shelp=trim(&buff[0],"\n"); va_end(a); return *this; }
 	option_t& add_break( int count=1 ){ break_count+=count; return* this; }
@@ -77,8 +78,8 @@ struct option_t
 protected:
 	friend struct parser_t;
 	bool exists() const { if(!parsed.instance) return false; return !subarg_count||!parsed.value.empty(); }
+	option_t& add_name(){ return *this; } // terminator for template argument recursion
 	template<typename... Args> option_t& add_name( const char* name, Args... args ){ if(name&&name[0]) names.insert(name); return add_name(args...); }
-	option_t& add_name( const char* name ){ if(name&&name[0]) names.insert(name); return *this; }
 	const char* name() const { for( auto& n : names ) if(n.size()==1) return n.c_str(); for( auto& n : names ) if(n.size()>1) return n.c_str(); return ""; }
 	const char* short_name() const { for( auto& n : names ) if(n.size()==1) return n.c_str(); return ""; }
 	std::vector<const char*> long_names() const { std::vector<const char*> v; for( auto& n : names ) if(n.size()>1) v.push_back(n.c_str()); return v; }
@@ -183,10 +184,9 @@ protected:
 
 	struct parsed_t
 	{
-		bool		instance=false;
-		int			argument_count=0;	// parsed argument count
+		int argument_count=0;
 		struct { bool help_exists = false; } b;
-		void clear(){ b.help_exists=false; argument_count=0; instance=false; }
+		void clear(){ b.help_exists=false; argument_count=0; }
 	} parsed;
 
 	parser_t*					parent = nullptr;
@@ -194,6 +194,7 @@ protected:
 	std::vector<parser_t*>		commands;
 	std::vector<argument_t*>	arguments;
 	std::vector<option_t*>		options;
+	bool						b_command_found=false; // this parser exists in arguments
 
 	option_t* find_option( const char* name ) const	{ if(!name||!name[0]) return nullptr; for( auto* o : options ) for( auto& n : o->names ) if(strcmp(name,n.c_str())==0) return o; return nullptr; }
 	void select_parser_impl( parser_t*& p, int argc, wchar_t** argv );
@@ -213,16 +214,6 @@ inline bool parser_t::exists( const std::string& name ) const
 	if(name=="h"||name=="help") return parsed.b.help_exists;
 	auto* o = find_option(name.c_str()); if(o) return o->parsed.instance>0;
 	for( auto* a : arguments ){ if(strcmp(a->name.c_str(),name.c_str())==0) return a->value_exists(); }
-	return false;
-}
-
-inline bool parser_t::command_exists( const std::string& name ) const
-{
-	for(auto* c:commands)
-	{
-		if(strcmp(c->attrib.name.c_str(),name.c_str())!=0) continue;
-		if(c->parsed.instance) return true;
-	}
 	return false;
 }
 
@@ -247,9 +238,21 @@ inline std::vector<std::wstring> parser_t::get_values( const std::string& name )
 	return v;
 }
 
+inline bool parser_t::command_exists( const std::string& name ) const
+{
+	for(auto* c:commands)
+	{
+		if(strcmp(c->attrib.name.c_str(),name.c_str())!=0) continue;
+		if(c->b_command_found) return true;
+	}
+	return false;
+}
+
 inline void parser_t::select_parser_impl( parser_t*& p, int argc, wchar_t** argv )
 {
-	p->parsed.instance=true; int next=p->attrib.depth+1; if(argc<=next) return;
+	p->b_command_found = true;
+	int next=p->attrib.depth+1; if(argc<=next) return;
+	
 	const wchar_t* a=trim(argv[next]); if(!a||!*a||_wcsicmp(a,L"help")==0) return;
 	std::string arg=wtoa(a); if(arg[0]==L'-') return; // option should not precede the command
 	for(auto* c:p->commands)
@@ -371,7 +374,7 @@ inline bool parser_t::validate()
 	// if help exists, show usage
 	if( parsed.b.help_exists ){ usage(); return false; }
 
-	if(parsed.argument_count<required_count)
+	if( parsed.argument_count < required_count )
 		return exit( "argument <%s>: required\n", required[parsed.argument_count]->name.c_str() );
 
 	// check the value provided for subargument
