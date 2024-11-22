@@ -122,10 +122,13 @@ struct parser_t
 
 	// query
 	inline bool option_exists() const;
-	inline bool exists( const std::string& name ) const;
 	inline bool command_exists( const std::string& name ) const;
 	inline bool callback_exists(){ parser_t* p=this;while(p&&!p->pf_callback) p=p->parent; return p&&p->pf_callback?true:false; }
 	inline bool help_exists() const { return parsed.b.help_exists; }
+		
+	// multi-name query for exists
+	inline bool exists() const { return false; }  // terminator for template argument-pack expansion
+	template<typename... Args> bool exists( const char* name, Args... args ) const;
 
 	// subcommands
 	inline parser_t& select_parser( int argc, wchar_t* argv[] ){ parser_t* p=this; select_parser_impl(p,argc,argv); return *p; }
@@ -196,12 +199,21 @@ protected:
 	std::vector<option_t*>		options;
 	bool						b_command_found=false; // this parser exists in arguments
 
-	option_t* find_option( const char* name ) const	{ if(!name||!name[0]) return nullptr; for( auto* o : options ) for( auto& n : o->names ) if(strcmp(name,n.c_str())==0) return o; return nullptr; }
+	option_t* find_option( const char* name ) const	{ if(!name||!name[0]) return nullptr; for(auto* o:options) for( auto& n:o->names ) if(n==name) return o; return nullptr; }
+	argument_t* find_argument( const char* name ) const { if(!name||!name[0]) return nullptr; for(auto* a:arguments){ if(a->name==name) return a; } return nullptr; }
 	void select_parser_impl( parser_t*& p, int argc, wchar_t** argv );
-
 	const int arg_begin() const { return attrib.depth+1; }
 	std::vector<argument_t*> get_required_arguments(){ std::vector<argument_t*> v; for(auto* a:arguments ) if(!a->optional) v.emplace_back(a); return v; }
 };
+
+template <typename... Args> bool parser_t::exists( const char* name, Args... args ) const
+{
+	if(!name) return exists(args...);
+	if(*name=='h'){ if(!name[1]||strcmp(name+1,"elp")==0)	return parsed.b.help_exists; }
+	if(auto* o=find_option(name); o&&o->parsed.instance>0)	return true;
+	if(auto* a=find_argument(name); a&&a->value_exists())	return true;
+	return exists(args...);
+}
 
 inline bool parser_t::option_exists() const
 {
@@ -209,25 +221,17 @@ inline bool parser_t::option_exists() const
 	return false;
 }
 
-inline bool parser_t::exists( const std::string& name ) const
-{
-	if(name=="h"||name=="help") return parsed.b.help_exists;
-	auto* o = find_option(name.c_str()); if(o) return o->parsed.instance>0;
-	for( auto* a : arguments ){ if(strcmp(a->name.c_str(),name.c_str())==0) return a->value_exists(); }
-	return false;
-}
-
 template<> inline std::wstring parser_t::get<std::wstring>( const std::string& name ) const
 {
-	for( auto* a : arguments ){ if(strcmp(a->name.c_str(),name.c_str())==0) return a->parsed.value; }
-	auto* o = find_option(name.c_str()); return o&&o->parsed.instance>0?o->parsed.value:L"";
+	auto* a=find_argument(name.c_str()); if(a) return a->parsed.value;
+	auto* o=find_option(name.c_str()); return o&&o->parsed.instance>0?o->parsed.value:L"";
 }
 
 inline std::vector<std::wstring> parser_t::others( const std::string& name ) const
 {
 	std::vector<std::wstring> v;
 	if(name.empty()){ for(auto& a:arguments){ if(a->name.empty()) v.push_back(a->parsed.value); } }	// unnamed arguments
-	else{ auto* o=find_option(name.c_str()); if(o&&o->parsed.instance>1) v=o->parsed.others; }				// named options
+	else{ auto* o=find_option(name.c_str()); if(o&&o->parsed.instance>1) v=o->parsed.others; }		// named options
 	return v;
 }
 
