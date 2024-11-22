@@ -266,7 +266,7 @@ struct path
 	inline bool is_subdir( const path& ancestor ) const { return _wcsnicmp(_data,ancestor._data,ancestor.size())==0; } // do not check existence
 	inline bool is_absolute() const { if(!*_data) return false; return _data[1]==L':'||is_unc()||is_rsync()||is_remote(); }
 	inline bool is_relative() const { return !is_pipe()&&!is_absolute(); }
-	inline path absolute( const wchar_t* base=L"" ) const { return is_absolute()?*this:_wfullpath(__wcsbuf(),(!*base||is_absolute())?_data:wcscat(wcscpy(__wcsbuf(),path(base).add_backslash()),_data),capacity); }	// do not directly return for non-canonicalized path
+	inline path absolute( const wchar_t* base=L"" ) const { return !*_data||is_absolute()?*this:_wfullpath(__wcsbuf(),(!*base||is_absolute())?_data:wcscat(wcscpy(__wcsbuf(),path(base).add_backslash()),_data),capacity); }	// do not directly return for non-canonicalized path
 	inline path relative( const wchar_t* from=L"", bool first_dot=false ) const;
 	inline path canonical() const { if(is_pipe()) return *this; if(is_rsync()||is_remote()) return to_slash(); path p(*this); p.canonicalize(); return p; } // not necessarily absolute: return relative path as well
 
