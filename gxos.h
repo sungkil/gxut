@@ -198,10 +198,11 @@ inline path windir(){ return path(os::env::var(L"WINDIR")).add_backslash(); }
 //***********************************************
 namespace cpu {
 //***********************************************
-__noinline const std::vector<int4>& info(){ static std::vector<int4> v; if(!v.empty()) return v; int4 i={};__cpuid(i,0);v.resize(i.x); /* function count */ for( int k=0,kn=int(v.size());k<kn;k++) __cpuidex(v[k],k,0); return v; }
-__noinline const char* vendor(){ static int v[8]={}; if(!v[0]){ auto i=info()[0]; v[0]=i[1];v[1]=i[3];v[2]=i[2]; } return (const char*)v; }
+__noinline const std::vector<int4>& info(){ static std::vector<int4> v; if(!v.empty()) return v; int4 i={};__cpuid((int*)&i.x, 0); v.resize(i.x); /* function count */ for(int k=0, kn=int(v.size()); k<kn; k++) __cpuidex((int*)&v[k], k, 0); return v; }
+__noinline const char* vendor(){ static int v[8]={}; if(!v[0]){ auto i=info()[0]; v[0]=i.y;v[1]=i.w;v[2]=i.z; } return (const char*)v; }
+__noinline const char* brand(){ static int b[16]={}; if(*b) return (const char*)b; int4 nx;__cpuid((int*)&nx, 0x80000000);if(nx.x<0x80000004) return ""; std::vector<int4> v; v.resize(nx.x-0x80000000); for(int k=0,kn=int(v.size());k<kn;k++) __cpuidex((int*)&v[k], 0x80000000+k, 0); memcpy(b+0,&v[2],sizeof(int4)*3); return (const char*)b; }
 __noinline uint64_t memory(){ uint64_t m; return GetPhysicallyInstalledSystemMemory(&m)?m:0; }
-__noinline bool has_sse42(){ int4 i=info()[1]; return ((i[2]>>20)&1)==1; }
+__noinline bool has_sse42(){ int4 i=info()[1]; return ((i.z>>20)&1)==1; }
 //***********************************************
 } // namespace cpu
 //***********************************************
