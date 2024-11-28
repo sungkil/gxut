@@ -34,6 +34,10 @@
 	#include <tlhelp32.h> // process info helper
 #endif
 
+#if defined(__has_include) && __has_include(<intrin.h>)
+	#include <intrin.h> // processor info
+#endif
+
 #ifndef __GNUC__		// MinGW has a problem with threads
 	#include <thread>	// usleep
 	#include <chrono>	// microtimer
@@ -189,6 +193,17 @@ inline path windir(){ return path(os::env::var(L"WINDIR")).add_backslash(); }
 
 //***********************************************
 } // namespace env
+//***********************************************
+
+//***********************************************
+namespace cpu {
+//***********************************************
+__noinline const std::vector<int4>& info(){ static std::vector<int4> v; if(!v.empty()) return v; int4 i={};__cpuid(i,0);v.resize(i.x); /* function count */ for( int k=0,kn=int(v.size());k<kn;k++) __cpuidex(v[k],k,0); return v; }
+__noinline const char* vendor(){ static int v[8]={}; if(!v[0]){ auto i=info()[0]; v[0]=i[1];v[1]=i[3];v[2]=i[2]; } return (const char*)v; }
+__noinline uint64_t memory(){ uint64_t m; return GetPhysicallyInstalledSystemMemory(&m)?m:0; }
+__noinline bool has_sse42(){ int4 i=info()[1]; return ((i[2]>>20)&1)==1; }
+//***********************************************
+} // namespace cpu
 //***********************************************
 
 //***********************************************

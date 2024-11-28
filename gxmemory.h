@@ -187,8 +187,7 @@ __noinline unsigned int crc32c_hw( const void* buff, size_t size, unsigned int c
 	for(;size>=sizeof(uint8_t);size-=sizeof(uint8_t),b+=sizeof(uint8_t)) c=_mm_crc32_u8((uint32_t)c,*(uint8_t*)b);
 	return uint32_t(~c);
 }
-inline bool has_sse42(){ static bool b=false,h=true; if(b) return h; b=true; int regs[4]={}; __cpuid(regs,1); return h=((regs[2]>>20)&1)==1; }
-inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ static unsigned int(*pcrc32c)(const void*,size_t,unsigned int)=has_sse42()?crc32c_hw:tcrc32<0x82f63b78UL>; return pcrc32c(buff,size,crc0); }
+inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ static unsigned int(*pcrc32c)(const void*,size_t,unsigned int)=os::cpu::has_sse42()?crc32c_hw:tcrc32<0x82f63b78UL>; return pcrc32c(buff,size,crc0); }
 #endif
 
 inline unsigned int crc32c( sized_ptr_t<void> p, unsigned int crc0=0 ){ return crc32c((const void*)p.ptr,p.size,crc0); }
