@@ -125,7 +125,7 @@ inline bool is_zip_signature( void* ptr, size_t size=0 )
 inline bool is_7zip_file( const path& file_path )
 {
 	FILE* fp = _wfopen(file_path.c_str(),L"rb"); if(!fp) return false;
-	_fseeki64(fp,0,SEEK_END); size_t size=_ftelli64(fp); _fseeki64(fp,0,SEEK_SET);
+	_fseeki64(fp,0,SEEK_END); size_t size=size_t(_ftelli64(fp)); _fseeki64(fp,0,SEEK_SET);
 	unsigned char t[6]={}; if(size>=sizeof(t)) fread(t,1,sizeof(t),fp); fclose(fp);
 	return is_7zip_signature(t,size);
 }
@@ -133,7 +133,7 @@ inline bool is_7zip_file( const path& file_path )
 inline bool is_zip_file( const path& file_path )
 {
 	FILE* fp = _wfopen(file_path.c_str(),L"rb"); if(!fp) return false;
-	_fseeki64(fp,0,SEEK_END); size_t size=_ftelli64(fp); _fseeki64(fp,0,SEEK_SET);
+	_fseeki64(fp,0,SEEK_END); size_t size=size_t(_ftelli64(fp)); _fseeki64(fp,0,SEEK_SET);
 	unsigned char t[6]={}; if(size>=sizeof(t)) fread(t,1,sizeof(t),fp); fclose(fp);
 	return is_zip_signature(t,size);
 }
@@ -187,7 +187,8 @@ __noinline unsigned int crc32c_hw( const void* buff, size_t size, unsigned int c
 	for(;size>=sizeof(uint8_t);size-=sizeof(uint8_t),b+=sizeof(uint8_t)) c=_mm_crc32_u8((uint32_t)c,*(uint8_t*)b);
 	return uint32_t(~c);
 }
-inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ static unsigned int(*pcrc32c)(const void*,size_t,unsigned int)=os::cpu::has_sse42()?crc32c_hw:tcrc32<0x82f63b78UL>; return pcrc32c(buff,size,crc0); }
+inline bool __has_sse42(){ static bool b=false; if(!b){int r[4]={};__cpuid(r,1);b=(((r[2]>>20)&1)==1);} return b; }
+inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ static unsigned int(*pcrc32c)(const void*,size_t,unsigned int)=__has_sse42()?crc32c_hw:tcrc32<0x82f63b78UL>; return pcrc32c(buff, size, crc0); }
 #endif
 
 inline unsigned int crc32c( sized_ptr_t<void> p, unsigned int crc0=0 ){ return crc32c((const void*)p.ptr,p.size,crc0); }
