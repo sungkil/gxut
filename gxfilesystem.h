@@ -347,6 +347,7 @@ struct path
 	bool write_file( sized_ptr_t<void> p ) const { return p.ptr&&p.size?write_file(p.ptr,p.size):false; }
 	bool write_file( const char* s ) const;
 	bool write_file( const wchar_t* s ) const;
+	bool is_binary_file() const	{ FILE* f = _wfopen(_data,L"rb"); if(!f) return false; char b[4096]; while(1){ size_t n=fread(b,1,sizeof(b),f); if(!n) break; if(memchr(b,0,n)){fclose(f);return true;} } fclose(f); return false; }
 
 	// temporary directories
 	static path temp( bool local=true, path local_dir=L"" ); // local_dir is used only when local is true
