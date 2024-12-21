@@ -49,22 +49,21 @@ struct mem_t : sized_ptr_t<void>
 	template <class T> __forceinline operator T* (){ return (T*) ptr; }
 };
 
-template <class T> struct mmap // memory-mapped file (similar to virtual memory)
+template <class T,bool readonly=false> struct mmap // memory-mapped file (similar to virtual memory)
 {
 	T*		ptr=nullptr; // last mapped ptr
 	size_t	size=0;
 	
-	mmap( size_t n ):b_readonly(false),size(n){ size_t s=size*sizeof(T); hFileMap=CreateFileMappingW( INVALID_HANDLE_VALUE /* use pagefile */, nullptr, PAGE_READWRITE, DWORD(s>>32), DWORD(s&0xffffffff), _uname() ); }
-	mmap( const wchar_t* file_path ):b_readonly(true) /* if n>0 or n != existing file size, a new file with n is created */ { struct _stat st={}; if(_waccess(file_path,0)!=0) return; _wstat(file_path,&st); size_t file_size=st.st_size; if(file_size==0) return; size=file_size/sizeof(T); hFile=CreateFileW(file_path,GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_FLAG_RANDOM_ACCESS,nullptr); if(hFile==INVALID_HANDLE_VALUE){size=0;return;} size_t memsize=sizeof(T)*size; hFileMap=CreateFileMappingW(hFile,nullptr,PAGE_READONLY,DWORD(uint64_t(memsize)>>32),DWORD(memsize&0xffffffff),nullptr); if(hFileMap==INVALID_HANDLE_VALUE){size=0;CloseHandle(hFile);hFile=nullptr;return;} }
+	mmap( size_t n ):size(n){ size_t s=size*sizeof(T); hFileMap=CreateFileMappingW( INVALID_HANDLE_VALUE /* use pagefile */, nullptr, PAGE_READWRITE, DWORD(s>>32), DWORD(s&0xffffffff), _uname() ); }
+	mmap( const wchar_t* file_path){ struct _stat st={}; if(_waccess(file_path,0)!=0) return; _wstat(file_path,&st); size_t file_size=st.st_size; size=file_size/sizeof(T); if(file_size==0) return; hFile=CreateFileW(file_path,GENERIC_READ|(readonly?0:GENERIC_WRITE), FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_RANDOM_ACCESS, nullptr); if(hFile==INVALID_HANDLE_VALUE){size=0;return;} size_t memsize=sizeof(T)*size; hFileMap=CreateFileMappingW(hFile,nullptr,readonly?PAGE_READONLY:PAGE_READWRITE,DWORD(uint64_t(memsize)>>32),DWORD(memsize&0xffffffff),nullptr); if(hFileMap==INVALID_HANDLE_VALUE){size=0;CloseHandle(hFile);hFile=nullptr;return;} }
 	virtual ~mmap(){ if(!empty()&&ptr){ FlushViewOfFile(ptr,0); UnmapViewOfFile(ptr); ptr=nullptr; } if(hFileMap!=INVALID_HANDLE_VALUE) CloseHandle(hFileMap); hFileMap=INVALID_HANDLE_VALUE; if(hFile!=INVALID_HANDLE_VALUE) CloseHandle(hFile); hFile=INVALID_HANDLE_VALUE; }
 	bool empty() const { return hFile==INVALID_HANDLE_VALUE||hFileMap==INVALID_HANDLE_VALUE||size==0; }
-	T* map( size_t offset=0, size_t n=0 ){ if(empty()) return nullptr; size_t s=offset*sizeof(T); return ptr=(T*)MapViewOfFile(hFileMap,FILE_MAP_READ|(b_readonly?0:FILE_MAP_WRITE),DWORD(uint64_t(s)>>32),DWORD(s&0xffffffff),(n?n:size)*sizeof(T)); }
+	T* map( size_t offset=0, size_t n=0 ){ if(empty()) return nullptr; size_t s=offset*sizeof(T); return ptr=(T*)MapViewOfFile(hFileMap,FILE_MAP_READ|(readonly?0:FILE_MAP_WRITE),DWORD(uint64_t(s)>>32),DWORD(s&0xffffffff),(n?n:size)*sizeof(T)); }
 	void unmap( T* p=nullptr ){ T* t=p?p:ptr; if(empty()||!t) return; FlushViewOfFile(t,0); UnmapViewOfFile(t); }
 
 protected:
 	HANDLE hFile = INVALID_HANDLE_VALUE;		// handle to the file (INVALID_HANDLE_VALUE means pagefile)
 	HANDLE hFileMap = INVALID_HANDLE_VALUE;		// handle to the file mapping
-	const bool b_readonly; // should be initialized in constructors, depending on if file is provided
 	static const wchar_t* _uname(){ static wchar_t fileName[256]; SYSTEMTIME s; GetSystemTime( &s ); wsprintfW( fileName, L"%p%02d%02d%02d%02d%04d%05d", GetCurrentThreadId(), s.wDay, s.wHour, s.wMinute, s.wSecond, s.wMilliseconds, rand() ); return fileName; } // make unique file name
 };
 
