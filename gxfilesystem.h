@@ -413,7 +413,7 @@ template<> __noinline sized_ptr_t<wchar_t> path::read_file<wchar_t>() const
 {
 	sized_ptr_t<wchar_t> p={nullptr,0};
 	FILE* fp=fopen(L"r",true); if(!fp) return {nullptr,0};
-	size_t size0 = file_size(fp); if(!size0){ fclose(fp); return {(wchar_t*)L"", 0}; }
+	size_t size0 = file_size(fp); if(!size0){ fclose(fp); p.ptr=(wchar_t*)L""; return p; }
 
 	std::wstring buffer; buffer.reserve(size0*2);
 	wchar_t buff[4096]; while(fgetws(buff,4096,fp)) buffer+=buff; fclose(fp);
@@ -428,7 +428,7 @@ template<> __noinline sized_ptr_t<char> path::read_file<char>() const
 {
 	sized_ptr_t<char> p={nullptr,0};
 	FILE* fp=fopen(L"r"); if(!fp) return {nullptr,0};
-	size_t size0 = file_size(fp); if(!size0){ fclose(fp); return {(char*)"", 0}; }
+	size_t size0 = file_size(fp); if(!size0){ fclose(fp); p.ptr=(char*)""; return p; }
 
 	std::string buffer; buffer.reserve(size0*2);
 	char buff[4096]; while(fgets(buff,4096,fp)) buffer+=buff; fclose(fp);
@@ -441,7 +441,7 @@ template<> __noinline sized_ptr_t<char> path::read_file<char>() const
 
 __noinline std::wstring path::read_file() const
 {
-	sized_ptr_t<wchar_t> p=read_file<wchar_t>(); if(!p) return L"";
+	sized_ptr_t<wchar_t> p=read_file<wchar_t>(); if(!p||!p.size) return L"";
 	std::wstring s=p.ptr; free(p.ptr); return s;
 }
 
