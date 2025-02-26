@@ -2,17 +2,15 @@
 #ifndef __GX_INET_H__
 #define __GX_INET_H__
 
-#ifdef __has_include
-	#if __has_include("gxfilesystem.h")
-		#include "gxstring.h"
-		#include "gxfilesystem.h"
-	#elif __has_include("../gxfilesystem.h")
-		#include "../gxstring.h"
-		#include "../gxfilesystem.h"
-	#elif __has_include(<gxut/gxfilesystem.h>)
-		#include <gxut/gxstring.h>
-		#include <gxut/gxfilesystem.h>
-	#endif
+#if __has_include("gxfilesystem.h")
+	#include "gxstring.h"
+	#include "gxfilesystem.h"
+#elif __has_include("../gxfilesystem.h")
+	#include "../gxstring.h"
+	#include "../gxfilesystem.h"
+#elif __has_include(<gxut/gxfilesystem.h>)
+	#include <gxut/gxstring.h>
+	#include <gxut/gxfilesystem.h>
 #endif
 
 #include <winsock2.h>
@@ -34,14 +32,14 @@ inline bool is_offline(){ return !is_online(); }
 struct file_t
 {
 	HINTERNET		hfile=nullptr;
-	std::wstring	url;		// source url
+	std::string		url;		// source url
 	path			tmp, dst;	// temporary and final target path; sequetially download and copy
 	size_t			file_size=0;
 	FILETIME		mfiletime={};
 
 	virtual ~file_t(){ release(); }
 	void release(){ if(!hfile) return; InternetCloseHandle(hfile); hfile=nullptr; }
-	bool open( HINTERNET session, const wchar_t* url );
+	bool open( HINTERNET session, const char* url );
 	bool get_file_size( HINTERNET session );
 };
 
@@ -50,23 +48,23 @@ struct session_t
 	HINTERNET handle = nullptr;
 
 	virtual ~session_t(){ release(); }
-	session_t(){ if(!is_online()) return; handle=InternetOpenW( path::module_path().name().c_str(),INTERNET_OPEN_TYPE_PRECONFIG,0,0,0); }
+	session_t(){ if(!is_online()) return; handle=InternetOpenW( path::module_path().wname(),INTERNET_OPEN_TYPE_PRECONFIG,0,0,0); }
 	void release(){ if(!handle) return; InternetCloseHandle(handle); handle=nullptr; }
 	operator bool() const { return handle!=nullptr; }
 
-	inline bool download( std::wstring url, path dst ){ return download(std::vector<std::wstring>{url},dst); }
-	bool download( std::vector<std::wstring> urls, path dst );
+	inline bool download( std::string url, path dst ){ return download(std::vector<std::string>{url},dst); }
+	bool download( std::vector<std::string> urls, path dst );
 
 protected:
-	bool download_thread_func( std::vector<std::wstring> urls, path dst );
+	bool download_thread_func( std::vector<std::string> urls, path dst );
 };
 
-__noinline bool file_t::open( HINTERNET session, const wchar_t* url )
+__noinline bool file_t::open( HINTERNET session, const char* url )
 {
-	if(!session){ fprintf( stdout, "%s(%s): session==nullptr", __func__, wtoa(url) ); return false; }
+	if(!session){ fprintf( stdout, "%s(%s): session==nullptr", __func__, url ); return false; }
 
 	wchar_t canonical_url[4096]; DWORD dwSize=4096;
-	InternetCanonicalizeUrlW( url, canonical_url, &dwSize, ICU_BROWSER_MODE );
+	InternetCanonicalizeUrlW( atow(url), canonical_url, &dwSize, ICU_BROWSER_MODE );
 
 	static const DWORD flags = INTERNET_FLAG_TRANSFER_BINARY|INTERNET_FLAG_RELOAD|INTERNET_FLAG_NO_CACHE_WRITE; // INTERNET_FLAG_PRAGMA_NOCACHE
 	release(); hfile=InternetOpenUrlW( session, canonical_url, 0, 0, flags, 0); if(!hfile){ release(); return false; }
@@ -88,7 +86,7 @@ __noinline bool file_t::get_file_size( HINTERNET session )
 	return true;
 }
 
-__noinline bool session_t::download_thread_func( std::vector<std::wstring> urls, path dst )
+__noinline bool session_t::download_thread_func( std::vector<std::string> urls, path dst )
 {
 	if(!handle) return false;
 
@@ -104,11 +102,11 @@ __noinline bool session_t::download_thread_func( std::vector<std::wstring> urls,
 		// server-local time difference can be up to several seconds
 		if(b_dst_exists&&!FileTimeGreater(f.mfiletime,f0)) return false; // older url file exists
 		
-		if(!f.get_file_size(handle)){ fprintf(stdout,"error: unable to get file size %s\n", dst.name().wtoa() );return false;} // now try to get the file size
+		if(!f.get_file_size(handle)){ fprintf(stdout,"error: unable to get file size %s\n", dst.aname() );return false;} // now try to get the file size
 		std::vector<char> buffer(f.file_size);
 		
 		if(!dst.dir().exists()) dst.dir().mkdir();
-		FILE* fp = dst.fopen("wb"); if(!fp){ fprintf(stdout,"error: unable to open %s\n", dst.name().wtoa());return false;}
+		FILE* fp = dst.fopen("wb"); if(!fp){ fprintf(stdout,"error: unable to open %s\n", dst.aname());return false;}
 		DWORD dw_size, dw_read; do
 		{
 			InternetQueryDataAvailable(f.hfile, &dw_size, 0, 0);
@@ -121,7 +119,7 @@ __noinline bool session_t::download_thread_func( std::vector<std::wstring> urls,
 		// modify the time stamp
 		FILETIME fnow=now();
 		dst.set_filetime(&fnow,&fnow,&f.mfiletime);
-		// fprintf( stdout, "%s\n", dst.name().wtoa() );
+		// fprintf( stdout, "%s\n", dst.aname() );
 
 		return true;
 	}
@@ -129,7 +127,7 @@ __noinline bool session_t::download_thread_func( std::vector<std::wstring> urls,
 	return false;
 }
 
-__noinline bool session_t::download( std::vector<std::wstring> urls, path dst )
+__noinline bool session_t::download( std::vector<std::string> urls, path dst )
 {
 	if(is_offline()||!handle||urls.empty()||dst.empty()) return false;
 	auto t=std::async(std::launch::async,&session_t::download_thread_func,this,urls,dst);
@@ -144,7 +142,7 @@ __noinline const char* get_registered_ip_address()
 	static char* buff=nullptr; if(buff) return buff; buff=(char*)malloc(1024*sizeof(char));
 	WSADATA wsadata; if(WSAStartup(MAKEWORD(2,2), &wsadata)!=0) return nullptr;
 	DWORD dns[]={1,1111}; if(!inet_pton(AF_INET,"208.67.222.222",(struct sockaddr_in*)&dns[1])) return nullptr;
-	PDNS_RECORD rec; if(DnsQuery_A("myip.opendns.com",DNS_TYPE_A,DNS_QUERY_BYPASS_CACHE,dns,&rec,nullptr)!=0||!rec) return nullptr;
+	PDNS_RECORD rec; if(DnsQuery_W(L"myip.opendns.com",DNS_TYPE_A,DNS_QUERY_BYPASS_CACHE,dns,&rec,nullptr)!=0||!rec) return nullptr;
 	if(rec&&buff&&!inet_ntop(AF_INET,(struct sockaddr_in*)&rec->Data.A.IpAddress,buff,1024)) return nullptr;
 	DnsFree(rec, DnsFreeRecordList);
 	return buff;

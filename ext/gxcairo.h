@@ -32,19 +32,15 @@
 
 //***********************************************
 // cairo.h
-#ifdef __has_include
-	#if __has_include("cairo.h")
-		#include "cairo.h"
-	#elif __has_include("../cairo/cairo.h")
-		#include "../cairo/cairo.h"
-	#elif __has_include("../../cairo/cairo.h")
-		#include "../../cairo/cairo.h"
-	#elif __has_include(<cairo/cairo.h>)
-		#include <cairo/cairo.h>
-	#elif __has_include(<cairo.h>)
-		#include <cairo.h>
-	#endif
-#else
+#if __has_include("cairo.h")
+	#include "cairo.h"
+#elif __has_include("../cairo/cairo.h")
+	#include "../cairo/cairo.h"
+#elif __has_include("../../cairo/cairo.h")
+	#include "../../cairo/cairo.h"
+#elif __has_include(<cairo/cairo.h>)
+	#include <cairo/cairo.h>
+#elif __has_include(<cairo.h>)
 	#include <cairo.h>
 #endif
 

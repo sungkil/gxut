@@ -3,10 +3,11 @@
 #include <shellapi.h>
 #include <gxut/gxfilesystem.h>
 #include <gxut/gxos.h>
+#include <gxut/gxtimer.h>
 #include <gxut/ext/gxzip.h>
 #include <gxut/ext/gxobjparser.h>
 #include <future> // std::async
-#if defined(__has_include) && __has_include(<fgets_sse2/fgets_sse2_slee.h>)
+#if __has_include(<fgets_sse2/fgets_sse2_slee.h>)
 	#include <fgets_sse2/fgets_sse2_slee.h>
 #endif
 
@@ -20,14 +21,14 @@ extern const char* __GX_MTLPARSER_CPP_TIMESTAMP__;
 namespace obj {
 //*************************************
 
-static const std::set<std::wstring>& get_archive_extensions()
+static const std::set<std::string>& get_archive_extensions()
 {
-	static std::set<std::wstring> m; if(!m.empty()) return m;
+	static std::set<std::string> m; if(!m.empty()) return m;
 #if defined(__7Z_H) && defined(__7Z_MEMINSTREAM_H)
-	m.insert(L"7z");
+	m.insert("7z");
 #endif
 #if defined(_unzip_H)||defined(__GXZIP_H__)
-	m.insert(L"zip");
+	m.insert("zip");
 #endif
 	return m;
 }
@@ -55,7 +56,7 @@ __forceinline char tolower( char c ){ uchar d=static_cast<uchar>(c-'A');return d
 __forceinline path decompress( const path& file_path );
 __forceinline bool is_extension_supported( path file_path )
 {
-	if(_wcsicmp(file_path.ext(),L"obj")==0) return true;
+	if(file_path.ext()=="obj") return true;
 	const auto& am = get_archive_extensions(); if(am.find(file_path.ext().c_str())!=am.end()) return true;
 	return false;
 }
@@ -97,7 +98,7 @@ namespace obj::cache
 			std::string(__GX_OBJPARSER_CPP_TIMESTAMP__)+
 			std::string(__GX_MTLPARSER_CPP_TIMESTAMP__);
 		std::string s = codestamp+file_path.mtimestamp();
-		for( auto& f : file_path.dir().absolute().scan( L"obj;mtl;7z;zip;jpg;jpeg;png;hdr" ) )
+		for( auto& f : file_path.dir().absolute().scan( "obj;mtl;7z;zip;jpg;jpeg;png;hdr" ) )
 			s += f.mtimestamp();
 		return uint64_t(std::hash<std::string>{}(s));
 	}
@@ -108,25 +109,25 @@ namespace obj::cache
 		path mesh_path=p_mesh->file_path, mtl_path=p_mesh->mtl_path; if(mesh_path.empty()||!mesh_path.exists()) return;
 		path mesh_cache_path = obj::cache::get_path(mesh_path);
 		bool r = mesh_cache_path.exists()&&mesh_cache_path.delete_file(false);
-		if(r&&b_log) wprintf( L"deleted %s\n", mesh_cache_path.c_str() );
+		if(r&&b_log) printf( "deleted %s\n", mesh_cache_path.c_str() );
 
-		path bton_path = p_mesh?obj::cache::get_path(mtl_path).replace_extension(L"bton"):path();
+		path bton_path = p_mesh?obj::cache::get_path(mtl_path).replace_extension("bton"):path();
 		r = bton_path.exists()&&bton_path.delete_file(false);
-		if(r&&b_log) wprintf( L"deleted %s\n", bton_path.c_str() );
+		if(r&&b_log) printf( "deleted %s\n", bton_path.c_str() );
 	}
 
 	inline void save_mesh( mesh* p_mesh )
 	{
 		path file_path = path(p_mesh->file_path);
 		path cache_path = get_path(file_path);
-		FILE* fp = _wfopen( cache_path, L"w" ); if(!fp){ wprintf(L"Unable to write %s\n",cache_path.c_str()); return; }
+		FILE* fp = cache_path.fopen("w"); if(!fp){ printf("Unable to write %s\n",cache_path.c_str()); return; }
 
 		// save the parser's id to reflect the revision of the parser and mesh's timestamp
 		fprintf( fp, "parserid = %llu\n", get_parser_id(file_path) );
 
 		// save mtl path
 		path mtl_path = file_path.dir()+p_mesh->mtl_path;
-		fprintf( fp, "mtllib = %s\n", wcslen(p_mesh->mtl_path)==0?"default":wtoa(p_mesh->mtl_path) );
+		fprintf( fp, "mtllib = %s\n", strlen(p_mesh->mtl_path)==0?"default":p_mesh->mtl_path );
 
 		// save counters
 		fprintf( fp, "object_count = %u\n", uint(p_mesh->objects.size()) );
@@ -141,7 +142,7 @@ namespace obj::cache
 		for( uint k=0; k < p_mesh->objects.size(); k++ )
 		{
 			object& obj = p_mesh->objects[k]; const bbox& b=obj.box;
-			fprintf( fp, "o[%d] %s ", k, obj.name );
+			fprintf( fp, "o[%u] %s ", k, obj.name );
 			fprintf( fp, "%f %f %f %f %f %f", b.m[0], b.m[1], b.m[2], b.M[0], b.M[1], b.M[2] );
 			fprintf( fp, "\n" );
 		}
@@ -150,7 +151,7 @@ namespace obj::cache
 		for( uint k=0; k < p_mesh->geometries.size(); k++ )
 		{
 			auto& g = p_mesh->geometries[k]; const bbox& b=g.box;
-			fprintf( fp, "g[%d] %d %d %d %d ", k, g.object_index, g.material_index, g.first_index, g.count );
+			fprintf( fp, "g[%u] %u %u %u %u ", k, g.object_index, g.material_index, g.first_index, g.count );
 			fprintf( fp, "%f %f %f %f %f %f", b.m[0], b.m[1], b.m[2], b.M[0], b.M[1], b.M[2] );
 			fprintf( fp, "\n" );
 		}
@@ -160,7 +161,7 @@ namespace obj::cache
 
 		// 7.1 close file and reopen as a binary mode: writing must be done in binary mode !!!!
 		fclose(fp); _flushall();
-		fp = _wfopen( cache_path, L"ab" );	// attach + binary mode
+		fp = cache_path.fopen("ab");	// attach + binary mode
 
 		// 7.2 save vertex and index list
 		fwrite( &p_mesh->vertices[0], sizeof(vertex), p_mesh->vertices.size(), fp );
@@ -173,7 +174,7 @@ namespace obj::cache
 	inline mesh* load_mesh( path file_path )
 	{
 		path cache_path = get_path(file_path); if(!cache_path.exists()) return nullptr;
-		FILE* fp = _wfopen( cache_path, L"rb" ); if(!fp) return nullptr;
+		FILE* fp = cache_path.fopen("rb"); if(!fp) return nullptr;
 
 		// get parser id
 		uint64_t parserid;
@@ -182,18 +183,18 @@ namespace obj::cache
 
 		// get the mtl name
 		char mtl_name[1024]; fgets(buff,8192,fp); sscanf( buff, "mtllib = %s\n", mtl_name );
-		path mtl_path0=path(file_path).dir() + atow(mtl_name), mtl_path=mtl_path0;
-		if(!mtl_path.exists()&&mtl_path!=L"default")
+		path mtl_path0=path(file_path).dir()+mtl_name, mtl_path=mtl_path0;
+		if(!mtl_path.exists()&&mtl_path!="default")
 		{
-			mtl_path = file_path.replace_extension(L"mtl");
+			mtl_path = file_path.replace_extension("mtl");
 			if(!mtl_path.exists()){ fclose(fp); return nullptr; } // mtl not exists
-			printf("%s is used instead of missing %s\n", mtl_path.name().wtoa(), mtl_path0.name().wtoa());
+			printf("%s is used instead of missing %s\n", mtl_path.aname(), mtl_path0.aname());
 		}
 
 		// now create mesh
 		mesh* p_mesh = new mesh();
-		wcscpy(p_mesh->file_path,file_path);
-		wcscpy(p_mesh->mtl_path,mtl_path.exists()?atow(mtl_name):L"default");
+		strcpy(p_mesh->file_path,file_path.c_str());
+		strcpy(p_mesh->mtl_path,mtl_path.exists()?mtl_name:"default");
 		
 		// load materials
 		if(mtl_path.exists()&&!mtl::load_mtl(mtl_path, p_mesh->materials, true )){ delete p_mesh; return nullptr; }
@@ -216,8 +217,8 @@ namespace obj::cache
 		for( uint k=0; k < object_count; k++ )
 		{
 			object* obj = p_mesh->create_object("");
-			vec3 &m=obj->box.m, &M=obj->box.M;
-			fgets(buff,8192,fp);sscanf(buff,"o[%d] %s %f %f %f %f %f %f\n", &obj->ID,obj->name,&m[0],&m[1],&m[2],&M[0],&M[1],&M[2]);
+			vec3 &bm=obj->box.m, &bM=obj->box.M;
+			fgets(buff,8192,fp);sscanf(buff,"o[%u] %s %f %f %f %f %f %f\n", &obj->ID,obj->name,&bm[0],&bm[1],&bm[2],&bM[0],&bM[1],&bM[2]);
 		}
 
 		// load geometries
@@ -225,8 +226,8 @@ namespace obj::cache
 		for( uint k=0; k < geometry_count; k++ )
 		{
 			geometry g(p_mesh,uint(p_mesh->geometries.size()),-1,0,0,nullptr,-1);
-			vec3 &m=g.box.m, &M=g.box.M;
-			fgets(buff,8192,fp); sscanf(buff,"g[%d] %d %d %d %d %f %f %f %f %f %f\n", &g.ID, &g.object_index, &g.material_index, &g.first_index, &g.count, &m[0],&m[1],&m[2],&M[0],&M[1],&M[2] );
+			vec3 &bm=g.box.m, &bM=g.box.M;
+			fgets(buff,8192,fp); sscanf(buff,"g[%u] %u %u %u %u %f %f %f %f %f %f\n", &g.ID, &g.object_index, &g.material_index, &g.first_index, &g.count, &bm[0],&bm[1],&bm[2],&bM[0],&bM[1],&bM[2] );
 			p_mesh->geometries.emplace_back(g);
 			p_mesh->objects[g.object_index].geometries.emplace_back(g.ID);
 		}
@@ -251,23 +252,23 @@ path obj::decompress( const path& file_path )
 {
 	path dst_path;
 #if defined(__GXZIP_H__)||defined(_unzip_H)
-	if(_wcsicmp(file_path.ext(),L"zip")==0)
+	if(file_path.ext()=="zip")
 	{
 		zip_t z(file_path);
-		if(!z.load()||z.entries.empty()){ printf("%s(): unabled to load %s",__func__,file_path.wtoa()); return dst_path; }
-		if(z.entries.size()!=1){ printf("%s(): have only a single file for mesh in %s\n",__func__,file_path.wtoa() ); return dst_path; }
-		dst_path = cache::get_dir()+z.entries.front().name;
+		if(!z.load()||z.entries.empty()){ printf("%s(): unabled to load %s",__func__,file_path.c_str()); return dst_path; }
+		if(z.entries.size()!=1){ printf("%s(): have only a single file for mesh in %s\n",__func__,file_path.c_str() ); return dst_path; }
+		dst_path = cache::get_dir()+wtoa(z.entries.front().name);
 		if(dst_path.exists()) dst_path.delete_file();
 		if(!z.extract_to_files(dst_path.dir())) return path();
 	}
 #endif
 #if defined(__7Z_H) && defined(__7Z_MEMINSTREAM_H)
-	if(_wcsicmp(file_path.ext(),L"7z")==0)
+	if(file_path.ext()=="7z")
 	{
 		szip_t s(file_path);
-		if(!s.load()||s.entries.empty()){ printf("%s(): unabled to load %s",__func__,file_path.wtoa()); return dst_path; }
-		if(s.entries.size()!=1){ printf("%s(): have only a single file for mesh in %s\n",__func__,file_path.wtoa() ); return dst_path; }
-		dst_path = cache::get_dir()+s.entries.front().name;
+		if(!s.load()||s.entries.empty()){ printf("%s(): unabled to load %s",__func__,file_path.c_str()); return dst_path; }
+		if(s.entries.size()!=1){ printf("%s(): have only a single file for mesh in %s\n",__func__,file_path.c_str() ); return dst_path; }
+		dst_path = cache::get_dir()+wtoa(s.entries.front().name);
 		if(dst_path.exists()) dst_path.delete_file();
 		if(!s.extract_to_files(dst_path.dir())) return path();
 	}
@@ -333,11 +334,11 @@ namespace obj {
 
 mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const char*) )
 {
-	os::timer_t t; t.begin();
+	gx::timer_t t; t.begin();
 	mesh* p_mesh = nullptr;	
 
-	if(!is_extension_supported(file_path)){ printf("obj::%s(): unsupported format: %s\n",__func__, file_path.ext().wtoa()); return nullptr; }
-	if(!file_path.exists()){ printf("obj::%s(): %s not exists",__func__,file_path.wtoa()); return nullptr; }
+	if(!is_extension_supported(file_path)){ printf("obj::%s(): unsupported format: %s\n",__func__, file_path.ext().c_str()); return nullptr; }
+	if(!file_path.exists()){ printf("obj::%s(): %s not exists",__func__,file_path.c_str()); return nullptr; }
 
 	//*********************************
 	// 1. if there is a cache, load from cache
@@ -354,13 +355,13 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	bool b_use_archive = archive_extensions.find(file_path.ext().c_str())!=archive_extensions.end();
 	if(b_use_archive)
 	{
-		if(flush_messages) flush_messages( format( "Decompressing %s ...", file_path.name().wtoa() ) );
-		wprintf( L"Decompressing %s ...", file_path.name().c_str() );
+		if(flush_messages) flush_messages( format( "Decompressing %s ...", file_path.aname() ) );
+		printf( "Decompressing %s ...", file_path.aname() );
 		auto dt = std::async(obj::decompress,file_path);
 		while(std::future_status::ready!=dt.wait_for(std::chrono::milliseconds(10))) if(flush_messages) flush_messages(nullptr);
 		dec_path = dt.get();
-		if(!dec_path.empty()) wprintf( L" completed in %.0f ms\n", t.end() );
-		else{ wprintf( L" failed in %.0f ms\n", t.end() ); return nullptr; }
+		if(!dec_path.empty()) printf( " completed in %.0f ms\n", t.end() );
+		else{ printf( " failed in %.0f ms\n", t.end() ); return nullptr; }
 	}
 
 	//*********************************
@@ -374,14 +375,14 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	auto log_begin = [&]()
 	{
 		if(!b_log_begin) return; b_log_begin=false;
-		wprintf( L"Loading %s ...", target_file_path.name().c_str() );
+		printf( "Loading %s ...", target_file_path.aname() );
 	};
 
-	FILE* fp = _wfopen( target_file_path, L"rb" ); if(fp==nullptr){ wprintf(L"Unable to open %s", file_path.c_str()); return nullptr; }
+	FILE* fp = target_file_path.fopen("rb"); if(fp==nullptr){ printf("Unable to open %s", file_path.c_str()); return nullptr; }
 	setvbuf( fp, nullptr, _IOFBF, 1llu<<26 ); // set the buffer size of iobuf to 64M
 
 	p_mesh = new mesh();
-	wcscpy(p_mesh->file_path,file_path);
+	strcpy(p_mesh->file_path,file_path.c_str());
 
 	//*********************************
 	// 4. current data setup
@@ -419,7 +420,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 
 	//*********************************
 	// start logging in case that there is no material
-	if(file_path.dir().scan<false>(L"mtl").empty()) log_begin(); 
+	if(file_path.dir().scan<false>("mtl").empty()) log_begin(); 
 
 	//*********************************
 	// string buffers
@@ -519,14 +520,14 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 		{
 			if(!p_mesh->mtl_path[0]) // load material only once
 			{
-				path mtl_path0=path(file_path).dir() + atow(trim(buff)), mtl_path=mtl_path0;
+				path mtl_path0=path(file_path).dir()+trim(buff), mtl_path=mtl_path0;
 				if(!mtl_path.exists())
 				{
-					mtl_path = file_path.replace_extension(L"mtl");
-					if(mtl_path.exists()) printf("%s is used instead of missing %s\n", mtl_path.name().wtoa(), mtl_path0.name().wtoa());
+					mtl_path = file_path.replace_extension("mtl");
+					if(mtl_path.exists()) printf("%s is used instead of missing %s\n", mtl_path.aname(), mtl_path0.aname());
 				}
-				if(!mtl::load_mtl(mtl_path, p_mesh->materials)){ printf("unable to load %s\n",mtl_path0.to_slash().wtoa()); return nullptr; }
-				wcscpy( p_mesh->mtl_path, mtl_path.relative(path(file_path).dir()) );
+				if(!mtl::load_mtl(mtl_path, p_mesh->materials)){ printf("unable to load %s\n",mtl_path0.slash()); return nullptr; }
+				strcpy( p_mesh->mtl_path, mtl_path.relative(path(file_path).dir()).c_str() );
 				
 				// postprocessing
 				if(!p_mesh->materials.empty()) mat_index = p_mesh->materials.size()>1?1:0; // default material
@@ -556,7 +557,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 
 	// update child geometries once again after removing empty geometries
 	for( auto& obj : p_mesh->objects )	obj.geometries.clear();
-	for( auto& g : p_mesh->geometries )	p_mesh->objects[g.object_index].geometries.emplace_back(g.ID);
+	for( auto& j : p_mesh->geometries )	p_mesh->objects[j.object_index].geometries.emplace_back(j.ID);
 
 	// clear all temporary large-memory buffers
 	obj::pos.clear();	obj::pos.shrink_to_fit();
@@ -580,7 +581,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	{
 		vec3 center = p_mesh->box.center();
 		for( auto& v : p_mesh->vertices ) v.pos = (v.pos-center)*1000.0f+center;
-		for( auto& g : p_mesh->geometries ){ g.box.m=(g.box.m-center)*1000.0f+center;g.box.M=(g.box.M-center)*1000.0f+center; }
+		for( auto& j : p_mesh->geometries ){ j.box.m=(j.box.m-center)*1000.0f+center;j.box.M=(j.box.M-center)*1000.0f+center; }
 		p_mesh->update_bound(false);
 	}
 
@@ -590,7 +591,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	if(p_mesh->materials.empty()) // at least, it's one due to light source material
 	{
 		mtl::create_default_material( p_mesh->materials );
-		for( auto& g: p_mesh->geometries ) g.material_index = 0;
+		for( auto& j: p_mesh->geometries ) j.material_index = 0;
 	}
 
 	// create lights based on the materials

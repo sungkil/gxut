@@ -7,31 +7,29 @@
 #define SOL_SAFE_REFERENCES	1
 #define SOL_SAFE_FUNCTION	1
 
-#if defined(__has_include)
-	#if !defined(__GXUT_H__) && __has_include(<gxut/gxut.h>)
-		#include <gxut/gxut.h>
-	#endif
-	#if !defined(__REX_H__) && __has_include(<rex.h>)
-		#include <rex.h>
-	#endif
-	#if __has_include("sol/sol.hpp")
-		#include "sol/sol.hpp"
-	#elif __has_include("../lua/sol/sol.hpp")
-		#include "../lua/sol/sol.hpp"
-	#elif __has_include("../../lua/sol/sol.hpp")
-		#include "../../lua/sol/sol.hpp"
-	#elif __has_include(<lua/sol/sol.hpp>)
-		#include <lua/sol/sol.hpp>
-	#elif __has_include(<lua/sol.hpp>)
-		#include <lua/sol.hpp>
-	#elif __has_include(<sol/sol.hpp>)
-		#include <sol/sol.hpp>
-	#elif // no sol is defined: fallback to regular lua
-		#pragma comment( lib, "lua" )
-		#include "Lua/lua.h"
-		#include "Lua/lauxlib.h"
-		#include "Lua/lualib.h"
-	#endif
+#if !defined(__GXUT_H__) && __has_include(<gxut/gxut.h>)
+	#include <gxut/gxut.h>
+#endif
+#if !defined(__REX_H__) && __has_include(<rex.h>)
+	#include <rex.h>
+#endif
+#if __has_include("sol/sol.hpp")
+	#include "sol/sol.hpp"
+#elif __has_include("../lua/sol/sol.hpp")
+	#include "../lua/sol/sol.hpp"
+#elif __has_include("../../lua/sol/sol.hpp")
+	#include "../../lua/sol/sol.hpp"
+#elif __has_include(<lua/sol/sol.hpp>)
+	#include <lua/sol/sol.hpp>
+#elif __has_include(<lua/sol.hpp>)
+	#include <lua/sol.hpp>
+#elif __has_include(<sol/sol.hpp>)
+	#include <sol/sol.hpp>
+#elif // no sol is defined: fallback to regular lua
+	#pragma comment( lib, "lua" )
+	#include "Lua/lua.h"
+	#include "Lua/lauxlib.h"
+	#include "Lua/lualib.h"
 #endif
 
 // automatic linking

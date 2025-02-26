@@ -1,17 +1,23 @@
 ﻿#ifndef __GX_STBIMAGE__
 #define __GX_STBIMAGE__
 
+#if __has_include("gxtype.h")
+	#include "gxtype.h"
+#elif __has_include("../gxtype.h")
+	#include "../gxtype.h"
+#elif __has_include(<gxut/gxtype.h>)
+	#include <gxut/gxtype.h>
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 
-#if defined(__has_include)
-	#if __has_include("stb_image.h")
-		#include "stb_image.h"
-	#elif __has_include(<stb_image.h>)
-		#include <stb_image.h>
-	#elif __has_include(<stb/stb_image.h>)
-		#include <stb/stb_image.h>
-	#endif
+#if __has_include("stb_image.h")
+	#include "stb_image.h"
+#elif __has_include(<stb_image.h>)
+	#include <stb_image.h>
+#elif __has_include(<stb/stb_image.h>)
+	#include <stb/stb_image.h>
 #endif
 
 //*************************************
@@ -45,13 +51,12 @@ inline image* create_image( int width, int height, int depth, int channels, unsi
 	return i;
 }
 
-inline image* load_image( const wchar_t* filepath, bool vflip=true, bool force_rgb=true )
+inline image* load_image( const char* file_path, bool vflip=true, bool force_rgb=true )
 {
-	path file_path = path(filepath).absolute(); 
-	if(!file_path.exists()){ printf( "%s(): %s not exists\n", __func__, wtoa(filepath) ); return nullptr; }
+	if(_access(file_path,0)!=0){ printf("%s(): %s not exists\n", __func__, file_path); return nullptr; }
 
 	int width, height, channels; // comp returns the original channels
-	stbi_uc* data = stbi_load( wtoa(file_path), &width, &height, &channels, force_rgb?3:0 ); if(!data) return nullptr;
+	stbi_uc* data = stbi_load( file_path, &width, &height, &channels, force_rgb?3:0); if(!data) return nullptr;
 	
 	// apply 4-byte alignment
 	image* i = gx::create_image(width,height,8,force_rgb?3:channels);

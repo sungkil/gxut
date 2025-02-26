@@ -21,13 +21,11 @@
 // timestamp to indicate struct changes in other files
 static const char* __GX_MESH_H_TIMESTAMP__ = _strdup(__TIMESTAMP__);
 
-#if defined(__has_include)
-	#if __has_include("gxmath.h")
-		#include "gxmath.h"
-	#endif
-	#if __has_include("gxfilesystem.h")
-		#include "gxfilesystem.h"
-	#endif
+#if __has_include("gxmath.h")
+	#include "gxmath.h"
+#endif
+#if __has_include("gxfilesystem.h")
+	#include "gxfilesystem.h"
 #endif
 
 //*************************************
@@ -444,8 +442,8 @@ struct mesh
 	mesh*	proxy=nullptr;		// created and released in GLMesh 
 
 	// auxiliary information
-	wchar_t	file_path[_MAX_PATH]={};	// mesh file path (e.g., *.obj, *.obj.7z)
-	wchar_t	mtl_path[_MAX_PATH]={};		// material file path (e.g., *.mtl)
+	char	file_path[_MAX_PATH]={};	// mesh file path (e.g., *.obj, *.obj.7z)
+	char	mtl_path[_MAX_PATH]={};		// material file path (e.g., *.mtl)
 
 	// crc hash to trigger on_dirty_mesh() callbacks
 	uint	crc = 0;
@@ -467,7 +465,7 @@ struct mesh
 	mesh* create_proxy( bool double_sided=false, bool use_quads=false );	// proxy mesh helpers: e.g., bounding box
 	void update_proxy();													// update existing proxy with newer matrices
 	std::vector<material> pack_materials() const { std::vector<material> p; auto& m=materials; p.resize(m.size()); for(size_t k=0,kn=p.size();k<kn;k++) p[k]=m[k]; return p; }
-	void dump_binary( const wchar_t* dir=L""); // dump the vertex/index buffers as binary files
+	void dump_binary( const char* dir=""); // dump the vertex/index buffers as binary files
 
 	// bound, dynamic, intersection
 	inline bool is_dynamic() const { for(size_t k=0, kn=objects.size()/instance_count; k<kn; k++) if(objects[k].attrib.dynamic) return true; return false; }
@@ -496,7 +494,7 @@ struct mesh
 // volume data format
 struct volume
 {
-	wchar_t	file_path[_MAX_PATH]={};
+	char	file_path[_MAX_PATH]={};
 	uint	width, height, depth;
 	vec3	voxel_size;		// size of a unit voxel
 	uint	format;			// GL_R32F or GL_RGBA32F
@@ -610,7 +608,7 @@ __noinline mesh* mesh::create_proxy( bool double_sided, bool quads )
 	proxy->instance_count = instance_count;
 	proxy->box = box;
 	proxy->acc = acc;	// use the same acceleration structures
-	wcscpy(proxy->file_path, file_path);
+	strcpy(proxy->file_path, file_path);
 
 	// copy objects and correct mesh pointers to proxy
 	for(auto& o:proxy->objects=objects) o.root = proxy;
@@ -655,15 +653,15 @@ __noinline void mesh::update_proxy()
 //*************************************
 // utility
 #ifdef __GX_FILESYSTEM_H__
-inline void mesh::dump_binary( const wchar_t* _dir )
+inline void mesh::dump_binary( const char* _dir )
 {
 	path dir = _dir;
 	if(vertices.empty() || indices.empty()) return;
 	dir = dir.add_backslash(); if(!dir.exists()) dir.mkdir();
-	path vertex_bin_path = dir + path(file_path).name(false).name(false) + L".vertex.bin";
-	path index_bin_path = dir + path(file_path).name(false).name(false) + L".index.bin";
-	FILE* fp = _wfopen(vertex_bin_path, L"wb"); fwrite(&vertices[0], sizeof(vertex), vertices.size(), fp); fclose(fp);
-	fp = _wfopen(index_bin_path, L"wb");  fwrite(&indices[0], sizeof(uint), indices.size(), fp); fclose(fp);
+	path vertex_bin_path = dir + path(file_path).name(false).name(false) + ".vertex.bin";
+	path index_bin_path = dir + path(file_path).name(false).name(false) + ".index.bin";
+	FILE* fp = vertex_bin_path.fopen("wb"); fwrite(&vertices[0], sizeof(vertex), vertices.size(), fp); fclose(fp);
+	fp = index_bin_path.fopen("wb");  fwrite(&indices[0], sizeof(uint), indices.size(), fp); fclose(fp);
 }
 #endif
 

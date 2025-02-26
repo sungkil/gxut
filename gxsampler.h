@@ -18,13 +18,11 @@
 #ifndef __GX_SAMPLER_H__
 #define __GX_SAMPLER_H__
 
-#ifdef __has_include
-	#if __has_include("gxmath.h")
-		#include "gxmath.h"
-	#endif
-	#if __has_include("gxfilesystem.h")
-		#include "gxfilesystem.h"
-	#endif
+#if __has_include("gxmath.h")
+	#include "gxmath.h"
+#endif
+#if __has_include("gxfilesystem.h")
+	#include "gxfilesystem.h"
 #endif
 
 #include <deque>
@@ -59,7 +57,7 @@ struct sampler_t : public isampler_t
 	sampler_t(){ _data.reserve(4096); } // reserve up to 4K samples by default
 	sampler_t( size_t size, bool b_resample=true ){ _data.reserve(4096); _data.resize(const_cast<uint&>(n)=uint(size)); if(b_resample) resample(); }
 
-	bool		dirty() const { return crc!=tcrc32(&model,sizeof(isampler_t)); }
+	bool		dirty() const { return crc!=tcrc32(0,&model,sizeof(isampler_t)); }
 	iterator	data() const { return _data.data(); }
 	iterator	begin() const { return _data.data(); }
 	iterator	end() const { return _data.data()+n; }
@@ -137,13 +135,13 @@ struct _poisson_disk_cache_t
 
 __noinline ::path _poisson_disk_cache_t::path( uint count, bool circular, uint seed )
 {
-	static ::path cache_dir = ::path::temp(false)+L"global\\sampler\\poisson\\";
-	static uint hash0 = tcrc32<>(__TIMESTAMP__,sizeof(char)*strlen(__TIMESTAMP__));
+	static ::path cache_dir = ::path::temp(false)+"global\\sampler\\poisson\\";
+	static uint hash0 = tcrc32<>(0,__TIMESTAMP__,sizeof(char)*strlen(__TIMESTAMP__));
 	uint hash = hash0;
-	hash = tcrc32<>(&count, sizeof(count), hash );
-	hash = tcrc32<>(&circular, sizeof(circular), hash );
-	hash = tcrc32<>(&seed, sizeof(seed), hash );
-	wchar_t b[64]; swprintf(b,64,L"%08x",hash);
+	hash = tcrc32<>(hash,&count, sizeof(count) );
+	hash = tcrc32<>(hash,&circular, sizeof(circular) );
+	hash = tcrc32<>(hash,&seed, sizeof(seed) );
+	char b[64]; snprintf(b,64,"%08x",hash);
 	return cache_dir+b;
 }
 
@@ -151,7 +149,7 @@ __noinline bool _poisson_disk_cache_t::load( std::vector<vec2>& v, uint count, b
 {
 	auto cache_path = path(count,circular,seed); if(!cache_path.exists()) return false;
 	if(cache_path.file_size()!=sizeof(vec4)*count) return false;
-	FILE* fp = _wfopen( cache_path.c_str(), L"rb" ); if(!fp) return false;
+	FILE* fp = cache_path.fopen("rb"); if(!fp) return false;
 	size_t read_count = fread( v.data(), sizeof(vec2), count, fp);
 	fclose(fp);
 	return read_count==count;
@@ -162,7 +160,7 @@ __noinline void _poisson_disk_cache_t::save( const std::vector<vec2>& v, bool ci
 	if(v.empty()) return;
 	auto cache_path = path(uint(v.size()), circular, seed);
 	if(!cache_path.dir().exists()) cache_path.dir().mkdir();
-	FILE* fp = _wfopen( cache_path.c_str(), L"wb" ); if(!fp){ printf("unable to open %s\n",cache_path.wtoa()); return; }
+	FILE* fp = cache_path.fopen("wb"); if(!fp){ printf("unable to open %s\n",cache_path.c_str()); return; }
 	fwrite( v.data(), sizeof(vec2), v.size(), fp);
 	fclose(fp);
 }
@@ -299,7 +297,7 @@ __noinline uint sampler_t::resample()
 	_reshape(_data.data(),surface); // reshape to circle, hemisphere, sphere, ...
 	for(uint k=0;k<n;k++) v[k].w=nrf;			// weight
 	if(surface==CIRCLE) _make_centered();
-	crc = tcrc32(&model,sizeof(isampler_t));	// to detect format change (equivalent to the detection of data change)
+	crc = tcrc32(0,&model,sizeof(isampler_t));	// to detect format change (equivalent to the detection of data change)
 	rewind(); // rewind the index
 	return n;
 }

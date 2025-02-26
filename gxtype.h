@@ -29,8 +29,12 @@
 		#define _HAS_EXCEPTIONS 0
 	#endif
 #endif
+// pre-validation for __has_include
+#ifndef __has_include
+	#error __has_include is undefined. Use modern C++ compiler (at the least c++17)
+#endif
 // SDKDDKVer
-#if defined(__has_include) && __has_include(<SDKDDKVer.h>)
+#if __has_include(<SDKDDKVer.h>)
 	#include <SDKDDKVer.h>
 #endif
 // prerequiste macros
@@ -41,34 +45,49 @@
 #include <inttypes.h>	// defines int64_t, uint64_t
 #include <math.h>
 #include <stdarg.h>
-#if defined(GX_PRINTF_REDIR)||defined(_REXDLL) // printf redirection with custom printf/wprintf (e.g., rex GUI printf)
+#if defined(GX_PRINTF_REDIR)||defined(_REXDLL) // printf redirection with custom printf
 	#if (!defined(printf)&&!defined(__GX_PRINTF_REDIR__))&&(defined(_INC_STDIO)||defined(_INC_WCHAR)||defined(_CSTDIO_)||defined(_CWCHAR_))
 		#error do not include <stdio.h> before gxut headers, when defining GX_PRINTF_REDIR
 	#endif
 	#ifndef printf
 		#define	printf	__printf	// rename default printf
-		#define	wprintf	__wprintf	// rename default wprintf
+		#define	wprintf	__wprintf	// rename default printf	
 	#endif
 	#include <stdio.h>
 	#include <wchar.h>
 	#include <cstdio>
 	#include <cwchar>
 	#undef	printf
-	#undef	wprintf
+	#undef	wprintf // disable wprintf at all
 	#ifndef __GX_PRINTF_REDIR__
 		#define __GX_PRINTF_REDIR__
 	#endif
-	// drop-in replacement of printf, where non-rex applications fallbacks to stdout
-	int __cdecl printf( const char* fmt, ... );
-	int __cdecl wprintf( const wchar_t* fmt, ... );
 #else
 	#include <stdio.h>
 	#include <wchar.h>
+	#include <wctype.h>
 	#include <cstdio>
 	#include <cwchar>
 #endif
 #include <stdlib.h>
 #include <string.h>
+// compile-time test of printf-style format string
+#if defined(_Printf_format_string_)
+	#define __printf_format_string__	_Printf_format_string_
+	#define __printf_format_attrib__
+	#define __scanf_format_string__		_Scanf_format_string_
+	#define __scanf_format_attrib__
+#elif defined(__GNUC__)
+	#define __printf_format_string__
+	#define __printf_format_attrib__	__attribute__((format(printf,2,3)))
+	#define __scanf_format_string__
+	#define __scanf_format_attrib__		__attribute__((format(scanf,2,3)))
+#endif
+// drop-in replacement of printf, where console applications fallbacks to stdout
+#if defined(GX_PRINTF_REDIR)||defined(_REXDLL)
+	int __cdecl printf( __printf_format_string__ const char* fmt, ... ) __printf_format_attrib__;
+#endif
+
 // STL
 #include <algorithm>
 #include <array>
@@ -79,11 +98,13 @@ using namespace std::string_literals; // enable s-suffix for std::string literal
 #include <typeinfo>
 #include <typeindex>
 #include <vector>
-// C++11 (c++14/17/20: 201402L, 201703L, 202002L, ...)
+// C++11/14/17/20: 201402L, 201703L, 202002L, ...
 #if (__cplusplus>199711L)||(defined(_MSVC_LANG)&&_MSVC_LANG>199711L) // MSVC define not  __cplusplus but _MSVC_LANG
+	#include <chrono>	// microtimer		
 	#include <functional>
 	#include <random>
 	#include <type_traits>
+	#include <thread>	// usleep
 	#include <unordered_map>
 	#include <unordered_set>
 	#if (__cplusplus>=201703L)||(defined(_MSVC_LANG)&&_MSVC_LANG>=201703L)||(defined(_HAS_CXX17)&&_HAS_CXX17)
@@ -100,14 +121,23 @@ using namespace std::string_literals; // enable s-suffix for std::string literal
 		#define WIN32_LEAN_AND_MEAN
 	#endif
 	#include <windows.h>
+	#include <io.h>			// low-level io functions
+	// enforce to use UTF-8 encoding of non-ascii source texts
+	#pragma execution_character_set("utf-8")
+	#ifndef CP_UTF8
+		#define CP_UTF8		65001       // CP_ACP==0: default to ANSI code page, CP_949 (korean)
+	#endif
+	#ifndef CP_GXUT
+		#define CP_GXUT		65001
+	#endif
+	#ifndef __GX_PRINTF_REDIR__
+		struct autocp_t { autocp_t(unsigned cp){ auto cp0=GetConsoleOutputCP(); if(cp!=cp0) SetConsoleOutputCP(cp); setlocale(LC_CTYPE,cp==CP_UTF8?"ko-KR.utf8":""); }; }; inline autocp_t autocp_utf8(CP_GXUT);
+	#endif
+	#define __attribute__(a)	// avoid errors for gcc-style attributes
 #endif
+
 // platform-specific
-#if defined _M_IX86
-	#define GX_PLATFORM "x86"
-#elif defined _M_X64
-	#define GX_PLATFORM "x64"
-#endif
-#if defined(_MSC_VER) && !defined(__clang__) // Visual Studio with cl
+#if defined(_MSC_VER) && !defined(__clang__) // Visual Studio without clang
 	#pragma optimize( "gs", on )
 	#pragma check_stack( off )
 	#pragma strict_gs_check( off )
@@ -120,36 +150,47 @@ using namespace std::string_literals; // enable s-suffix for std::string literal
 	#pragma warning( disable: 4244 )	// int to wchar_t, possible loss of data
 	#pragma warning( disable: 4324 )	// alignment padding
 	#pragma warning( disable: 4458 )	// hiding class member
+	#pragma warning( disable: 6011 )	// Dereferencing NULL pointer
 	#pragma warning( disable: 6031 )	// return value ignored
+	#pragma warning( disable: 6308 )	// 'realloc' might return null pointer
+	#pragma warning( disable: 6326 )	// Potential comparison of a constant with another constant
+	#pragma warning( disable: 6387 )	// could be '0':  this does not adhere to the specification for the function
 	#pragma warning( disable: 26451 )	// arithmetic overflow: operator* on a 4 byte value
 	#pragma warning( disable: 26495 )	// always initialize a member variable: not applicable to an anonymous struct in a union
-#else // GCC or Clang
+	#pragma warning( disable: 26813 )	// Use 'bitwise and' to check if a flag is set.
+	#pragma warning( disable: 26819 )	// Unannotated fallthrough between switch labels (es.78)
+	// dll function wrapper: load from dll and operates as a function without auto dll release
+	template <typename T> struct dll_function_t { HMODULE hdll=nullptr;T ptr=nullptr; dll_function_t(const char* dll,const char* func){if((hdll=LoadLibraryA(dll)))ptr=T(GetProcAddress(hdll,func));} ~dll_function_t(){if(hdll){FreeLibrary(hdll);hdll=nullptr;}} operator T(){return ptr;} };
+	#ifdef INVALID_HANDLE_VALUE
+		inline HANDLE& safe_close_handle( HANDLE& h ){ if(h!=INVALID_HANDLE_VALUE) CloseHandle(h); return h=INVALID_HANDLE_VALUE; }
+	#endif
+#elif defined(__GNUC__) // GCC
 	#ifndef __noinline
 		#define __noinline __attribute__((noinline)) inline
 	#endif
-	#ifdef __GNUC__
-		#ifndef __forceinline
-			#define __forceinline inline __attribute__((__always_inline__))
-		#endif
-	#elif defined(__clang__)
-		#pragma clang diagnostic ignored "-Wmissing-braces"					// ignore excessive warning for initialzer
-		#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"		// ignore non-virtual destructor
-		#pragma clang diagnostic ignored "-Wunused-variable"				// supress warning for unused b0
-		#pragma clang diagnostic ignored "-Wunused-command-line-argument"	// e.g., /Gm-, /QPar, /FpC; clang bugs show still warnings
-		#pragma clang diagnostic ignored "-Wclang-cl-pch"					// clang bugs show still warnings
+	#ifndef __forceinline
+		#define __forceinline inline __attribute__((__always_inline__))
 	#endif
+	#pragma GCC diagnostic ignored "-Wconversion"
+	#pragma GCC diagnostic ignored "-Wmultichar"
+	#pragma GCC diagnostic ignored "-Wunknown-pragmas"
+	#pragma GCC diagnostic ignored "-Wunused-variable"
+#elif defined(__clang__) // Clang
+	#ifndef __noinline
+		#define __noinline __attribute__((noinline)) inline
+	#endif
+	#pragma clang diagnostic ignored "-Wmissing-braces"					// ignore excessive warning for initialzer
+	#pragma clang diagnostic ignored "-Wdelete-non-virtual-dtor"		// ignore non-virtual destructor
+	#pragma clang diagnostic ignored "-Wunused-variable"				// supress warning for unused b0
+	#pragma clang diagnostic ignored "-Wunused-command-line-argument"	// e.g., /Gm-, /QPar, /FpC; clang bugs show still warnings
+	#pragma clang diagnostic ignored "-Wclang-cl-pch"					// clang bugs show still warnings
 #endif
 // pointer type with size: waiting for a C++ standard for proposal P0901R3 (std::sized_ptr_t)
-template <class T=void> struct sized_ptr_t { T* ptr; size_t size; operator T* (){ return ptr; }	operator const T* () const { return ptr; } T* operator->(){ return ptr; }	const T* operator->() const { return ptr; } }; 
-// dll function wrapper: load from dll and operates as a function without auto dll release
-template <typename T> struct dll_function_t { HMODULE hdll=nullptr;T ptr=nullptr; dll_function_t(const wchar_t* dll,const char* func){if(hdll=LoadLibraryW(dll))ptr=T(GetProcAddress(hdll,func));} ~dll_function_t(){if(hdll){FreeLibrary(hdll);hdll=nullptr;}} operator T(){return ptr;} };
+template <class T=void> struct sized_ptr_t { T* ptr; size_t size; operator T* (){ return ptr; }	operator const T* () const { return ptr; } T* operator->(){ return ptr; } const T* operator->() const { return ptr; } }; 
 // utility functions
 template <class T> T*& safe_free( T*& p ){if(p) free((void*)p); return p=nullptr; }
 template <class T> T*& safe_delete( T*& p ){if(p) delete p; return p=nullptr; }
 template <class T> T*& safe_release( T*& p ){if(p) p->Release(); return p=nullptr; }
-#ifdef INVALID_HANDLE_VALUE
-inline HANDLE& safe_close_handle( HANDLE& h ){ if(h!=INVALID_HANDLE_VALUE) CloseHandle(h); return h=INVALID_HANDLE_VALUE; }
-#endif
 
 // nocase/logical base template
 namespace nocase { template <class T> struct less {}; template <class T> struct equal_to {}; template <class T> struct hash {}; };

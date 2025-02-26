@@ -21,13 +21,11 @@
 // timestamp to indicate struct changes in other files
 static const char* __GX_RT_H_TIMESTAMP__ = _strdup(__TIMESTAMP__);
 
-#if defined(__has_include)
-	#if __has_include("gxmesh.h")
-		#include "gxmesh.h"
-	#endif
-	#if __has_include("gxsampler.h")
-		#include "gxsampler.h"
-	#endif
+#if __has_include("gxmesh.h")
+	#include "gxmesh.h"
+#endif
+#if __has_include("gxsampler.h")
+	#include "gxsampler.h"
 #endif
 
 //*************************************

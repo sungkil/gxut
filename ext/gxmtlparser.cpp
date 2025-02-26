@@ -4,6 +4,7 @@
 #include <gxut/gxos.h>
 #include <gxut/gxfilesystem.h>
 #include <gxut/gxmemory.h>
+#include <gxut/gxtimer.h>
 #include <gxut/ext/gxobjparser.h>
 #include <gximage/gximage.h>
 #pragma comment( lib, "shlwapi" )
@@ -73,8 +74,8 @@ mtl_item_t::mtl_item_t( const std::string& _key, const char* first_token ):key(_
 
 path mtl_item_t::map_path()
 {
-	if(tokens.empty()) return L"";
-	auto& b=tokens.back(); if(::path p(b);p.is_absolute()){b=p.is_subdir(mtl_dir)?p.relative(mtl_dir).wtoa():p.name().wtoa();}
+	if(tokens.empty()) return "";
+	auto& b=tokens.back(); if(::path p(b);p.is_absolute()){b=p.is_subdir(mtl_dir)?p.relative(mtl_dir).c_str():p.aname();}
 	return mtl_dir+tokens.back();
 }
 
@@ -83,8 +84,8 @@ bool mtl_item_t::make_canonical_relative_path()
 	auto &b=tokens.back(), b0=b;
 	for( int k=0;k<8&&strstr(b.c_str(),"\\\\");k++) b=str_replace(b.c_str(),"\\\\","\\");	// remove double backslash
 	for( int k=0;k<8&&strstr(b.c_str(),"//");k++) b=str_replace(b.c_str(),"//","/");		// remove double slash
-	::path p(b=path(b).to_backslash().canonical().wtoa());
-	if(!p.is_relative()) b=p.is_subdir(mtl_dir)?p.relative(mtl_dir).wtoa():p.name().wtoa();
+	::path p(b=path(b).to_backslash().canonical().c_str());
+	if(!p.is_relative()) b=p.is_subdir(mtl_dir)?p.relative(mtl_dir).c_str():p.aname();
 	return _stricmp(b0.c_str(),b.c_str())!=0; // return change exists
 }
 
@@ -104,11 +105,11 @@ static bool is_normal_map( path file_path )
 	if(auto it=cache.find(file_path); it!=cache.end()) return it->second;
 	cache[file_path]=false; if(!file_path.exists()) return false;
 
-	image* header=gx::load_image_header(file_path); if(!header){ printf("failed to load header of %s\n", file_path.wtoa() ); return false; }
+	image* header=gx::load_image_header(file_path.c_str()); if(!header){ printf("failed to load header of %s\n", file_path.c_str() ); return false; }
 	bool early_exit = header->channels!=3||header->width<8||header->height<8; gx::release_image_header(&header); if(early_exit) return false;
 
 	// do not force rgb to bump; and use cache
-	image* i = gx::load_image(file_path,true,false,false); if(!i){ printf("failed to load the bump map %s\n", wtoa(file_path) ); return false; }
+	image* i = gx::load_image(file_path.c_str(),true,false,false); if(!i){ printf("failed to load the bump map %s\n", file_path.c_str() ); return false; }
 	int w=i->width, h=i->height;
 	int bcount=0, bcount_thresh=int(halton_samples.size()*0.8f);
 	for( int k=0, kn=int(halton_samples.size()); k<kn&&bcount<bcount_thresh; k++ )
@@ -127,19 +128,19 @@ static bool is_normal_map( path file_path )
 	return cache[file_path] = bcount<bcount_thresh ? false : true;
 }
 
-static bool generate_normal_map( path normal_path, path bump_path, path mtl_path=L"" )
+static bool generate_normal_map( path normal_path, path bump_path, path mtl_path="" )
 {
-	if(!bump_path.exists()){ printf("%s(): %s not exists\n", __func__, bump_path.name().wtoa() ); return false; }
+	if(!bump_path.exists()){ printf("%s(): %s not exists\n", __func__, bump_path.aname() ); return false; }
 	FILETIME bump_mtime = bump_path.mfiletime();
 	if(normal_path.exists()&&normal_path.mfiletime()>=bump_mtime) return true;
 
-	os::timer_t t;
+	gx::timer_t t;
 
 	// test whether the bump map is actually a normal map
 	// do not force rgb to bump; and use cache
-	image* bump0 = gx::load_image(bump_path,true,false,false); if(!bump0){ printf("%s(): failed to load %s\n", __func__, bump_path.name().wtoa() ); return false; }
-	wprintf( L"%sgenerating %s from %s... ",
-		mtl_path?format(L"[%s] ",mtl_path.name().c_str()):L"",normal_path.name().c_str(), bump_path.name().c_str() );
+	image* bump0 = gx::load_image(bump_path.c_str(),true,false,false); if(!bump0){ printf("%s(): failed to load %s\n", __func__, bump_path.aname() ); return false; }
+	printf( "%sgenerating %s from %s... ",
+		!mtl_path.empty()?format("[%s] ", mtl_path.aname()):"", normal_path.aname(), bump_path.aname());
 
 	// convert uchar bumpmap to 1-channel float image
 	image* bump = gx::create_image( bump0->width, bump0->height, 32, 1 );
@@ -182,14 +183,14 @@ static bool generate_normal_map( path normal_path, path bump_path, path mtl_path
 	}
 
 	// first write to the temporary image
-	gx::save_image( normal_path, normal );
+	gx::save_image( normal_path.c_str(), normal );
 	if(normal_path.exists()) normal_path.set_filetime(nullptr,nullptr,&bump_mtime);
 
 	gx::release_image(&bump0);
 	gx::release_image(&bump);
 	gx::release_image(&normal);
 
-	wprintf( L"completed in %.f ms\n", t.end() );
+	printf( "completed in %.f ms\n", t.end() );
 	return true;
 }
 
@@ -202,17 +203,17 @@ static path get_normal_path( const path& bump_path, nocase::map<path,path>& bton
 	path ext = bump_path.ext();
 	
 	// remove postfix for bump
-	if(base.size()>4&&_wcsistr(substr(base.c_str(),-4),L"bump")) base=path(substr(base.c_str(),0,-4))+L"norm";
+	if(base.size()>4&&_stristr(substr(base.c_str(),-4),"bump")) base=path(substr(base.c_str(),0,-4))+"norm";
 	else if(base.back()==L'b') base.back()=L'n';
 	else base+="n";
 	
 	for( int k=0; k<8; k++, base+="n" )
 	{
-		path dst = base+L"."+ext;
+		path dst = base+"."+ext;
 		if(!dst.exists()||used_images.find(dst)==used_images.end()) return dst;
 	}
-	printf("%s(): unable to find normal_path for %s\n",__func__,bump_path.to_slash().wtoa());
-	return L"";
+	printf("%s(): unable to find normal_path for %s\n",__func__,bump_path.slash());
+	return "";
 }
 
 static std::map<uint,std::string> build_crc_lut( std::vector<mtl_section_t>& sections )
@@ -234,7 +235,7 @@ static std::map<uint,std::string> build_crc_lut( std::vector<mtl_section_t>& sec
 
 static float optimize_textures( path file_path, std::vector<mtl_section_t>& sections )
 {
-	os::timer_t timer;
+	gx::timer_t timer;
 
 	// replace redundant map path
 	nocase::set<path> dups; // duplicate images
@@ -246,7 +247,7 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 
 			auto &src=t->back();
 			auto &dst=crc_lut[t->crc]; if(_stricmp(src.c_str(),dst.c_str())==0) continue;
-			printf( "[%s] replace: %s << %s\n", file_path.name().wtoa(), src.c_str(), dst.c_str() );
+			printf( "[%s] replace: %s << %s\n", file_path.aname(), src.c_str(), dst.c_str() );
 			dups.emplace(t->map_path());
 			src = dst;
 			b_dirty = true;
@@ -261,7 +262,7 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 	auto test_normal = [&]( mtl_item_t* t )->bool { path m=t->map_path(); if(auto it=valid_normals.find(m);it!=valid_normals.end()) return it->second; return valid_normals[m]=is_normal_map(m); };
 	for( auto& section : sections )
 	{
-		auto* n=section.find("norm"); if(n&&!test_normal(n)){ printf( "[%s] %s: %s is not a normal map\n", file_path.name().wtoa(), section.name.c_str(), n->map_path().name().wtoa() ); n->clear(); n=nullptr; b_dirty=true; }
+		auto* n=section.find("norm"); if(n&&!test_normal(n)){ printf( "[%s] %s: %s is not a normal map\n", file_path.aname(), section.name.c_str(), n->map_path().aname() ); n->clear(); n=nullptr; b_dirty=true; }
 		auto* b=section.find("bump"); if(!n&&b&&test_normal(b)){ n=section.add_norm(b->back()); b_dirty=true; }
 		if(b&&n){ auto it=bton.find(b->map_path()); if(it==bton.end()) bton[b->map_path()]=n->map_path(); }
 	}
@@ -271,7 +272,7 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 	for( auto& section : sections ) for( auto* t : section.maps() )
 	{
 		path m=t->map_path(); if(m.exists()){ used_images.insert(m); continue; }
-		printf( "[%s] %s.%s: %s not exists\n", file_path.name().wtoa(), section.name.c_str(), t->key.c_str(), m.name().wtoa() );
+		printf( "[%s] %s.%s: %s not exists\n", file_path.aname(), section.name.c_str(), t->key.c_str(), m.aname() );
 		t->clear(); b_dirty=true;
 	}
 
@@ -281,7 +282,7 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 		auto *n=m.find("norm"), *b=m.find("bump"); if(n||!b) continue;
 		path norm_path = get_normal_path( b->map_path(), bton, used_images ); if(norm_path.empty()) continue;
 		if(!norm_path.exists()&&!generate_normal_map( norm_path, b->map_path(), file_path )) continue;
-		n = m.add_norm( norm_path.relative(mtl_dir).wtoa() ); if(!n) continue;
+		n = m.add_norm( norm_path.relative(mtl_dir).c_str() ); if(!n) continue;
 		
 		used_images.insert(norm_path);
 		bton[b->map_path()] = norm_path;
@@ -289,16 +290,16 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 	}
 
 	// delete non-used images
-	for( auto& f : mtl_dir.scan<false>( L"jpg;png" ) )
+	for( auto& f : mtl_dir.scan<false>( "jpg;png" ) )
 	{
 		if(used_images.find(f)!=used_images.end()) continue;
 		if(dups.find(f)==dups.end()) // do not delete other non-duplicate non-used images
 		{
-			if(f.name(false)!=L"index") printf( "[%s] potential redundancy: %s\n", file_path.name(true).wtoa(), f.name().wtoa() );
+			if(f.name(false)!="index") printf( "[%s] potential redundancy: %s\n", file_path.aname(), f.aname() );
 			continue;
 		}
 		if(!f.delete_file(true)) continue;
-		printf( "[%s] deleting duplicates: %s\n", file_path.name(true).wtoa(), f.name().wtoa() );
+		printf( "[%s] deleting duplicates: %s\n", file_path.aname(), f.aname() );
 	}
 
 	return float(timer.end());
@@ -307,8 +308,8 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 static bool save_mtl( path file_path, const std::vector<mtl_section_t>& sections, float opt_time )
 {
 	auto mfiletime0 = file_path.mfiletime();
-	FILE* fp = _wfopen( file_path, L"w" ); if(!fp){ printf("%s(): failed to open %s\n", __func__, file_path.to_slash().wtoa() ); return false; }
-	printf( "[%s] optimization ... ", file_path.name().wtoa() );
+	FILE* fp = file_path.fopen("w"); if(!fp){ printf("%s(): failed to open %s\n", __func__, file_path.slash() ); return false; }
+	printf( "[%s] optimization ... ", file_path.aname() );
 
 	for( int k=0, kn=int(sections.size()); k<kn; k++ )
 	{
@@ -332,8 +333,8 @@ std::vector<mtl_section_t> parse_mtl( path file_path )
 {
 	std::vector<mtl_section_t> v; v.reserve(1024);
 
-	if(!file_path.exists()){ printf("%s(): %s not exists\n", __func__, file_path.wtoa() ); return v; }
-	FILE* fp = _wfopen(file_path,L"r"); if(!fp){ printf("%s(): unable to open %s\n", __func__, file_path.wtoa()); return v; }
+	if(!file_path.exists()){ printf("%s(): %s not exists\n", __func__, file_path.c_str() ); return v; }
+	FILE* fp = file_path.fopen("r"); if(!fp){ printf("%s(): unable to open %s\n", __func__, file_path.c_str()); return v; }
 	
 	// fill no-name header entry
 	v.emplace_back(mtl_section_t());
@@ -363,7 +364,7 @@ std::vector<mtl_section_t> parse_mtl( path file_path )
 		}
 		else
 		{
-			mtl_item_t t(key); for(size_t k=1;k<vs.size();k++) t.tokens.emplace_back(vs[k]);
+			mtl_item_t t(key); for(size_t j=1;j<vs.size();j++) t.tokens.emplace_back(vs[j]);
 			if(t.is_map_type()&&t.make_canonical_relative_path()) b_dirty=true;
 			v.back().items.emplace_back(std::move(t)); // add split tokens
 		}
@@ -411,7 +412,7 @@ material_impl create_light_material( uint ID )
 
 bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_cache )
 {
-	os::timer_t timer;
+	gx::timer_t timer;
 
 	// reset common attributes
 	mtl_dir = file_path.dir().canonical();
@@ -482,7 +483,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 			else if(key=="illum"); // already processed
 			else if(key=="kd")
 			{
-				if(t.size()<3){ wprintf(L"Kd size < 3\n"); return false; }
+				if(t.size()<3){ printf("Kd size < 3\n"); return false; }
 				m.color[0] = t.value(0);
 				m.color[1] = t.value(1);
 				m.color[2] = t.value(2);
@@ -549,7 +550,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 			// unrecognized keys
 			else if(passtags.find(key)==passtags.end())
 			{
-				printf("[%s] %s: unrecognized key: '%s'\n", file_path.name().wtoa(), section.name.c_str(), key.c_str()); return false;
+				printf("[%s] %s: unrecognized key: '%s'\n", file_path.aname(), section.name.c_str(), key.c_str()); return false;
 			}
 		}
 
@@ -568,7 +569,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 
 	// update file after bump_as_normal
 	if(b_dirty) save_mtl( file_path, sections, opt_time );
-	if(!with_cache) wprintf( L"Loading %s ... completed in %.2f ms\n", file_path.name().c_str(), timer.end() );
+	if(!with_cache) printf( "Loading %s ... completed in %.2f ms\n", file_path.aname(), timer.end() );
 	
 	return true;
 }

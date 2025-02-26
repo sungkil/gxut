@@ -20,64 +20,65 @@
 
 #include "gxmath.h"
 #include "gxstring.h"
-#include "gxos.h"
 #include "gxfilesystem.h"
-#include <malloc.h>
+#include <malloc.h> // _get_heap_handle()
 
-#ifdef __has_include
-	#if defined(GX_OPENGL_GLEW)
-		#ifdef GX_OPENGL_GLAD
-			#error do not define GX_OPENGL_GLAD and GX_OPENGL_GLEW simultaneously
-		#endif
-		#ifndef GLEW_STATIC
-			#define GLEW_STATIC
-		#endif
-		#if __has_include(<GL/glew.h>)
-			#include <GL/glew.h>
-		#elif __has_include("glew.h")
-			#include "glew.h"
-		#endif
-		#pragma comment( lib, "glew32s" )	// explicit linking to static glew32 x64
-		#pragma comment( lib, "OpenGL32" )	// explicit linking to system OpenGL
-		#define gxHasExtension(name)	GLEW_ARB_##name
-	#elif defined(GX_OPENGL_GLAD)
-		#if __has_include(<GL/glad/gl.h>)
-			#include <GL/glad/gl.h>
-		#elif __has_include(<GL/glad.h>)
-			#include <GL/glad.h>
-		#elif __has_include("glad.h")
-			#include "glad.h"
-		#endif
-		#define gxHasExtension(name)	GLAD_GL_ARB_##name
-	#else
-		#if __has_include(<gxut/gxcorearb.h>)
-			#include <gxut/gxcorearb.h>
-		#elif __has_include(<GL/gxcorearb.h>)
-			#include <GL/gxcorearb.h>
-		#elif __has_include("gxcorearb.h")
-			#include "gxcorearb.h"
-		#endif
-		#define gxHasExtension(name)	GX_ARB_##name
+#if __has_include("gxtimer.h")
+	#include "gxtimer.h"
+#endif
+
+#if defined(GX_OPENGL_GLEW)
+	#ifdef GX_OPENGL_GLAD
+		#error do not define GX_OPENGL_GLAD and GX_OPENGL_GLEW simultaneously
 	#endif
+	#ifndef GLEW_STATIC
+		#define GLEW_STATIC
+	#endif
+	#if __has_include(<GL/glew.h>)
+		#include <GL/glew.h>
+	#elif __has_include("glew.h")
+		#include "glew.h"
+	#endif
+	#pragma comment( lib, "glew32s" )	// explicit linking to static glew32 x64
+	#pragma comment( lib, "OpenGL32" )	// explicit linking to system OpenGL
+	#define gxHasExtension(name)	GLEW_ARB_##name
+#elif defined(GX_OPENGL_GLAD)
+	#if __has_include(<GL/glad/gl.h>)
+		#include <GL/glad/gl.h>
+	#elif __has_include(<GL/glad.h>)
+		#include <GL/glad.h>
+	#elif __has_include("glad.h")
+		#include "glad.h"
+	#endif
+	#define gxHasExtension(name)	GLAD_GL_ARB_##name
+#else
+	#if __has_include(<gxut/gxcorearb.h>)
+		#include <gxut/gxcorearb.h>
+	#elif __has_include(<GL/gxcorearb.h>)
+		#include <GL/gxcorearb.h>
+	#elif __has_include("gxcorearb.h")
+		#include "gxcorearb.h"
+	#endif
+	#define gxHasExtension(name)	GX_ARB_##name
+#endif
 	
-	#ifdef GX_OPENGL_GLFX
-		#if __has_include(<GL/glfx.h>)
-			#include <GL/glfx.h>
-		#elif __has_include(<glfx/glfx.h>)
-			#include <glfx/glfx.h>
-		#elif __has_include("glfx.h")
-			#include "glfx.h"
-		#endif
+#ifdef GX_OPENGL_GLFX
+	#if __has_include(<GL/glfx.h>)
+		#include <GL/glfx.h>
+	#elif __has_include(<glfx/glfx.h>)
+		#include <glfx/glfx.h>
+	#elif __has_include("glfx.h")
+		#include "glfx.h"
 	#endif
+#endif
 
-	#ifdef GX_CUDA_GL_INTEROP
-		#pragma warning( push )
-		#pragma warning( disable: 4819 )	// disable waring on the foreign codepage
-		#if __has_include(<cuda_gl_interop.h>)
-			#include <cuda_gl_interop.h>	// this should be located after glew/glad/gxcorearb.h
-		#endif
-		#pragma warning( pop )
+#ifdef GX_CUDA_GL_INTEROP
+	#pragma warning( push )
+	#pragma warning( disable: 4819 )	// disable waring on the foreign codepage
+	#if __has_include(<cuda_gl_interop.h>)
+		#include <cuda_gl_interop.h>	// this should be located after glew/glad/gxcorearb.h
 	#endif
+	#pragma warning( pop )
 #endif
 
 //***********************************************
@@ -151,7 +152,7 @@ inline GLint	gxGetTextureBPP( GLint internal_format ){ return gxGetTextureBPC(in
 inline GLenum	gxGetImageTextureInternalFormat( int depth, int channels ){ if(depth==8) return channels==1?GL_R8:channels==2?GL_RG8:channels==3?GL_RGB8:channels==4?GL_RGBA8:0; else if(depth==16)	return channels==1?GL_R16F:channels==2?GL_RG16F:channels==3?GL_RGB16F:channels==4?GL_RGBA16F:0; else if(depth==32)	return channels==1?GL_R32F:channels==2?GL_RG32F:channels==3?GL_RGB32F:channels==4?GL_RGBA32F:0; return 0; }
 inline bool		gxIsSamplerType( GLenum uniformType ){ GLenum t=uniformType; if(t>=GL_SAMPLER_1D && t<=GL_SAMPLER_2D_SHADOW) return true; if(t>=GL_SAMPLER_1D_ARRAY && t<=GL_SAMPLER_CUBE_SHADOW) return true; if(t>=GL_INT_SAMPLER_1D && t<=GL_UNSIGNED_INT_SAMPLER_2D_ARRAY) return true; if(t>=GL_SAMPLER_2D_RECT && t<=GL_SAMPLER_2D_RECT_SHADOW ) return true; if(t>=GL_SAMPLER_BUFFER && t<=GL_UNSIGNED_INT_SAMPLER_BUFFER ) return true; if(t>=GL_SAMPLER_CUBE_MAP_ARRAY && t<=GL_UNSIGNED_INT_SAMPLER_CUBE_MAP_ARRAY ) return true; if(t>=GL_SAMPLER_2D_MULTISAMPLE && t<=GL_UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE_ARRAY ) return true; /* TODO: if(t>=GL_SAMPLER_RENDERBUFFER_NV && t<=GL_UNSIGNED_INT_SAMPLER_RENDERBUFFER_NV ) return true;*/ return false; }
 inline bool		gxIsImageType( GLenum uniformType ){ GLenum t=uniformType; if(t>=GL_IMAGE_1D && t<=GL_UNSIGNED_INT_IMAGE_2D_MULTISAMPLE_ARRAY) return true; return false; }
-inline path		gxGetProgramBinaryPath( const char* name ){ path p=path::temp()+L"glfx\\binary\\"+atow(name)+L".bin"; if(!p.dir().exists()) p.dir().mkdir(); return p; }
+inline path		gxGetProgramBinaryPath( const char* name ){ path p=path::temp()+"glfx\\binary\\"+name+".bin"; if(!p.dir().exists()) p.dir().mkdir(); return p; }
 inline int		gxGetMipLevels( int width, int height=1, int depth=1 ){ int l=0,s=uint(max(max(width,height),depth)); while(s){s=s>>1;l++;} return l; }
 inline uint		gxGetMipLevels( uint width, uint height=1, uint depth=1 ){ uint l=0,s=uint(max(max(width,height),depth)); while(s){s=s>>1;l++;} return l; }
 inline GLuint	gxCreateQuery( GLenum target ){ GLuint idx; if(glCreateQueries) glCreateQueries(target,1,&idx); else glGenQueries(1,&idx); return idx; }
@@ -236,39 +237,38 @@ namespace gl {
 	};
 
 	//***********************************************
-#ifdef __GX_OS_TIMER__
+#ifdef __GX_TIMER_H__
 	struct timer_t : public Object
 	{
 		union { double2 result; struct { double x, y; }; };	// Async OpenGL Timestamp: (begin,end)
 		
 		static double&	offset(){ static double f=0; return f; }
-		static void		sync_with_qpc(){ static int64_t e=epoch(); glFinish(); double i=0,j=0;uint k;for(k=0;k<16;k++){j+=(gxGetInteger64v(GL_TIMESTAMP)-e)/1000000.0;i+=os::timer_t::now();} offset()=(i-j)/double(k); glFinish(); }
-		static int64_t	epoch(){ static int64_t e=0; if(e) return e; auto* ef=(int64_t(*)()) GetProcAddress(GetModuleHandleW(nullptr),"rex_timer_epoch_GL"); if(ef) return e=ef(); else if(glGetInteger64v){ printf( "gl::Timer::epoch(): unable to get rex_timer_epoch_GL()\n" ); glGetInteger64v(GL_TIMESTAMP,&e); return e; } printf( "gl::epoch(): unable to get the epoch of OpenGL\n" ); return e=-1; }
+		static void		sync_with_qpc(){ static int64_t e=epoch(); glFinish(); double i=0,j=0;uint k;for(k=0;k<16;k++){j+=(gxGetInteger64v(GL_TIMESTAMP)-e)/1000000.0;i+=gx::timer_t::now();} offset()=(i-j)/double(k); glFinish(); }
+		static int64_t	epoch(){ static int64_t e=0; if(e) return e; auto* ef=(int64_t(*)()) GetProcAddress(GetModuleHandleW(nullptr),"get_timer_epoch_GL"); if(ef) return e=ef(); else if(glGetInteger64v){ printf( "gl::Timer::epoch(): unable to get rex_timer_epoch_GL()\n" ); glGetInteger64v(GL_TIMESTAMP,&e); return e; } printf( "gl::epoch(): unable to get the epoch of OpenGL\n" ); return e=-1; }
 
 		// constructor: initialized with the internal qpc or an external qpc
-		timer_t():timer_t(_qpc0){}
-		timer_t(os::timer_t& t):Object(gxCreateQuery(GL_TIMESTAMP),"",GL_TIMESTAMP),_ID1(gxCreateQuery(target)),_qpc(t){ result=_qpc.result={0,0}; }
+		timer_t():timer_t(_cc0){}
+		timer_t( gx::timer_t& t ):Object(gxCreateQuery(GL_TIMESTAMP),"",GL_TIMESTAMP),_ID1(gxCreateQuery(target)),_cc(t){ result=_cc.result={0,0}; }
 		~timer_t() override { GLuint idx[2]={ID,_ID1}; glDeleteQueries(2,idx); }
 
 		// gl::Timer specific implementations
 		inline bool		is_available(){ GLint available; glGetQueryObjectiv(_ID1,GL_QUERY_RESULT_AVAILABLE, &available); return _complete=(available!=GL_FALSE); }
 		inline void		finish(){ if(_complete) return; static int64_t e=epoch(); static const GLenum q=GL_QUERY_RESULT; GLuint64 v; glGetQueryObjectui64v(ID,q,&v); x = double(v-e)/1000000.0+offset(); glGetQueryObjectui64v(_ID1,q,&v); y=double(v-e)/1000000.0+offset(); _complete=true; }
-		inline double	latency(){ if(!_complete) finish(); return x-_qpc.x; }	// difference between CPU time and the time for flushing preceding commands = result.x - qpc.x
+		inline double	latency(){ if(!_complete) finish(); return x-_cc.x; }	// difference between CPU time and the time for flushing preceding commands = result.x - qpc.x
 
-		// consistent interface with gx::timer
-		inline void		begin(){ _qpc.begin(); glQueryCounter(ID,target); _complete=false; }
-		inline void		end(){ glQueryCounter(_ID1,target); _qpc.end(); _complete=false; }
+		inline void		begin(){ _cc.begin(); glQueryCounter(ID,target); _complete=false; }
+		inline void		end(){ glQueryCounter(_ID1,target); _cc.end(); _complete=false; }
 		inline double	delta(){ if(!_complete) finish(); return y-x; }
 		inline double	now(){ return (gxGetInteger64v(GL_TIMESTAMP)-epoch())/1000000.0+offset(); }
-		inline void		clear(){ _qpc.begin();_qpc.end();result=_qpc.result; _complete=true; }
+		inline void		clear(){ _cc.begin();_cc.end();result=_cc.result; _complete=true; }
 	
 	protected:
 		const GLuint	_ID1=0;
-		os::timer_t&	_qpc;	// synchronous QueryPerformance CPU counter: reference to external or internal counter
-		os::timer_t		_qpc0;	// synchronous QueryPerformance CPU counter: internal counter instance
+		gx::timer_t&	_cc;	// synchronous CPU counter: reference to external or internal counter
+		gx::timer_t		_cc0;	// synchronous CPU counter: internal counter instance
 		bool			_complete=false;
 	};
-#endif // __GX_OS_TIMER__
+#endif // __GX_TIMER_H__
 
 	//***********************************************
 	struct Buffer : public Object
@@ -336,7 +336,7 @@ namespace gl {
 	//***********************************************
 	// crc32c
 	#pragma warning( disable: 6011 )
-	inline unsigned int crc32c( const void* ptr, size_t size, unsigned int crc0=0 )
+	inline unsigned int crc32c( unsigned int crc0, const void* ptr, size_t size )
 	{
 		const unsigned char* buff= (unsigned char*) ptr;
 		static unsigned* t[4] = {nullptr}; if(!t[0]){ for(int k=0;k<4;k++) t[k]=(unsigned*) malloc(sizeof(unsigned)*256); for(int k=0;k<256;k++){ unsigned c=k; for( unsigned j=0;j<8;j++) c=c&1?0x82f63b78UL^(c>>1):c>>1; t[0][k]=c; } for(int k=0;k<256;k++){ unsigned c=t[0][k]; for(int j=1;j<4;j++) t[j][k]=c=t[0][c&0xff]^(c>>8); } }
@@ -346,6 +346,7 @@ namespace gl {
 		for(;size;size--,buff++) c=t[0][(c^(*buff))&0xff]^(c>>8);
 		return ~c;
 	}
+	inline unsigned int crc32c( const void* ptr, size_t size ){ return crc32c(0,ptr,size); }
 	#pragma warning( default: 6011 )
 
 	//***********************************************
@@ -853,7 +854,7 @@ namespace gl {
 	// shader/program/effect source structures
 	struct shader_macro_t : public std::vector<std::string>
 	{
-		void append( const char* m, ... ){char b[4096];va_list a;va_start(a,m);size_t len=size_t(_vscprintf(m,a));vsprintf_s(b,len+1,m,a);va_end(a); for(auto& s:*this) if(strcmp(s.c_str(),b)==0) return; emplace_back(b); }
+		void append( __printf_format_string__ const char* m, ... ) __printf_format_attrib__ {char b[4096];va_list a;va_start(a,m);size_t len=size_t(vsnprintf(0,0,m,a));vsnprintf(b,len+1,m,a);va_end(a); for(auto& s:*this) if(strcmp(s.c_str(),b)==0) return; emplace_back(b); }
 		std::string merge() const { std::string m; for(auto& s:*this){ m+=s; if(s.back()!='\n') m+='\n'; } if(!m.empty()) m+='\n'; return m; }
 	};
 	struct named_string_t { std::string name, value; };
@@ -869,10 +870,10 @@ namespace gl {
 			std::string f;
 			for( size_t k=0; k < size(); k++ )
 			{
-				for( auto* l : explode_conservative(at(k).value.c_str(),'\n') )
+				for( auto& l : explode_conservative(at(k).value.c_str(),'\n') )
 				{
-					if(TRIM_LINE_DIRECTIVE&&strncmp(l,"#line",strlen("#line"))==0) continue;
-					if(strncmp(l," in ",strlen(" in "))==0||strncmp(l," out ",strlen(" out "))==0) l++;
+					if(TRIM_LINE_DIRECTIVE&&strncmp(l.c_str(), "#line", strlen("#line"))==0) continue;
+					if(strncmp(l.c_str(), " in ", strlen(" in "))==0||strncmp(l.c_str(), " out ", strlen(" out "))==0) l=l.substr(1);
 					f += l; f+="\n";
 				}
 			}
@@ -899,16 +900,16 @@ namespace gl {
 		void export_shader_sources( path dir, path name ){ for( auto it : *this ) export_shader_source( it.first, dir, name ); }
 		void export_shader_source( GLuint shader_type, path dir, path name, bool b_print_log=true )
 		{
-			path ext = get_shader_extension_name( shader_type ); if(ext.empty()){ printf( "unable to find shader_type %d\n", shader_type ); return; }
+			path ext = get_shader_extension_name( shader_type ); if(ext.empty()){ printf( "unable to find shader_type %d\n", int(shader_type) ); return; }
 			path file_path = dir+name+"."+ext;
-			if(b_print_log) wprintf( L"%s\n", file_path.relative(path::module_dir()).to_slash().c_str() );
+			if(b_print_log) printf( "%s\n", file_path.relative(path::module_dir()).slash());
 			get_shader_source(shader_type).flatten( file_path );
 		}
 		path get_shader_extension_name( GLuint shader_type ) const
 		{
 			// extension names: https://www.khronos.org/opengles/sdk/tools/Reference-Compiler/
-			static const std::map<GLuint,path> m = { {GL_VERTEX_SHADER, L"vert"}, {GL_FRAGMENT_SHADER, L"frag"}, {GL_GEOMETRY_SHADER, L"geom"}, {GL_TESS_EVALUATION_SHADER, L"tesc"}, {GL_TESS_CONTROL_SHADER, L"tese"}, {GL_COMPUTE_SHADER, L"comp"}, };
-			auto it=m.find(shader_type); return it==m.end() ? path():it->second;
+			static const std::map<GLuint,std::string> m = { {GL_VERTEX_SHADER, "vert"}, {GL_FRAGMENT_SHADER, "frag"}, {GL_GEOMETRY_SHADER, "geom"}, {GL_TESS_EVALUATION_SHADER, "tesc"}, {GL_TESS_CONTROL_SHADER, "tese"}, {GL_COMPUTE_SHADER, "comp"}, };
+			auto it=m.find(shader_type); return it==m.end() ? path():it->second.c_str();
 		}
 	};
 
@@ -944,7 +945,7 @@ namespace gl {
 		void set_uniform( const char* name, const ivec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
 		void set_uniform( const char* name, const ivec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
 		void set_uniform( const char* name, const uint& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
-#ifdef _M_X64
+#if defined(_M_X64)||defined(__LP64__)
 		void set_uniform( const char* name, const size_t& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; if(count==1) u->set(ID,(uint*)&v,count); else {std::vector<uint> l(count);for(int j=0;j<count;j++)l[j]=uint((&v)[j]);u->set(ID,(uint*)&l[0],count);} }
 #endif
 		void set_uniform( const char* name, const uvec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
@@ -1123,11 +1124,11 @@ namespace gl {
 inline std::vector<gl::indexed_string_t> gxExplodeShaderSource( const char* source, int first_index=1 )
 {
 	std::vector<gl::indexed_string_t> v;
-	std::vector<const char*> vs = explode_conservative(source,'\n');
+	auto vs = explode_conservative(source,'\n');
 
 	for( int k=0, kn=int(vs.size()), idx=first_index; k<kn; k++ )
 	{
-		const char* s = ltrim(vs[k]);
+		const char* s = ltrim(vs[k].c_str());
 		bool b_line = strncmp(s,"#line",5)==0;
 		int r = b_line?sscanf( s+6, "%d", &idx ):0;
 		gl::indexed_string_t i; i=vs[k]; i.index=idx;
@@ -1173,14 +1174,14 @@ namespace gl {
 		~Effect() override { active_program=nullptr; if(quad){ delete quad; quad=nullptr; } if(!pts.empty()){ for(auto& it:pts) safe_delete(it.second); pts.clear(); } for(auto& it:uniform_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} uniform_buffer_map.clear(); for(auto* p:programs) delete p; programs.clear(); }
 		static void unbind(){ glUseProgram(0); }
 
-		Program* bind( const char* program_name, ... ){ char buff[1024]; va_list a;va_start(a,program_name);vsprintf_s(buff,1024,program_name,a);va_end(a); active_program=get_program(buff); if(active_program) active_program->bind(); else{ active_program=nullptr; glUseProgram(0); } return active_program; }
+		Program* bind( __printf_format_string__ const char* program_name, ... ) __printf_format_attrib__ { char buff[1024]; va_list a;va_start(a,program_name);vsnprintf(buff,1024,program_name,a);va_end(a); active_program=get_program(buff); if(active_program) active_program->bind(); else{ active_program=nullptr; glUseProgram(0); } return active_program; }
 		Program* bind( uint index ){ active_program=get_program_by_index(index); if(active_program) active_program->bind(); else { active_program=nullptr; glUseProgram(0); } return active_program; }
 
 		bool empty() const { return programs.empty(); }
 		size_t size() const { return programs.size(); }
 		Program* get_program( const char* name ) const { for(auto* p:programs)if(_stricmp(p->name(),name)==0) return p; printf("Unable to find program \"%s\" in effect \"%s\"\n", name, this->_name ); return nullptr; }
 		Program* get_program_by_index( uint index ) const { if(index<programs.size()) return programs[index]; else { printf("[%s] Out-of-bound program index\n", _name ); return nullptr; } }
-		Program* get_program_by_id( uint program_ID ) const { for(auto* p:programs)if(p->ID==program_ID) return p; printf("Unable to find program \"%d\" in effect \"%s\"\n", program_ID, this->_name ); return nullptr; }
+		Program* get_program_by_id( uint program_ID ) const { for(auto* p:programs)if(p->ID==program_ID) return p; printf("Unable to find program \"%u\" in effect \"%s\"\n", program_ID, this->_name ); return nullptr; }
 		Program* create_program( const char* name, const program_source_t& source );
 		Program* append_program( Program* program ){ if(!program) return nullptr; programs.emplace_back(program); auto& m=program->_uniform_block_map;for(auto& it:m){gl::Program::UniformBlock& ub=it.second;ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size);} return program; }
 		bool append( gl::effect_source_t source );
@@ -1231,11 +1232,11 @@ namespace gl {
 		inline void dispatch_compute_threads( GLuint tx, GLuint ty=1, GLuint tz=1 ){ auto* p=get_program_by_id(gxGetIntegerv(GL_CURRENT_PROGRAM)); if(!p){ printf("%s(): no program is bound\n",__func__); return; } uvec3 s=p->get_compute_work_group_size(); glDispatchCompute(max((tx+s.x-1)/s.x,1u),max((ty+s.y-1)/s.y,1u),max((tz+s.z-1)/s.z,1u)); }
 
 		// shader source files
-		void export_shader_sources( path dir, path fxname=L"" )
+		void export_shader_sources( path dir, path fxname="" )
 		{
-			dir = dir.to_backslash(); if(!dir.empty()&&!dir.ext().empty()&&dir.back()!=L'\\') dir=dir.dir(); dir += L"glsl\\";
+			dir = dir.to_backslash(); if(!dir.empty()&&!dir.ext().empty()&&dir.back()!=L'\\') dir=dir.dir(); dir += "glsl\\";
 			fxname = fxname.empty() ? _name : fxname.remove_extension();
-			for( auto* p : programs ) p->source.export_shader_sources( dir, fxname+L"."+p->name() );
+			for( auto* p : programs ) p->source.export_shader_sources( dir, fxname+"."+p->name() );
 		}
 
 		// internal members
@@ -1368,7 +1369,7 @@ inline void gxSaveProgramBinary( const char* name, GLuint ID, uint crc )
 {
 	std::vector<char> program_binary(gxGetProgramiv( ID, GL_PROGRAM_BINARY_LENGTH ),0);
 	GLenum binary_format=0; glGetProgramBinary( ID, GLsizei(program_binary.size()), nullptr, &binary_format, &program_binary[0] );
-	FILE* fp = _wfopen( gxGetProgramBinaryPath(name), L"wb");
+	FILE* fp = gxGetProgramBinaryPath(name).fopen("wb");
 	fwrite( &crc, sizeof(crc), 1, fp );
 	fwrite( &binary_format, sizeof(GLenum), 1, fp );
 	fwrite( &program_binary[0], sizeof(char), program_binary.size(), fp );
@@ -1382,7 +1383,7 @@ inline GLuint gxLoadProgramBinary( const char* name, uint crc )
 	size_t program_binary_size = program_binary_path.file_size();
 	if(program_binary_size<offset) return 0; // no md5 hash and binary format exists
 	std::vector<char> buff(program_binary_size);
-	FILE* fp = _wfopen( program_binary_path, L"rb"); if(fp==nullptr) return 0; fread( &buff[0], sizeof(char), program_binary_size, fp ); fclose(fp);
+	FILE* fp = program_binary_path.fopen("rb"); if(fp==nullptr) return 0; fread(&buff[0], sizeof(char), program_binary_size, fp); fclose(fp);
 	if( memcmp( &buff[0], &crc, crc_size ) !=0 ) return 0;
 	GLenum binary_format=0; memcpy( &binary_format, (&buff[0])+crc_size, sizeof(GLenum) );
 	GLuint ID = glCreateProgram(); glProgramBinary( ID, binary_format, (&buff[0])+offset, GLsizei(program_binary_size-offset) );
@@ -1438,7 +1439,7 @@ inline GLuint gxCompileShader( GLenum shader_type, const char* name, const std::
 {
 	std::vector<const char*> ps; for( auto& s : source ) ps.push_back(s.value.c_str());
 	
-	GLuint ID = glCreateShader( shader_type ); if(ID==0){ printf("%s(): unable to glCreateShader(%d)\n", __func__, shader_type); return 0; }
+	GLuint ID = glCreateShader( shader_type ); if(ID==0){ printf("%s(): unable to glCreateShader(%u)\n", __func__, shader_type); return 0; }
 	glShaderSource( ID, GLsizei(ps.size()), ps.data(), nullptr );
 	glCompileShader( ID );
 
@@ -1677,7 +1678,7 @@ inline gl::Effect* __gxCreateEffectImpl( gl::Effect* parent, const char* fxname,
 		{
 			std::vector<gl::named_string_t> ns;
 			auto ev = source.explode_parsed(parser->shader_source(k,j));
-			for( int e=0, en=int(ev.size()); e<en; e++ ) ns.emplace_back( gl::named_string_t{source.get_name(e), ev[e]} );
+			for( int i=0, ni=int(ev.size()); i<ni; i++ ) ns.emplace_back( gl::named_string_t{source.get_name(i), ev[i]} );
 			ss[parser->shader_type(k,j)] = ns;
 		}
 		
@@ -1999,7 +2000,7 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLu
 	// create a new texture; here, we must use glGenTextures() instead of glCreateTextures(), because texture view requires to have a created but uninitialized texture.
 	GLuint ID1; glGenTextures(1,&ID1); if(ID1==0) return nullptr;
 	bool b_slice0 = min_level==0&&levels==1&&layers==1;
-	const char* name1 = b_slice0?format("%s[%d]",src->_name,min_layer):format("%s[%d:%d][%d:%d]",src->_name,min_layer,layers-1,min_level,levels-1);
+	const char* name1 = b_slice0?format("%s[%u]",src->_name,min_layer):format("%s[%u:%u][%u:%u]",src->_name,min_layer,layers-1,min_level,levels-1);
 
 	// get attributes
 	GLint internal_format	= src->internal_format();

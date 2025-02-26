@@ -19,6 +19,10 @@
 #define __GX_MATH__
 
 #include "gxtype.h"
+#if __has_include( "gxstrmin.h" )
+	#include "gxstrmin.h"
+#endif
+
 #include <limits.h>
 #include <float.h>
 #include <numeric>	// for std::iota
@@ -279,7 +283,7 @@ struct bbox_t { vec3 m=3.402823466e+38F; uint __0; vec3 M=-3.402823466e+38F; uin
 //*************************************
 // std::hash support here
 
-#ifdef _M_X64
+#if defined(_M_X64)||defined(__LP64__)
 template <class T> struct bitwise_hash {size_t operator()(const T v)const{ size_t h=14695981039346656037ULL;const uchar* p=(const uchar*)&v;for(size_t k=0;k<sizeof(T);k++){h^=size_t(p[k]);h*=1099511628211ULL;}return h;}}; // FNV-1a hash function (from VC2015/2017)
 #elif defined(_M_IX86)
 template <class T> struct bitwise_hash {size_t operator()(const T v)const{ size_t h=2166136261U;const uchar* p=(const uchar*)&v;for(size_t k=0;k<sizeof(T);k++){h^=size_t(p[k]);h*=16777619U;}return h;}}; // FNV-1a hash function (from VC2015/2017)
@@ -565,13 +569,14 @@ static_assert(sizeof(dmat4)%sizeof(double)*16==0,"sizeof(dmat4)!=sizeof(double)*
 
 //*************************************
 // string-matrix conversion functions
-char* _strbuf(size_t); // forward decl. in gxstring.h
-inline const char* ftoa( const mat2& m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g";size_t size=size_t(_scprintf(fmt,f[0],f[1],f[2],f[3]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,f[0],f[1],f[2],f[3]);return buff;}
-inline const char* ftoa( const mat3& m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g";size_t size=size_t(_scprintf(fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]);return buff;}
-inline const char* ftoa( const mat4& m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g";size_t size=size_t(_scprintf(fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]);return buff;}
-inline const char* ftoa( const dmat2&m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g";size_t size=size_t(_scprintf(fmt,f[0],f[1],f[2],f[3]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,f[0],f[1],f[2],f[3]);return buff;}
-inline const char* ftoa( const dmat3&m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g";size_t size=size_t(_scprintf(fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]);return buff;}
-inline const char* ftoa( const dmat4&m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g";size_t size=size_t(_scprintf(fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]));char* buff=_strbuf(size); sprintf_s(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]);return buff;}
+#ifdef __GX_STRMIN_H__
+inline const char* ftoa( const mat2& m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3]);return buff;}
+inline const char* ftoa( const mat3& m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]);return buff;}
+inline const char* ftoa( const mat4& m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]);return buff;}
+inline const char* ftoa( const dmat2&m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3]);return buff;}
+inline const char* ftoa( const dmat3&m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]);return buff;}
+inline const char* ftoa( const dmat4&m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]);return buff;}
+#endif
 inline mat3 atof9( const char* a ){		mat3 m;char* e=0; for(int k=0;k<9;k++,a=e) (&m._11)[k]=strtof(a,&e); return m; }
 inline mat4 atof16( const char* a ){	mat4 m;char* e=0; for(int k=0;k<16;k++,a=e)(&m._11)[k]=strtof(a,&e); return m; }
 inline dmat3 atod9( const char* a ){	dmat3 m;char* e=0;for(int k=0;k<9;k++,a=e) (&m._11)[k]=strtod(a,&e); return m; }
@@ -763,14 +768,13 @@ __forceinline vec2 normVec3BitsToVec2( vec3 v )
 }
 __forceinline vec3 vec2BitsToNormVec3( vec2 v )
 {
-	static const uint cap=21, hcap=10, cmask=0x1fffff, hmask=0x3ff;	// channel capacity, half capacity, channel capacity mask (=(1<<cap)-1), half capacity mask (=(1<<hcap)-1)
+	static const uint cap=21, hcap=10, cmask=0x1fffff;	// channel capacity, half capacity, channel capacity mask (=(1<<cap)-1)
 	uvec2 u = uvec2( floatBitsToUint(v.x), floatBitsToUint(v.y) );
 	return vec3(float(u.x&cmask),float((u.y>>1)&cmask),float(((u.x&~cmask)>>(cap-hcap))|(u.y>>(cap+1))))/float(cmask);
 }
 
 //*************************************
 // spline interpolations
-#pragma warning( disable: 4244 )
 template <class T> T hermite( T v0, T v1, T v2, T v3, double t, double tension=0.5, double bias=0.0, double continuity=-0.5 )
 {
 	// REF: http://en.wikipedia.org/wiki/Kochanek%E2%80%93Bartels_spline
@@ -800,10 +804,11 @@ template <class T> T bezier( T v0, T v1, T v2, T v3, double t )
 // CRC32 with 4-batch parallel construction (from zlib)
 #pragma warning( disable: 6011 )
 template <unsigned int poly=0x82f63b78UL> // defaulted to crc32c
-__noinline unsigned int tcrc32( const void* buff, size_t size, unsigned int crc0=0 )
+__noinline unsigned int tcrc32( unsigned int crc0, const void* buff, size_t size )
 {
-	if(!buff||!size) return crc0; unsigned c = ~crc0;
-	static unsigned* t[4] = {nullptr}; if(!t[0]){ for(int k=0;k<4;k++) t[k]=(unsigned*) malloc(sizeof(unsigned)*256); for(int k=0;k<256;k++){ unsigned c=k; for( unsigned j=0;j<8;j++) c=c&1?poly^(c>>1):c>>1; t[0][k]=c; } for(int k=0;k<256;k++){ unsigned c=t[0][k]; for(int j=1;j<4;j++) t[j][k]=c=t[0][c&0xff]^(c>>8); } }
+	if(!buff||!size){ return crc0; }
+	static unsigned* t[4]={}; if(!t[0]){ for(int k=0;k<4;k++) t[k]=(unsigned*) malloc(sizeof(unsigned)*256); for(int k=0;k<256;k++){ unsigned v=k; for( unsigned j=0;j<8;j++) v=v&1?poly^(v>>1):v>>1; t[0][k]=v; } for(int k=0;k<256;k++){ unsigned v=t[0][k]; for(int j=1;j<4;j++) t[j][k]=v=t[0][v&0xff]^(v>>8); } }
+	unsigned c = ~crc0;
 	const unsigned char* b=(const unsigned char*)buff;
 	for(;size&&(ptrdiff_t(b)&7);size--,b++) c=t[0][(c^(*b))&0xff]^(c>>8); // move forward to the 8-byte aligned boundary
 	for(;size>=4;size-=4,b+=4){c^=*(unsigned*)b;c=t[3][(c>>0)&0xff]^t[2][(c>>8)&0xff]^t[1][(c>>16)&0xff]^t[0][(c>>24)&0xff]; }

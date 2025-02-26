@@ -2,7 +2,7 @@
 #ifndef __GXFONT_H__
 #define __GXFONT_H__
 
-#if defined(__has_include)&&__has_include(<gxut/gxrex.h>)
+#if __has_include(<gxut/gxrex.h>)
 #include <gxut/gxrex.h> // rex image functions
 #endif
 
@@ -29,12 +29,12 @@ struct font_engine
 	std::map<ushort,char_t>	char_map;		// LUT table: ANSI and then UTF8 >> (index,wide)
 	int						dpi=96;			// 96 for normal case
 
-	font_engine( const wchar_t* face, int point_size, uchar3 color={255,255,0}, uchar3 shadow={64,64,64}, bool vflip=false );
+	font_engine( const char* face, int point_size, uchar3 color={255,255,0}, uchar3 shadow={64,64,64}, bool vflip=false );
 	font_engine( image* table_path, int ty, int row=0, bool vflip=false );
 	~font_engine();
 
 	image*	resize_table( int count );
-	void	save_table( const wchar_t* file_path ){ if(table) rex::save_image( file_path, table ); }
+	void	save_table( const char* file_path ){ if(table) rex::save_image( file_path, table ); }
 	bool	update( const wchar_t* str );	// return true when the table is dirty
 	void	begin_raster( HBITMAP* phBitmap0, HFONT* phFont0 );
 	void	end_raster( HBITMAP hBitmap0, HFONT hFont0 );
@@ -47,7 +47,7 @@ struct font_engine
 
 inline BITMAPINFO* create_font_bitmap_info( int width, int height, int channels )
 {
-	BITMAPINFO* bmp_info = (BITMAPINFO*)malloc(sizeof(BITMAPINFOHEADER)+sizeof(RGBQUAD)*256);
+	BITMAPINFO* bmp_info = (BITMAPINFO*)malloc(sizeof(BITMAPINFOHEADER)+sizeof(RGBQUAD)*256); if(!bmp_info) return nullptr;
 	BITMAPINFOHEADER* bmih = &(bmp_info->bmiHeader);
 	memset(bmih,0,sizeof(*bmih));
 	bmih->biSize = sizeof(BITMAPINFOHEADER);
@@ -71,7 +71,7 @@ inline font_engine::~font_engine()
 	if(table)		rex::release_image(&table);
 }
 
-inline font_engine::font_engine( const wchar_t* face, int point_size, uchar3 color, uchar3 shadow, bool vflip ):vflip_table(vflip)
+inline font_engine::font_engine( const char* face, int point_size, uchar3 color, uchar3 shadow, bool vflip ):vflip_table(vflip)
 {
 	if(!(hDC=CreateCompatibleDC(nullptr))){ printf( "font_engine: hDC==nullptr\n" ); return; }
 	
@@ -83,7 +83,7 @@ inline font_engine::font_engine( const wchar_t* face, int point_size, uchar3 col
 	const_cast<int&>(TX)=TY/2;
 
 	if(hDC) bitmap = CreateCompatibleBitmap(hDC,TY,TY); // compatible (monochrome) bitmap
-	LOGFONT lf={}; lf.lfHeight=-TY; lf.lfCharSet=DEFAULT_CHARSET;wcscpy(lf.lfFaceName,face);hFont=CreateFontIndirectW(&lf);
+	LOGFONTW lf={}; lf.lfHeight=-TY; lf.lfCharSet=DEFAULT_CHARSET;wcscpy(lf.lfFaceName,atow(face));hFont=CreateFontIndirectW(&lf);
 	buffer		= rex::create_image(TY,TY,8,4);
 	bitmap_info	= create_font_bitmap_info(TY,TY,1);
 
@@ -96,7 +96,7 @@ inline font_engine::font_engine( const wchar_t* face, int point_size, uchar3 col
 
 inline font_engine::font_engine( image* table0, int ty, int row, bool vflip ):vflip_table(vflip)
 {
-	if(!(hDC=CreateCompatibleDC(nullptr))){ MessageBoxW( 0, L"FontEngine: dc==nullptr", L"Error", MB_OK ); return; }
+	if(!(hDC=CreateCompatibleDC(nullptr))){ MessageBoxA( 0, "FontEngine: dc==nullptr", "Error", MB_OK ); return; }
 	dpi = GetDeviceCaps(hDC,LOGPIXELSY); DeleteDC(hDC); hDC=nullptr; // remove DC after getting dpi
 
 	const_cast<int&>(TY)=ty*dpi/96;

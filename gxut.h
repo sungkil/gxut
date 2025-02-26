@@ -18,23 +18,15 @@
 #ifndef __GXUT_H__
 #define __GXUT_H__
 
-// includes only essential header files
-#ifdef __has_include
-	#if __has_include("gxmath.h")
-		#include "gxmath.h"
-	#endif
-	#if __has_include("gxstring.h")
-		#include "gxstring.h"
-	#endif
-	#if __has_include("gxfilesystem.h")
-		#include "gxfilesystem.h"
-	#endif
-	#if __has_include("gxos.h")
-		#include "gxos.h"
-	#endif
-	#if __has_include("gxmemory.h")
-		#include "gxmemory.h"
-	#endif
+// includes only minimal essential header files
+#if __has_include("gxmath.h")
+	#include "gxmath.h"
+#endif
+#if __has_include("gxstring.h")
+	#include "gxstring.h"
+#endif
+#if __has_include("gxfilesystem.h")
+	#include "gxfilesystem.h"
 #endif
 
 //*************************************

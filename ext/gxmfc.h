@@ -1,4 +1,5 @@
 #pragma once
+#include <Shlobj.h>
 
 // modified macro for inline message map
 #if _MSC_VER >= 1911 // VS2017 Preview
@@ -70,8 +71,11 @@ inline void copy_string_to_clipboard( const char* str )
 	if(hglobal==nullptr){ CloseClipboard(); return; }
 
 	char* buffer = (char*) GlobalLock(hglobal);
-	memcpy( buffer, str, len*sizeof(char));
-	buffer[len] = '\0';
+	if(buffer)
+	{
+		memcpy( buffer, str, len*sizeof(char));
+		buffer[len] = '\0';
+	}
 
 	SetClipboardData( CF_TEXT, hglobal );
 	CloseClipboard();
@@ -92,8 +96,11 @@ inline void copy_string_to_clipboard( const wchar_t* str )
 	if(hglobal==nullptr){ CloseClipboard(); return; }
 
 	wchar_t* buffer = (wchar_t*) GlobalLock(hglobal);
-	memcpy( buffer, str, len*sizeof(wchar_t));
-	buffer[len] = '\0';
+	if(buffer)
+	{
+		memcpy( buffer, str, len*sizeof(wchar_t));
+		buffer[len] = '\0';
+	}
 
 	SetClipboardData( CF_UNICODETEXT, hglobal );
 	CloseClipboard();
@@ -222,7 +229,7 @@ struct explorer_t
 	{
 		clear();
 		path folder_path; bool bFound=false; VARIANT v={}; V_VT(&v)=VT_I4;
-		if(!SUCCEEDED(CoCreateInstance(CLSID_ShellWindows,nullptr,CLSCTX_ALL,IID_IShellWindows,(void**)&psw))){ clear(); return L""; }
+		if(!SUCCEEDED(CoCreateInstance(CLSID_ShellWindows,nullptr,CLSCTX_ALL,IID_IShellWindows,(void**)&psw))){ clear(); return ""; }
 		for( V_I4(&v)=0; !bFound && psw->Item(v,&pd)==S_OK; V_I4(&v)++ )
 		{
 			pwba=nullptr; if(!SUCCEEDED(pd->QueryInterface(IID_IWebBrowserApp, (void**)&pwba ))){ clear(); continue; }
@@ -233,7 +240,7 @@ struct explorer_t
 			psv=nullptr; if(!SUCCEEDED(psb->QueryActiveShellView(&psv))){ clear(); continue; }
 			pfv=nullptr; if(!SUCCEEDED(psv->QueryInterface(IID_IFolderView,(void**)&pfv))){ clear(); continue; }
 			ppf2=nullptr; if(!SUCCEEDED(pfv->GetFolder(IID_IPersistFolder2,(void**)&ppf2))){ clear(); continue; }
-			pidlFolder=nullptr; if(SUCCEEDED(ppf2->GetCurFolder(&pidlFolder))){ if(!SHGetPathFromIDList(pidlFolder,folder_path)) folder_path.clear(); } CoTaskMemFree(pidlFolder);
+			pidlFolder=nullptr; if(SUCCEEDED(ppf2->GetCurFolder(&pidlFolder))){ wchar_t b[path::capacity]; if(SHGetPathFromIDListW(pidlFolder,b)) folder_path=wtoa(b); else folder_path.clear(); } CoTaskMemFree(pidlFolder);
 			clear();
 		}
 		clear();
@@ -254,7 +261,7 @@ struct explorer_t
 			psv=nullptr; if(!SUCCEEDED(psb->QueryActiveShellView(&psv))){ clear(); continue; }
 			pfv=nullptr; if(!SUCCEEDED(psv->QueryInterface(IID_IFolderView,(void**)&pfv))){ clear(); continue; }
 			ppf2=nullptr; if(!SUCCEEDED(pfv->GetFolder(IID_IPersistFolder2,(void**)&ppf2))){ clear(); continue; }
-			auto* pidl = ILCreateFromPathW(folder_path);
+			auto* pidl = ILCreateFromPathW(atow(folder_path.c_str()));
 			bFound = SUCCEEDED(psb->BrowseObject( pidl, SBSP_SAMEBROWSER ));
 			ILFree(pidl);
 			clear();
@@ -262,7 +269,7 @@ struct explorer_t
 		clear();
 	}
 
-	static void open_folder( const wchar_t* dir )
+	static void open_folder( const char* dir )
 	{
 		if(!path(dir).exists()) return;
 		HWND foreground_window = GetForegroundWindow(); // retrieve current foreground window

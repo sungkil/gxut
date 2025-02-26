@@ -49,13 +49,13 @@ template <class T, size_t N> struct block_allocator
 		if( cfm==nullptr || (cfm->allocated+sizeof(T)*n) > cfm->capacity )
 		{
 			// otherwise create a new file
-			SYSTEMTIME s={}; GetSystemTime(&s); wchar_t fileName[1024]={}; wsprintf( fileName, L"fa%p%02d%02d%02d%02d%04d%05d", GetCurrentThreadId(), s.wDay, s.wHour, s.wMinute, s.wSecond, s.wMilliseconds, rand() ); // make unique file name
-			path filePath=path::temp_dir()+L"gxallocator\\"+fileName; if(!filePath.dir().exists()) filePath.dir().mkdir();
+			SYSTEMTIME s={}; GetSystemTime(&s); char file_name[1024]={}; snprintf( file_name, 1024, "fa%p%02d%02d%02d%02d%04d%05d", GetCurrentThreadId(), s.wDay, s.wHour, s.wMinute, s.wSecond, s.wMilliseconds, rand() ); // make unique file name
+			path file_path=path::temp()+"gxallocator\\"+file_name; if(!file_path.dir().exists()) file_path.dir().mkdir();
 
 			file_map fm={};
 			fm.capacity = n>block_allocator_thresh ? n*sizeof(T) : N*n*sizeof(T);	// use block allocation only for small allocation
-			fm.hFile = CreateFileW( filePath, GENERIC_READ|GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_FLAG_RANDOM_ACCESS|FILE_FLAG_DELETE_ON_CLOSE, nullptr ); if( fm.hFile==INVALID_HANDLE_VALUE ) return nullptr;
-			fm.hFileMap = CreateFileMappingW( fm.hFile, nullptr, PAGE_READWRITE, 0, fm.capacity, fileName ); if( fm.hFileMap==INVALID_HANDLE_VALUE ) return nullptr;
+			fm.hFile = CreateFileW( atow(file_path.c_str()), GENERIC_READ|GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_FLAG_RANDOM_ACCESS|FILE_FLAG_DELETE_ON_CLOSE, nullptr ); if( fm.hFile==INVALID_HANDLE_VALUE ) return nullptr;
+			fm.hFileMap = CreateFileMappingW( fm.hFile, nullptr, PAGE_READWRITE, 0, fm.capacity, file_name ); if( fm.hFileMap==INVALID_HANDLE_VALUE ) return nullptr;
 			fm.view = MapViewOfFile( fm.hFileMap, FILE_MAP_ALL_ACCESS, 0, 0, fm.capacity ); if(fm.view==nullptr){ CloseHandle( fm.hFileMap ); fm.hFileMap = INVALID_HANDLE_VALUE; return nullptr; }
 
 			// update the current records
@@ -158,7 +158,7 @@ template <class T> struct file_allocator_single
 	void construct( pointer p, const T& value ){ new((void*)p)T( value ); }
 	void destroy( pointer p ){ p->~T(); }
 
-	static const wchar_t* _uname(){ static wchar_t fileName[1024]; SYSTEMTIME s; GetSystemTime( &s ); wsprintf( fileName, L"ma%p%02d%02d%02d%02d%04d%05d", GetCurrentThreadId(), s.wDay, s.wHour, s.wMinute, s.wSecond, s.wMilliseconds, rand() ); return fileName; } // make unique file name
+	static const char* _uname(){ static char file_name[1024]; SYSTEMTIME s; GetSystemTime( &s ); snprintf( file_name, 1024, "ma%p%02d%02d%02d%02d%04d%05d", GetCurrentThreadId(), s.wDay, s.wHour, s.wMinute, s.wSecond, s.wMilliseconds, rand() ); return file_name; } // make unique file name
 	pointer allocate( size_type n, const void* /*hint*/ = 0 ){ if(n==0) return nullptr; hFileMap = CreateFileMappingW( INVALID_HANDLE_VALUE /* pagefile */, nullptr, PAGE_READWRITE, 0, n*sizeof(T), _uname() ); if( hFileMap==INVALID_HANDLE_VALUE ) return nullptr; return (T*)MapViewOfFile( hFileMap, FILE_MAP_READ|FILE_MAP_WRITE, 0, 0, n*sizeof(T) ); }
 	void deallocate( pointer p, size_type n ){ if(p){FlushViewOfFile(p,0);UnmapViewOfFile(p);} if(hFileMap!=INVALID_HANDLE_VALUE){CloseHandle(hFileMap );hFileMap=INVALID_HANDLE_VALUE;}}
 

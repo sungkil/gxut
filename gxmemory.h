@@ -18,13 +18,13 @@
 #ifndef __GX_MEMORY_H__
 #define __GX_MEMORY_H__
 
-#if defined(__has_include)&&__has_include("gxfilesystem.h")
+#if __has_include("gxfilesystem.h")
 	#include "gxfilesystem.h"
 #endif
-#if defined(__has_include)&&__has_include("gxmath.h")
+#if __has_include("gxmath.h")
 	#include "gxmath.h"
 #endif
-#if defined(__has_include)&&__has_include(<intrin.h>)&&__has_include(<nmmintrin.h>)
+#if __has_include(<intrin.h>)&&__has_include(<nmmintrin.h>)
 	#include <intrin.h>
 	#include <nmmintrin.h>
 #endif
@@ -55,7 +55,7 @@ template <class T,bool readonly=false> struct mmap // memory-mapped file (simila
 	size_t	size=0;
 	
 	mmap( size_t n ):size(n){ size_t s=size*sizeof(T); hFileMap=CreateFileMappingW( INVALID_HANDLE_VALUE /* use pagefile */, nullptr, PAGE_READWRITE, DWORD(s>>32), DWORD(s&0xffffffff), _uname() ); }
-	mmap( const wchar_t* file_path){ struct _stat st={}; if(_waccess(file_path,0)!=0) return; _wstat(file_path,&st); size_t file_size=st.st_size; size=file_size/sizeof(T); if(file_size==0) return; hFile=CreateFileW(file_path,GENERIC_READ|(readonly?0:GENERIC_WRITE), FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_RANDOM_ACCESS, nullptr); if(hFile==INVALID_HANDLE_VALUE){size=0;return;} size_t memsize=sizeof(T)*size; hFileMap=CreateFileMappingW(hFile,nullptr,readonly?PAGE_READONLY:PAGE_READWRITE,DWORD(uint64_t(memsize)>>32),DWORD(memsize&0xffffffff),nullptr); if(hFileMap==INVALID_HANDLE_VALUE){size=0;CloseHandle(hFile);hFile=nullptr;return;} }
+	mmap( const char* file_path){ struct _stat st={}; if(_access(file_path,0)!=0) return; _stat(file_path,&st); size_t file_size=st.st_size; size=file_size/sizeof(T); if(file_size==0) return; hFile=CreateFileW(atow(file_path),GENERIC_READ|(readonly?0:GENERIC_WRITE), FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_RANDOM_ACCESS, nullptr); if(hFile==INVALID_HANDLE_VALUE){size=0;return;} size_t memsize=sizeof(T)*size; hFileMap=CreateFileMappingW(hFile,nullptr,readonly?PAGE_READONLY:PAGE_READWRITE,DWORD(uint64_t(memsize)>>32),DWORD(memsize&0xffffffff),nullptr); if(hFileMap==INVALID_HANDLE_VALUE){size=0;CloseHandle(hFile);hFile=nullptr;return;} }
 	virtual ~mmap(){ if(!empty()&&ptr){ FlushViewOfFile(ptr,0); UnmapViewOfFile(ptr); ptr=nullptr; } if(hFileMap!=INVALID_HANDLE_VALUE) CloseHandle(hFileMap); hFileMap=INVALID_HANDLE_VALUE; if(hFile!=INVALID_HANDLE_VALUE) CloseHandle(hFile); hFile=INVALID_HANDLE_VALUE; }
 	bool empty() const { return hFile==INVALID_HANDLE_VALUE||hFileMap==INVALID_HANDLE_VALUE||size==0; }
 	T* map( size_t offset=0, size_t n=0 ){ if(empty()) return nullptr; size_t s=offset*sizeof(T); return ptr=(T*)MapViewOfFile(hFileMap,FILE_MAP_READ|(readonly?0:FILE_MAP_WRITE),DWORD(uint64_t(s)>>32),DWORD(s&0xffffffff),(n?n:size)*sizeof(T)); }
@@ -64,7 +64,7 @@ template <class T,bool readonly=false> struct mmap // memory-mapped file (simila
 protected:
 	HANDLE hFile = INVALID_HANDLE_VALUE;		// handle to the file (INVALID_HANDLE_VALUE means pagefile)
 	HANDLE hFileMap = INVALID_HANDLE_VALUE;		// handle to the file mapping
-	static const wchar_t* _uname(){ static wchar_t fileName[256]; SYSTEMTIME s; GetSystemTime( &s ); wsprintfW( fileName, L"%p%02d%02d%02d%02d%04d%05d", GetCurrentThreadId(), s.wDay, s.wHour, s.wMinute, s.wSecond, s.wMilliseconds, rand() ); return fileName; } // make unique file name
+	static const char* _uname(){ static char n[256]; SYSTEMTIME s; GetSystemTime(&s); snprintf( n, _countof(n), "%p%02d%02d%02d%02d%04d%05d", GetCurrentThreadId(), s.wDay, s.wHour, s.wMinute, s.wSecond, s.wMilliseconds, rand() ); return n; } // make unique file name
 };
 
 #ifndef __ZIPENTRY__
@@ -94,9 +94,9 @@ struct izip_t	// common interface to zip, 7zip, ...
 	virtual ~izip_t(){}
 	virtual void release()=0;
 	virtual bool load()=0;
-	virtual bool extract_to_files( path dir, const wchar_t* name=nullptr )=0;	// if name==nullptr, extract all files. otherwise, extract a single file with the name
-	virtual bool extract_to_memory( const wchar_t* name=nullptr )=0;			// if name==nullptr, extract all files. otherwise, extract a single file with the name
-	virtual zipentry_t* find( const wchar_t* name ){ for(auto& e:entries){ if(_wcsicmp(e.name,name)==0) return &e; } return nullptr; }
+	virtual bool extract_to_files( path dir, const char* name=nullptr )=0;	// if name==nullptr, extract all files. otherwise, extract a single file with the name
+	virtual bool extract_to_memory( const char* name=nullptr )=0;			// if name==nullptr, extract all files. otherwise, extract a single file with the name
+	virtual zipentry_t* find( const char* name ){ std::wstring w=atow(name); for(auto& e:entries){ if(_wcsicmp(e.name,w.c_str())==0) return &e; } return nullptr; }
 };
 
 // signature detection
@@ -123,7 +123,7 @@ inline bool is_zip_signature( void* ptr, size_t size=0 )
 
 inline bool is_7zip_file( const path& file_path )
 {
-	FILE* fp = _wfopen(file_path.c_str(),L"rb"); if(!fp) return false;
+	FILE* fp = file_path.fopen("rb"); if(!fp) return false;
 	_fseeki64(fp,0,SEEK_END); size_t size=size_t(_ftelli64(fp)); _fseeki64(fp,0,SEEK_SET);
 	unsigned char t[6]={}; if(size>=sizeof(t)) fread(t,1,sizeof(t),fp); fclose(fp);
 	return is_7zip_signature(t,size);
@@ -131,7 +131,7 @@ inline bool is_7zip_file( const path& file_path )
 
 inline bool is_zip_file( const path& file_path )
 {
-	FILE* fp = _wfopen(file_path.c_str(),L"rb"); if(!fp) return false;
+	FILE* fp = file_path.fopen("rb"); if(!fp) return false;
 	_fseeki64(fp,0,SEEK_END); size_t size=size_t(_ftelli64(fp)); _fseeki64(fp,0,SEEK_SET);
 	unsigned char t[6]={}; if(size>=sizeof(t)) fread(t,1,sizeof(t),fp); fclose(fp);
 	return is_zip_signature(t,size);
@@ -150,30 +150,33 @@ struct resource_t : public mem_t
 	~resource_t(){ release(); }
 	void release(){ if(hmem){ /*UnlockResource(hmem);*/ FreeResource(hmem); hmem=nullptr; } if(zip){ zip->release(); delete zip; zip=nullptr; } }
 	bool find( LPCWSTR lpName ){ return (hres=FindResourceW( hModule, lpName, type ))!=nullptr; }
+	bool find( LPCSTR lpName ){ return (hres=FindResourceW( hModule, atow(lpName), type ))!=nullptr; }
 	bool find( int res_id ){ return find(MAKEINTRESOURCEW(res_id)); }
 
 	bool load(){ if(!hres||!(hmem=LoadResource(hModule,hres))) return false; size=SizeofResource(hModule,hres); ptr=LockResource(hmem); return size!=0; }
 	bool load( LPCWSTR lpName ){ return find(lpName)&&load(); }
+	bool load( LPCSTR lpName ){ return find(atow(lpName))&&load(); }
 	bool load( int res_id ){ return find(res_id)&&load(); }
 
 	// loading for specific types
-	std::wstring load_wstring(){ if(type!=MAKEINTRESOURCEW(6/*string 6*/)||!load()) return L""; std::wstring w; w.resize(size/sizeof(wchar_t)); memcpy((void*)w.c_str(),ptr,size); return w; }
+	std::string load_string(){ if(type!=MAKEINTRESOURCEW(6/*string 6*/)||!load()) return ""; std::wstring w; w.resize(size/sizeof(decltype(w)::value_type)); memcpy((void*)w.c_str(),ptr,size); return wtoa(w.c_str()); }
 	izip_t* load_zip();
 };
 #endif // MAKEINTRESOURCEW
 
 //***********************************************
 // regular crc32 wrappers
-inline unsigned int crc32( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0xedb88320UL>(buff,size,crc0); }
-inline unsigned int crc32( sized_ptr_t<void> p, unsigned int crc0=0 ){ return crc32((const void*)p.ptr,p.size); }
-#if !defined(_MSC_VER)||defined(__clang__)
-inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ return tcrc32<0x82f63b78UL>(buff,size,crc0); }
-#else
+inline unsigned int crc32( unsigned int crc0, const void* buff, size_t size ){ return tcrc32<0xedb88320UL>(crc0,buff,size); }
+inline unsigned int crc32( unsigned int crc0, sized_ptr_t<void> p ){ return crc32(crc0,(const void*)p.ptr,p.size); }
+inline unsigned int crc32( const void* buff, size_t size ){ return crc32(0,buff,size); }
+inline unsigned int crc32( sized_ptr_t<void> p ){ return crc32(0,p); }
+
+#if defined(_MSC_VER)&&!defined(__clang__)
 // CRC32C SSE4.2 implementation up to 8-batch parallel construction (https://github.com/Voxer/sse4_crc32)
-__noinline unsigned int crc32c_hw( const void* buff, size_t size, unsigned int crc0 )
+__noinline unsigned int crc32c_hw( unsigned int crc0, const void* buff, size_t size )
 {
 	if(!buff||!size) return crc0; const unsigned char* b = (const unsigned char*) buff;
-#if defined(_M_X64)
+#if defined(_M_X64)||defined(__LP64__)
 	uint64_t c = ~uint64_t(crc0);
 	for(;size && ((ptrdiff_t)b&7);size--,b++) c=_mm_crc32_u8(uint32_t(c),*b); // move forward to the 8-byte aligned boundary
 	for(;size>=sizeof(uint64_t);size-=sizeof(uint64_t),b+=sizeof(uint64_t)) c=_mm_crc32_u64(c,*(uint64_t*)b);
@@ -187,16 +190,26 @@ __noinline unsigned int crc32c_hw( const void* buff, size_t size, unsigned int c
 	return uint32_t(~c);
 }
 inline bool __has_sse42(){ static bool b=false; if(!b){int r[4]={};__cpuid(r,1);b=(((r[2]>>20)&1)==1);} return b; }
-inline unsigned int crc32c( const void* buff, size_t size, unsigned int crc0=0 ){ static unsigned int(*pcrc32c)(const void*,size_t,unsigned int)=__has_sse42()?crc32c_hw:tcrc32<0x82f63b78UL>; return pcrc32c(buff, size, crc0); }
+inline unsigned int crc32c( unsigned int crc0, const void* buff, size_t size ){ static unsigned int(*pcrc32c)(unsigned int,const void*,size_t)=__has_sse42()?crc32c_hw:tcrc32<0x82f63b78UL>; return pcrc32c(crc0,buff,size); }
+#else
+inline unsigned int crc32c( unsigned int crc0, const void* buff, size_t size ){ return tcrc32<0x82f63b78UL>(crc0,buff,size); }
 #endif
+inline unsigned int crc32c( unsigned int crc0, sized_ptr_t<void> p ){ return crc32c(crc0,(const void*)p.ptr,p.size); }
+inline unsigned int crc32c( unsigned int crc0, const char* s ){ return crc32c(crc0,(const void*)s,strlen(s)); }
+inline unsigned int crc32c( unsigned int crc0, const wchar_t* s ){ return crc32c(crc0,(const void*)s,wcslen(s)); }
+template <class T> inline unsigned int crc32c( unsigned int crc0, const std::vector<T>& v ){ return v.empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
+template <class T> inline unsigned int crc32c( unsigned int crc0, const std::vector<T>* v ){ return !v||v->empty()?crc0:crc32c(crc0,v->data(),v->size()*sizeof(T)); }
+template <class T, size_t N> inline unsigned int crc32c( unsigned int crc0, const std::array<T,N>& v ){ return v.empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
+template <class T, size_t N> inline unsigned int crc32c( unsigned int crc0, const std::array<T,N>* v ){ return !v||v->empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
 
-inline unsigned int crc32c( sized_ptr_t<void> p, unsigned int crc0=0 ){ return crc32c((const void*)p.ptr,p.size,crc0); }
-inline unsigned int crc32c( const char* s ){ return crc32c((const void*)s,strlen(s)); }
-inline unsigned int crc32c( const wchar_t* s ){ return crc32c((const void*)s,wcslen(s)*sizeof(wchar_t)); }
-template <class T> inline unsigned int crc32c( const std::vector<T>& v, unsigned int crc0=0 ){ return v.empty()?crc0:crc32c(v.data(),v.size()*sizeof(T),crc0); }
-template <class T> inline unsigned int crc32c( const std::vector<T>* v, unsigned int crc0=0 ){ return !v||v->empty()?crc0:crc32c(v->data(),v->size()*sizeof(T),crc0); }
-template <class T, size_t N> inline unsigned int crc32c( const std::array<T,N>& v, unsigned int crc0=0 ){ return v.empty()?crc0:crc32c(v.data(),v.size()*sizeof(T),crc0); }
-template <class T, size_t N> inline unsigned int crc32c( const std::array<T,N>* v, unsigned int crc0=0 ){ return !v||v->empty()?crc0:crc32c(v.data(),v.size()*sizeof(T),crc0); }
+inline unsigned int crc32c( const void* buff, size_t size ){ return crc32c(0,buff,size); }
+inline unsigned int crc32c( sized_ptr_t<void> p ){ return crc32c(0,p); }
+inline unsigned int crc32c(	const char* s ){ return crc32c(0,s); }
+inline unsigned int crc32c(	const wchar_t* s ){ return crc32c(0,s); }
+template <class T> inline unsigned int crc32c( const std::vector<T>& v ){ return crc32c<T>(0,v); }
+template <class T> inline unsigned int crc32c( const std::vector<T>* v ){ return crc32c<T>(0,v); }
+template <class T, size_t N> inline unsigned int crc32c( const std::array<T,N>& v ){ return crc32c<T,N>(v); }
+template <class T, size_t N> inline unsigned int crc32c( const std::array<T,N>* v ){ return crc32c<T,N>(v); }
 
 //***********************************************
 // MD5 implementation
@@ -205,7 +218,6 @@ struct md5
 	uint4 digest={0xd98c1dd4,0x4b2008f,0x980980e9,0x7e42f8ec}; // null digest
 	explicit md5(const char* str):md5(str,strlen(str)){}
 	explicit md5(std::string str):md5(str.c_str(),str.size()){}
-	explicit md5(std::wstring wstr):md5(wstr.c_str(),wstr.size()*sizeof(wchar_t)){}
 	md5(const void* ptr, size_t size){ if(ptr&&size) update(ptr,size); }
 	md5(sized_ptr_t<void> p):md5(p.ptr,p.size){}
 	const char* c_str() const { static char buff[64]; unsigned char* u=(unsigned char*)&digest; char* c=buff; for(int k=0;k<16;k++,u++,c+=2)sprintf(c,"%02x",*u); buff[32]=0; return buff; }
@@ -279,10 +291,10 @@ __noinline void md5::update( const void* data, size_t size )
 #ifdef __GX_FILESYSTEM_H__
 __noinline uint path::crc32c() const
 {
-	FILE* fp=_wfopen(_data,L"rb"); if(!fp) return 0;
+	FILE* fp=fopen("rb"); if(!fp) return 0;
 	size_t bs=min(file_size(fp),size_t(1<<16)); if(bs==0){ fclose(fp); return 0; }
-	char* buff=(char*)malloc(bs); uint c=0; size_t r=0; while(r=fread(buff,1,bs,fp)) c=::crc32c(buff,r,c);
-	fclose(fp); free(buff);
+	char* buff=(char*)malloc(bs); uint c=0; size_t r=0; if(buff){ while(r=fread(buff,1,bs,fp)) c=::crc32c(c,buff,r); }
+	fclose(fp); if(buff) free(buff);
 	return c;
 }
 
