@@ -352,7 +352,7 @@ __noinline bool create_process( const char* app, const char* args=nullptr,
 {
 	STARTUPINFOW si={sizeof(si)}; si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=windowed?SW_SHOW:SW_HIDE;
 	PROCESS_INFORMATION pi={};
-	if(!CreateProcessW( app?atow(app):nullptr, (LPWSTR)atow(__build_process_cmd(app, args).c_str()), nullptr, nullptr, FALSE, priority, nullptr, nullptr, &si, &pi)||!pi.hProcess){ ebox(get_last_error()); return false; }
+	if(!CreateProcessW( app?atow(app):nullptr, (LPWSTR)atow(__build_process_cmd(app,args).c_str()), nullptr, nullptr, FALSE, priority, nullptr, nullptr, &si, &pi)||!pi.hProcess){ ebox(get_last_error()); return false; }
 	if(wait){ WaitForSingleObject(pi.hProcess,INFINITE); safe_close_handle( pi.hThread ); safe_close_handle( pi.hProcess ); }
 	return true;
 }
@@ -390,7 +390,7 @@ __noinline bool redirect_process( const char* app, const char* args=nullptr,
 
 	// create process and wait if necessary
 	PROCESS_INFORMATION pi={};
-	if(!CreateProcessW( atow(app), (LPWSTR)atow(__build_process_cmd(app,args).c_str()), nullptr, nullptr, TRUE, priority, nullptr, nullptr, &si, &pi )||!pi.hProcess){ ebox(get_last_error()); return false; }
+	if(!CreateProcessW( app?atow(app):nullptr, (LPWSTR)atow(__build_process_cmd(app,args).c_str()), nullptr, nullptr, TRUE, priority, nullptr, nullptr, &si, &pi )||!pi.hProcess){ ebox(get_last_error()); return false; }
 
 	static char* buff=nullptr; static size_t blen=0;
 	DWORD n_avail=0, n_read=0, read_count=0;

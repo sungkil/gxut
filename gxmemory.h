@@ -150,12 +150,10 @@ struct resource_t : public mem_t
 	~resource_t(){ release(); }
 	void release(){ if(hmem){ /*UnlockResource(hmem);*/ FreeResource(hmem); hmem=nullptr; } if(zip){ zip->release(); delete zip; zip=nullptr; } }
 	bool find( LPCWSTR lpName ){ return (hres=FindResourceW( hModule, lpName, type ))!=nullptr; }
-	bool find( LPCSTR lpName ){ return (hres=FindResourceW( hModule, atow(lpName), type ))!=nullptr; }
 	bool find( int res_id ){ return find(MAKEINTRESOURCEW(res_id)); }
 
 	bool load(){ if(!hres||!(hmem=LoadResource(hModule,hres))) return false; size=SizeofResource(hModule,hres); ptr=LockResource(hmem); return size!=0; }
 	bool load( LPCWSTR lpName ){ return find(lpName)&&load(); }
-	bool load( LPCSTR lpName ){ return find(atow(lpName))&&load(); }
 	bool load( int res_id ){ return find(res_id)&&load(); }
 
 	// loading for specific types
