@@ -207,12 +207,6 @@ public:
 	struct split_t { value_type *drive, *dir, *fname, *ext; };
 	__forceinline split_t split( value_type* drive=nullptr, value_type* dir=nullptr, value_type* fname=nullptr, value_type* ext=nullptr ) const { _splitpath_s(_data,drive,drive?_MAX_DRIVE:0,dir,dir?_MAX_DIR:0,fname,fname?_MAX_FNAME:0,ext,ext?_MAX_EXT:0); if(drive&&drive[0]) drive[0]=value_type(toupper(drive[0])); return split_t{drive,dir,fname,ext}; }
 
-	// shortcuts to C-string
-	const char* aname( bool with_ext=true ) const { return __strdup(name(with_ext).c_str()); }
-	const wchar_t* wname( bool with_ext=true ) const { return atow(name(with_ext).c_str()); }
-	const char* slash() const { return __strdup(to_slash().c_str()); }
-	const char* auto_quote() const { if(!*_data||(_data[0]=='\"'&&_data[strlen(_data)-1]=='\"')) return c_str(); auto* t=__strbuf(capacity); size_t l=strlen(_data); memcpy(t,_data,l*sizeof(value_type)); if(t[l]==' '||t[l]=='\t'||t[l]=='\n') t[l]=0; if(t[0]==' '||t[0]=='\t'||t[0]=='\n') t++; if(t[0]!='-'&&!strchr(t,' ')&&!strchr(t,'\t')&&!strchr(t,'\n')&&!strchr(t,'|')&&!strchr(t,'&')&&!strchr(t,'<')&&!strchr(t,'>')) return c_str(); path p; p[0]='\"'; memcpy(p._data+1,_data,l*sizeof(value_type)); p[l+1]='\"'; p[l+2]=0; return __strdup(p.c_str()); }
-
 	// helpers for C-string functions
 	bool find( const char* s, bool case_insensitive=true ){ return (case_insensitive?_stristr(_data,s):strstr(_data,s))!=nullptr; }
 
@@ -220,7 +214,7 @@ public:
 	typedef struct _stat64 stat_t;						// use "struct _stat" instead of "_stat" for C-compatibility
 	inline stat_t	stat() const { stat_t s={}; if(exists()) _stat64(_data,&s); return s; }
 	inline DWORD&	attributes() const { update_cache(); return cache().dwFileAttributes; }
-	inline void		update_cache() const { auto& c=cache(); if(!GetFileAttributesExW(atow(_data),GetFileExInfoStandard,&c)||c.dwFileAttributes==INVALID_FILE_ATTRIBUTES){ memset(&c,0,sizeof(attrib_t)); c.dwFileAttributes=INVALID_FILE_ATTRIBUTES; return; } c.ftLastWriteTime=DiscardFileTimeMilliseconds(c.ftLastWriteTime); }
+	inline void		update_cache() const { if(!*_data) return; auto& c=cache(); if(!GetFileAttributesExW(atow(_data),GetFileExInfoStandard,&c)||c.dwFileAttributes==INVALID_FILE_ATTRIBUTES){ memset(&c,0,sizeof(attrib_t)); c.dwFileAttributes=INVALID_FILE_ATTRIBUTES; return; } c.ftLastWriteTime=DiscardFileTimeMilliseconds(c.ftLastWriteTime); }
 	inline void		clear_cache() const { attrib_t* a=(attrib_t*)(_data+capacity); memset(a,0,sizeof(attrib_t)); a->dwFileAttributes=INVALID_FILE_ATTRIBUTES; }
 	inline uint64_t file_size() const { update_cache(); auto& c=cache(); if(c.dwFileAttributes==INVALID_FILE_ATTRIBUTES) return 0; return uint64_t(c.nFileSizeHigh)<<32ull|uint64_t(c.nFileSizeLow); }
 
@@ -260,12 +254,16 @@ public:
 	path drive() const { if(!*_data) return path();if(is_unc()) return unc_root();path d;_splitpath_s(_data,d._data,_MAX_DRIVE,0,0,0,0,0,0);return d; }
 	path dir() const { path p; value_type* d=__strbuf(capacity);if(is_unc()){path r=unc_root();size_t rl=r.size();if(size()<=rl+1){if(r._data[rl-1]!=__backslash){r._data[rl]=__backslash;r._data[rl+1]=0;}return r;}} _splitpath_s(_data,p._data,_MAX_DRIVE,d,_MAX_DIR,0,0,0,0); size_t pl=strlen(p._data), dl=strlen(d); if(0==(pl+dl)) return ".\\"; if(dl){ memcpy(p._data+pl,d,dl*sizeof(value_type)); p._data[pl+dl]=0; } return p; }
 	path unc_root() const { if(!is_unc()) return path(); path r=*this;size_t l=strlen(_data);for(size_t k=0;k<l;k++)if(r[k]==__slash)r[k]=__backslash; auto* b=strchr(r._data+2,__backslash);if(b)((value_type*)b)[0]=0; return r; } // similar to drive (but to the root unc path without backslash)
-	path name( bool with_ext=true ) const { path p; value_type* ext=with_ext?__strbuf(capacity):nullptr; _splitpath_s(_data,0,0,0,0,p._data,_MAX_FNAME,ext,ext?_MAX_EXT:0); if(!ext) return p; size_t pl=strlen(p._data), el=strlen(ext); if(el){ memcpy(p._data+pl,ext,el*sizeof(value_type)); p._data[pl+el]=0; } return p; }
 	path dir_name() const { if(strchr(_data,__backslash)) return dir().remove_backslash().name(); else if(strchr(_data,__slash)) return dir().remove_slash().name(); else return ""; }
 	path ext() const { value_type e[_MAX_EXT+1]; _splitpath_s(_data,0,0,0,0,0,0,e,_MAX_EXT); path p; if(*e!=0) strcpy(p._data,e+1); return p; }
 	path parent() const { return dir().remove_backslash().dir(); }
 	std::vector<path> ancestors( path root="" ) const { if(empty()) return std::vector<path>(); if(root._data[0]==0) root=is_unc()?unc_root():module_dir(); path d=dir(); int l=int(d.size()),rl=int(root.size()); bool r=_strnicmp(d._data,root._data,rl)==0; std::vector<path> a;a.reserve(4); for(int k=l-1,e=r?rl-1:0;k>=e;k--){ if(d._data[k]!=__backslash&&d._data[k]!=__slash) continue; d._data[k+1]=0; a.emplace_back(d); } return a; }
 	path junction() const { path t; if(!*_data||!exists()) return t; bool b_dir=is_dir(),j=false; for(auto& d:b_dir?ancestors():dir().ancestors()){ if(d.is_drive()) break; if((d.attributes()&FILE_ATTRIBUTE_REPARSE_POINT)!=0){j=true;break;} } if(!j) return t; HANDLE h=CreateFileW(atow(c_str()), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0); if(h==INVALID_HANDLE_VALUE) return t; auto* w=__strbuf<wchar_t>(capacity); GetFinalPathNameByHandleW(h, w, t.capacity, FILE_NAME_NORMALIZED); CloseHandle(h); strcpy(t._data,wtoa(w)); if(strncmp(t._data, "\\\\?\\", 4)==0) t=path(t._data+4); return b_dir?t.add_backslash():t; }
+
+	// shortcuts to C-string
+	const char* name( bool with_ext=true ) const { path p; value_type* ext=with_ext?__strbuf(capacity):nullptr; _splitpath_s(_data,0,0,0,0,p._data,_MAX_FNAME,ext,ext?_MAX_EXT:0); if(!ext) return __strdup(p._data); size_t pl=strlen(p._data), el=strlen(ext); if(el){ memcpy(p._data+pl,ext,el*sizeof(value_type)); p._data[pl+el]=0; } return __strdup(p._data); }
+	const char* slash() const { return __strdup(to_slash().c_str()); }
+	const char* auto_quote() const { if(!*_data||(_data[0]=='\"'&&_data[strlen(_data)-1]=='\"')) return c_str(); auto* t=__strbuf(capacity); size_t l=strlen(_data); memcpy(t,_data,l*sizeof(value_type)); if(t[l]==' '||t[l]=='\t'||t[l]=='\n') t[l]=0; if(t[0]==' '||t[0]=='\t'||t[0]=='\n') t++; if(t[0]!='-'&&!strchr(t,' ')&&!strchr(t,'\t')&&!strchr(t,'\n')&&!strchr(t,'|')&&!strchr(t,'&')&&!strchr(t,'<')&&!strchr(t,'>')) return c_str(); path p; p[0]='\"'; memcpy(p._data+1,_data,l*sizeof(value_type)); p[l+1]='\"'; p[l+2]=0; return __strdup(p.c_str()); }
 
 	// content manipulations
 	path remove_first_dot()	const { return (strlen(_data)>2&&_data[0]=='.'&&_data[1]==__backslash) ? path(_data+2) : *this; }
@@ -280,7 +278,7 @@ public:
 	path chdir() const { path old=cwd(); int r=is_dir()?_chdir(_data):0; return old; } // return old working directory
 	bool mkdir() const; // make all super directories
 	bool copy_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()||dst.empty()) return false; if(dst.is_dir()||dst.back()==__backslash) dst=dst.add_backslash()+name(); dst.dir().mkdir(); if(dst.exists()&&overwrite){ if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } return bool(CopyFileW( atow(c_str()), atow(dst.c_str()), overwrite?FALSE:TRUE)); }
-	bool move_file( path dst ) const { return is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(atow(_data),atow(dst._data))!=0 : !copy_file(dst,true) ? false: rmfile(); }
+	bool move_file( path dst ) const { return !*_data||!dst._data||is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(atow(_data),atow(dst._data))!=0 : !copy_file(dst,true) ? false: rmfile(); }
 #ifndef _INC_SHELLAPI
 	bool delete_file() const { if(!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); return DeleteFileW(_data)==TRUE; }
 	bool rmfile() const { return delete_file(); }
@@ -289,11 +287,11 @@ public:
 #else
 	bool delete_file( bool b_undo=false ) const { if(!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=FOF_FILESONLY|FOF_SILENT|FOF_NOCONFIRMATION|(b_undo?FOF_ALLOWUNDO:0); auto* w=atow(c_str()); auto* b=wcscpy(__strbuf<wchar_t>(wcslen(w)+1),w); fop.pFrom=b; return SHFileOperationW(&fop)==0;}
 	bool rmfile( bool b_undo=false ) const { return delete_file(b_undo); }
-	bool delete_dir( bool b_undo=true ) const { if(!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=FOF_SILENT|FOF_NOCONFIRMATION|(b_undo?FOF_ALLOWUNDO:0); auto* w=atow(c_str()); auto* b=wcscpy(__strbuf<wchar_t>(wcslen(w)+1),w); fop.pFrom=b; return SHFileOperationW(&fop)==0;}
+	bool delete_dir( bool b_undo=true ) const { if(!exists()||!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=FOF_SILENT|FOF_NOCONFIRMATION|(b_undo?FOF_ALLOWUNDO:0); auto* w=atow(c_str()); auto* b=wcscpy(__strbuf<wchar_t>(wcslen(w)+1),w); fop.pFrom=b; return SHFileOperationW(&fop)==0;}
 	bool rmdir( bool b_undo=true ) const { return delete_dir(b_undo); }
 	bool copy_dir( path dst, bool overwrite=true ) const { if(!is_dir()) return false;value_type* from=__strbuf(capacity);snprintf(from,capacity,"%s\\*\0",_data);dst[dst.size()+1]='\0'; SHFILEOPSTRUCTW fop={};fop.wFunc=FO_COPY;fop.fFlags=FOF_ALLOWUNDO|FOF_SILENT|FOF_NOCONFIRMATION; fop.pFrom=atow(path(from).c_str());fop.pTo=atow(dst.c_str()); return SHFileOperationW(&fop)==0; }
-	bool move_dir( path dst ) const { return !is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(atow(_data),atow(dst._data))!=0 : !copy_dir(dst,true) ? false: rmdir(); }
-	void open( const char* args=nullptr, bool b_show_window=true ) const { ShellExecuteW(GetDesktopWindow(),L"Open",atow(auto_quote()), args?atow(args):nullptr, nullptr, b_show_window?SW_SHOW:SW_HIDE); }
+	bool move_dir( path dst ) const { return !exists()||!is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(atow(_data),atow(dst._data))!=0 : !copy_dir(dst,true) ? false: rmdir(); }
+	void open( const char* args=nullptr, bool b_show_window=true ) const { if(!*_data) return; ShellExecuteW(GetDesktopWindow(),L"Open",atow(auto_quote()), args?atow(args):nullptr, nullptr, b_show_window?SW_SHOW:SW_HIDE); }
 	void open_dir() const { dir().open(nullptr,true); }
 #endif
 
@@ -310,14 +308,14 @@ public:
 	SYSTEMTIME csystemtime() const { return FileTimeToSystemTime(cfiletime()); }
 	SYSTEMTIME asystemtime() const { return FileTimeToSystemTime(afiletime()); }
 	SYSTEMTIME msystemtime() const { return FileTimeToSystemTime(mfiletime()); }
-	void set_filetime( const FILETIME* ctime, const FILETIME* atime, const FILETIME* mtime ) const { HANDLE h=CreateFileW(atow(c_str()),FILE_WRITE_ATTRIBUTES,0,nullptr,OPEN_EXISTING,0,nullptr); if(!h)return; auto& c=cache(); if(ctime) c.ftCreationTime=*ctime; if(atime) c.ftLastAccessTime=*atime; if(mtime) c.ftLastWriteTime=*mtime; SetFileTime(h, ctime, atime, mtime ); CloseHandle(h); }
+	void set_filetime( const FILETIME* ctime, const FILETIME* atime, const FILETIME* mtime ) const { if(!exists()) return; HANDLE h=CreateFileW(atow(c_str()),FILE_WRITE_ATTRIBUTES,0,nullptr,OPEN_EXISTING,0,nullptr); if(!h)return; auto& c=cache(); if(ctime) c.ftCreationTime=*ctime; if(atime) c.ftLastAccessTime=*atime; if(mtime) c.ftLastWriteTime=*mtime; SetFileTime(h, ctime, atime, mtime ); CloseHandle(h); }
 	void set_filetime( FILETIME f ) const { set_filetime(&f,&f,&f); }
 	void set_filetime( const path& other ) const { if(!other.exists()) return; other.update_cache(); auto& c=other.cache(); set_filetime(&c.ftCreationTime,&c.ftLastAccessTime,&c.ftLastWriteTime); }
 
 	// module/working directories
 	static inline path module_path( HMODULE h_module=nullptr ){ static path m; if(!m.empty()&&!h_module) return m; auto* w=__strbuf<wchar_t>(capacity); GetModuleFileNameW(h_module,w,path::capacity);  path p=wtoa(w); p[0]=::toupper(p[0]); p=p.canonical(); return h_module?p:(m=p); } // 'module' conflicts with C++ modules
 	static inline path module_dir( HMODULE h_module=nullptr ){ static path d=module_path().dir(); return h_module?module_path(h_module).dir():d; }
-	static inline const char* module_name( HMODULE h_module=nullptr ){ static path m=module_path(h_module).name(false); return m.c_str(); }
+	static inline const char* module_name(){ static path m=module_path(nullptr).name(false); return m.c_str(); }
 	static inline path current_path(){ path p; auto* r=_getcwd(p._data,path::capacity); return p.absolute().add_backslash(); }	// current working directory
 	static inline path cwd(){ return current_path(); }	// current working directory
 	static inline path chdir( path dir ){ return dir.chdir(); }
@@ -468,7 +466,7 @@ std::vector<path> path::scan( const char* ext_filter, const char* pattern, bool 
 	scan_t si;
 	si.b.recursive=recursive; si.b.subdirs=b_subdirs; si.b.dir=recursive||b_subdirs; si.b.glob=pattern&&(strchr(pattern,'*')||strchr(pattern,'?'));
 	si.ext.v=eptr.size()>0?&eptr[0]:nullptr; si.ext.l=eptr.size();
-	std::wstring wpattern=atow(pattern); si.glob.pattern=wpattern.c_str(); si.glob.l=pattern?wpattern.size():0;
+	std::wstring wpattern=pattern?atow(pattern):L""; si.glob.pattern=pattern?wpattern.c_str():nullptr; si.glob.l=pattern?wpattern.size():0;
 	si.result.reserve(1ull<<16);scan_recursive(src,si);si.result.shrink_to_fit();
 	return si.result;
 }
@@ -511,7 +509,7 @@ std::vector<path> path::subdirs( const char* pattern ) const
 	scan_t si;
 	si.b.recursive=recursive; si.b.subdirs=true; si.b.dir=true; si.b.glob=pattern&&(strchr(pattern,'*')||strchr(pattern,'?'));
 	si.ext.v=nullptr; si.ext.l=0;
-	std::wstring wpattern=atow(pattern); si.glob.pattern=wpattern.c_str(); si.glob.l=pattern?wpattern.size():0;
+	std::wstring wpattern=pattern?atow(pattern):L""; si.glob.pattern=pattern?wpattern.c_str():nullptr; si.glob.l=pattern?wpattern.size():0;
 	si.result.reserve(1ull<<12);subdirs_recursive(src,si);si.result.shrink_to_fit();
 	return si.result;
 }
@@ -550,7 +548,7 @@ __noinline path path::temp( bool local, path local_dir )
 {
 	// get local_appdata
 	char* buff=getenv("LOCALAPPDATA");
-	static path r=path(buff?buff:"").add_backslash()+module_path().name(false).key()+__backslash;
+	static path r=path(buff?buff:"").add_backslash()+path(module_name()).key()+__backslash;
 	path t=r; if(local){ if(local_dir.empty()) local_dir=module_dir(); t+=path("local\\")+local_dir.key().add_backslash(); }
 	if(!t.exists()) t.mkdir();
 	return t;

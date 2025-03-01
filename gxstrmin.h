@@ -105,14 +105,14 @@ inline bool is_valid_utf8( const char* s )
 	return true;
 }
 
-inline const wchar_t* atow( const char* a ){ if(!a) return L""; uint cp=is_utf8(a)?CP_UTF8:0; int l=MultiByteToWideChar(cp, 0, a, -1, 0, 0); wchar_t* w=__strbuf<wchar_t>(l); MultiByteToWideChar(cp, 0, a, -1, w, l); return w; }
-inline const char* wtoa( const wchar_t* w ){ if(!w) return ""; int l=WideCharToMultiByte(CP_GXUT, 0, w, -1, 0, 0, 0, 0); char* a=__strbuf(l); WideCharToMultiByte(CP_GXUT, 0, w, -1, a, l, 0, 0); return a; }
-inline const char* atoa( const char* src, uint src_cp, uint dst_cp=CP_GXUT ){ if(!src) return ""; if(src_cp==dst_cp) return __strdup(src); int l=MultiByteToWideChar(src_cp, 0, src, -1, 0, 0); wchar_t* w=__strbuf<wchar_t>(l); MultiByteToWideChar(src_cp, 0, src, -1, w, l); l=WideCharToMultiByte(dst_cp, 0, w, -1, 0, 0, 0, 0); char* a=__strbuf(l); WideCharToMultiByte(dst_cp, 0, w, -1, a, l, 0, 0); return a; }
+inline const wchar_t* atow( const char* a ){ if(!a) return nullptr; if(!*a) return L""; uint cp=is_utf8(a)?CP_UTF8:0; int l=MultiByteToWideChar(cp, 0, a, -1, 0, 0); wchar_t* w=__strbuf<wchar_t>(l); MultiByteToWideChar(cp, 0, a, -1, w, l); return w; }
+inline const char* wtoa( const wchar_t* w ){ if(!w) return nullptr; if(!*w) return ""; int l=WideCharToMultiByte(CP_GXUT, 0, w, -1, 0, 0, 0, 0); char* a=__strbuf(l); WideCharToMultiByte(CP_GXUT, 0, w, -1, a, l, 0, 0); return a; }
+inline const char* atoa( const char* src, uint src_cp, uint dst_cp=CP_GXUT ){ if(!src) return nullptr; if(!*src) return ""; if(src_cp==dst_cp) return __strdup(src); int l=MultiByteToWideChar(src_cp, 0, src, -1, 0, 0); wchar_t* w=__strbuf<wchar_t>(l); MultiByteToWideChar(src_cp, 0, src, -1, w, l); l=WideCharToMultiByte(dst_cp, 0, w, -1, 0, 0, 0, 0); char* a=__strbuf(l); WideCharToMultiByte(dst_cp, 0, w, -1, a, l, 0, 0); return a; }
 #else
-inline const wchar_t* atow( const char* a ){ const char* p=a; size_t l=mbsrtowcs(0,&p,0,0); wchar_t* b=__strbuf(l); mbstate_t s={}; mbsrtowcs(b,&p,l+1,&s); return b; }
-inline const char* wtoa( const wchar_t* w ){ const wchar_t* p=w; size_t l=wcsrtombs(0,&p,0,0); char* b=__strbuf(l); mbstate_t s={}; wcsrtombs(b,&p,l+1,&s); return b; }
+inline const wchar_t* atow( const char* a ){ if(!a) return nullptr; if(!*a) return L""; const char* p=a; size_t l=mbsrtowcs(0,&p,0,0); wchar_t* b=__strbuf(l); mbstate_t s={}; mbsrtowcs(b,&p,l+1,&s); return b; }
+inline const char* wtoa( const wchar_t* w ){ if(!w) return nullptr; if(!*w) return ""; const wchar_t* p=w; size_t l=wcsrtombs(0,&p,0,0); char* b=__strbuf(l); mbstate_t s={}; wcsrtombs(b,&p,l+1,&s); return b; }
 #endif
-inline bool ismbs( const char* s ){ if(!s||!*s)return false;for(int k=0,kn=int(strlen(s));k<kn;k++,s++)if(*s<0)return true;return false; }
+inline bool ismbs( const char* s ){ if(!s||!*s) return false; for(int k=0,kn=int(strlen(s));k<kn;k++,s++) if(*s<0)return true; return false; }
 
 // format and printf replacement
 inline const char* __cdecl vformat( __printf_format_string__ char const* const fmt, va_list a ){ size_t len=size_t(vsnprintf(0,0,fmt,a)); char* buffer=__strbuf(len); vsnprintf(buffer,len+1,fmt,a); return buffer; }
@@ -122,9 +122,9 @@ inline const wchar_t* __cdecl format( __printf_format_string__ wchar_t const* co
 
 // natural-order and case-insensitive comparison for std::sort, std::map/set, std::unordered_map/set
 #ifdef _INC_SHLWAPI
-	inline int _strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ return StrCmpLogicalW(_Str1,_Str2); }
+	inline int _strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ return (!_Str1||!_Str2)?0:StrCmpLogicalW(_Str1,_Str2); }
 #elif defined(_MSC_VER)
-	inline int _strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ static dll_function_t<int(*)(const wchar_t*,const wchar_t*)> f("shlwapi.dll","StrCmpLogicalW"); return f?f(_Str1,_Str2):_wcsicmp(_Str1,_Str2); } // load StrCmpLogicalW(): when unavailable, fallback to wcsicmp
+	inline int _strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ static dll_function_t<int(*)(const wchar_t*,const wchar_t*)> f("shlwapi.dll","StrCmpLogicalW"); return !f?_wcsicmp(_Str1,_Str2):(!_Str1||!_Str2)?0:f(_Str1,_Str2); } // load StrCmpLogicalW(): when unavailable, fallback to wcsicmp
 #else
 	inline int _strcmplogical( const wchar_t* s1, const wchar_t* s2 )
 	{

@@ -166,7 +166,7 @@ protected:
 
 	struct attribute_t
 	{
-		std::string	name = path::module_path().aname(false);
+		std::string	name = path::module_name();
 		std::string copyright;
 		std::string	header, footer;
 		std::string help;		// shorter help for commands

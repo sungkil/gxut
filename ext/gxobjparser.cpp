@@ -188,7 +188,7 @@ namespace obj::cache
 		{
 			mtl_path = file_path.replace_extension("mtl");
 			if(!mtl_path.exists()){ fclose(fp); return nullptr; } // mtl not exists
-			printf("%s is used instead of missing %s\n", mtl_path.aname(), mtl_path0.aname());
+			printf("%s is used instead of missing %s\n", mtl_path.name(), mtl_path0.name());
 		}
 
 		// now create mesh
@@ -355,8 +355,8 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	bool b_use_archive = archive_extensions.find(file_path.ext().c_str())!=archive_extensions.end();
 	if(b_use_archive)
 	{
-		if(flush_messages) flush_messages( format( "Decompressing %s ...", file_path.aname() ) );
-		printf( "Decompressing %s ...", file_path.aname() );
+		if(flush_messages) flush_messages( format( "Decompressing %s ...", file_path.name() ) );
+		printf( "Decompressing %s ...", file_path.name() );
 		auto dt = std::async(obj::decompress,file_path);
 		while(std::future_status::ready!=dt.wait_for(std::chrono::milliseconds(10))) if(flush_messages) flush_messages(nullptr);
 		dec_path = dt.get();
@@ -375,7 +375,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	auto log_begin = [&]()
 	{
 		if(!b_log_begin) return; b_log_begin=false;
-		printf( "Loading %s ...", target_file_path.aname() );
+		printf( "Loading %s ...", target_file_path.name() );
 	};
 
 	FILE* fp = target_file_path.fopen("rb"); if(fp==nullptr){ printf("Unable to open %s", file_path.c_str()); return nullptr; }
@@ -524,7 +524,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 				if(!mtl_path.exists())
 				{
 					mtl_path = file_path.replace_extension("mtl");
-					if(mtl_path.exists()) printf("%s is used instead of missing %s\n", mtl_path.aname(), mtl_path0.aname());
+					if(mtl_path.exists()) printf("%s is used instead of missing %s\n", mtl_path.name(), mtl_path0.name());
 				}
 				if(!mtl::load_mtl(mtl_path, p_mesh->materials)){ printf("unable to load %s\n",mtl_path0.slash()); return nullptr; }
 				strcpy( p_mesh->mtl_path, mtl_path.relative(path(file_path).dir()).c_str() );

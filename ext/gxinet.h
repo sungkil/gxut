@@ -48,7 +48,7 @@ struct session_t
 	HINTERNET handle = nullptr;
 
 	virtual ~session_t(){ release(); }
-	session_t(){ if(!is_online()) return; handle=InternetOpenW( path::module_path().wname(),INTERNET_OPEN_TYPE_PRECONFIG,0,0,0); }
+	session_t(){ if(!is_online()) return; handle=InternetOpenW( atow(path::module_path().name()),INTERNET_OPEN_TYPE_PRECONFIG,0,0,0); }
 	void release(){ if(!handle) return; InternetCloseHandle(handle); handle=nullptr; }
 	operator bool() const { return handle!=nullptr; }
 
@@ -102,11 +102,11 @@ __noinline bool session_t::download_thread_func( std::vector<std::string> urls, 
 		// server-local time difference can be up to several seconds
 		if(b_dst_exists&&!FileTimeGreater(f.mfiletime,f0)) return false; // older url file exists
 		
-		if(!f.get_file_size(handle)){ fprintf(stdout,"error: unable to get file size %s\n", dst.aname() );return false;} // now try to get the file size
+		if(!f.get_file_size(handle)){ fprintf(stdout,"error: unable to get file size %s\n", dst.name() );return false;} // now try to get the file size
 		std::vector<char> buffer(f.file_size);
 		
 		if(!dst.dir().exists()) dst.dir().mkdir();
-		FILE* fp = dst.fopen("wb"); if(!fp){ fprintf(stdout,"error: unable to open %s\n", dst.aname());return false;}
+		FILE* fp = dst.fopen("wb"); if(!fp){ fprintf(stdout,"error: unable to open %s\n", dst.name());return false;}
 		DWORD dw_size, dw_read; do
 		{
 			InternetQueryDataAvailable(f.hfile, &dw_size, 0, 0);
@@ -119,7 +119,7 @@ __noinline bool session_t::download_thread_func( std::vector<std::string> urls, 
 		// modify the time stamp
 		FILETIME fnow=now();
 		dst.set_filetime(&fnow,&fnow,&f.mfiletime);
-		// fprintf( stdout, "%s\n", dst.aname() );
+		// fprintf( stdout, "%s\n", dst.name() );
 
 		return true;
 	}

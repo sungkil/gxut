@@ -75,7 +75,7 @@ mtl_item_t::mtl_item_t( const std::string& _key, const char* first_token ):key(_
 path mtl_item_t::map_path()
 {
 	if(tokens.empty()) return "";
-	auto& b=tokens.back(); if(::path p(b);p.is_absolute()){b=p.is_subdir(mtl_dir)?p.relative(mtl_dir).c_str():p.aname();}
+	auto& b=tokens.back(); if(::path p(b);p.is_absolute()){b=p.is_subdir(mtl_dir)?p.relative(mtl_dir).c_str():p.name();}
 	return mtl_dir+tokens.back();
 }
 
@@ -85,7 +85,7 @@ bool mtl_item_t::make_canonical_relative_path()
 	for( int k=0;k<8&&strstr(b.c_str(),"\\\\");k++) b=str_replace(b.c_str(),"\\\\","\\");	// remove double backslash
 	for( int k=0;k<8&&strstr(b.c_str(),"//");k++) b=str_replace(b.c_str(),"//","/");		// remove double slash
 	::path p(b=path(b).to_backslash().canonical().c_str());
-	if(!p.is_relative()) b=p.is_subdir(mtl_dir)?p.relative(mtl_dir).c_str():p.aname();
+	if(!p.is_relative()) b=p.is_subdir(mtl_dir)?p.relative(mtl_dir).c_str():p.name();
 	return _stricmp(b0.c_str(),b.c_str())!=0; // return change exists
 }
 
@@ -130,7 +130,7 @@ static bool is_normal_map( path file_path )
 
 static bool generate_normal_map( path normal_path, path bump_path, path mtl_path="" )
 {
-	if(!bump_path.exists()){ printf("%s(): %s not exists\n", __func__, bump_path.aname() ); return false; }
+	if(!bump_path.exists()){ printf("%s(): %s not exists\n", __func__, bump_path.name() ); return false; }
 	FILETIME bump_mtime = bump_path.mfiletime();
 	if(normal_path.exists()&&normal_path.mfiletime()>=bump_mtime) return true;
 
@@ -138,9 +138,9 @@ static bool generate_normal_map( path normal_path, path bump_path, path mtl_path
 
 	// test whether the bump map is actually a normal map
 	// do not force rgb to bump; and use cache
-	image* bump0 = gx::load_image(bump_path.c_str(),true,false,false); if(!bump0){ printf("%s(): failed to load %s\n", __func__, bump_path.aname() ); return false; }
+	image* bump0 = gx::load_image(bump_path.c_str(),true,false,false); if(!bump0){ printf("%s(): failed to load %s\n", __func__, bump_path.name() ); return false; }
 	printf( "%sgenerating %s from %s... ",
-		!mtl_path.empty()?format("[%s] ", mtl_path.aname()):"", normal_path.aname(), bump_path.aname());
+		!mtl_path.empty()?format("[%s] ", mtl_path.name()):"", normal_path.name(), bump_path.name());
 
 	// convert uchar bumpmap to 1-channel float image
 	image* bump = gx::create_image( bump0->width, bump0->height, 32, 1 );
@@ -247,7 +247,7 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 
 			auto &src=t->back();
 			auto &dst=crc_lut[t->crc]; if(_stricmp(src.c_str(),dst.c_str())==0) continue;
-			printf( "[%s] replace: %s << %s\n", file_path.aname(), src.c_str(), dst.c_str() );
+			printf( "[%s] replace: %s << %s\n", file_path.name(), src.c_str(), dst.c_str() );
 			dups.emplace(t->map_path());
 			src = dst;
 			b_dirty = true;
@@ -262,7 +262,7 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 	auto test_normal = [&]( mtl_item_t* t )->bool { path m=t->map_path(); if(auto it=valid_normals.find(m);it!=valid_normals.end()) return it->second; return valid_normals[m]=is_normal_map(m); };
 	for( auto& section : sections )
 	{
-		auto* n=section.find("norm"); if(n&&!test_normal(n)){ printf( "[%s] %s: %s is not a normal map\n", file_path.aname(), section.name.c_str(), n->map_path().aname() ); n->clear(); n=nullptr; b_dirty=true; }
+		auto* n=section.find("norm"); if(n&&!test_normal(n)){ printf( "[%s] %s: %s is not a normal map\n", file_path.name(), section.name.c_str(), n->map_path().name() ); n->clear(); n=nullptr; b_dirty=true; }
 		auto* b=section.find("bump"); if(!n&&b&&test_normal(b)){ n=section.add_norm(b->back()); b_dirty=true; }
 		if(b&&n){ auto it=bton.find(b->map_path()); if(it==bton.end()) bton[b->map_path()]=n->map_path(); }
 	}
@@ -272,7 +272,7 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 	for( auto& section : sections ) for( auto* t : section.maps() )
 	{
 		path m=t->map_path(); if(m.exists()){ used_images.insert(m); continue; }
-		printf( "[%s] %s.%s: %s not exists\n", file_path.aname(), section.name.c_str(), t->key.c_str(), m.aname() );
+		printf( "[%s] %s.%s: %s not exists\n", file_path.name(), section.name.c_str(), t->key.c_str(), m.name() );
 		t->clear(); b_dirty=true;
 	}
 
@@ -295,11 +295,11 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 		if(used_images.find(f)!=used_images.end()) continue;
 		if(dups.find(f)==dups.end()) // do not delete other non-duplicate non-used images
 		{
-			if(f.name(false)!="index") printf( "[%s] potential redundancy: %s\n", file_path.aname(), f.aname() );
+			if(f.name(false)!="index") printf( "[%s] potential redundancy: %s\n", file_path.name(), f.name() );
 			continue;
 		}
 		if(!f.delete_file(true)) continue;
-		printf( "[%s] deleting duplicates: %s\n", file_path.aname(), f.aname() );
+		printf( "[%s] deleting duplicates: %s\n", file_path.name(), f.name() );
 	}
 
 	return float(timer.end());
@@ -309,7 +309,7 @@ static bool save_mtl( path file_path, const std::vector<mtl_section_t>& sections
 {
 	auto mfiletime0 = file_path.mfiletime();
 	FILE* fp = file_path.fopen("w"); if(!fp){ printf("%s(): failed to open %s\n", __func__, file_path.slash() ); return false; }
-	printf( "[%s] optimization ... ", file_path.aname() );
+	printf( "[%s] optimization ... ", file_path.name() );
 
 	for( int k=0, kn=int(sections.size()); k<kn; k++ )
 	{
@@ -550,7 +550,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 			// unrecognized keys
 			else if(passtags.find(key)==passtags.end())
 			{
-				printf("[%s] %s: unrecognized key: '%s'\n", file_path.aname(), section.name.c_str(), key.c_str()); return false;
+				printf("[%s] %s: unrecognized key: '%s'\n", file_path.name(), section.name.c_str(), key.c_str()); return false;
 			}
 		}
 
@@ -569,7 +569,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 
 	// update file after bump_as_normal
 	if(b_dirty) save_mtl( file_path, sections, opt_time );
-	if(!with_cache) printf( "Loading %s ... completed in %.2f ms\n", file_path.aname(), timer.end() );
+	if(!with_cache) printf( "Loading %s ... completed in %.2f ms\n", file_path.name(), timer.end() );
 	
 	return true;
 }

@@ -340,8 +340,8 @@ __noinline bool binary_cache::compress( bool rm_src )
 {
 	if(!cache_path().exists()) return false;
 	HZIP hZip = CreateZip( atow(zip_path().c_str()), nullptr);
-	if(ZR_OK==ZipAdd( hZip, atow(cache_path().name().c_str()), atow(cache_path().c_str()))){ CloseZipZ(hZip); if(rm_src) cache_path().rmfile(); return true; }
-	else { printf( "Unable to compress %s\n", cache_path().aname() ); CloseZipZ( hZip ); return false; }
+	if(ZR_OK==ZipAdd( hZip, atow(cache_path().name()), atow(cache_path().c_str()))){ CloseZipZ(hZip); if(rm_src) cache_path().rmfile(); return true; }
+	else { printf( "Unable to compress %s\n", cache_path().name() ); CloseZipZ( hZip ); return false; }
 }
 
 __noinline bool binary_cache::decompress()

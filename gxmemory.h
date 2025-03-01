@@ -163,12 +163,7 @@ struct resource_t : public mem_t
 #endif // MAKEINTRESOURCEW
 
 //***********************************************
-// regular crc32 wrappers
-inline unsigned int crc32( unsigned int crc0, const void* buff, size_t size ){ return tcrc32<0xedb88320UL>(crc0,buff,size); }
-inline unsigned int crc32( unsigned int crc0, sized_ptr_t<void> p ){ return crc32(crc0,(const void*)p.ptr,p.size); }
-inline unsigned int crc32( const void* buff, size_t size ){ return crc32(0,buff,size); }
-inline unsigned int crc32( sized_ptr_t<void> p ){ return crc32(0,p); }
-
+// crc32c wrappers
 #if defined(_MSC_VER)&&!defined(__clang__)
 // CRC32C SSE4.2 implementation up to 8-batch parallel construction (https://github.com/Voxer/sse4_crc32)
 __noinline unsigned int crc32c_hw( unsigned int crc0, const void* buff, size_t size )

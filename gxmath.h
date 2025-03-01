@@ -815,6 +815,8 @@ __noinline unsigned int tcrc32( unsigned int crc0, const void* buff, size_t size
 	for(;size;size--,b++)c=t[0][(c^(*b))&0xff]^(c>>8);
 	return ~c;
 }
+// regular crc32 wrapper
+inline unsigned int crc32( unsigned int crc0, const void* buff, size_t size ){ return tcrc32<0xedb88320UL>(crc0,buff,size); }
 #pragma warning( default: 6011 )
 
 //*************************************

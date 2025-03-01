@@ -658,8 +658,8 @@ inline void mesh::dump_binary( const char* _dir )
 	path dir = _dir;
 	if(vertices.empty() || indices.empty()) return;
 	dir = dir.add_backslash(); if(!dir.exists()) dir.mkdir();
-	path vertex_bin_path = dir + path(file_path).name(false).name(false) + ".vertex.bin";
-	path index_bin_path = dir + path(file_path).name(false).name(false) + ".index.bin";
+	path vertex_bin_path = dir + path(path(file_path).name(false)).name(false) + ".vertex.bin";
+	path index_bin_path = dir + path(path(file_path).name(false)).name(false) + ".index.bin";
 	FILE* fp = vertex_bin_path.fopen("wb"); fwrite(&vertices[0], sizeof(vertex), vertices.size(), fp); fclose(fp);
 	fp = index_bin_path.fopen("wb");  fwrite(&indices[0], sizeof(uint), indices.size(), fp); fclose(fp);
 }
