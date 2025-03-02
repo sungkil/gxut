@@ -223,7 +223,7 @@ static std::map<uint,std::string> build_crc_lut( std::vector<mtl_section_t>& sec
 	for( auto& section : sections ) for( auto* t: section.maps() )
 	{
 		auto it = crc_map.find(t->back()); if(it!=crc_map.end()){ t->crc = it->second; continue; }
-		t->crc = crc_map[t->back()] = t->map_path().exists() ? t->map_path().crc32c() : 0;
+		t->crc = crc_map[t->back()] = t->map_path().exists() ? t->map_path().crc() : 0;
 	}
 
 	// invert lookup table for crc-unique maps
@@ -295,7 +295,7 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 		if(used_images.find(f)!=used_images.end()) continue;
 		if(dups.find(f)==dups.end()) // do not delete other non-duplicate non-used images
 		{
-			if(f.name(false)!="index") printf( "[%s] potential redundancy: %s\n", file_path.name(), f.name() );
+			if(_stricmp(f.name(false),"index")!=0) printf( "[%s] potential redundancy: %s\n", file_path.name(), f.name() );
 			continue;
 		}
 		if(!f.delete_file(true)) continue;

@@ -166,9 +166,9 @@ struct resource_t : public mem_t
 // crc32c wrappers
 #if defined(_MSC_VER)&&!defined(__clang__)
 // CRC32C SSE4.2 implementation up to 8-batch parallel construction (https://github.com/Voxer/sse4_crc32)
-__noinline unsigned int crc32c_hw( unsigned int crc0, const void* buff, size_t size )
+__noinline unsigned int crc32c_hw( unsigned int crc0, const void* ptr, size_t size )
 {
-	if(!buff||!size) return crc0; const unsigned char* b = (const unsigned char*) buff;
+	if(!ptr||!size) return crc0; const unsigned char* b = (const unsigned char*) ptr;
 #if defined(_M_X64)||defined(__LP64__)
 	uint64_t c = ~uint64_t(crc0);
 	for(;size && ((ptrdiff_t)b&7);size--,b++) c=_mm_crc32_u8(uint32_t(c),*b); // move forward to the 8-byte aligned boundary
@@ -183,9 +183,9 @@ __noinline unsigned int crc32c_hw( unsigned int crc0, const void* buff, size_t s
 	return uint32_t(~c);
 }
 inline bool __has_sse42(){ static bool b=false; if(!b){int r[4]={};__cpuid(r,1);b=(((r[2]>>20)&1)==1);} return b; }
-inline unsigned int crc32c( unsigned int crc0, const void* buff, size_t size ){ static unsigned int(*pcrc32c)(unsigned int,const void*,size_t)=__has_sse42()?crc32c_hw:tcrc32<0x82f63b78UL>; return pcrc32c(crc0,buff,size); }
+inline unsigned int crc32c( unsigned int crc0, const void* ptr, size_t size ){ static unsigned int(*pcrc32c)(unsigned int,const void*,size_t)=__has_sse42()?crc32c_hw:crc32<0x82f63b78UL>; return pcrc32c(crc0,ptr,size); }
 #else
-inline unsigned int crc32c( unsigned int crc0, const void* buff, size_t size ){ return tcrc32<0x82f63b78UL>(crc0,buff,size); }
+inline unsigned int crc32c( unsigned int crc0, const void* ptr, size_t size ){ return crc32<0x82f63b78UL>(crc0,ptr,size); }
 #endif
 inline unsigned int crc32c( unsigned int crc0, sized_ptr_t<void> p ){ return crc32c(crc0,(const void*)p.ptr,p.size); }
 inline unsigned int crc32c( unsigned int crc0, const char* s ){ return crc32c(crc0,(const void*)s,strlen(s)); }
@@ -195,7 +195,7 @@ template <class T> inline unsigned int crc32c( unsigned int crc0, const std::vec
 template <class T, size_t N> inline unsigned int crc32c( unsigned int crc0, const std::array<T,N>& v ){ return v.empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
 template <class T, size_t N> inline unsigned int crc32c( unsigned int crc0, const std::array<T,N>* v ){ return !v||v->empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
 
-inline unsigned int crc32c( const void* buff, size_t size ){ return crc32c(0,buff,size); }
+inline unsigned int crc32c( const void* ptr, size_t size ){ return crc32c(0,ptr,size); }
 inline unsigned int crc32c( sized_ptr_t<void> p ){ return crc32c(0,p); }
 inline unsigned int crc32c(	const char* s ){ return crc32c(0,s); }
 inline unsigned int crc32c(	const wchar_t* s ){ return crc32c(0,s); }
@@ -282,7 +282,7 @@ __noinline void md5::update( const void* data, size_t size )
 //***********************************************
 // augmentation of filesystem
 #ifdef __GX_FILESYSTEM_H__
-__noinline uint path::crc32c() const
+__noinline uint path::crc() const
 {
 	FILE* fp=fopen("rb"); if(!fp) return 0;
 	size_t bs=min(file_size(fp),size_t(1<<16)); if(bs==0){ fclose(fp); return 0; }

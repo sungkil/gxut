@@ -181,7 +181,7 @@ public:
 	size_t size() const { return strlen(_data); }
 
 	// crc32c/md5 checksums of the file content
-	inline uint crc32c() const;	// implemented in gxmemory.h
+	inline uint crc() const;	// implemented in gxmemory.h
 	inline uint4 md5() const;	// implemented in gxmemory.h
 
 	// in-place transforms

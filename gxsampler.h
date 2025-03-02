@@ -57,7 +57,7 @@ struct sampler_t : public isampler_t
 	sampler_t(){ _data.reserve(4096); } // reserve up to 4K samples by default
 	sampler_t( size_t size, bool b_resample=true ){ _data.reserve(4096); _data.resize(const_cast<uint&>(n)=uint(size)); if(b_resample) resample(); }
 
-	bool		dirty() const { return crc!=tcrc32(0,&model,sizeof(isampler_t)); }
+	bool		dirty() const { return crc!=crc32(0,&model,sizeof(isampler_t)); }
 	iterator	data() const { return _data.data(); }
 	iterator	begin() const { return _data.data(); }
 	iterator	end() const { return _data.data()+n; }
@@ -136,12 +136,11 @@ struct _poisson_disk_cache_t
 __noinline ::path _poisson_disk_cache_t::path( uint count, bool circular, uint seed )
 {
 	static ::path cache_dir = ::path::temp(false)+"global\\sampler\\poisson\\";
-	static uint hash0 = tcrc32<>(0,__TIMESTAMP__,sizeof(char)*strlen(__TIMESTAMP__));
-	uint hash = hash0;
-	hash = tcrc32<>(hash,&count, sizeof(count) );
-	hash = tcrc32<>(hash,&circular, sizeof(circular) );
-	hash = tcrc32<>(hash,&seed, sizeof(seed) );
-	char b[64]; snprintf(b,64,"%08x",hash);
+	static uint crc0 = crc32(0,__TIMESTAMP__,strlen(__TIMESTAMP__)*sizeof(char));
+	uint crc = crc32(crc0, &count, sizeof(count) );
+	crc = crc32(crc, &circular, sizeof(circular) );
+	crc = crc32(crc, &seed, sizeof(seed) );
+	char b[64]; snprintf(b,64,"%08x",crc);
 	return cache_dir+b;
 }
 
@@ -297,7 +296,7 @@ __noinline uint sampler_t::resample()
 	_reshape(_data.data(),surface); // reshape to circle, hemisphere, sphere, ...
 	for(uint k=0;k<n;k++) v[k].w=nrf;			// weight
 	if(surface==CIRCLE) _make_centered();
-	crc = tcrc32(0,&model,sizeof(isampler_t));	// to detect format change (equivalent to the detection of data change)
+	crc = crc32(0,&model,sizeof(isampler_t));	// to detect format change (equivalent to the detection of data change)
 	rewind(); // rewind the index
 	return n;
 }

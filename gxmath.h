@@ -802,22 +802,17 @@ template <class T> T bezier( T v0, T v1, T v2, T v3, double t )
 
 //*************************************
 // CRC32 with 4-batch parallel construction (from zlib)
-#pragma warning( disable: 6011 )
-template <unsigned int poly=0x82f63b78UL> // defaulted to crc32c
-__noinline unsigned int tcrc32( unsigned int crc0, const void* buff, size_t size )
+template <unsigned int poly=0x82f63b78UL> // defaulted to crc32c; deflate use 0xedb88320UL
+__noinline unsigned int crc32( unsigned int crc0, const void* ptr, size_t size )
 {
-	if(!buff||!size){ return crc0; }
+	if(!ptr||!size){ return crc0; }
 	static unsigned* t[4]={}; if(!t[0]){ for(int k=0;k<4;k++) t[k]=(unsigned*) malloc(sizeof(unsigned)*256); for(int k=0;k<256;k++){ unsigned v=k; for( unsigned j=0;j<8;j++) v=v&1?poly^(v>>1):v>>1; t[0][k]=v; } for(int k=0;k<256;k++){ unsigned v=t[0][k]; for(int j=1;j<4;j++) t[j][k]=v=t[0][v&0xff]^(v>>8); } }
-	unsigned c = ~crc0;
-	const unsigned char* b=(const unsigned char*)buff;
+	unsigned c = ~crc0; const unsigned char* b=(const unsigned char*)ptr;
 	for(;size&&(ptrdiff_t(b)&7);size--,b++) c=t[0][(c^(*b))&0xff]^(c>>8); // move forward to the 8-byte aligned boundary
 	for(;size>=4;size-=4,b+=4){c^=*(unsigned*)b;c=t[3][(c>>0)&0xff]^t[2][(c>>8)&0xff]^t[1][(c>>16)&0xff]^t[0][(c>>24)&0xff]; }
 	for(;size;size--,b++)c=t[0][(c^(*b))&0xff]^(c>>8);
 	return ~c;
 }
-// regular crc32 wrapper
-inline unsigned int crc32( unsigned int crc0, const void* buff, size_t size ){ return tcrc32<0xedb88320UL>(crc0,buff,size); }
-#pragma warning( default: 6011 )
 
 //*************************************
 namespace gx {

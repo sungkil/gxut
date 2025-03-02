@@ -334,22 +334,6 @@ namespace gl {
 	struct DrawElementsIndirectCommand { uint count, instance_count=1, first_index=0, base_vertex=0, base_instance=0; uint pad0, pad1, pad2; }; // see https://www.opengl.org/wiki/GLAPI/glDrawElementsInstancedBaseVertexBaseInstance
 
 	//***********************************************
-	// crc32c
-	#pragma warning( disable: 6011 )
-	inline unsigned int crc32c( unsigned int crc0, const void* ptr, size_t size )
-	{
-		const unsigned char* buff= (unsigned char*) ptr;
-		static unsigned* t[4] = {nullptr}; if(!t[0]){ for(int k=0;k<4;k++) t[k]=(unsigned*) malloc(sizeof(unsigned)*256); for(int k=0;k<256;k++){ unsigned c=k; for( unsigned j=0;j<8;j++) c=c&1?0x82f63b78UL^(c>>1):c>>1; t[0][k]=c; } for(int k=0;k<256;k++){ unsigned c=t[0][k]; for(int j=1;j<4;j++) t[j][k]=c=t[0][c&0xff]^(c>>8); } }
-		if(buff==nullptr||size==0) return crc0; unsigned c = ~crc0;
-		for(;size&&(((ptrdiff_t)buff)&7);size--,buff++) c=t[0][(c^(*buff))&0xff]^(c>>8); // move forward to the 8-byte aligned boundary
-		for(;size>=4;size-=4,buff+=4){c^=*(unsigned*)buff;c=t[3][(c>>0)&0xff]^t[2][(c>>8)&0xff]^t[1][(c>>16)&0xff]^t[0][(c>>24)&0xff]; }
-		for(;size;size--,buff++) c=t[0][(c^(*buff))&0xff]^(c>>8);
-		return ~c;
-	}
-	inline unsigned int crc32c( const void* ptr, size_t size ){ return crc32c(0,ptr,size); }
-	#pragma warning( default: 6011 )
-
-	//***********************************************
 	struct Texture : public Object
 	{
 		Texture( GLuint ID, const char* name, GLenum target, GLenum InternalFormat, GLenum Format, GLenum Type, uint64_t heap=_get_heap_handle() ):Object(ID,name,target),_internal_format(InternalFormat),_type(Type),_format(Format),_channels(gxGetTextureChannels(InternalFormat)),_bpp(gxGetTextureBPP(InternalFormat)),_crtheap(heap){}
@@ -437,7 +421,7 @@ namespace gl {
 		inline bool copy( Texture* dst, GLint level=0 );
 
 		// view-related function: wrapper to createTextureView
-		inline static uint crc( GLuint min_level, GLuint levels, GLuint min_layer, GLuint layers, GLenum target, bool force_array ){ struct info { GLuint min_level, levels, min_layer, layers; GLenum target; bool force_array; }; info i={min_level,levels,min_layer,layers,target,force_array}; return gl::crc32c(&i,sizeof(i)); }
+		inline static uint crc( GLuint min_level, GLuint levels, GLuint min_layer, GLuint layers, GLenum target, bool force_array ){ struct info { GLuint min_level, levels, min_layer, layers; GLenum target; bool force_array; }; info i={min_level,levels,min_layer,layers,target,force_array}; return crc32(0,&i,sizeof(i)); }
 		inline Texture* view( GLuint min_level, GLuint levels, GLuint min_layer=0, GLuint layers=1, GLenum target=0 ){ return gxCreateTextureView(this,min_level,levels,min_layer,layers,target,false); } // view support (> OpenGL 4.3)
 		inline Texture* slice( GLuint layer, GLuint level=0 ){ return view(level,1,layer,1); }
 		inline Texture* last_mip( GLuint layer=0 ){ return view(_levels-1,1,layer,1); }
@@ -1538,7 +1522,7 @@ inline gl::Program* gxCreateProgram( std::string prefix, std::string name, const
 
 	// 3. create md5 hash of shader souces
 	std::string crcsrc=pname; for( auto& it : source ){ for( auto& s : it.second ) crcsrc += s.value; }
-	uint crc = gl::crc32c(crcsrc.c_str(),crcsrc.length());
+	uint crc = crc32(0,crcsrc.c_str(),crcsrc.size()*sizeof(decltype(crcsrc)::value_type));
 
 	// 4. try to load binary cache
 	GLuint binary_program_ID = gxLoadProgramBinary( pname, crc );
