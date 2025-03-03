@@ -30,6 +30,7 @@
 	#if __has_include(<unistd.h>)
 		#include <unistd.h>
 	#endif
+	#include <cpuid.h>
 #endif
 
 #if __has_include("gxstring.h") && !defined(__GX_STRING_H__)
@@ -44,6 +45,34 @@ namespace gx { namespace compiler
 	inline int month(){ static int m=0; if(m) return m; char buff[64]={}; int r=sscanf(__DATE__,"%s", buff); return m=monthtoi(buff); }
 	inline int day(){ static int d=0; if(d) return d; char buff[64]={}; int r=sscanf(__DATE__,"%*s %s %*s", buff); return d=atoi(buff); }
 }}
+
+//***********************************************
+namespace os { namespace cpu {
+//***********************************************
+#if defined(_MSC_VER) && !defined(__clang__) // Visual Studio without clang
+	inline uint	 __get_function_count( bool extended=false ){ uint4 n={}; uint ext=extended?0x80000000:0; __cpuid((int*)&n.x,ext); return n.x-ext; }
+	inline uint4 __get_cpu_id( unsigned int level, bool extended=false ){ uint ext=extended?0x80000000:0; uint4 i; __cpuidex((int*)&i.x,ext+level,0); return i; }
+	inline uint64_t memory(){ uint64_t m; return GetPhysicallyInstalledSystemMemory(&m)?m:0; }
+#elif defined(__GNUC__) // GCC
+	inline uint  __get_function_count( bool extended=false ){ uint ext=extended?0x80000000:0; unsigned int n=__get_cpuid_max(ext,0); return n-ext; }
+	inline uint4 __get_cpu_id( unsigned int level, bool extended=false ){ uint ext=extended?0x80000000:0; uint4 i; __get_cpuid(ext+level,&i.x,&i.y,&i.z,&i.w); return i; }
+#endif
+
+__noinline const uint4 info( unsigned int level, bool extended=false )
+{
+	static std::vector<uint4> i[2]; // basic, extended
+	auto& v = i[extended?1:0]; if(!v.empty()) return v[level];
+	uint kn = __get_function_count(extended); if(kn<4){ return uint4{}; } v.resize(kn);
+	for( unsigned int k=0; k<kn; k++ ) v[k]=__get_cpu_id(k,extended);
+	return v[level];
+}
+__noinline const char* vendor(){ static uint4 s={}; if(!s.x){ auto v=info(0); s.x=v.y; s.y=v.z; s.z=v.w; } return (const char*)&s.x; }
+__noinline const char* brand(){ static uint4 s[4]={}; if(s[0].x) return (const char*)&s[0]; s[0]=info(2,true); s[1]=info(3,true); s[2]=info(4,true); return (const char*)&s[0]; }
+__noinline bool has_sse42(){ return ((info(1).z>>20)&1)==1; }
+
+//***********************************************
+}} // namespace os::cpu
+//***********************************************
 
 // win32 messagebox wrapper utilities
 #ifdef _MSC_VER
@@ -178,23 +207,11 @@ inline path windir(){ return path(os::env::var("WINDIR")).add_backslash(); }
 //***********************************************
 
 //***********************************************
-namespace cpu {
-//***********************************************
-__noinline const std::vector<int4>& info(){ static std::vector<int4> v; if(!v.empty()) return v; int4 i={};__cpuid((int*)&i.x, 0); v.resize(i.x); /* function count */ for(int k=0, kn=int(v.size()); k<kn; k++) __cpuidex((int*)&v[k], k, 0); return v; }
-__noinline const char* vendor(){ static int v[8]={}; if(!v[0]){ const auto& i=info()[0]; v[0]=i.y;v[1]=i.w;v[2]=i.z; } return (const char*)v; }
-__noinline const char* brand(){ static int b[16]={}; if(*b) return (const char*)b; int4 nx;__cpuid((int*)&nx, 0x80000000);if(nx.x<0x80000004) return ""; std::vector<int4> v; v.resize(nx.x-0x80000000); for(int k=0,kn=int(v.size());k<kn;k++) __cpuidex((int*)&v[k], 0x80000000+k, 0); memcpy(b+0,&v[2],sizeof(int4)*3); return (const char*)b; }
-__noinline uint64_t memory(){ uint64_t m; return GetPhysicallyInstalledSystemMemory(&m)?m:0; }
-__noinline bool has_sse42(){ int4 i=info()[1]; return ((i.z>>20)&1)==1; }
-//***********************************************
-} // namespace cpu
-//***********************************************
-
-//***********************************************
 // system variables/paths
 inline const char* computer_name( bool b_lowercase=true )
 {
 	static char cname[1024]={};
-	wchar_t w[1024]={0}; DWORD l=sizeof(w)/sizeof(w[0]); GetComputerNameW(w,&l);
+	wchar_t w[1024]={0}; unsigned long l=sizeof(w)/sizeof(w[0]); GetComputerNameW(w,&l);
 	if(b_lowercase) for(size_t k=0,kn=wcslen(w);k<kn;k++) w[k]=tolower(w[k]);
 	return strcpy(cname,wtoa(w));
 }

@@ -74,18 +74,12 @@
 // compile-time test of printf-style format string
 #if defined(_Printf_format_string_)
 	#define __printf_format_string__	_Printf_format_string_
-	#define __printf_format_attrib__
-	#define __scanf_format_string__		_Scanf_format_string_
-	#define __scanf_format_attrib__
 #elif defined(__GNUC__)
 	#define __printf_format_string__
-	#define __printf_format_attrib__	__attribute__((format(printf,2,3)))
-	#define __scanf_format_string__
-	#define __scanf_format_attrib__		__attribute__((format(scanf,2,3)))
 #endif
 // drop-in replacement of printf, where console applications fallbacks to stdout
 #if defined(GX_PRINTF_REDIR)||defined(_REXDLL)
-	int __cdecl printf( __printf_format_string__ const char* fmt, ... ) __printf_format_attrib__;
+	int printf( __printf_format_string__ const char* fmt, ... );
 #endif
 
 // STL
@@ -133,7 +127,7 @@ using namespace std::string_literals; // enable s-suffix for std::string literal
 	#ifndef __GX_PRINTF_REDIR__
 		struct autocp_t { autocp_t(unsigned cp){ auto cp0=GetConsoleOutputCP(); if(cp!=cp0) SetConsoleOutputCP(cp); setlocale(LC_CTYPE,cp==CP_UTF8?"ko-KR.utf8":""); }; }; inline autocp_t autocp_utf8(CP_GXUT);
 	#endif
-	#define __attribute__(a)	// avoid errors for gcc-style attributes
+	#define __attribute__(a)
 #endif
 
 // platform-specific

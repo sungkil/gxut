@@ -45,7 +45,7 @@ namespace gx { namespace argparse {
 
 struct argument_t
 {
-	argument_t& add_help( __printf_format_string__ const char* fmt, ... ) __printf_format_attrib__ { va_list a; va_start(a,fmt); std::vector<char> buff(vsnprintf(0,0,fmt,a)+1); vsnprintf(&buff[0],buff.size(),fmt,a); va_end(a); shelp=trim(&buff[0],"\n"); return *this; }
+	argument_t& add_help( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(vsnprintf(0,0,fmt,a)+1); vsnprintf(&buff[0],buff.size(),fmt,a); va_end(a); shelp=trim(&buff[0],"\n"); return *this; }
 	argument_t& set_default( const char* v ){ parsed.value=v; return *this; }
 	argument_t& set_optional(){ optional=true; return *this; } 
 	
@@ -67,7 +67,7 @@ struct option_t
 
 	option_t& add_name( const char* name ){ if(name&&name[0]) names.insert(name); return *this; }
 	option_t& add_subarg( std::vector<std::string> constraints={} ){ subarg_count++; if(!constraints.empty()) this->constraints=constraints; return *this; }
-	option_t& add_help( __printf_format_string__ const char* fmt, ... ) __printf_format_attrib__ { va_list a; va_start(a,fmt); std::vector<char> buff(vsnprintf(0,0,fmt,a)+1); vsnprintf(&buff[0],buff.size(),fmt,a); shelp=trim(&buff[0],"\n"); va_end(a); return *this; }
+	option_t& add_help( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(vsnprintf(0,0,fmt,a)+1); vsnprintf(&buff[0],buff.size(),fmt,a); shelp=trim(&buff[0],"\n"); va_end(a); return *this; }
 	option_t& add_break( int count=1 ){ break_count+=count; return* this; }
 	option_t& set_default( const char* arg ){ parsed.value=arg; return *this; }
 	option_t& set_hidden(){ hidden=true; return *this; } 
@@ -110,10 +110,10 @@ struct parser_t
 
 	// attributes
 	inline const char* name() const { return attrib.name.c_str(); }
-	inline void add_header( __printf_format_string__ const char* fmt, ... ) __printf_format_attrib__ { va_list a; va_start(a,fmt); int l=vsnprintf(0,0,fmt,a); std::vector<char> buff(l+1); vsnprintf(&buff[0],l+1llu,fmt,a); attrib.header=trim(&buff[0]); va_end(a); }
-	inline void add_footer( __printf_format_string__ const char* fmt, ... ) __printf_format_attrib__ { va_list a; va_start(a,fmt); int l=vsnprintf(0,0,fmt,a); std::vector<char> buff(l+1); vsnprintf(&buff[0],l+1llu,fmt,a); attrib.footer=trim(&buff[0]); va_end(a); }
+	inline void add_header( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); int l=vsnprintf(0,0,fmt,a); std::vector<char> buff(l+1); vsnprintf(&buff[0],l+1llu,fmt,a); attrib.header=trim(&buff[0]); va_end(a); }
+	inline void add_footer( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); int l=vsnprintf(0,0,fmt,a); std::vector<char> buff(l+1); vsnprintf(&buff[0],l+1llu,fmt,a); attrib.footer=trim(&buff[0]); va_end(a); }
 	inline void add_copyright( const char* author, int since_year ){ attrib.copyright = format( "copyright (c) %d-%d by %s\n", since_year, gx::compiler::year()+1, author ); }
-	inline parser_t& add_help( __printf_format_string__ const char* fmt, ... ) __printf_format_attrib__ { va_list a; va_start(a,fmt); std::vector<char> buff(vsnprintf(0,0,fmt,a)+1); vsnprintf(&buff[0],buff.size(),fmt,a); attrib.help=trim(&buff[0],"\n"); va_end(a); return *this; }
+	inline parser_t& add_help( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(vsnprintf(0,0,fmt,a)+1); vsnprintf(&buff[0],buff.size(),fmt,a); attrib.help=trim(&buff[0],"\n"); va_end(a); return *this; }
 	inline void add_break( int count=1 ){ if(options.empty()) return; options.back()->add_break(count); }
 
 	// query
@@ -159,7 +159,7 @@ struct parser_t
 	inline std::vector<std::string> get_values( const std::string& name ) const;
 
 	// error handling, debugging
-	bool exit( __printf_format_string__ const char* fmt, ... ) __printf_format_attrib__ { va_list a; va_start(a,fmt); const char* w=vformat(fmt,a); va_end(a); char msg[2048]; snprintf( msg, 2048, "[%s] %s\nUse -h option to see usage.\n", name(), trim(w,"\n") ); fprintf( stdout, msg ); return false; }
+	bool exit( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); const char* w=vformat(fmt,a); va_end(a); char msg[2048]; snprintf( msg, 2048, "[%s] %s\nUse -h option to see usage.\n", name(), trim(w,"\n") ); fprintf( stdout, msg ); return false; }
 	void dump();
 	
 protected:

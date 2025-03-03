@@ -109,16 +109,16 @@ inline const wchar_t* atow( const char* a ){ if(!a) return nullptr; if(!*a) retu
 inline const char* wtoa( const wchar_t* w ){ if(!w) return nullptr; if(!*w) return ""; int l=WideCharToMultiByte(CP_GXUT, 0, w, -1, 0, 0, 0, 0); char* a=__strbuf(l); WideCharToMultiByte(CP_GXUT, 0, w, -1, a, l, 0, 0); return a; }
 inline const char* atoa( const char* src, uint src_cp, uint dst_cp=CP_GXUT ){ if(!src) return nullptr; if(!*src) return ""; if(src_cp==dst_cp) return __strdup(src); int l=MultiByteToWideChar(src_cp, 0, src, -1, 0, 0); wchar_t* w=__strbuf<wchar_t>(l); MultiByteToWideChar(src_cp, 0, src, -1, w, l); l=WideCharToMultiByte(dst_cp, 0, w, -1, 0, 0, 0, 0); char* a=__strbuf(l); WideCharToMultiByte(dst_cp, 0, w, -1, a, l, 0, 0); return a; }
 #else
-inline const wchar_t* atow( const char* a ){ if(!a) return nullptr; if(!*a) return L""; const char* p=a; size_t l=mbsrtowcs(0,&p,0,0); wchar_t* b=__strbuf(l); mbstate_t s={}; mbsrtowcs(b,&p,l+1,&s); return b; }
+inline const wchar_t* atow( const char* a ){ if(!a) return nullptr; if(!*a) return L""; const char* p=a; size_t l=mbsrtowcs(0,&p,0,0); wchar_t* b=__strbuf<wchar_t>(l); mbstate_t s={}; mbsrtowcs(b,&p,l+1,&s); return b; }
 inline const char* wtoa( const wchar_t* w ){ if(!w) return nullptr; if(!*w) return ""; const wchar_t* p=w; size_t l=wcsrtombs(0,&p,0,0); char* b=__strbuf(l); mbstate_t s={}; wcsrtombs(b,&p,l+1,&s); return b; }
 #endif
 inline bool ismbs( const char* s ){ if(!s||!*s) return false; for(int k=0,kn=int(strlen(s));k<kn;k++,s++) if(*s<0)return true; return false; }
 
 // format and printf replacement
-inline const char* __cdecl vformat( __printf_format_string__ char const* const fmt, va_list a ){ size_t len=size_t(vsnprintf(0,0,fmt,a)); char* buffer=__strbuf(len); vsnprintf(buffer,len+1,fmt,a); return buffer; }
-inline const wchar_t* __cdecl vformat( __printf_format_string__ wchar_t const* const fmt, va_list a ){ size_t len=size_t(vswprintf(0,0,fmt,a)); wchar_t* bufferW=__strbuf<wchar_t>(len); vswprintf(bufferW,len+1,fmt,a); return bufferW; }
-inline const char* __cdecl format( __printf_format_string__ char const* const fmt, ... ) __printf_format_attrib__ { va_list a; va_start(a,fmt); size_t len=size_t(vsnprintf(0,0,fmt,a)); char* buffer=__strbuf(len); vsnprintf(buffer,len+1,fmt,a); va_end(a); return buffer; }
-inline const wchar_t* __cdecl format( __printf_format_string__ wchar_t const* const fmt, ... ) __printf_format_attrib__ { va_list a; va_start(a,fmt); size_t len=size_t(vswprintf(0,0,fmt,a)); wchar_t* bufferW=__strbuf<wchar_t>(len); vswprintf(bufferW,len+1,fmt,a); va_end(a); return bufferW; }
+inline const char*		vformat( __printf_format_string__ const char* fmt, va_list a ){ size_t len=size_t(vsnprintf(0,0,fmt,a)); char* buffer=__strbuf(len); vsnprintf(buffer,len+1,fmt,a); return buffer; }
+inline const wchar_t*	vformat( __printf_format_string__ const wchar_t* const fmt, va_list a ){ size_t len=size_t(vswprintf(0,0,fmt,a)); wchar_t* bufferW=__strbuf<wchar_t>(len); vswprintf(bufferW,len+1,fmt,a); return bufferW; }
+inline const char*		__attribute__((format(printf,1,2))) format( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); size_t len=size_t(vsnprintf(0,0,fmt,a)); char* buffer=__strbuf(len); vsnprintf(buffer,len+1,fmt,a); va_end(a); return buffer; }
+inline const wchar_t*	format( __printf_format_string__ const wchar_t* fmt, ... ){ va_list a; va_start(a,fmt); size_t len=size_t(vswprintf(0,0,fmt,a)); wchar_t* bufferW=__strbuf<wchar_t>(len); vswprintf(bufferW,len+1,fmt,a); va_end(a); return bufferW; }
 
 // natural-order and case-insensitive comparison for std::sort, std::map/set, std::unordered_map/set
 #ifdef _INC_SHLWAPI

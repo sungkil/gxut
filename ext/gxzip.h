@@ -297,8 +297,8 @@ struct binary_cache
 	virtual path zip_path(){ return cache_path()+".zip"; }
 	virtual std::string signature() = 0;
 
-	void writef( __printf_format_string__ const char* fmt, ... ) __printf_format_attrib__ { if(!fp) return; va_list a; va_start(a,fmt); vfprintf(fp,fmt,a); va_end(a); }
-	void readf( __scanf_format_string__ const char* fmt, ... ) __scanf_format_attrib__ { if(!fp) return; va_list a; va_start(a,fmt); vfscanf(fp,fmt,a); va_end(a); }
+	void writef( __printf_format_string__ const char* fmt, ... ){ if(!fp) return; va_list a; va_start(a,fmt); vfprintf(fp,fmt,a); va_end(a); }
+	void readf( const char* fmt, ... ){ if(!fp) return; va_list a; va_start(a,fmt); vfscanf(fp,fmt,a); va_end(a); }
 	void write( void* ptr, size_t size ){ if(fp) fwrite( ptr, size, 1, fp ); }
 	void read( void* ptr, size_t size ){ if(fp) fread(ptr,size,1,fp); }
 	void close()
