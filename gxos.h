@@ -436,7 +436,7 @@ __noinline std::string read_process( std::string cmd, const char* trims=" \t\r\n
 	FILE* pp = _popen(cmd.c_str(),"rb"); if(!pp) return "";
 	std::vector<char> v; v.reserve(1024); char buff[64]={}; size_t n=0; while( n=fread(buff,1,sizeof(buff),pp) ) v.insert(v.end(),buff,buff+n); v.emplace_back(0);
 	bool b_eof= feof(pp); _pclose(pp); if(!b_eof) printf("%s(%s): broken pipe\n", __func__, cmd.c_str() );
-	return trim(is_utf8?atoa(v.data(),CP_UTF8,0):v.data(),trims);  // auto convert CP_UTF8 to current code page
+	char* s=v.data(); return trim(is_utf8(s)?atoa(s,CP_UTF8,0):s, trims);  // auto convert CP_UTF8 to current code page
 }
 
 #ifdef _INC_SHELLAPI
