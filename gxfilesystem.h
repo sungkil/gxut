@@ -205,7 +205,16 @@ public:
 
 	// split path
 	struct split_t { value_type *drive, *dir, *fname, *ext; };
-	__forceinline split_t split( value_type* drive=nullptr, value_type* dir=nullptr, value_type* fname=nullptr, value_type* ext=nullptr ) const { _splitpath_s(_data,drive,drive?_MAX_DRIVE:0,dir,dir?_MAX_DIR:0,fname,fname?_MAX_FNAME:0,ext,ext?_MAX_EXT:0); if(drive&&drive[0]) drive[0]=value_type(toupper(drive[0])); return split_t{drive,dir,fname,ext}; }
+	__forceinline split_t split( bool drive=false, bool dir=false, bool fname=false, bool ext=false ) const
+	{
+		auto* r=drive?__strbuf<wchar_t>(_MAX_DRIVE):nullptr;
+		auto* d=dir?__strbuf<wchar_t>(_MAX_DIR):nullptr;
+		auto* n=fname?__strbuf<wchar_t>(_MAX_FNAME):nullptr;
+		auto* x=ext?__strbuf<wchar_t>(_MAX_EXT):nullptr;
+		_wsplitpath_s(atow(_data),r,r?_MAX_DRIVE:0,d,d?_MAX_DIR:0,n,n?_MAX_FNAME:0,x,x?_MAX_EXT:0);
+		if(r&&*r) *r=value_type(toupper(*r));
+		return split_t{(value_type*)wtoa(r),(value_type*)wtoa(d),(value_type*)wtoa(n),(value_type*)wtoa(x)};
+	}
 
 	// helpers for C-string functions
 	bool find( const char* s, bool case_insensitive=true ){ return (case_insensitive?_stristr(_data,s):strstr(_data,s))!=nullptr; }
@@ -251,24 +260,24 @@ public:
 
 	// path info/operations
 	volume_t volume() const { return (is_unc()||is_rsync()||is_remote()||!drive().exists())?volume_t():volume_t(drive().c_str()); }
-	path drive() const { if(!*_data) return path();if(is_unc()) return unc_root();path d;_splitpath_s(_data,d._data,_MAX_DRIVE,0,0,0,0,0,0);return d; }
-	path dir() const { path p; value_type* d=__strbuf(capacity);if(is_unc()){path r=unc_root();size_t rl=r.size();if(size()<=rl+1){if(r._data[rl-1]!=__backslash){r._data[rl]=__backslash;r._data[rl+1]=0;}return r;}} _splitpath_s(_data,p._data,_MAX_DRIVE,d,_MAX_DIR,0,0,0,0); size_t pl=strlen(p._data), dl=strlen(d); if(0==(pl+dl)) return ".\\"; if(dl){ memcpy(p._data+pl,d,dl*sizeof(value_type)); p._data[pl+dl]=0; } return p; }
+	path drive() const { if(!*_data) return path();if(is_unc()) return unc_root();path d=split(true).drive;return d; }
+	path dir() const { path p; value_type* d=__strbuf(capacity);if(is_unc()){path r=unc_root();size_t rl=r.size();if(size()<=rl+1){if(r._data[rl-1]!=__backslash){r._data[rl]=__backslash;r._data[rl+1]=0;}return r;}} auto s=split(true,true); if(!*s.dir&&!*s.drive) return ".\\"; strcpy(p._data,s.drive); if(*s.dir) strcat(p._data,s.dir); return p; }
 	path unc_root() const { if(!is_unc()) return path(); path r=*this;size_t l=strlen(_data);for(size_t k=0;k<l;k++)if(r[k]==__slash)r[k]=__backslash; auto* b=strchr(r._data+2,__backslash);if(b)((value_type*)b)[0]=0; return r; } // similar to drive (but to the root unc path without backslash)
 	path dir_name() const { if(strchr(_data,__backslash)) return dir().remove_backslash().name(); else if(strchr(_data,__slash)) return dir().remove_slash().name(); else return ""; }
-	path ext() const { value_type e[_MAX_EXT+1]; _splitpath_s(_data,0,0,0,0,0,0,e,_MAX_EXT); path p; if(*e!=0) strcpy(p._data,e+1); return p; }
+	path ext() const { auto s=split(false,false,false,true); return *s.ext?s.ext+1:""; }
 	path parent() const { return dir().remove_backslash().dir(); }
 	std::vector<path> ancestors( path root="" ) const { if(empty()) return std::vector<path>(); if(root._data[0]==0) root=is_unc()?unc_root():module_dir(); path d=dir(); int l=int(d.size()),rl=int(root.size()); bool r=_strnicmp(d._data,root._data,rl)==0; std::vector<path> a;a.reserve(4); for(int k=l-1,e=r?rl-1:0;k>=e;k--){ if(d._data[k]!=__backslash&&d._data[k]!=__slash) continue; d._data[k+1]=0; a.emplace_back(d); } return a; }
 	path junction() const { path t; if(!*_data||!exists()) return t; bool b_dir=is_dir(),j=false; for(auto& d:b_dir?ancestors():dir().ancestors()){ if(d.is_drive()) break; if((d.attributes()&FILE_ATTRIBUTE_REPARSE_POINT)!=0){j=true;break;} } if(!j) return t; HANDLE h=CreateFileW(atow(c_str()), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0); if(h==INVALID_HANDLE_VALUE) return t; auto* w=__strbuf<wchar_t>(capacity); GetFinalPathNameByHandleW(h, w, t.capacity, FILE_NAME_NORMALIZED); CloseHandle(h); strcpy(t._data,wtoa(w)); if(strncmp(t._data, "\\\\?\\", 4)==0) t=path(t._data+4); return b_dir?t.add_backslash():t; }
 
 	// shortcuts to C-string
-	const char* name( bool with_ext=true ) const { path p; value_type* ext=with_ext?__strbuf(capacity):nullptr; _splitpath_s(_data,0,0,0,0,p._data,_MAX_FNAME,ext,ext?_MAX_EXT:0); if(!ext) return __strdup(p._data); size_t pl=strlen(p._data), el=strlen(ext); if(el){ memcpy(p._data+pl,ext,el*sizeof(value_type)); p._data[pl+el]=0; } return __strdup(p._data); }
+	const char* name( bool with_ext=true ) const { auto s=split(false,false,true,with_ext); if(!with_ext||!s.ext||!*s.ext) return s.fname; return strcat(strcpy(__strbuf(capacity),s.fname),s.ext); }
 	const char* slash() const { return __strdup(to_slash().c_str()); }
 	const char* auto_quote() const { if(!*_data||(_data[0]=='\"'&&_data[strlen(_data)-1]=='\"')) return c_str(); auto* t=__strbuf(capacity); size_t l=strlen(_data); memcpy(t,_data,l*sizeof(value_type)); if(t[l]==' '||t[l]=='\t'||t[l]=='\n') t[l]=0; if(t[0]==' '||t[0]=='\t'||t[0]=='\n') t++; if(t[0]!='-'&&!strchr(t,' ')&&!strchr(t,'\t')&&!strchr(t,'\n')&&!strchr(t,'|')&&!strchr(t,'&')&&!strchr(t,'<')&&!strchr(t,'>')) return c_str(); path p; p[0]='\"'; memcpy(p._data+1,_data,l*sizeof(value_type)); p[l+1]='\"'; p[l+2]=0; return __strdup(p.c_str()); }
 
 	// content manipulations
 	path remove_first_dot()	const { return (strlen(_data)>2&&_data[0]=='.'&&_data[1]==__backslash) ? path(_data+2) : *this; }
-	path remove_extension() const { split_t si=split(__strbuf(capacity),__strbuf(capacity),__strbuf(capacity)); return strcat(strcat(si.drive,si.dir),si.fname); }
-	path replace_extension( path ext ) const { if(ext.empty()) return *this; split_t si=split(__strbuf(capacity), __strbuf(capacity), __strbuf(capacity), __strbuf(capacity)); path p; snprintf(p._data, capacity, "%s%s%s%s%s", si.drive, si.dir, si.fname, ext[0]=='.'?"":".", ext._data); return p; }
+	path remove_extension() const { split_t si=split(true,true,true); return strcat(strcat(strcpy(__strbuf(capacity),si.drive),si.dir),si.fname); }
+	path replace_extension( path ext ) const { if(ext.empty()) return *this; split_t si=split(true,true,true); path p; snprintf(p._data, capacity, "%s%s%s%s%s", si.drive, si.dir, si.fname, ext[0]=='.'?"":".", ext._data); return p; }
 	std::vector<path> explode( char delim=preferred_separator ) const { std::vector<path> L; path s=preferred_separator==__slash?to_slash():*this; L.reserve(16); value_type* ctx=nullptr; const value_type d[2]={delim,0}; for(value_type* t=strtok_s(s._data,d,&ctx); t; t=strtok_s(0,d,&ctx)) L.emplace_back(t); return L; }
 
 	// directory attributes

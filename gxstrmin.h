@@ -21,7 +21,7 @@
 #include "gxtype.h"
 
 // shared circular buffers
-template <class T=char> __forceinline T* __strbuf( size_t len ){ static T* C[1<<14]={}; static uint cid=0; cid=cid%(sizeof(C)/sizeof(C[0])); C[cid]=(T*)(C[cid]?realloc(C[cid],sizeof(T)*(len+2)):malloc(sizeof(T)*(len+2))); if(C[cid]){ C[cid][len]=0; C[cid][len+1]=0; } return C[cid++]; }
+template <class T=char> __forceinline T* __strbuf( size_t len ){ static T* C[1<<14]={}; static uint cid=0; cid=cid%(sizeof(C)/sizeof(C[0])); C[cid]=(T*)(C[cid]?realloc(C[cid],sizeof(T)*(len+2)):malloc(sizeof(T)*(len+2))); if(C[cid]){ C[cid][0]=C[cid][len]=C[cid][len+1]=0; } return C[cid++]; }
 template <class T=char> __forceinline T* __strdup( const T* s, size_t len ){ T* d=__strbuf<T>(size_t(len)); if(!len){ d[0]=d[1]=0; return d; } memcpy(d, s, sizeof(T)*len); d[len]=d[len+1]=0; return d; }
 template <class T=char> __forceinline T* __strdup( const T* s ){ size_t l=0; const T* t=s; while(*t){t++;l++;} return __strdup<T>(s,l); }
 
@@ -105,9 +105,9 @@ inline bool is_valid_utf8( const char* s )
 	return true;
 }
 
-inline const wchar_t* atow( const char* a ){ if(!a) return nullptr; if(!*a) return L""; uint cp=is_utf8(a)?CP_UTF8:0; int l=MultiByteToWideChar(cp, 0, a, -1, 0, 0); wchar_t* w=__strbuf<wchar_t>(l); MultiByteToWideChar(cp, 0, a, -1, w, l); return w; }
-inline const char* wtoa( const wchar_t* w ){ if(!w) return nullptr; if(!*w) return ""; int l=WideCharToMultiByte(CP_GXUT, 0, w, -1, 0, 0, 0, 0); char* a=__strbuf(l); WideCharToMultiByte(CP_GXUT, 0, w, -1, a, l, 0, 0); return a; }
-inline const char* atoa( const char* src, uint src_cp, uint dst_cp=CP_GXUT ){ if(!src) return nullptr; if(!*src) return ""; if(src_cp==dst_cp) return __strdup(src); int l=MultiByteToWideChar(src_cp, 0, src, -1, 0, 0); wchar_t* w=__strbuf<wchar_t>(l); MultiByteToWideChar(src_cp, 0, src, -1, w, l); l=WideCharToMultiByte(dst_cp, 0, w, -1, 0, 0, 0, 0); char* a=__strbuf(l); WideCharToMultiByte(dst_cp, 0, w, -1, a, l, 0, 0); return a; }
+inline const wchar_t* atow( const char* a ){ if(!a) return nullptr; if(!*a) return L""; uint cp=is_utf8(a)?CP_UTF8:0; int l=MultiByteToWideChar(cp,0,a,-1,0,0); wchar_t* w=__strbuf<wchar_t>(l); MultiByteToWideChar(cp,0,a,-1,w,l); return w; }
+inline const char* wtoa( const wchar_t* w ){ if(!w) return nullptr; if(!*w) return ""; int l=WideCharToMultiByte(0,0,w,-1,0,0,0,0); char* a=__strbuf(l); WideCharToMultiByte(0,0,w,-1,a,l,0,0); return a; }
+inline const char* atoa( const char* src, uint src_cp, uint dst_cp ){ if(!src) return nullptr; if(!*src) return ""; if(src_cp==dst_cp) return __strdup(src); int l=MultiByteToWideChar(src_cp,0,src,-1,0,0); wchar_t* w=__strbuf<wchar_t>(l); MultiByteToWideChar(src_cp,0,src,-1,w,l); l=WideCharToMultiByte(dst_cp,0,w,-1,0,0,0,0); char* a=__strbuf(l); WideCharToMultiByte(dst_cp,0,w,-1,a,l,0,0); return a; }
 #else
 inline const wchar_t* atow( const char* a ){ if(!a) return nullptr; if(!*a) return L""; const char* p=a; size_t l=mbsrtowcs(0,&p,0,0); wchar_t* b=__strbuf<wchar_t>(l); mbstate_t s={}; mbsrtowcs(b,&p,l+1,&s); return b; }
 inline const char* wtoa( const wchar_t* w ){ if(!w) return nullptr; if(!*w) return ""; const wchar_t* p=w; size_t l=wcsrtombs(0,&p,0,0); char* b=__strbuf(l); mbstate_t s={}; wcsrtombs(b,&p,l+1,&s); return b; }

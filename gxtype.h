@@ -116,17 +116,6 @@ using namespace std::string_literals; // enable s-suffix for std::string literal
 	#endif
 	#include <windows.h>
 	#include <io.h>			// low-level io functions
-	// enforce to use UTF-8 encoding of non-ascii source texts
-	#pragma execution_character_set("utf-8")
-	#ifndef CP_UTF8
-		#define CP_UTF8		65001       // CP_ACP==0: default to ANSI code page, CP_949 (korean)
-	#endif
-	#ifndef CP_GXUT
-		#define CP_GXUT		65001
-	#endif
-	#ifndef __GX_PRINTF_REDIR__
-		struct autocp_t { autocp_t(unsigned cp){ auto cp0=GetConsoleOutputCP(); if(cp!=cp0) SetConsoleOutputCP(cp); setlocale(LC_CTYPE,cp==CP_UTF8?"ko-KR.utf8":""); }; }; inline autocp_t autocp_utf8(CP_GXUT);
-	#endif
 	#define __attribute__(a)
 #endif
 

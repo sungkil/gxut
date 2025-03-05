@@ -98,8 +98,8 @@ namespace os {
 //*************************************
 #ifdef _MSC_VER
 // win32 utilities
-__noinline const char* get_last_error(){ static char buff[4096]={};DWORD e=GetLastError();char *s=nullptr;FormatMessageA( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,e,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPSTR)&s,0,nullptr);snprintf(buff,4096,"%s (code=%x)",s,uint(e));LocalFree(s);return buff; }
-__noinline void flush_message( int sleepTime=1 ){MSG m;for(int k=0;k<100&&PeekMessageA(&m,nullptr,0,0,PM_REMOVE);k++)SendMessageA(m.hwnd,m.message,m.wParam,m.lParam);if(sleepTime>=0) Sleep(sleepTime);}
+__noinline const char* get_last_error(){ static wchar_t buff[4096]={};DWORD e=GetLastError();wchar_t *s=nullptr;FormatMessageW( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,e,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPWSTR)&s,0,nullptr);swprintf(buff,4096,L"%s (code=%x)",s,uint(e));LocalFree(s);return wtoa(buff); }
+__noinline void flush_message( int sleepTime=1 ){MSG m;for(int k=0;k<100&&PeekMessageW(&m,nullptr,0,0,PM_REMOVE);k++)SendMessageW(m.hwnd,m.message,m.wParam,m.lParam);if(sleepTime>=0) Sleep(sleepTime);}
 
 inline const char* module_path( HMODULE h_module=nullptr ){ static char buff[_MAX_PATH]={}; wchar_t w[_MAX_PATH]; GetModuleFileNameW(h_module,w,_MAX_PATH); w[0]=::toupper(w[0]); return strcpy(buff,wtoa(w)); }
 inline const char* module_name( HMODULE h_module=nullptr ){ const char* f=module_path(h_module); for( int kn=int(strlen(f)), k=kn-1; k>=0; k-- ) if(f[k]==L'\\') return f+k+1; return f; }
@@ -431,14 +431,12 @@ __noinline bool redirect_process( const char* app, const char* args=nullptr,
 }
 #endif
 
-__noinline std::string read_process( std::string cmd, uint cp=0, const char* trims=" \t\r\n") // provide CP_UTF8 for some apps
+__noinline std::string read_process( std::string cmd, const char* trims=" \t\r\n")
 {
-	FILE* pp=_popen(cmd.c_str(),"r"); if(!pp) return "";
-	std::string b; char buff[256]={}; while( fgets(buff,sizeof(buff)/sizeof(buff[0]),pp) ) b+= buff;
-	bool b_eof= feof(pp); if(!b_eof) printf("%s(%s): broken pipe\n", __func__, cmd.c_str() );
-	_pclose(pp);
-	if(cp) b=atoa(b.c_str(),cp);
-	return trim(b.c_str(),trims);
+	FILE* pp = _popen(cmd.c_str(),"rb"); if(!pp) return "";
+	std::vector<char> v; v.reserve(1024); char buff[64]={}; size_t n=0; while( n=fread(buff,1,sizeof(buff),pp) ) v.insert(v.end(),buff,buff+n); v.emplace_back(0);
+	bool b_eof= feof(pp); _pclose(pp); if(!b_eof) printf("%s(%s): broken pipe\n", __func__, cmd.c_str() );
+	return trim(is_utf8?atoa(v.data(),CP_UTF8,0):v.data(),trims);  // auto convert CP_UTF8 to current code page
 }
 
 #ifdef _INC_SHELLAPI
