@@ -71,6 +71,7 @@
 #endif
 #include <stdlib.h>
 #include <string.h>
+#include <direct.h> // directory control
 // compile-time test of printf-style format string
 #if defined(_Printf_format_string_)
 	#define __printf_format_string__	_Printf_format_string_
@@ -148,6 +149,12 @@ using namespace std::string_literals; // enable s-suffix for std::string literal
 		inline HANDLE& safe_close_handle( HANDLE& h ){ if(h!=INVALID_HANDLE_VALUE) CloseHandle(h); return h=INVALID_HANDLE_VALUE; }
 	#endif
 #elif defined(__GNUC__) // GCC
+	#if __has_include(<unistd.h>)
+		#include <unistd.h>
+	#endif
+	#if __has_include(<linux/limits.h>)
+		#include <linux/limits.h>
+	#endif
 	#ifndef __noinline
 		#define __noinline __attribute__((noinline)) inline
 	#endif
@@ -232,5 +239,29 @@ struct image
 	// fourcc; YUY2==YUYV, I420==YU12==IYUV (YUV420P), YV12 (YVU420P), NV12 (YUV420SP)
 	enum fcc_t { RGB=0, YUY2='2yuy', YUYV='vyuy', I420='024i', YU12=I420, IYUV='vuyi', YV12='21vy', NV12='21vn' };
 };
+
+// compiler utility
+namespace compiler
+{
+	inline int monthtoi( const char* month ){ if(!month||!month[0]||!month[1]||!month[2]) return 0; char a=tolower(month[0]), b=tolower(month[1]), c=tolower(month[2]); if(a=='j'){ if(b=='a') return 1; if(c=='n') return 6; return 7; } if(a=='f') return 2; if(a=='m'){ if(c=='r') return 3; return 5; } if(a=='a'){ if(b=='p') return 4; return 8; } if(a=='s') return 9; if(a=='o') return 10; if(a=='n') return 11; return 12; }
+	inline int year(){ static int y=0; if(y) return y; char buff[64]={}; int r=sscanf(__DATE__,"%*s %*s %s", buff); return y=atoi(buff); }
+	inline int month(){ static int m=0; if(m) return m; char buff[64]={}; int r=sscanf(__DATE__,"%s", buff); return m=monthtoi(buff); }
+	inline int day(){ static int d=0; if(d) return d; char buff[64]={}; int r=sscanf(__DATE__,"%*s %s %*s", buff); return d=atoi(buff); }
+}
+
+// common constants
+#ifndef PATH_MAX
+#define PATH_MAX 4096 // PATH_MAX in linux; _MAX_PATH = MAX_PATH == 260 in Windows
+#endif
+
+// executable info: path, dir, name, cwd
+#ifdef _WIN32
+inline const char* module_path(){ static char m[PATH_MAX]={}; if(!*m) GetModuleFileNameA(nullptr,m,PATH_MAX); return m; }
+inline const char* module_dir(){ static char d[PATH_MAX+1]={}; if(*d) return d; char a[PATH_MAX+1]; _splitpath_s(module_path(),d,PATH_MAX,a,PATH_MAX,0,0,0,0); strcat(d,a); return d; }
+inline const char* module_name(){ static char n[PATH_MAX+1]={}; if(*n) return n; _splitpath_s(module_path(),0,0,0,0,n,PATH_MAX,0,0); return n; }
+inline const char* cwd(){ static char c[PATH_MAX+1]={}; if(!*c){ _getcwd(c,PATH_MAX); size_t l=strlen(c); if(*c&&c[l-1]!='\\'){ c[l]='\\'; c[l+1]=0; } } return c; } // current working directory
+#elif __GNUC__
+inline const char* module_path(){ static char m[PATH_MAX]={}; if(!*m){ if(!readlink("/proc/self/exe",m,PATH_MAX)>0) *m=0; } return m; }
+#endif
 
 #endif // __GX_TYPE_H__

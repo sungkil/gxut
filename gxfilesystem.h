@@ -21,15 +21,11 @@
 #include "gxtype.h"
 #include "gxstrmin.h"
 
-#include <direct.h>		// directory control
 #include <time.h>
 #include <deque>
 #if __has_include(<shellapi.h>)
 	#include <shellapi.h>
 #endif
-
-// common constants
-static const int GX_MAX_PATH = 1024;	// MAX_PATH == 260
 
 //***********************************************
 // Win32-like filetime utilities
@@ -55,13 +51,13 @@ inline bool FileTimeGreater( FILETIME f1, FILETIME f2, int64_t offset=DefaultFil
 #ifdef _APISETFILE_
 struct volume_t
 {
-	static const int	capacity = GX_MAX_PATH; // MAX_PATH == 260
+	static const int	capacity = 256;
 	wchar_t				root[4]={}; // trailing backslash required
-	wchar_t				name[capacity+1]={};
+	wchar_t				name[capacity] = {};
 	unsigned long		serial_number=0;
 	unsigned long		maximum_component_length=0;
 	uint64_t			_disk_size=0, _free_space=0;
-	struct { unsigned long flags=0; wchar_t name[capacity+1]={}; } filesystem;
+	struct {			unsigned long flags=0; wchar_t name[capacity+1]={}; } filesystem;
 
 	// constructor
 	volume_t() = default;
@@ -100,7 +96,7 @@ struct path
 	using iterator			= value_type*;
 	using const_iterator	= const value_type*;
 	using attrib_t			= WIN32_FILE_ATTRIBUTE_DATA;	// auxiliary cache information from scan()
-	static constexpr int capacity = GX_MAX_PATH;			// MAX_PATH == 260
+	static constexpr int capacity = PATH_MAX;
 
 	// platform-specific definitions
 	static constexpr value_type __slash = '/';
@@ -259,18 +255,24 @@ public:
 	inline path canonical() const { if(is_pipe()) return *this; if(is_rsync()||is_remote()) return to_slash(); path p(*this); p.canonicalize(); return p; } // not necessarily absolute: return relative path as well
 
 	// path info/operations
-	volume_t volume() const { return (is_unc()||is_rsync()||is_remote()||!drive().exists())?volume_t():volume_t(drive().c_str()); }
-	path drive() const { if(!*_data) return path();if(is_unc()) return unc_root();path d=split(true).drive;return d; }
+	volume_t volume() const
+	{
+		volume_t v;
+		//if(is_unc()||is_rsync()||is_remote()||!drive().exists()) return v;
+		return volume_t(drive().c_str());
+	}
+	path drive() const { if(!*_data) return path();if(is_unc()) return unc_root(); return split(true).drive; }
 	path dir() const { path p; value_type* d=__strbuf(capacity);if(is_unc()){path r=unc_root();size_t rl=r.size();if(size()<=rl+1){if(r._data[rl-1]!=__backslash){r._data[rl]=__backslash;r._data[rl+1]=0;}return r;}} auto s=split(true,true); if(!*s.dir&&!*s.drive) return ".\\"; strcpy(p._data,s.drive); if(*s.dir) strcat(p._data,s.dir); return p; }
 	path unc_root() const { if(!is_unc()) return path(); path r=*this;size_t l=strlen(_data);for(size_t k=0;k<l;k++)if(r[k]==__slash)r[k]=__backslash; auto* b=strchr(r._data+2,__backslash);if(b)((value_type*)b)[0]=0; return r; } // similar to drive (but to the root unc path without backslash)
-	path dir_name() const { if(strchr(_data,__backslash)) return dir().remove_backslash().name(); else if(strchr(_data,__slash)) return dir().remove_slash().name(); else return ""; }
+	path dir_name() const { if(strchr(_data,__backslash)) return dir().remove_backslash().basename(); else if(strchr(_data,__slash)) return dir().remove_slash().basename(); else return ""; }
+	path basename( bool with_ext=true ) const { auto s=split(false,false,true,with_ext); if(!with_ext||!s.ext||!*s.ext) return s.fname; return strcat(strcpy(__strbuf(capacity),s.fname),s.ext); }
 	path ext() const { auto s=split(false,false,false,true); return *s.ext?s.ext+1:""; }
 	path parent() const { return dir().remove_backslash().dir(); }
 	std::vector<path> ancestors( path root="" ) const { if(empty()) return std::vector<path>(); if(root._data[0]==0) root=is_unc()?unc_root():module_dir(); path d=dir(); int l=int(d.size()),rl=int(root.size()); bool r=_strnicmp(d._data,root._data,rl)==0; std::vector<path> a;a.reserve(4); for(int k=l-1,e=r?rl-1:0;k>=e;k--){ if(d._data[k]!=__backslash&&d._data[k]!=__slash) continue; d._data[k+1]=0; a.emplace_back(d); } return a; }
 	path junction() const { path t; if(!*_data||!exists()) return t; bool b_dir=is_dir(),j=false; for(auto& d:b_dir?ancestors():dir().ancestors()){ if(d.is_drive()) break; if((d.attributes()&FILE_ATTRIBUTE_REPARSE_POINT)!=0){j=true;break;} } if(!j) return t; HANDLE h=CreateFileW(atow(c_str()), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0); if(h==INVALID_HANDLE_VALUE) return t; auto* w=__strbuf<wchar_t>(capacity); GetFinalPathNameByHandleW(h, w, t.capacity, FILE_NAME_NORMALIZED); CloseHandle(h); strcpy(t._data,wtoa(w)); if(strncmp(t._data, "\\\\?\\", 4)==0) t=path(t._data+4); return b_dir?t.add_backslash():t; }
-
+	
 	// shortcuts to C-string
-	const char* name( bool with_ext=true ) const { auto s=split(false,false,true,with_ext); if(!with_ext||!s.ext||!*s.ext) return s.fname; return strcat(strcpy(__strbuf(capacity),s.fname),s.ext); }
+	const char* name( bool with_ext=true ) const { return __strdup(basename(with_ext).c_str()); }
 	const char* slash() const { return __strdup(to_slash().c_str()); }
 	const char* auto_quote() const { if(!*_data||(_data[0]=='\"'&&_data[strlen(_data)-1]=='\"')) return c_str(); auto* t=__strbuf(capacity); size_t l=strlen(_data); memcpy(t,_data,l*sizeof(value_type)); if(t[l]==' '||t[l]=='\t'||t[l]=='\n') t[l]=0; if(t[0]==' '||t[0]=='\t'||t[0]=='\n') t++; if(t[0]!='-'&&!strchr(t,' ')&&!strchr(t,'\t')&&!strchr(t,'\n')&&!strchr(t,'|')&&!strchr(t,'&')&&!strchr(t,'<')&&!strchr(t,'>')) return c_str(); path p; p[0]='\"'; memcpy(p._data+1,_data,l*sizeof(value_type)); p[l+1]='\"'; p[l+2]=0; return __strdup(p.c_str()); }
 
@@ -284,7 +286,6 @@ public:
 	bool has_file( const path& file_name ) const { return is_dir()&&operator/(file_name).exists(); }
 
 	// chdir/make/copy/delete file/dir operations
-	path chdir() const { path old=cwd(); int r=is_dir()?_chdir(_data):0; return old; } // return old working directory
 	bool mkdir() const; // make all super directories
 	bool copy_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()||dst.empty()) return false; if(dst.is_dir()||dst.back()==__backslash) dst=dst.add_backslash()+name(); dst.dir().mkdir(); if(dst.exists()&&overwrite){ if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } return bool(CopyFileW( atow(c_str()), atow(dst.c_str()), overwrite?FALSE:TRUE)); }
 	bool move_file( path dst ) const { return !*_data||!dst._data||is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(atow(_data),atow(dst._data))!=0 : !copy_file(dst,true) ? false: rmfile(); }
@@ -320,14 +321,6 @@ public:
 	void set_filetime( const FILETIME* ctime, const FILETIME* atime, const FILETIME* mtime ) const { if(!exists()) return; HANDLE h=CreateFileW(atow(c_str()),FILE_WRITE_ATTRIBUTES,0,nullptr,OPEN_EXISTING,0,nullptr); if(!h)return; auto& c=cache(); if(ctime) c.ftCreationTime=*ctime; if(atime) c.ftLastAccessTime=*atime; if(mtime) c.ftLastWriteTime=*mtime; SetFileTime(h, ctime, atime, mtime ); CloseHandle(h); }
 	void set_filetime( FILETIME f ) const { set_filetime(&f,&f,&f); }
 	void set_filetime( const path& other ) const { if(!other.exists()) return; other.update_cache(); auto& c=other.cache(); set_filetime(&c.ftCreationTime,&c.ftLastAccessTime,&c.ftLastWriteTime); }
-
-	// module/working directories
-	static inline path module_path( HMODULE h_module=nullptr ){ static path m; if(!m.empty()&&!h_module) return m; auto* w=__strbuf<wchar_t>(capacity); GetModuleFileNameW(h_module,w,path::capacity);  path p=wtoa(w); p[0]=::toupper(p[0]); p=p.canonical(); return h_module?p:(m=p); } // 'module' conflicts with C++ modules
-	static inline path module_dir( HMODULE h_module=nullptr ){ static path d=module_path().dir(); return h_module?module_path(h_module).dir():d; }
-	static inline const char* module_name(){ static path m=module_path(nullptr).name(false); return m.c_str(); }
-	static inline path current_path(){ path p; auto* r=_getcwd(p._data,path::capacity); return p.absolute().add_backslash(); }	// current working directory
-	static inline path cwd(){ return current_path(); }	// current working directory
-	static inline path chdir( path dir ){ return dir.chdir(); }
 
 	// file content access: void (rb/wb), char (r/w), wchar_t (r/w,ccs=UTF-8)
 	FILE* fopen( const char* mode, bool utf8=false ) const;
@@ -568,7 +561,7 @@ __noinline path path::relative( path from, bool first_dot ) const
 	if(is_pipe()||is_rsync()||is_remote()) return *this;
 	if(is_relative()) return !first_dot?this->remove_first_dot():*this;
 
-	path from_dir = from.empty() ? path::cwd() : path(from).dir().absolute();
+	path from_dir = from.empty() ? cwd() : path(from).dir().absolute();
 	if(::tolower(from_dir[0])!=::tolower(this->_data[0])) return *this; // different drive
 
 	// 1. keep filename, make the list of reference and current path

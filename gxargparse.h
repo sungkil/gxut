@@ -18,25 +18,10 @@
 #ifndef __GX_ARGPARSE_H__
 #define __GX_ARGPARSE_H__
 
-#if __has_include("gxmath.h")
-	#include "gxmath.h"
-#elif __has_include(<gxmath.h>)
-	#include <gxmath.h>
-#endif
-#if __has_include("gxstring.h")
-	#include "gxstring.h"
-#elif __has_include(<gxstring.h>)
-	#include <gxstring.h>
-#endif
-#if __has_include("gxfilesystem.h")
-	#include "gxfilesystem.h"
-#elif __has_include(<gxfilesystem.h>)
-	#include <gxfilesystem.h>
-#endif
-#if __has_include("gxos.h")
-	#include "gxos.h"
-#elif __has_include(<gxos.h>)
-	#include <gxos.h>
+#if __has_include("gxut.h")
+	#include "gxut.h"
+#elif __has_include(<gxut/gxut.h>)
+	#include <gxut/gxut.h>
 #endif
 
 //***********************************************
@@ -106,13 +91,14 @@ struct parser_t
 	using callback_t = bool(*)(parser_t&);
 
 	// ctor/dtor
+	parser_t(){ strcpy(attrib.name,module_name());  }
 	virtual ~parser_t(){ for(auto& c:commands)safe_delete(c); for(auto& a:arguments)safe_delete(a); for(auto& o:options)safe_delete(o); }
 
 	// attributes
-	inline const char* name() const { return attrib.name.c_str(); }
+	inline const char* name() const { return attrib.name; }
 	inline void add_header( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); int l=vsnprintf(0,0,fmt,a); std::vector<char> buff(l+1); vsnprintf(&buff[0],l+1llu,fmt,a); attrib.header=trim(&buff[0]); va_end(a); }
 	inline void add_footer( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); int l=vsnprintf(0,0,fmt,a); std::vector<char> buff(l+1); vsnprintf(&buff[0],l+1llu,fmt,a); attrib.footer=trim(&buff[0]); va_end(a); }
-	inline void add_copyright( const char* author, int since_year ){ attrib.copyright = format( "copyright (c) %d-%d by %s\n", since_year, gx::compiler::year()+1, author ); }
+	inline void add_copyright( const char* author, int since_year ){ attrib.copyright = format( "copyright (c) %d-%d by %s\n", since_year, compiler::year()+1, author ); }
 	inline parser_t& add_help( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(vsnprintf(0,0,fmt,a)+1); vsnprintf(&buff[0],buff.size(),fmt,a); attrib.help=trim(&buff[0],"\n"); va_end(a); return *this; }
 	inline void add_break( int count=1 ){ if(options.empty()) return; options.back()->add_break(count); }
 
@@ -128,10 +114,10 @@ struct parser_t
 
 	// subcommands
 	inline parser_t& select_parser( int argc, wchar_t* argv[] ){ parser_t* p=this; select_parser_impl(p,argc,argv); return *p; }
-	inline parser_t& add_command( const char* name ){ commands.emplace_back(new parser_t()); auto* c=commands.back(); c->parent=this; c->attrib.name=name; c->attrib.depth=attrib.depth+1; return *c; }
+	inline parser_t& add_command( const char* name ){ commands.emplace_back(new parser_t()); auto* c=commands.back(); c->parent=this; strcpy(c->attrib.name,name); c->attrib.depth=attrib.depth+1; return *c; }
 	inline parser_t& set_callback( callback_t cb ){ pf_callback=cb; return *this; }
 	inline bool run(){ parser_t* p=this;while(p&&!p->pf_callback) p=p->parent; if(!p||!p->pf_callback){fprintf(stdout,"unable to find callback for %s\n",name());return false;} return p->pf_callback(*p); }
-	inline const char* get_command_names() const { std::string c=this->name(); for( parser_t* p=this->parent; p; p=p->parent ) c = p->attrib.name+" "+c; return __strdup(c.c_str()); }
+	inline const char* get_command_names() const { std::string c=this->name(); for( parser_t* p=this->parent; p; p=p->parent ) c = std::string(p->attrib.name)+" "+c; return __strdup(c.c_str()); }
 
 	// short template functions
 	argument_t& add_argument( const char* name ){ arguments.push_back(new argument_t()); auto* a=arguments.back(); a->name=name; return *a; }
@@ -148,7 +134,9 @@ struct parser_t
 	// get<> specializations, and other get functions
 	template <class T=std::string>	inline T get( const std::string& name ) const;
 	template<> inline std::string	get<std::string>( const std::string& name ) const;
+#ifdef __GX_FILESYSTEM_H__
 	template<> inline path			get<path>( const std::string& name ) const { return get<std::string>(name).c_str(); }
+#endif
 	template<> inline int			get<int>( const std::string& name ) const { return atoi(get<std::string>(name).c_str()); }
 	template<> inline uint			get<uint>( const std::string& name ) const { return uint(atoi(get<std::string>(name).c_str())); }
 	template<> inline float			get<float>( const std::string& name ) const { return float(atof(get<std::string>(name).c_str())); }
@@ -166,7 +154,7 @@ protected:
 
 	struct attribute_t
 	{
-		std::string	name = path::module_name();
+		char		name[256];
 		std::string copyright;
 		std::string	header, footer;
 		std::string help;		// shorter help for commands
@@ -241,7 +229,7 @@ inline bool parser_t::command_exists( const std::string& name ) const
 {
 	for(auto* c:commands)
 	{
-		if(strcmp(c->attrib.name.c_str(),name.c_str())!=0) continue;
+		if(strcmp(c->attrib.name,name.c_str())!=0) continue;
 		if(c->b_command_found) return true;
 	}
 	return false;
@@ -427,11 +415,11 @@ inline bool parser_t::usage( const char* alt_name )
 	for( auto& a : req_args )	cap=cap>a.first.length()?cap:a.first.length();
 	for( auto& a : opt_args )	cap=cap>a.first.length()?cap:a.first.length();
 	for( auto& o : opts )		cap=cap>o.first.length()?cap:o.first.length();
-	for( auto* c : commands)	cap=cap>c->attrib.name.length()?cap:c->attrib.name.length();
+	for( auto* c : commands)	cap=cap>strlen(c->attrib.name)?cap:strlen(c->attrib.name);
 	if(cap==0&&commands.empty()) return exit("no argument/options found\n");
 
 	// now, prints the results
-	fprintf( stdout, "\n%s version %04d-%02d-%02d\n", path::module_name(), gx::compiler::year(), gx::compiler::month(), gx::compiler::day() );
+	fprintf( stdout, "\n%s version %04d-%02d-%02d\n", attrib.name, compiler::year(), compiler::month(), compiler::day() );
 	if(!attrib.copyright.empty()) fprintf( stdout, "%s\n", trim(attrib.copyright.c_str()) );
 	if(!attrib.header.empty()) fprintf( stdout, "%s\n\n", attrib.header.c_str() );
 
@@ -478,7 +466,9 @@ inline bool parser_t::usage( const char* alt_name )
 		fprintf( stdout, "\n%s\n", attrib.footer.c_str() );
 	}
 
+#ifdef __GX_OS_H__
 	if(!os::console::has_parent()) system("pause");
+#endif
 
 	return false;
 }

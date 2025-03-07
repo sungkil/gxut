@@ -1,5 +1,11 @@
 #pragma once
 
+#if __has_include(<gxut/gxos.h>)
+	#include <gxut/gxos.h>
+#else __has_include("../gxos.h")
+	#include "../gxos.h"
+#endif
+
 using std::string;
 using std::vector;
 
@@ -13,7 +19,7 @@ struct registry_t
 	string	cmd;
 	string	icon;
 	
-	static path exe_path(){ return path::module_path().replace_extension("exe"); }
+	static path exe_path(){ return path(module_path()).replace_extension("exe"); }
 
 	template <HKEY root=HKEY_CLASSES_ROOT> bool add( string subkey, string name, string value );
 	template <HKEY root=HKEY_CLASSES_ROOT> bool add_shell( string subkey ){ return add_shell<root>(vector<string>{subkey}); }
