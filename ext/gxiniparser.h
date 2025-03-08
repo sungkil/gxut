@@ -144,7 +144,7 @@ __noinline bool parser_t::save_as( const path& file_path )
 
 	auto_lock_t lock(cs);
 
-	bool b_hidden_file=false;if(_access(file_path.c_str(),0)==0&&(GetFileAttributesW(::atow(file_path.c_str()))&FILE_ATTRIBUTE_HIDDEN)){b_hidden_file=true;SetFileAttributesW(atow(file_path.c_str()),GetFileAttributesW(atow(file_path.c_str()))&(~FILE_ATTRIBUTE_HIDDEN) );} // save and remove hidden attribute
+	bool b_hidden_file=false;if(access(file_path.c_str(),0)==0&&(GetFileAttributesW(::atow(file_path.c_str()))&FILE_ATTRIBUTE_HIDDEN)){b_hidden_file=true;SetFileAttributesW(atow(file_path.c_str()),GetFileAttributesW(atow(file_path.c_str()))&(~FILE_ATTRIBUTE_HIDDEN) );} // save and remove hidden attribute
 	FILE* fp=nullptr; for(uint k=0;fp==nullptr&&k<20;k++){ fp=file_path.fopen("w",true); Sleep(5); } // wait 100ms for busy writing
 	if(fp==nullptr){ printf( "%s(): Unable to open %s to write", __func__, file_path.c_str() ); return false; }
 	_fseeki64( fp, 0, SEEK_SET ); // remove BOM

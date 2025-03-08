@@ -18,11 +18,11 @@
 #ifndef __GX_MEMORY_H__
 #define __GX_MEMORY_H__
 
-#if __has_include("gxfilesystem.h")
-	#include "gxfilesystem.h"
-#endif
 #if __has_include("gxmath.h")
 	#include "gxmath.h"
+#endif
+#if __has_include("gxfilesystem.h")
+	#include "gxfilesystem.h"
 #endif
 #if __has_include(<intrin.h>)&&__has_include(<nmmintrin.h>)
 	#include <intrin.h>
@@ -55,7 +55,7 @@ template <class T,bool readonly=false> struct mmap // memory-mapped file (simila
 	size_t	size=0;
 	
 	mmap( size_t n ):size(n){ size_t s=size*sizeof(T); hFileMap=CreateFileMappingW( INVALID_HANDLE_VALUE /* use pagefile */, nullptr, PAGE_READWRITE, DWORD(s>>32), DWORD(s&0xffffffff), _uname() ); }
-	mmap( const char* file_path){ struct _stat st={}; if(_access(file_path,0)!=0) return; _stat(file_path,&st); size_t file_size=st.st_size; size=file_size/sizeof(T); if(file_size==0) return; hFile=CreateFileW(atow(file_path),GENERIC_READ|(readonly?0:GENERIC_WRITE), FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_RANDOM_ACCESS, nullptr); if(hFile==INVALID_HANDLE_VALUE){size=0;return;} size_t memsize=sizeof(T)*size; hFileMap=CreateFileMappingW(hFile,nullptr,readonly?PAGE_READONLY:PAGE_READWRITE,DWORD(uint64_t(memsize)>>32),DWORD(memsize&0xffffffff),nullptr); if(hFileMap==INVALID_HANDLE_VALUE){size=0;CloseHandle(hFile);hFile=nullptr;return;} }
+	mmap( const char* file_path){ struct _stat st={}; if(access(file_path,0)!=0) return; _stat(file_path,&st); size_t file_size=st.st_size; size=file_size/sizeof(T); if(file_size==0) return; hFile=CreateFileW(atow(file_path),GENERIC_READ|(readonly?0:GENERIC_WRITE), FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_RANDOM_ACCESS, nullptr); if(hFile==INVALID_HANDLE_VALUE){size=0;return;} size_t memsize=sizeof(T)*size; hFileMap=CreateFileMappingW(hFile,nullptr,readonly?PAGE_READONLY:PAGE_READWRITE,DWORD(uint64_t(memsize)>>32),DWORD(memsize&0xffffffff),nullptr); if(hFileMap==INVALID_HANDLE_VALUE){size=0;CloseHandle(hFile);hFile=nullptr;return;} }
 	virtual ~mmap(){ if(!empty()&&ptr){ FlushViewOfFile(ptr,0); UnmapViewOfFile(ptr); ptr=nullptr; } if(hFileMap!=INVALID_HANDLE_VALUE) CloseHandle(hFileMap); hFileMap=INVALID_HANDLE_VALUE; if(hFile!=INVALID_HANDLE_VALUE) CloseHandle(hFile); hFile=INVALID_HANDLE_VALUE; }
 	bool empty() const { return hFile==INVALID_HANDLE_VALUE||hFileMap==INVALID_HANDLE_VALUE||size==0; }
 	T* map( size_t offset=0, size_t n=0 ){ if(empty()) return nullptr; size_t s=offset*sizeof(T); return ptr=(T*)MapViewOfFile(hFileMap,FILE_MAP_READ|(readonly?0:FILE_MAP_WRITE),DWORD(uint64_t(s)>>32),DWORD(s&0xffffffff),(n?n:size)*sizeof(T)); }
@@ -164,7 +164,7 @@ struct resource_t : public mem_t
 
 //***********************************************
 // crc32c wrappers
-#if defined(_MSC_VER)&&!defined(__clang__)
+#ifdef __msvc__
 // CRC32C SSE4.2 implementation up to 8-batch parallel construction (https://github.com/Voxer/sse4_crc32)
 __noinline unsigned int crc32c_hw( unsigned int crc0, const void* ptr, size_t size )
 {

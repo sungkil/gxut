@@ -18,10 +18,7 @@
 #ifndef __GX_MATH__
 #define __GX_MATH__
 
-#include "gxtype.h"
-#if __has_include( "gxstrmin.h" )
-	#include "gxstrmin.h"
-#endif
+#include "gxlib.h"
 
 #include <limits.h>
 #include <float.h>
@@ -31,7 +28,10 @@
 using std::min;
 using std::max;
 
+#ifdef PI
 #undef PI
+#endif
+
 template <class T=float> constexpr T PI = T(3.141592653589793);
 template <class T,class N,class X> T clamp( T v, N vmin, X vmax ){ return v<T(vmin)?T(vmin):v>T(vmax)?T(vmax):v; }
 
@@ -569,14 +569,12 @@ static_assert(sizeof(dmat4)%sizeof(double)*16==0,"sizeof(dmat4)!=sizeof(double)*
 
 //*************************************
 // string-matrix conversion functions
-#ifdef __GX_STRMIN_H__
 inline const char* ftoa( const mat2& m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3]);return buff;}
 inline const char* ftoa( const mat3& m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]);return buff;}
 inline const char* ftoa( const mat4& m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]);return buff;}
 inline const char* ftoa( const dmat2&m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3]);return buff;}
 inline const char* ftoa( const dmat3&m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]);return buff;}
 inline const char* ftoa( const dmat4&m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]);return buff;}
-#endif
 inline mat3 atof9( const char* a ){		mat3 m;char* e=0; for(int k=0;k<9;k++,a=e) (&m._11)[k]=strtof(a,&e); return m; }
 inline mat4 atof16( const char* a ){	mat4 m;char* e=0; for(int k=0;k<16;k++,a=e)(&m._11)[k]=strtof(a,&e); return m; }
 inline dmat3 atod9( const char* a ){	dmat3 m;char* e=0;for(int k=0;k<9;k++,a=e) (&m._11)[k]=strtod(a,&e); return m; }
@@ -799,20 +797,6 @@ template <class T> T bezier( T v0, T v1, T v2, T v3, double t )
 	return v0*a[0]+v1*a[1]+v2*a[2]+v3*a[3];
 }
 #pragma warning( default: 4244 )
-
-//*************************************
-// CRC32 with 4-batch parallel construction (from zlib)
-template <unsigned int poly=0x82f63b78UL> // defaulted to crc32c; deflate use 0xedb88320UL
-__noinline unsigned int crc32( unsigned int crc0, const void* ptr, size_t size )
-{
-	if(!ptr||!size){ return crc0; }
-	static unsigned* t[4]={}; if(!t[0]){ for(int k=0;k<4;k++) t[k]=(unsigned*) malloc(sizeof(unsigned)*256); for(int k=0;k<256;k++){ unsigned v=k; for( unsigned j=0;j<8;j++) v=v&1?poly^(v>>1):v>>1; t[0][k]=v; } for(int k=0;k<256;k++){ unsigned v=t[0][k]; for(int j=1;j<4;j++) t[j][k]=v=t[0][v&0xff]^(v>>8); } }
-	unsigned c = ~crc0; const unsigned char* b=(const unsigned char*)ptr;
-	for(;size&&(ptrdiff_t(b)&7);size--,b++) c=t[0][(c^(*b))&0xff]^(c>>8); // move forward to the 8-byte aligned boundary
-	for(;size>=4;size-=4,b+=4){c^=*(unsigned*)b;c=t[3][(c>>0)&0xff]^t[2][(c>>8)&0xff]^t[1][(c>>16)&0xff]^t[0][(c>>24)&0xff]; }
-	for(;size;size--,b++)c=t[0][(c^(*b))&0xff]^(c>>8);
-	return ~c;
-}
 
 //*************************************
 namespace gx {

@@ -886,7 +886,7 @@ namespace gl {
 		{
 			path ext = get_shader_extension_name( shader_type ); if(ext.empty()){ printf( "unable to find shader_type %d\n", int(shader_type) ); return; }
 			path file_path = dir+name+"."+ext;
-			if(b_print_log) printf( "%s\n", file_path.relative(module_dir()).slash());
+			if(b_print_log) printf( "%s\n", file_path.relative(exe::dir()).slash());
 			get_shader_source(shader_type).flatten( file_path );
 		}
 		path get_shader_extension_name( GLuint shader_type ) const

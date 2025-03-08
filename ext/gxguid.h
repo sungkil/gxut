@@ -18,7 +18,7 @@
 #ifndef __GX_GUID_H__
 #define __GX_GUID_H__
 
-#include "../gxtype.h"
+#include "../gxlib.h"
 #if defined(_WIN32)||defined(_WIN64) // Windows
 	#include <guiddef.h>
 #endif

@@ -18,8 +18,7 @@
 #ifndef __GX_STRING_H__
 #define __GX_STRING_H__
 
-#include "gxtype.h"
-#include "gxstrmin.h"
+#include "gxlib.h"
 
 // Byte order masks for UTF encoding
 static const unsigned char BOM_UTF8[3]={0xEF,0xBB,0xBF};

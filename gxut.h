@@ -19,6 +19,7 @@
 #define __GXUT_H__
 
 // includes only minimal essential header files
+#include "gxlib.h"
 #if __has_include("gxmath.h")
 	#include "gxmath.h"
 #endif

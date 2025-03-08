@@ -18,7 +18,7 @@
 #ifndef __GX_TIMER_H__
 #define __GX_TIMER_H__
 
-#include "gxtype.h"
+#include "gxlib.h"
 #include <time.h>
 
 // compiler utility
@@ -41,7 +41,7 @@ struct timer_t
 
 inline void usleep( int us )
 {
-#if defined(_MSC_VER)&&__has_include(<winsock2.h>) // use higher-precision select() when available
+#if defined(__msvc__)&&__has_include(<winsock2.h>) // use higher-precision select() when available
 	struct ws2select_t
 	{
 		HMODULE hdll=nullptr;

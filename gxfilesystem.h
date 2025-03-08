@@ -18,8 +18,7 @@
 #ifndef __GX_FILESYSTEM_H__
 #define __GX_FILESYSTEM_H__
 
-#include "gxtype.h"
-#include "gxstrmin.h"
+#include "gxlib.h"
 
 #include <time.h>
 #include <deque>
@@ -46,48 +45,7 @@ inline bool operator>(  FILETIME f1, FILETIME f2 ){ return CompareFileTime(&f1,&
 inline bool operator<(  FILETIME f1, FILETIME f2 ){ return CompareFileTime(&f1,&f2)<0; }
 static const uint64_t DefaultFileTimeOffset = FileTimeOffset(0,0,0,30); // server-local difference can be up to several seconds
 inline bool FileTimeGreater( FILETIME f1, FILETIME f2, int64_t offset=DefaultFileTimeOffset ){ return FileTimeToUint64(f1)>FileTimeToUint64(f2)+offset; } // do not make FileTimeLess(), which causes confusion in use cases
-
-// disk volume type for windows
-#ifdef _APISETFILE_
-struct volume_t
-{
-	static const int	capacity = 256;
-	wchar_t				root[4]={}; // trailing backslash required
-	wchar_t				name[capacity] = {};
-	unsigned long		serial_number=0;
-	unsigned long		maximum_component_length=0;
-	uint64_t			_disk_size=0, _free_space=0;
-	struct {			unsigned long flags=0; wchar_t name[capacity+1]={}; } filesystem;
-
-	// constructor
-	volume_t() = default;
-	volume_t( const volume_t& other ) = default;
-	volume_t& operator=( const volume_t& other ) = default;
-	volume_t( const char* drive )
-	{
-		if(!drive||!drive[0]||!isalpha(drive[0])) return;
-		root[0]=drive[0]; root[1]=L':'; root[2]=L'\\'; root[3]=0;
-		if(!GetVolumeInformationW(root,name,capacity,&serial_number,&maximum_component_length,&filesystem.flags,filesystem.name,capacity)){ root[0]=0; return; }
-		ULARGE_INTEGER a,t,f; GetDiskFreeSpaceExW(root, &a, &t, &f);
-		_disk_size = uint64_t(t.QuadPart);
-		_free_space = uint64_t(a.QuadPart);
-	}
-
-	// query
-	bool exists() const { return root[0]!=0&&serial_number!=0&&filesystem.name[0]!=0; }
-	uint64_t size() const { return exists()?_disk_size:0; }
-	uint64_t free_space() const { return exists()?_free_space:0; }
-	bool has_free_space( uint64_t inverse_thresh=10 ) const { return exists()&&free_space()>(size()/inverse_thresh); }
-	bool is_exfat() const { return _wcsicmp(filesystem.name,L"exFAT")==0; }
-	bool is_ntfs() const { return _wcsicmp(filesystem.name,L"NTFS")==0; }
-	bool is_fat32() const { return _wcsicmp(filesystem.name,L"FAT32")==0; }
-};
 #endif
-#endif
-
-//***********************************************
-// posix-like or std::filesystem-like utilities
-inline bool is_fifo( FILE* fp ){ if(!fp) return false; struct stat s; return fstat(_fileno(fp),&s)==0?(s.st_mode&_S_IFIFO?true:false):false; }
 
 struct path
 {
@@ -216,7 +174,6 @@ public:
 	bool find( const char* s, bool case_insensitive=true ){ return (case_insensitive?_stristr(_data,s):strstr(_data,s))!=nullptr; }
 
 	// attribute by stats
-	typedef struct _stat64 stat_t;						// use "struct _stat" instead of "_stat" for C-compatibility
 	inline stat_t	stat() const { stat_t s={}; if(exists()) _stat64(_data,&s); return s; }
 	inline DWORD&	attributes() const { update_cache(); return cache().dwFileAttributes; }
 	inline void		update_cache() const { if(!*_data) return; auto& c=cache(); if(!GetFileAttributesExW(atow(_data),GetFileExInfoStandard,&c)||c.dwFileAttributes==INVALID_FILE_ATTRIBUTES){ memset(&c,0,sizeof(attrib_t)); c.dwFileAttributes=INVALID_FILE_ATTRIBUTES; return; } c.ftLastWriteTime=DiscardFileTimeMilliseconds(c.ftLastWriteTime); }
@@ -255,12 +212,6 @@ public:
 	inline path canonical() const { if(is_pipe()) return *this; if(is_rsync()||is_remote()) return to_slash(); path p(*this); p.canonicalize(); return p; } // not necessarily absolute: return relative path as well
 
 	// path info/operations
-	volume_t volume() const
-	{
-		volume_t v;
-		//if(is_unc()||is_rsync()||is_remote()||!drive().exists()) return v;
-		return volume_t(drive().c_str());
-	}
 	path drive() const { if(!*_data) return path();if(is_unc()) return unc_root(); return split(true).drive; }
 	path dir() const { path p; value_type* d=__strbuf(capacity);if(is_unc()){path r=unc_root();size_t rl=r.size();if(size()<=rl+1){if(r._data[rl-1]!=__backslash){r._data[rl]=__backslash;r._data[rl+1]=0;}return r;}} auto s=split(true,true); if(!*s.dir&&!*s.drive) return ".\\"; strcpy(p._data,s.drive); if(*s.dir) strcat(p._data,s.dir); return p; }
 	path unc_root() const { if(!is_unc()) return path(); path r=*this;size_t l=strlen(_data);for(size_t k=0;k<l;k++)if(r[k]==__slash)r[k]=__backslash; auto* b=strchr(r._data+2,__backslash);if(b)((value_type*)b)[0]=0; return r; } // similar to drive (but to the root unc path without backslash)
@@ -268,7 +219,7 @@ public:
 	path basename( bool with_ext=true ) const { auto s=split(false,false,true,with_ext); if(!with_ext||!s.ext||!*s.ext) return s.fname; return strcat(strcpy(__strbuf(capacity),s.fname),s.ext); }
 	path ext() const { auto s=split(false,false,false,true); return *s.ext?s.ext+1:""; }
 	path parent() const { return dir().remove_backslash().dir(); }
-	std::vector<path> ancestors( path root="" ) const { if(empty()) return std::vector<path>(); if(root._data[0]==0) root=is_unc()?unc_root():module_dir(); path d=dir(); int l=int(d.size()),rl=int(root.size()); bool r=_strnicmp(d._data,root._data,rl)==0; std::vector<path> a;a.reserve(4); for(int k=l-1,e=r?rl-1:0;k>=e;k--){ if(d._data[k]!=__backslash&&d._data[k]!=__slash) continue; d._data[k+1]=0; a.emplace_back(d); } return a; }
+	std::vector<path> ancestors( path root="" ) const { if(empty()) return std::vector<path>(); if(root._data[0]==0) root=is_unc()?unc_root():exe::dir(); path d=dir(); int l=int(d.size()),rl=int(root.size()); bool r=_strnicmp(d._data,root._data,rl)==0; std::vector<path> a;a.reserve(4); for(int k=l-1,e=r?rl-1:0;k>=e;k--){ if(d._data[k]!=__backslash&&d._data[k]!=__slash) continue; d._data[k+1]=0; a.emplace_back(d); } return a; }
 	path junction() const { path t; if(!*_data||!exists()) return t; bool b_dir=is_dir(),j=false; for(auto& d:b_dir?ancestors():dir().ancestors()){ if(d.is_drive()) break; if((d.attributes()&FILE_ATTRIBUTE_REPARSE_POINT)!=0){j=true;break;} } if(!j) return t; HANDLE h=CreateFileW(atow(c_str()), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0); if(h==INVALID_HANDLE_VALUE) return t; auto* w=__strbuf<wchar_t>(capacity); GetFinalPathNameByHandleW(h, w, t.capacity, FILE_NAME_NORMALIZED); CloseHandle(h); strcpy(t._data,wtoa(w)); if(strncmp(t._data, "\\\\?\\", 4)==0) t=path(t._data+4); return b_dir?t.add_backslash():t; }
 	
 	// shortcuts to C-string
@@ -278,7 +229,7 @@ public:
 
 	// content manipulations
 	path remove_first_dot()	const { return (strlen(_data)>2&&_data[0]=='.'&&_data[1]==__backslash) ? path(_data+2) : *this; }
-	path remove_extension() const { split_t si=split(true,true,true); return strcat(strcat(strcpy(__strbuf(capacity),si.drive),si.dir),si.fname); }
+	path remove_extension() const { split_t si=split(true,true,true); auto* b=__strbuf(capacity); snprintf(b,capacity,"%s%s%s",si.drive, si.dir, si.fname); return b; }
 	path replace_extension( path ext ) const { if(ext.empty()) return *this; split_t si=split(true,true,true); path p; snprintf(p._data, capacity, "%s%s%s%s%s", si.drive, si.dir, si.fname, ext[0]=='.'?"":".", ext._data); return p; }
 	std::vector<path> explode( char delim=preferred_separator ) const { std::vector<path> L; path s=preferred_separator==__slash?to_slash():*this; L.reserve(16); value_type* ctx=nullptr; const value_type d[2]={delim,0}; for(value_type* t=strtok_s(s._data,d,&ctx); t; t=strtok_s(0,d,&ctx)) L.emplace_back(t); return L; }
 
@@ -365,7 +316,7 @@ __noinline bool path::mkdir() const // make all super directories
 	auto v=to_backslash().dir().ancestors(); if(v.empty()) return false; auto bl=v.back().size();
 	if(is_unc()){ auto r=dir().unc_root();size_t rl=r.size();if(bl<=rl+1){v.pop_back();bl=v.back().size();}if(bl<=rl+1)v.pop_back(); }
 	else if(bl<=3){ if(v.back()[1]==':')v.pop_back();else if(bl<=1)v.pop_back(); }
-	for( auto it=v.rbegin(); it!=v.rend(); it++ ){ if(!it->exists()&&_mkdir(it->_data)!=0) return false; }
+	for( auto it=v.rbegin(); it!=v.rend(); it++ ){ if(!it->exists()&&::mkdir(it->_data)!=0) return false; }
 	return true;
 }
 
@@ -550,8 +501,8 @@ __noinline path path::temp( bool local, path local_dir )
 {
 	// get local_appdata
 	char* buff=getenv("LOCALAPPDATA");
-	static path r=path(buff?buff:"").add_backslash()+path(module_name()).key()+__backslash;
-	path t=r; if(local){ if(local_dir.empty()) local_dir=module_dir(); t+=path("local\\")+local_dir.key().add_backslash(); }
+	static path r=path(buff?buff:"").add_backslash()+path(exe::name()).key()+__backslash;
+	path t=r; if(local){ if(local_dir.empty()) local_dir=exe::dir(); t+=path("local\\")+local_dir.key().add_backslash(); }
 	if(!t.exists()) t.mkdir();
 	return t;
 }
@@ -625,6 +576,44 @@ namespace nocase
 	template <> struct equal_to<path>{ bool operator()(const path& a,const path& b)const{return _stricmp(a.c_str(),b.c_str())==0; } };
 	template <> struct hash<path>{ size_t operator()(const path& p)const{ return std::hash<std::string>()(_strlwr(__strdup(p.c_str()))); } };
 }
+
+// disk volume type for windows
+#ifdef _APISETFILE_
+struct volume_t
+{
+	static const int	capacity = 256;
+	wchar_t				root[4]={}; // trailing backslash required
+	wchar_t				name[capacity] = {};
+	unsigned long		serial_number=0;
+	unsigned long		maximum_component_length=0;
+	uint64_t			_disk_size=0, _free_space=0;
+	struct {			unsigned long flags=0; wchar_t name[capacity+1]={}; } filesystem;
+
+	// constructor
+	volume_t() = default;
+	volume_t( const volume_t& other ) = default;
+	volume_t& operator=( const volume_t& other ) = default;
+	volume_t( const path& file_path )
+	{
+		if(file_path.is_unc()||file_path.is_rsync()||file_path.is_remote()) return;
+		path drive = file_path.drive(); if(drive.empty()||!isalpha(drive[0])||!drive.exists()) return;
+		root[0]=drive[0]; root[1]=L':'; root[2]=L'\\'; root[3]=0;
+		if(!GetVolumeInformationW(root,name,capacity,&serial_number,&maximum_component_length,&filesystem.flags,filesystem.name,capacity)){ root[0]=0; return; }
+		ULARGE_INTEGER a,t,f; GetDiskFreeSpaceExW(root, &a, &t, &f);
+		_disk_size = uint64_t(t.QuadPart);
+		_free_space = uint64_t(a.QuadPart);
+	}
+
+	// query
+	bool exists() const { return root[0]!=0&&serial_number!=0&&filesystem.name[0]!=0; }
+	uint64_t size() const { return exists()?_disk_size:0; }
+	uint64_t free_space() const { return exists()?_free_space:0; }
+	bool has_free_space( uint64_t inverse_thresh=10 ) const { return exists()&&free_space()>(size()/inverse_thresh); }
+	bool is_exfat() const { return _wcsicmp(filesystem.name,L"exFAT")==0; }
+	bool is_ntfs() const { return _wcsicmp(filesystem.name,L"NTFS")==0; }
+	bool is_fat32() const { return _wcsicmp(filesystem.name,L"FAT32")==0; }
+};
+#endif
 
 //***********************************************
 #endif // __GX_FILESYSTEM_H__

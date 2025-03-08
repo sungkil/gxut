@@ -48,7 +48,7 @@ struct session_t
 	HINTERNET handle = nullptr;
 
 	virtual ~session_t(){ release(); }
-	session_t(){ if(!is_online()) return; handle=InternetOpenW( atow(path(module_path()).name()),INTERNET_OPEN_TYPE_PRECONFIG,0,0,0); }
+	session_t(){ if(!is_online()) return; handle=InternetOpenW( atow(path(exe::path()).name()),INTERNET_OPEN_TYPE_PRECONFIG,0,0,0); }
 	void release(){ if(!handle) return; InternetCloseHandle(handle); handle=nullptr; }
 	operator bool() const { return handle!=nullptr; }
 

@@ -2,14 +2,14 @@
 #ifndef __GXZIP_H__
 #define __GXZIP_H__
 
-#if __has_include("gxtype.h")
-	#include "gxtype.h"
+#if __has_include("gxlib.h")
+	#include "gxlib.h"
 	#include "gxmemory.h"
-#elif __has_include("../gxtype.h")
-	#include "../gxtype.h"
+#elif __has_include("../gxlib.h")
+	#include "../gxlib.h"
 	#include "../gxmemory.h"
-#elif __has_include(<gxut/gxtype.h>)
-	#include <gxut/gxtype.h>
+#elif __has_include(<gxut/gxlib.h>)
+	#include <gxut/gxlib.h>
 	#include <gxut/gxmemory.h>
 #endif
 

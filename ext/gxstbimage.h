@@ -1,12 +1,12 @@
 ﻿#ifndef __GX_STBIMAGE__
 #define __GX_STBIMAGE__
 
-#if __has_include("gxtype.h")
-	#include "gxtype.h"
-#elif __has_include("../gxtype.h")
-	#include "../gxtype.h"
-#elif __has_include(<gxut/gxtype.h>)
-	#include <gxut/gxtype.h>
+#if __has_include("gxlib.h")
+	#include "gxlib.h"
+#elif __has_include("../gxlib.h")
+	#include "../gxlib.h"
+#elif __has_include(<gxut/gxlib.h>)
+	#include <gxut/gxlib.h>
 #endif
 
 #include <stdio.h>
@@ -53,7 +53,7 @@ inline image* create_image( int width, int height, int depth, int channels, unsi
 
 inline image* load_image( const char* file_path, bool vflip=true, bool force_rgb=true )
 {
-	if(_access(file_path,0)!=0){ printf("%s(): %s not exists\n", __func__, file_path); return nullptr; }
+	if(access(file_path,0)!=0){ printf("%s(): %s not exists\n", __func__, file_path); return nullptr; }
 
 	int width, height, channels; // comp returns the original channels
 	stbi_uc* data = stbi_load( file_path, &width, &height, &channels, force_rgb?3:0); if(!data) return nullptr;
