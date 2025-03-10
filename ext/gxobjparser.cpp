@@ -21,9 +21,9 @@ extern const char* __GX_MTLPARSER_CPP_TIMESTAMP__;
 namespace obj {
 //*************************************
 
-static const std::set<std::string>& get_archive_extensions()
+static const std::set<string>& get_archive_extensions()
 {
-	static std::set<std::string> m; if(!m.empty()) return m;
+	static std::set<string> m; if(!m.empty()) return m;
 #if defined(__7Z_H) && defined(__7Z_MEMINSTREAM_H)
 	m.insert("7z");
 #endif
@@ -36,9 +36,9 @@ static const std::set<std::string>& get_archive_extensions()
 // vertex hash key using position ID; significantly faster than bitwise hash
 struct vertex_hash {size_t operator()(const ivec3& v)const{ return reinterpret_cast<const size_t&>(v.x); }};
 using vtx_map_t		= std::unordered_map<ivec3,uint,vertex_hash>;
-using pos_vector_t	= std::vector<vec3>;
-using nrm_vector_t	= std::vector<vec3>;
-using tex_vector_t	= std::vector<vec2>;
+using pos_vector_t	= vector<vec3>;
+using nrm_vector_t	= vector<vec3>;
+using tex_vector_t	= vector<vec2>;
 using vtx_vector_t	= decltype(mesh::vertices);
 using idx_vector_t	= decltype(mesh::indices);
 
@@ -92,15 +92,15 @@ namespace obj::cache
 {
 	inline uint64_t get_parser_id( path file_path )
 	{
-		static const std::string codestamp = 
-			std::string(__GX_MESH_H_TIMESTAMP__)+
-			std::string(__GX_OBJPARSER_H_TIMESTAMP__)+
-			std::string(__GX_OBJPARSER_CPP_TIMESTAMP__)+
-			std::string(__GX_MTLPARSER_CPP_TIMESTAMP__);
-		std::string s = codestamp+file_path.mtimestamp();
+		static const string codestamp = 
+			string(__GX_MESH_H_TIMESTAMP__)+
+			string(__GX_OBJPARSER_H_TIMESTAMP__)+
+			string(__GX_OBJPARSER_CPP_TIMESTAMP__)+
+			string(__GX_MTLPARSER_CPP_TIMESTAMP__);
+		string s = codestamp+file_path.mtimestamp();
 		for( auto& f : file_path.dir().absolute().scan( "obj;mtl;7z;zip;jpg;jpeg;png;hdr" ) )
 			s += f.mtimestamp();
-		return uint64_t(std::hash<std::string>{}(s));
+		return uint64_t(std::hash<string>{}(s));
 	}
 
 	void clear( mesh* p_mesh, bool b_log )
@@ -298,7 +298,7 @@ __forceinline uint get_or_create_vertex( char* str )
 	return vertex_index;
 }
 
-static std::set<std::string> bypass_tags =
+static std::set<string> bypass_tags =
 {
 	"cstype",		// curve or surface type
 	"deg",			// skip degree

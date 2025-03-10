@@ -18,7 +18,10 @@
 #ifndef __GX_TIMER_H__
 #define __GX_TIMER_H__
 
-#include "gxlib.h"
+#if !defined(__GXUT_H__) && __has_include(<gxut/gxut.h>)
+	#include <gxut/gxut.h>
+#endif
+
 #include <time.h>
 
 // compiler utility

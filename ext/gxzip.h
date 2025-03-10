@@ -2,14 +2,14 @@
 #ifndef __GXZIP_H__
 #define __GXZIP_H__
 
-#if __has_include("gxlib.h")
-	#include "gxlib.h"
+#if __has_include("gxut.h")
+	#include "gxut.h"
 	#include "gxmemory.h"
-#elif __has_include("../gxlib.h")
-	#include "../gxlib.h"
+#elif __has_include("../gxut.h")
+	#include "../gxut.h"
 	#include "../gxmemory.h"
-#elif __has_include(<gxut/gxlib.h>)
-	#include <gxut/gxlib.h>
+#elif __has_include(<gxut/gxut.h>)
+	#include <gxut/gxut.h>
 	#include <gxut/gxmemory.h>
 #endif
 
@@ -221,13 +221,13 @@ namespace zlib {
 //*************************************
 inline size_t capacity( size_t size ){ return size+(((size+16383)>>16)*5)+6; }
 
-__noinline std::vector<uchar> compress( void* ptr, size_t size, bool b_gzip )
+__noinline vector<uchar> compress( void* ptr, size_t size, bool b_gzip )
 {
 	z_stream s; memset(&s,0,sizeof(decltype(s)));
 	int ret = b_gzip?deflateInit2_(&s,-1,8,MAX_WBITS+16,8,0,ZLIB_VERSION,sizeof(s)):deflateInit_(&s,-1,ZLIB_VERSION,sizeof(s));
-	if(ret!=0/*Z_OK*/) return std::vector<uchar>();
+	if(ret!=0/*Z_OK*/) return vector<uchar>();
 	
-	std::vector<uchar> buff(capacity(size));
+	vector<uchar> buff(capacity(size));
 	static const uint chunk = 0x8000;
 	size_t todo = size;
 	s.next_in	= (uchar*) ptr;
@@ -246,10 +246,10 @@ __noinline std::vector<uchar> compress( void* ptr, size_t size, bool b_gzip )
 	return buff;
 }
 
-__noinline std::vector<uchar> decompress( void* ptr, size_t size )
+__noinline vector<uchar> decompress( void* ptr, size_t size )
 {
 	z_stream s; memset(&s,0,sizeof(s));
-	std::vector<uchar> buff; if(size<3) return buff;
+	vector<uchar> buff; if(size<3) return buff;
 
 	static const uchar siggz[] = {0x1F,0x8B,0x08};
 	bool b_gz = memcmp(ptr,siggz,sizeof(siggz))==0;
@@ -257,7 +257,7 @@ __noinline std::vector<uchar> decompress( void* ptr, size_t size )
 	if(b_gz) inflateInit2_(&s,MAX_WBITS+16,ZLIB_VERSION,int(sizeof(z_stream))); else inflateInit_(&s,ZLIB_VERSION,int(sizeof(z_stream)));
 	
 	static const uint chunk = 0x8000;
-	static std::vector<uchar> temp(chunk);
+	static vector<uchar> temp(chunk);
 	size_t todo = size;
 
 	buff.reserve(chunk);
@@ -295,7 +295,7 @@ struct binary_cache
 
 	virtual path cache_path() = 0;
 	virtual path zip_path(){ return cache_path()+".zip"; }
-	virtual std::string signature() = 0;
+	virtual string signature() = 0;
 
 	void writef( __printf_format_string__ const char* fmt, ... ){ if(!fp) return; va_list a; va_start(a,fmt); vfprintf(fp,fmt,a); va_end(a); }
 	void readf( const char* fmt, ... ){ if(!fp) return; va_list a; va_start(a,fmt); vfscanf(fp,fmt,a); va_end(a); }
@@ -310,7 +310,7 @@ struct binary_cache
 	__noinline bool open( bool read=true )
 	{
 		b_read = read;
-		uint64_t sig = uint64_t(std::hash<std::string>{}(std::string(__TIMESTAMP__)+signature()));
+		uint64_t sig = uint64_t(std::hash<string>{}(string(__TIMESTAMP__)+signature()));
 		path cpath=cache_path(), zpath=zip_path();
 		if(b_read)
 		{
@@ -329,8 +329,8 @@ struct binary_cache
 		return true;
 	}
 
-	std::vector<uchar> pack_bits( std::vector<bool>& v ){ std::vector<uchar> b((v.size()+7)>>3,0); for(size_t k=0,kn=v.size();k<kn;k++) if(v[k]) b[k>>3] |= (1<<uchar(k&7)); return b; }
-	std::vector<bool> unpack_bits( std::vector<uchar>& b, size_t max_count=0xffffffff ){ std::vector<bool> v(min(b.size()*8,max_count),0); for(size_t k=0,kn=v.size();k<kn;k++) if(b[k>>3]&(1<<uchar(k&7))) v[k]=true; return v; }
+	vector<uchar> pack_bits( vector<bool>& v ){ vector<uchar> b((v.size()+7)>>3,0); for(size_t k=0,kn=v.size();k<kn;k++) if(v[k]) b[k>>3] |= (1<<uchar(k&7)); return b; }
+	vector<bool> unpack_bits( vector<uchar>& b, size_t max_count=0xffffffff ){ vector<bool> v(min(b.size()*8,max_count),0); for(size_t k=0,kn=v.size();k<kn;k++) if(b[k>>3]&(1<<uchar(k&7))) v[k]=true; return v; }
 
 	bool compress( bool rm_src=true );
 	bool decompress();

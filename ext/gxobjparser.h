@@ -16,9 +16,9 @@ namespace obj
 
 namespace mtl
 {
-	void create_default_material( std::vector<material_impl>& materials );
-	bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_cache=false );
-	uint find_material( std::vector<material_impl>& materials, const char* name );
+	void create_default_material( vector<material_impl>& materials );
+	bool load_mtl( path file_path, vector<material_impl>& materials, bool with_cache=false );
+	uint find_material( vector<material_impl>& materials, const char* name );
 }
 
 // cache forward declaration

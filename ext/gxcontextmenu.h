@@ -6,9 +6,6 @@
 	#include "../gxos.h"
 #endif
 
-using std::string;
-using std::vector;
-
 //*************************************
 namespace ctx {
 //*************************************
@@ -35,7 +32,7 @@ template <HKEY root>
 inline bool registry_t::add( string subkey, string name, string value )
 {
 	os::reg::key_t<root> i(str_replace(subkey.c_str(),"/","\\")); if(!i.open()) return false;
-	buffer += std::string(wtoa(i.c_str()))+"\n";
+	buffer += string(wtoa(i.c_str()))+"\n";
 	buffer += format( "\"%s\"=\"%s\"\n", name.c_str(), str_escape(value.c_str()) );
 	buffer += format( "\n");
 	return true;
@@ -50,13 +47,13 @@ inline bool registry_t::add_shell( vector<string> subkeys )
 
 		// register icon first
 		os::reg::key_t<root> i( "%s/shell/%s", s.c_str(), name.c_str() );
-		buffer += std::string(wtoa(i.c_str()))+"\n";
+		buffer += string(wtoa(i.c_str()))+"\n";
 		buffer += format( "\"Icon\"=\"%s\"\n", str_escape(icon.c_str()) );
 		buffer += format( "\n");
 
 		// register cmd
 		os::reg::key_t<root> c( "%s/shell/%s/command", s.c_str(), name.c_str() );
-		buffer += std::string(wtoa(c.c_str()))+"\n";
+		buffer += string(wtoa(c.c_str()))+"\n";
 		buffer += format( "@=\"%s\"\n", str_escape(cmd.c_str()) );
 		buffer += format( "\n");
 	}

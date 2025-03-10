@@ -33,8 +33,8 @@ struct isampler_t
 {
 	enum model_t { SIMPLE, POISSON, HALTON, HAMMERSLEY };
 	enum surface_t { SQUARE, CIRCLE, HEMISPHERE, COSHEMI, SPHERE, CYLINDER }; // COSHEMI: cosine-weighted hemisphere
-	static std::vector<std::string> model_names(){ return {"simple","Poisson","Halton","Hammersley"}; }
-	static std::vector<std::string> surface_names(){ return {"square","circle","hemisphere","coshemi","sphere","cylinder"}; }
+	static vector<string> model_names(){ return {"simple","Poisson","Halton","Hammersley"}; }
+	static vector<string> surface_names(){ return {"square","circle","hemisphere","coshemi","sphere","cylinder"}; }
 	
 	model_t		model=POISSON;
 	surface_t	surface=CIRCLE;
@@ -76,7 +76,7 @@ protected:
 	void		_reshape( vec4* v, surface_t dst );
 	void		_make_centered();
 
-	std::vector<value_type> _data;
+	vector<value_type> _data;
 };
 
 //*************************************
@@ -109,8 +109,8 @@ struct bridson_t
 	const bool			circular;
 	float				r;
 	int					grid_size;
-	std::vector<cell>	grid;
-	std::vector<vec2>	samples;
+	vector<cell>	grid;
+	vector<vec2>	samples;
 	std::deque<sample>	active_queue;
 	
 	bridson_t( bool circ ):circular(circ){};
@@ -129,8 +129,8 @@ struct bridson_t
 struct _poisson_disk_cache_t
 {
 	static ::path path( uint count, bool circular, uint seed );
-	static bool load( std::vector<vec2>& v, uint count, bool circular, uint seed );
-	static void save( const std::vector<vec2>& v, bool circular, uint seed );
+	static bool load( vector<vec2>& v, uint count, bool circular, uint seed );
+	static void save( const vector<vec2>& v, bool circular, uint seed );
 };
 
 __noinline ::path _poisson_disk_cache_t::path( uint count, bool circular, uint seed )
@@ -144,7 +144,7 @@ __noinline ::path _poisson_disk_cache_t::path( uint count, bool circular, uint s
 	return cache_dir+b;
 }
 
-__noinline bool _poisson_disk_cache_t::load( std::vector<vec2>& v, uint count, bool circular, uint seed )
+__noinline bool _poisson_disk_cache_t::load( vector<vec2>& v, uint count, bool circular, uint seed )
 {
 	auto cache_path = path(count,circular,seed); if(!cache_path.exists()) return false;
 	if(cache_path.file_size()!=sizeof(vec4)*count) return false;
@@ -154,7 +154,7 @@ __noinline bool _poisson_disk_cache_t::load( std::vector<vec2>& v, uint count, b
 	return read_count==count;
 }
 
-__noinline void _poisson_disk_cache_t::save( const std::vector<vec2>& v, bool circular, uint seed )
+__noinline void _poisson_disk_cache_t::save( const vector<vec2>& v, bool circular, uint seed )
 {
 	if(v.empty()) return;
 	auto cache_path = path(uint(v.size()), circular, seed);
@@ -214,9 +214,9 @@ __noinline int bridson_t::generate( const int count, float radius )
 	return int(samples.size());
 }
 
-__noinline std::vector<vec2> poisson_disk( uint _count, bool circular, uint seed )
+__noinline vector<vec2> poisson_disk( uint _count, bool circular, uint seed )
 {
-	std::vector<vec2> v;
+	vector<vec2> v;
 	if(_poisson_disk_cache_t::load(v,_count,circular,seed)) return v;
 
 	int			count = _count;

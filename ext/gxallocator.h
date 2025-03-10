@@ -41,7 +41,7 @@ template <class T, size_t N> struct block_allocator
 		HANDLE	hFileMap = INVALID_HANDLE_VALUE;	// handle to the file mapping
 		size_t	num_chunks = 0;						// number of valid chunks
 	};
-	std::vector<file_map>	file_map_list;
+	vector<file_map>	file_map_list;
 
 	T* allocate( size_t n )
 	{

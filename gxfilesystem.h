@@ -18,7 +18,13 @@
 #ifndef __GX_FILESYSTEM_H__
 #define __GX_FILESYSTEM_H__
 
-#include "gxlib.h"
+// include gxut.h without other headers
+#ifndef __GXUT_H__
+#pragma push_macro("__GXUT_EXCLUDE_HEADERS__")
+#define __GXUT_EXCLUDE_HEADERS__
+#include "gxut.h"
+#pragma pop_macro("__GXUT_EXCLUDE_HEADERS__")
+#endif
 
 #include <time.h>
 #include <deque>
@@ -49,11 +55,11 @@ inline bool FileTimeGreater( FILETIME f1, FILETIME f2, int64_t offset=DefaultFil
 
 struct path
 {
-	using value_type		= char;
-	using string_type		= std::basic_string<value_type,std::char_traits<value_type>,std::allocator<value_type>>;
+	using value_type		= char; // follow posix-system definitions
+	using string_type		= std::basic_string<value_type>;
 	using iterator			= value_type*;
 	using const_iterator	= const value_type*;
-	using attrib_t			= WIN32_FILE_ATTRIBUTE_DATA;	// auxiliary cache information from scan()
+	using attrib_t			= WIN32_FILE_ATTRIBUTE_DATA; // auxiliary cache information from scan()
 	static constexpr int capacity = PATH_MAX;
 
 	// platform-specific definitions
@@ -214,24 +220,24 @@ public:
 	// path info/operations
 	path drive() const { if(!*_data) return path();if(is_unc()) return unc_root(); return split(true).drive; }
 	path dir() const { path p; value_type* d=__strbuf(capacity);if(is_unc()){path r=unc_root();size_t rl=r.size();if(size()<=rl+1){if(r._data[rl-1]!=__backslash){r._data[rl]=__backslash;r._data[rl+1]=0;}return r;}} auto s=split(true,true); if(!*s.dir&&!*s.drive) return ".\\"; strcpy(p._data,s.drive); if(*s.dir) strcat(p._data,s.dir); return p; }
-	path unc_root() const { if(!is_unc()) return path(); path r=*this;size_t l=strlen(_data);for(size_t k=0;k<l;k++)if(r[k]==__slash)r[k]=__backslash; auto* b=strchr(r._data+2,__backslash);if(b)((value_type*)b)[0]=0; return r; } // similar to drive (but to the root unc path without backslash)
-	path dir_name() const { if(strchr(_data,__backslash)) return dir().remove_backslash().filename(); else if(strchr(_data,__slash)) return dir().remove_slash().filename(); else return ""; }
+	path unc_root() const { if(!is_unc()) return path(); path r=*this;size_t l=strlen(_data);for(size_t k=0;k<l;k++){if(r[k]==__slash)r[k]=__backslash;} auto* b=strpbrk(r._data+2,"\\/"); if(b)((value_type*)b)[0]=0; return r; } // similar to drive (but to the root unc path without backslash)
+	path dir_name() const { return strpbrk(_data,"\\/")?dir().remove_backslash().filename():""; }
 	path filename( bool with_ext=true ) const { auto s=split(false,false,true,with_ext); if(!with_ext||!s.ext||!*s.ext) return s.fname; return strcat(strcpy(__strbuf(capacity),s.fname),s.ext); }
 	path ext() const { auto s=split(false,false,false,true); return *s.ext?s.ext+1:""; }
 	path parent() const { return dir().remove_backslash().dir(); }
-	std::vector<path> ancestors( path root="" ) const { if(empty()) return std::vector<path>(); if(root._data[0]==0) root=is_unc()?unc_root():exe::dir(); path d=dir(); int l=int(d.size()),rl=int(root.size()); bool r=_strnicmp(d._data,root._data,rl)==0; std::vector<path> a;a.reserve(4); for(int k=l-1,e=r?rl-1:0;k>=e;k--){ if(d._data[k]!=__backslash&&d._data[k]!=__slash) continue; d._data[k+1]=0; a.emplace_back(d); } return a; }
+	vector<path> ancestors( path root="" ) const { if(empty()) return vector<path>(); if(root._data[0]==0) root=is_unc()?unc_root():exe::dir(); path d=dir(); int l=int(d.size()),rl=int(root.size()); bool r=_strnicmp(d._data,root._data,rl)==0; vector<path> a;a.reserve(4); for(int k=l-1,e=r?rl-1:0;k>=e;k--){ if(d._data[k]!=__backslash&&d._data[k]!=__slash) continue; d._data[k+1]=0; a.emplace_back(d); } return a; }
 	path junction() const { path t; if(!*_data||!exists()) return t; bool b_dir=is_dir(),j=false; for(auto& d:b_dir?ancestors():dir().ancestors()){ if(d.is_drive()) break; if((d.attributes()&FILE_ATTRIBUTE_REPARSE_POINT)!=0){j=true;break;} } if(!j) return t; HANDLE h=CreateFileW(atow(c_str()), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0); if(h==INVALID_HANDLE_VALUE) return t; auto* w=__strbuf<wchar_t>(capacity); GetFinalPathNameByHandleW(h, w, t.capacity, FILE_NAME_NORMALIZED); CloseHandle(h); strcpy(t._data,wtoa(w)); if(strncmp(t._data, "\\\\?\\", 4)==0) t=path(t._data+4); return b_dir?t.add_backslash():t; }
 	
 	// shortcuts to C-string
 	const char* name( bool with_ext=true ) const { return __strdup(filename(with_ext).c_str()); }
 	const char* slash() const { return __strdup(to_slash().c_str()); }
-	const char* auto_quote() const { if(!*_data||(_data[0]=='\"'&&_data[strlen(_data)-1]=='\"')) return c_str(); auto* t=__strbuf(capacity); size_t l=strlen(_data); memcpy(t,_data,l*sizeof(value_type)); if(t[l]==' '||t[l]=='\t'||t[l]=='\n') t[l]=0; if(t[0]==' '||t[0]=='\t'||t[0]=='\n') t++; if(t[0]!='-'&&!strchr(t,' ')&&!strchr(t,'\t')&&!strchr(t,'\n')&&!strchr(t,'|')&&!strchr(t,'&')&&!strchr(t,'<')&&!strchr(t,'>')) return c_str(); path p; p[0]='\"'; memcpy(p._data+1,_data,l*sizeof(value_type)); p[l+1]='\"'; p[l+2]=0; return __strdup(p.c_str()); }
+	const char* auto_quote() const { if(!*_data||(_data[0]=='\"'&&_data[strlen(_data)-1]=='\"')) return c_str(); auto* t=__strbuf(capacity); size_t l=strlen(_data); memcpy(t,_data,l*sizeof(value_type)); if(t[l]==' '||t[l]=='\t'||t[l]=='\n') t[l]=0; if(t[0]==' '||t[0]=='\t'||t[0]=='\n') t++; if(t[0]!='-'&&!strpbrk(t," \t\n|&<>")) return c_str(); path p; p[0]='\"'; memcpy(p._data+1, _data, l*sizeof(value_type)); p[l+1]='\"'; p[l+2]=0; return __strdup(p.c_str()); }
 
 	// content manipulations
 	path remove_first_dot()	const { return (strlen(_data)>2&&_data[0]=='.'&&_data[1]==__backslash) ? path(_data+2) : *this; }
 	path remove_extension() const { split_t si=split(true,true,true); auto* b=__strbuf(capacity); snprintf(b,capacity,"%s%s%s",si.drive, si.dir, si.fname); return b; }
 	path replace_extension( path ext ) const { if(ext.empty()) return *this; split_t si=split(true,true,true); path p; snprintf(p._data, capacity, "%s%s%s%s%s", si.drive, si.dir, si.fname, ext[0]=='.'?"":".", ext._data); return p; }
-	std::vector<path> explode( char delim=preferred_separator ) const { std::vector<path> L; path s=preferred_separator==__slash?to_slash():*this; L.reserve(16); value_type* ctx=nullptr; const value_type d[2]={delim,0}; for(value_type* t=strtok_s(s._data,d,&ctx); t; t=strtok_s(0,d,&ctx)) L.emplace_back(t); return L; }
+	vector<path> explode( char delim=preferred_separator ) const { vector<path> L; path s=preferred_separator==__slash?to_slash():*this; L.reserve(16); value_type* ctx=nullptr; const value_type d[2]={delim,0}; for(value_type* t=strtok_s(s._data,d,&ctx); t; t=strtok_s(0,d,&ctx)) L.emplace_back(t); return L; }
 
 	// directory attributes
 	bool has_file( const path& file_name ) const { return is_dir()&&operator/(file_name).exists(); }
@@ -243,7 +249,7 @@ public:
 #ifndef _INC_SHELLAPI
 	bool delete_file() const { if(!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); return DeleteFileW(_data)==TRUE; }
 	bool rmfile() const { return delete_file(); }
-	bool delete_dir() const { if(!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); _wrmdir(_data); return true; }
+	bool delete_dir() const { if(!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); rmdir(_data); return true; }
 	bool rmdir() const { return delete_dir(); }
 #else
 	bool delete_file( bool b_undo=false ) const { if(!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=FOF_FILESONLY|FOF_SILENT|FOF_NOCONFIRMATION|(b_undo?FOF_ALLOWUNDO:0); auto* w=atow(c_str()); auto* b=wcscpy(__strbuf<wchar_t>(wcslen(w)+1),w); fop.pFrom=b; return SHFileOperationW(&fop)==0;}
@@ -276,7 +282,7 @@ public:
 	// file content access: void (rb/wb), char (r/w), wchar_t (r/w,ccs=UTF-8)
 	FILE* fopen( const char* mode, bool utf8=false ) const;
 	template <class T=void> sized_ptr_t<T> read_file() const;
-	std::string read_file() const;
+	string read_file() const;
 	bool write_file( const void* ptr, size_t size ) const;
 	bool write_file( sized_ptr_t<void> p ) const { return p.ptr&&p.size?write_file(p.ptr,p.size):false; }
 	bool write_file( const char* s ) const;
@@ -288,11 +294,10 @@ public:
 
 	// utilities
 	static path serial( path dir, const char* prefix, const char* postfix, int numzero=4 );
-	inline path key() const { if(!*_data)return path();path d;size_t n=0;for(size_t k=0,kn=size();k<kn;k++){value_type c=_data[k];if(c!=':'&&c!=' ') d[n++]=(c==__backslash||c==__slash)?'.':(::tolower(c));}if(d[n-1]=='.')n--;d[n]=0;return d; }
 
 	// scan(): ext_filter (specific extensions delimited by semicolons), str_filter (path should contain this string)
-	template <bool recursive=true> std::vector<path> scan( const char* ext_filter=nullptr, const char* pattern=nullptr, bool b_subdirs=false ) const;
-	template <bool recursive=true> std::vector<path> subdirs( const char* pattern=nullptr ) const;
+	template <bool recursive=true> vector<path> scan( const char* ext_filter=nullptr, const char* pattern=nullptr, bool b_subdirs=false ) const;
+	template <bool recursive=true> vector<path> subdirs( const char* pattern=nullptr ) const;
 
 protected:
 	__forceinline attrib_t& cache() const { return *((attrib_t*)(_data+capacity)); }
@@ -302,7 +307,7 @@ protected:
 	static size_t file_size( FILE* fp ){ if(!fp) return 0; auto p=_ftelli64(fp); _fseeki64(fp,0,SEEK_END); size_t s=_ftelli64(fp); _fseeki64(fp,p,SEEK_SET); return s; }
 #endif
 	
-	struct scan_t { std::vector<path> result; struct { bool recursive, subdirs, dir, glob; } b; struct { sized_ptr_t<wchar_t>* v; size_t l; } ext; struct { const wchar_t* pattern; size_t l; } glob; };
+	struct scan_t { vector<path> result; struct { bool recursive, subdirs, dir, glob; } b; struct { sized_ptr_t<wchar_t>* v; size_t l; } ext; struct { const wchar_t* pattern; size_t l; } glob; };
 	void scan_recursive( path dir, scan_t& si ) const;
 	void subdirs_recursive( path dir, scan_t& si ) const;
 };
@@ -359,7 +364,7 @@ template<> __noinline sized_ptr_t<char> path::read_file<char>() const
 	FILE* fp=fopen("r"); if(!fp) return {nullptr,0};
 	size_t size0 = file_size(fp); if(!size0){ fclose(fp); p.ptr=(char*)""; return p; }
 
-	std::string buffer; buffer.reserve(size0*2);
+	string buffer; buffer.reserve(size0*2);
 	char buff[4096]; while(fgets(buff,4096,fp)) buffer+=buff; fclose(fp);
 	p.size = buffer.size();
 	p.ptr = (char*) malloc((p.size+2)*sizeof(char));
@@ -368,10 +373,10 @@ template<> __noinline sized_ptr_t<char> path::read_file<char>() const
 	return p;
 }
 
-__noinline std::string path::read_file() const
+__noinline string path::read_file() const
 {
 	sized_ptr_t<char> p=read_file<char>(); if(!p||!p.size) return "";
-	std::string s=p.ptr; free(p.ptr); return s;
+	string s=p.ptr; free(p.ptr); return s;
 }
 
 template<> __noinline sized_ptr_t<const void> path::read_file<const void>() const
@@ -411,13 +416,13 @@ __noinline bool path::write_file( const wchar_t* s ) const
 }
 
 template <bool recursive> __noinline
-std::vector<path> path::scan( const char* ext_filter, const char* pattern, bool b_subdirs ) const
+vector<path> path::scan( const char* ext_filter, const char* pattern, bool b_subdirs ) const
 {
-	path src=empty()?path(".\\"):(is_relative()?absolute(".\\"):*this).add_backslash(); if(!src.is_dir()) return std::vector<path>{};
-	std::vector<std::wstring> exts; if(ext_filter&&ext_filter[0]){ value_type ef[4096]={}, *ctx=nullptr; strcpy(ef,ext_filter); for(value_type* e=strtok_s(ef,";",&ctx);e;e=strtok_s(nullptr,";",&ctx)) if(e[0]) exts.push_back(L"."s+atow(e)); }
-	std::vector<sized_ptr_t<wchar_t>> eptr; for( auto& e:exts ) eptr.emplace_back(sized_ptr_t<wchar_t>{(wchar_t*)e.c_str(),e.size()});
+	path src=empty()?path(".\\"):(is_relative()?absolute(".\\"):*this).add_backslash(); if(!src.is_dir()) return vector<path>{};
+	vector<std::wstring> exts; if(ext_filter&&ext_filter[0]){ value_type ef[4096]={}, *ctx=nullptr; strcpy(ef,ext_filter); for(value_type* e=strtok_s(ef,";",&ctx);e;e=strtok_s(nullptr,";",&ctx)) if(e[0]) exts.push_back(L"."s+atow(e)); }
+	vector<sized_ptr_t<wchar_t>> eptr; for( auto& e:exts ) eptr.emplace_back(sized_ptr_t<wchar_t>{(wchar_t*)e.c_str(),e.size()});
 	scan_t si;
-	si.b.recursive=recursive; si.b.subdirs=b_subdirs; si.b.dir=recursive||b_subdirs; si.b.glob=pattern&&(strchr(pattern,'*')||strchr(pattern,'?'));
+	si.b.recursive=recursive; si.b.subdirs=b_subdirs; si.b.dir=recursive||b_subdirs; si.b.glob=pattern&&strpbrk(pattern,"*?");
 	si.ext.v=eptr.size()>0?&eptr[0]:nullptr; si.ext.l=eptr.size();
 	std::wstring wpattern=pattern?atow(pattern):L""; si.glob.pattern=pattern?wpattern.c_str():nullptr; si.glob.l=pattern?wpattern.size():0;
 	si.result.reserve(1ull<<16);scan_recursive(src,si);si.result.shrink_to_fit();
@@ -429,7 +434,7 @@ __noinline void path::scan_recursive( path dir, path::scan_t& si ) const
 	wchar_t wdir[capacity]={}; wcscpy(wdir,atow(dir._data));
 	WIN32_FIND_DATAW fd={}; HANDLE h=FindFirstFileExW(atow((dir+"*.*")._data), FindExInfoBasic/*minimal(faster)*/, &fd, FindExSearchNameMatch, 0, FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
 	size_t dl=wcslen(wdir); wchar_t *f=fd.cFileName, *p=wdir+dl; auto*e=si.ext.v;
-	std::vector<path> sdir; if(si.b.recursive) sdir.reserve(16);
+	vector<path> sdir; if(si.b.recursive) sdir.reserve(16);
 
 	while(FindNextFileW(h,&fd))
 	{
@@ -456,11 +461,11 @@ __noinline void path::scan_recursive( path dir, path::scan_t& si ) const
 }
 
 template <bool recursive> __noinline
-std::vector<path> path::subdirs( const char* pattern ) const
+vector<path> path::subdirs( const char* pattern ) const
 {
-	path src=empty()?path(".\\"):(is_relative()?absolute(".\\"):*this).add_backslash(); if(!src.is_dir()) return std::vector<path>{};
+	path src=empty()?path(".\\"):(is_relative()?absolute(".\\"):*this).add_backslash(); if(!src.is_dir()) return vector<path>{};
 	scan_t si;
-	si.b.recursive=recursive; si.b.subdirs=true; si.b.dir=true; si.b.glob=pattern&&(strchr(pattern,'*')||strchr(pattern,'?'));
+	si.b.recursive=recursive; si.b.subdirs=true; si.b.dir=true; si.b.glob=pattern&&strpbrk(pattern,"*?");
 	si.ext.v=nullptr; si.ext.l=0;
 	std::wstring wpattern=pattern?atow(pattern):L""; si.glob.pattern=pattern?wpattern.c_str():nullptr; si.glob.l=pattern?wpattern.size():0;
 	si.result.reserve(1ull<<12);subdirs_recursive(src,si);si.result.shrink_to_fit();
@@ -472,7 +477,7 @@ __noinline void path::subdirs_recursive( path dir, path::scan_t& si ) const
 	wchar_t wdir[capacity]={}; wcscpy(wdir,atow(dir._data));
 	WIN32_FIND_DATAW fd={}; HANDLE h=FindFirstFileExW(atow((dir+"*.*")._data), FindExInfoBasic/*minimal(faster)*/, &fd, FindExSearchNameMatch, 0, FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
 	size_t dl=wcslen(wdir); wchar_t *f=fd.cFileName, *p=wdir+dl;
-	std::vector<path> sdir; if(si.b.recursive) sdir.reserve(16);
+	vector<path> sdir; if(si.b.recursive) sdir.reserve(16);
 
 	while(FindNextFileW(h,&fd))
 	{
@@ -501,8 +506,8 @@ __noinline path path::temp( bool local, path local_dir )
 {
 	// get local_appdata
 	char* buff=getenv("LOCALAPPDATA");
-	static path r=path(buff?buff:"").add_backslash()+path(exe::name()).key()+__backslash;
-	path t=r; if(local){ if(local_dir.empty()) local_dir=exe::dir(); t+=path("local\\")+local_dir.key().add_backslash(); }
+	static path r=path(buff?buff:"").add_backslash()+path_key(exe::name())+__backslash;
+	path t=r; if(local){ if(local_dir.empty()) local_dir=exe::dir(); t+=path("local\\")+::add_backslash(path_key(local_dir.c_str())); }
 	if(!t.exists()) t.mkdir();
 	return t;
 }
@@ -516,7 +521,7 @@ __noinline path path::relative( path from, bool first_dot ) const
 	if(::tolower(from_dir[0])!=::tolower(this->_data[0])) return *this; // different drive
 
 	// 1. keep filename, make the list of reference and current path
-	std::vector<path> src_list=from_dir.explode(), dst_list=dir().explode();
+	vector<path> src_list=from_dir.explode(), dst_list=dir().explode();
 
 	// 2. compare and count the different directory levels
 	path result;
@@ -567,14 +572,14 @@ __noinline void path::canonicalize()
 // nocase/std map/unordered_map extension for path
 namespace std
 {
-	template <> struct hash<path>{ size_t operator()(const path& p)const{ return std::hash<std::string>()(_strlwr(__strdup(p.c_str()))); }};
+	template <> struct hash<path>{ size_t operator()(const path& p)const{ return std::hash<string>()(_strlwr(__strdup(p.c_str()))); }};
 }
 
 namespace nocase
 {
 	template <> struct less<path>{ bool operator()(const path& a,const path& b)const{return a<b;}};
 	template <> struct equal_to<path>{ bool operator()(const path& a,const path& b)const{return _stricmp(a.c_str(),b.c_str())==0; } };
-	template <> struct hash<path>{ size_t operator()(const path& p)const{ return std::hash<std::string>()(_strlwr(__strdup(p.c_str()))); } };
+	template <> struct hash<path>{ size_t operator()(const path& p)const{ return std::hash<string>()(_strlwr(__strdup(p.c_str()))); } };
 }
 
 // disk volume type for windows

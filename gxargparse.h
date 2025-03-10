@@ -18,9 +18,7 @@
 #ifndef __GX_ARGPARSE_H__
 #define __GX_ARGPARSE_H__
 
-#if __has_include("gxut.h")
-	#include "gxut.h"
-#elif __has_include(<gxut/gxut.h>)
+#if __has_include(<gxut/gxut.h>)
 	#include <gxut/gxut.h>
 #endif
 
@@ -30,15 +28,15 @@ namespace gx { namespace argparse {
 
 struct argument_t
 {
-	argument_t& add_help( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(vsnprintf(0,0,fmt,a)+1); vsnprintf(&buff[0],buff.size(),fmt,a); va_end(a); shelp=trim(&buff[0],"\n"); return *this; }
+	argument_t& add_help( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); vector<char> buff(vsnprintf(0,0,fmt,a)+1); vsnprintf(&buff[0],buff.size(),fmt,a); va_end(a); shelp=trim(&buff[0],"\n"); return *this; }
 	argument_t& set_default( const char* v ){ parsed.value=v; return *this; }
 	argument_t& set_optional(){ optional=true; return *this; } 
 	
 protected:
-	std::string		name;
-	std::string		shelp;
-	bool			optional=false;
-	struct parsed_t { std::string value; void clear(){ value.clear(); } } parsed;
+	string		name;
+	string		shelp;
+	bool		optional=false;
+	struct parsed_t { string value; void clear(){ value.clear(); } } parsed;
 	
 	friend struct parser_t;
 	bool value_exists() const { return !parsed.value.empty(); }
@@ -51,8 +49,8 @@ struct option_t
 	void clear(){ parsed.clear(); } // clear values
 
 	option_t& add_name( const char* name ){ if(name&&name[0]) names.insert(name); return *this; }
-	option_t& add_subarg( std::vector<std::string> constraints={} ){ subarg_count++; if(!constraints.empty()) this->constraints=constraints; return *this; }
-	option_t& add_help( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(vsnprintf(0,0,fmt,a)+1); vsnprintf(&buff[0],buff.size(),fmt,a); shelp=trim(&buff[0],"\n"); va_end(a); return *this; }
+	option_t& add_subarg( vector<string> constraints={} ){ subarg_count++; if(!constraints.empty()) this->constraints=constraints; return *this; }
+	option_t& add_help( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); vector<char> buff(vsnprintf(0,0,fmt,a)+1); vsnprintf(&buff[0],buff.size(),fmt,a); shelp=trim(&buff[0],"\n"); va_end(a); return *this; }
 	option_t& add_break( int count=1 ){ break_count+=count; return* this; }
 	option_t& set_default( const char* arg ){ parsed.value=arg; return *this; }
 	option_t& set_hidden(){ hidden=true; return *this; } 
@@ -64,24 +62,24 @@ protected:
 	template<typename... Args> option_t& add_name( const char* name, Args... args ){ if(name&&name[0]) names.insert(name); return add_name(args...); }
 	const char* name() const { for( auto& n : names ) if(n.size()==1) return n.c_str(); for( auto& n : names ) if(n.size()>1) return n.c_str(); return ""; }
 	const char* short_name() const { for( auto& n : names ) if(n.size()==1) return n.c_str(); return ""; }
-	std::vector<const char*> long_names() const { std::vector<const char*> v; for( auto& n : names ) if(n.size()>1) v.push_back(n.c_str()); return v; }
+	vector<const char*> long_names() const { vector<const char*> v; for( auto& n : names ) if(n.size()>1) v.push_back(n.c_str()); return v; }
 	bool is_value_acceptable( const char* v ){ if(constraints.empty()) return true; for( const auto& c:constraints ) if(_stricmp(c.c_str(),v)==0) return true; return false; }
-	std::string contraints_to_str(){ if(constraints.empty()) return ""; std::string s=constraints.front(); for(size_t k=1,kn=constraints.size();k<kn;k++) s+=std::string(",")+constraints[k]; return s; }
+	string contraints_to_str(){ if(constraints.empty()) return ""; string s=constraints.front(); for(size_t k=1,kn=constraints.size();k<kn;k++) s+=string(",")+constraints[k]; return s; }
 	bool push_back( const char* v ){ if(!is_value_acceptable(v)){ printf( "option '%s' not accepts '%s'; use one in {%s}\n", name(), v, contraints_to_str().c_str() ); return false; } if(parsed.instance==0||parsed.value.empty()) parsed.value=v; else parsed.others.push_back(v); return true; }
 
-	struct lless { bool operator()(const std::string& a,const std::string& b)const{return a.size()!=b.size()?a.size()<b.size():_stricmp(a.c_str(),b.c_str())<0;}};
-	std::set<std::string,lless>	names;				// multiple names allowed for a single option
-	std::string					shelp;				// help string
-	bool						hidden=false;		// hide in usage()
-	int							break_count=0;		// post-line breaks
-	int							subarg_count=0;		// required subarg counter
-	std::vector<std::string>	constraints;		// value constraints: allow values only in this set
+	struct lless { bool operator()(const string& a,const string& b)const{return a.size()!=b.size()?a.size()<b.size():_stricmp(a.c_str(),b.c_str())<0;}};
+	std::set<string,lless>	names;				// multiple names allowed for a single option
+	string					shelp;				// help string
+	bool					hidden=false;		// hide in usage()
+	int						break_count=0;		// post-line breaks
+	int						subarg_count=0;		// required subarg counter
+	vector<string>			constraints;		// value constraints: allow values only in this set
 
 	struct parsed_t
 	{
-		std::string					value;				// found first values
-		std::vector<std::string>	others;				// additional excessive multiple options
-		int							instance=0;			// occurence of option and multiple instances of an option (for subarguments)
+		string				value;				// found first values
+		vector<string>		others;				// additional excessive multiple options
+		int					instance=0;			// occurence of option and multiple instances of an option (for subarguments)
 		void clear(){ value.clear(); others.clear(); instance=0; }
 	} parsed;
 };
@@ -96,15 +94,15 @@ struct parser_t
 
 	// attributes
 	inline const char* name() const { return attrib.name; }
-	inline void add_header( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); int l=vsnprintf(0,0,fmt,a); std::vector<char> buff(l+1); vsnprintf(&buff[0],l+1llu,fmt,a); attrib.header=trim(&buff[0]); va_end(a); }
-	inline void add_footer( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); int l=vsnprintf(0,0,fmt,a); std::vector<char> buff(l+1); vsnprintf(&buff[0],l+1llu,fmt,a); attrib.footer=trim(&buff[0]); va_end(a); }
+	inline void add_header( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); int l=vsnprintf(0,0,fmt,a); vector<char> buff(l+1); vsnprintf(&buff[0],l+1llu,fmt,a); attrib.header=trim(&buff[0]); va_end(a); }
+	inline void add_footer( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); int l=vsnprintf(0,0,fmt,a); vector<char> buff(l+1); vsnprintf(&buff[0],l+1llu,fmt,a); attrib.footer=trim(&buff[0]); va_end(a); }
 	inline void add_copyright( const char* author, int since_year ){ attrib.copyright = format( "copyright (c) %d-%d by %s\n", since_year, compiler::year()+1, author ); }
-	inline parser_t& add_help( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(vsnprintf(0,0,fmt,a)+1); vsnprintf(&buff[0],buff.size(),fmt,a); attrib.help=trim(&buff[0],"\n"); va_end(a); return *this; }
+	inline parser_t& add_help( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); vector<char> buff(vsnprintf(0,0,fmt,a)+1); vsnprintf(&buff[0],buff.size(),fmt,a); attrib.help=trim(&buff[0],"\n"); va_end(a); return *this; }
 	inline void add_break( int count=1 ){ if(options.empty()) return; options.back()->add_break(count); }
 
 	// query
 	inline bool option_exists() const;
-	inline bool command_exists( const std::string& name ) const;
+	inline bool command_exists( const string& name ) const;
 	inline bool callback_exists(){ parser_t* p=this;while(p&&!p->pf_callback) p=p->parent; return p&&p->pf_callback?true:false; }
 	inline bool help_exists() const { return parsed.b.help_exists; }
 		
@@ -117,7 +115,7 @@ struct parser_t
 	inline parser_t& add_command( const char* name ){ commands.emplace_back(new parser_t()); auto* c=commands.back(); c->parent=this; strcpy(c->attrib.name,name); c->attrib.depth=attrib.depth+1; return *c; }
 	inline parser_t& set_callback( callback_t cb ){ pf_callback=cb; return *this; }
 	inline bool run(){ parser_t* p=this;while(p&&!p->pf_callback) p=p->parent; if(!p||!p->pf_callback){fprintf(stdout,"unable to find callback for %s\n",name());return false;} return p->pf_callback(*p); }
-	inline const char* get_command_names() const { std::string c=this->name(); for( parser_t* p=this->parent; p; p=p->parent ) c = std::string(p->attrib.name)+" "+c; return __strdup(c.c_str()); }
+	inline const char* get_command_names() const { string c=this->name(); for( parser_t* p=this->parent; p; p=p->parent ) c = string(p->attrib.name)+" "+c; return __strdup(c.c_str()); }
 
 	// short template functions
 	argument_t& add_argument( const char* name ){ arguments.push_back(new argument_t()); auto* a=arguments.back(); a->name=name; return *a; }
@@ -132,19 +130,19 @@ struct parser_t
 	static const char* rebuild_arguments( int argc, char* argv[] );
 
 	// get<> specializations, and other get functions
-	template <class T=std::string>	inline T get( const std::string& name ) const;
-	template<> inline std::string	get<std::string>( const std::string& name ) const;
+	template <class T=string>	inline T get( const string& name ) const;
+	template<> inline string	get<string>( const string& name ) const;
 #ifdef __GX_FILESYSTEM_H__
-	template<> inline path			get<path>( const std::string& name ) const { return get<std::string>(name).c_str(); }
+	template<> inline path		get<path>( const string& name ) const { return get<string>(name).c_str(); }
 #endif
-	template<> inline int			get<int>( const std::string& name ) const { return atoi(get<std::string>(name).c_str()); }
-	template<> inline uint			get<uint>( const std::string& name ) const { return uint(atoi(get<std::string>(name).c_str())); }
-	template<> inline float			get<float>( const std::string& name ) const { return float(atof(get<std::string>(name).c_str())); }
-	template<> inline double		get<double>( const std::string& name ) const { return atof(get<std::string>(name).c_str()); }
-	std::vector<std::string>		others( const std::string& name="" ) const;
+	template<> inline int		get<int>( const string& name ) const { return atoi(get<string>(name).c_str()); }
+	template<> inline uint		get<uint>( const string& name ) const { return uint(atoi(get<string>(name).c_str())); }
+	template<> inline float		get<float>( const string& name ) const { return float(atof(get<string>(name).c_str())); }
+	template<> inline double	get<double>( const string& name ) const { return atof(get<string>(name).c_str()); }
+	vector<string>				others( const string& name="" ) const;
 
 	// get multiple values
-	inline std::vector<std::string> get_values( const std::string& name ) const;
+	inline vector<string>		get_values( const string& name ) const;
 
 	// error handling, debugging
 	bool exit( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); const char* w=vformat(fmt,a); va_end(a); char msg[2048]; snprintf( msg, 2048, "[%s] %s\nUse -h option to see usage.\n", name(), trim(w,"\n") ); fprintf( stdout, msg ); return false; }
@@ -154,11 +152,11 @@ protected:
 
 	struct attribute_t
 	{
-		char		name[256];
-		std::string copyright;
-		std::string	header, footer;
-		std::string help;		// shorter help for commands
-		int			depth=0;	// depth to commands; non-zero means sub-commands
+		char	name[256];
+		string	copyright;
+		string	header, footer;
+		string	help;		// shorter help for commands
+		int		depth=0;	// depth to commands; non-zero means sub-commands
 	} attrib;
 
 	struct cmdline_t
@@ -175,18 +173,18 @@ protected:
 		void clear(){ b.help_exists=false; argument_count=0; }
 	} parsed;
 
-	parser_t*					parent = nullptr;
-	callback_t					pf_callback = nullptr;
-	std::vector<parser_t*>		commands;
-	std::vector<argument_t*>	arguments;
-	std::vector<option_t*>		options;
-	bool						b_command_found=false; // this parser exists in arguments
+	parser_t*			parent = nullptr;
+	callback_t			pf_callback = nullptr;
+	vector<parser_t*>	commands;
+	vector<argument_t*>	arguments;
+	vector<option_t*>	options;
+	bool				b_command_found=false; // this parser exists in arguments
 
 	option_t* find_option( const char* name ) const	{ if(!name||!name[0]) return nullptr; for(auto* o:options) for( auto& n:o->names ) if(n==name) return o; return nullptr; }
 	argument_t* find_argument( const char* name ) const { if(!name||!name[0]) return nullptr; for(auto* a:arguments){ if(a->name==name) return a; } return nullptr; }
 	void select_parser_impl( parser_t*& p, int argc, wchar_t** argv );
 	const int arg_begin() const { return attrib.depth+1; }
-	std::vector<argument_t*> get_required_arguments(){ std::vector<argument_t*> v; for(auto* a:arguments ) if(!a->optional) v.emplace_back(a); return v; }
+	vector<argument_t*> get_required_arguments(){ vector<argument_t*> v; for(auto* a:arguments ) if(!a->optional) v.emplace_back(a); return v; }
 };
 
 template <typename... Args> bool parser_t::exists( const char* name, Args... args ) const
@@ -204,28 +202,28 @@ inline bool parser_t::option_exists() const
 	return false;
 }
 
-template<> inline std::string parser_t::get<std::string>( const std::string& name ) const
+template<> inline string parser_t::get<string>( const string& name ) const
 {
 	auto* a=find_argument(name.c_str()); if(a) return a->parsed.value;
 	auto* o=find_option(name.c_str()); return o&&o->parsed.instance>0?o->parsed.value:"";
 }
 
-inline std::vector<std::string> parser_t::others( const std::string& name ) const
+inline vector<string> parser_t::others( const string& name ) const
 {
-	std::vector<std::string> v;
+	vector<string> v;
 	if(name.empty()){ for(auto& a:arguments){ if(a->name.empty()) v.push_back(a->parsed.value); } }	// unnamed arguments
 	else{ auto* o=find_option(name.c_str()); if(o&&o->parsed.instance>1) v=o->parsed.others; }		// named options
 	return v;
 }
 
-inline std::vector<std::string> parser_t::get_values( const std::string& name ) const
+inline vector<string> parser_t::get_values( const string& name ) const
 {
-	std::vector<std::string> v;	v.emplace_back( get<std::string>(name) );
+	vector<string> v;	v.emplace_back( get<string>(name) );
 	auto o=others(name);		v.insert(v.end(),o.begin(),o.end());
 	return v;
 }
 
-inline bool parser_t::command_exists( const std::string& name ) const
+inline bool parser_t::command_exists( const string& name ) const
 {
 	for(auto* c:commands)
 	{
@@ -241,7 +239,7 @@ inline void parser_t::select_parser_impl( parser_t*& p, int argc, wchar_t** argv
 	int next=p->attrib.depth+1; if(argc<=next) return;
 	
 	const wchar_t* a=trim(argv[next]); if(!a||!*a||_wcsicmp(a,L"help")==0) return;
-	std::string arg=wtoa(a); if(arg[0]==L'-') return; // option should not precede the command
+	string arg=wtoa(a); if(arg[0]==L'-') return; // option should not precede the command
 	for(auto* c:p->commands)
 	{
 		if(c->attrib.name!=arg) continue;
@@ -300,11 +298,11 @@ inline bool parser_t::parse( int argc, wchar_t* argv[], bool b_validate )
 		else if(a[1]) // in case of (not too short) option
 		{
 			bool b_short = a[1]!=L'-';
-			std::string name = wtoa(b_short?a+1:a+2); // strip hyphens
+			string name = wtoa(b_short?a+1:a+2); // strip hyphens
 			if(name.empty()||!isalpha(name[0])) continue;
 
 			// split by equal
-			std::string value1;
+			string value1;
 			const char* eq=strchr(name.c_str(),'=');
 			bool eq_exists = name.length()>=2&&eq;
 			if(name.length()>=2&&eq)
@@ -377,7 +375,7 @@ inline bool parser_t::validate()
 
 inline bool parser_t::usage( const char* alt_name )
 {
-	std::vector<std::pair<std::string,std::string>> req_args, opt_args, opts;
+	vector<std::pair<string,string>> req_args, opt_args, opts;
 
 	// print options for multi-line help
 	static auto print_option = []( const char* fmt, const char* o, const char* h )
@@ -400,10 +398,10 @@ inline bool parser_t::usage( const char* alt_name )
 		if(o->hidden) continue;
 
 		auto* short_name = o->short_name();
-		std::string front = short_name&&short_name[0]?format("-%s ",short_name):"   ";
+		string front = short_name&&short_name[0]?format("-%s ",short_name):"   ";
 		auto lv=o->long_names();
 		for( size_t j=0, jn=lv.size(); j<jn; j++ ) front+=format("%s%s",j==0?"--":"|",lv[j]);
-		if(o->subarg_count) front += std::string("=")+(o->constraints.empty()?"*":std::string("{")+o->contraints_to_str()+"}");
+		if(o->subarg_count) front += string("=")+(o->constraints.empty()?"*":string("{")+o->contraints_to_str()+"}");
 		opts.emplace_back( front, o->shelp );
 
 		// add line breaks
@@ -439,7 +437,7 @@ inline bool parser_t::usage( const char* alt_name )
 	}
 	fprintf( stdout, " ...\n" );
 
-	std::string sfmt=format(" %%-%ds %%s\n",int(cap+4));
+	string sfmt=format(" %%-%ds %%s\n",int(cap+4));
 	const char* fmt=sfmt.c_str();
 
 	if(!commands.empty())
@@ -488,10 +486,10 @@ inline const char* parser_t::rebuild_arguments( int argc, wchar_t* argv[] )
 inline const char* parser_t::rebuild_arguments( int argc, char* argv[] )
 {
 	if(argc<=1) return "";
-	static std::string a; a.clear();
+	static string a; a.clear();
 	for( int k=1; k < argc; k++ )
 	{
-		bool ws=strchr(argv[k],' ')||strchr(argv[k],'\t');
+		bool ws=strpbrk(argv[k]," \t")!=nullptr;
 		if(k>1) a+=" "; if(ws) a+="\""; a += argv[k]; if(ws) a+="\"";
 	}
 	return a.c_str();
@@ -500,13 +498,13 @@ inline const char* parser_t::rebuild_arguments( int argc, char* argv[] )
 inline void parser_t::dump()
 {
 	// retrive things to print
-	std::vector<std::pair<std::string,std::string>> args, opts;
+	vector<std::pair<string,string>> args, opts;
 	for(auto* a:arguments) if(!a->name.empty()) args.emplace_back( a->name.c_str(), a->parsed.value.c_str() );
-	std::string ots; for(auto& a:others()) ots+=format( "%s ",a.c_str()); args.emplace_back( "others", ots );
+	string ots; for(auto& a:others()) ots+=format( "%s ",a.c_str()); args.emplace_back( "others", ots );
 	for(auto* o:options)
 	{
-		std::string n=o->name();
-		std::string v;
+		string n=o->name();
+		string v;
 		if(o->parsed.instance==0) v="0";
 		else
 		{
@@ -525,7 +523,7 @@ inline void parser_t::dump()
 	for( auto& a:args ) cap=cap>a.first.size()?cap:a.first.size();
 	for( auto& o:opts ) cap=cap>o.first.size()?cap:o.first.size();
 	if(cap==0) return void(exit( "cap==0\n"));
-	std::string sfmt = format(" %%-%zds   = %%s\n",cap+4); const char* fmt=sfmt.c_str();
+	string sfmt = format(" %%-%zds   = %%s\n",cap+4); const char* fmt=sfmt.c_str();
 
 	// now, print
 	fprintf( stdout, "******************************\n");

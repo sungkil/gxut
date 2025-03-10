@@ -18,15 +18,15 @@
 #ifndef __GX_RT_H__
 #define __GX_RT_H__
 
-// timestamp to indicate struct changes in other files
-static const char* __GX_RT_H_TIMESTAMP__ = _strdup(__TIMESTAMP__);
-
 #if __has_include("gxmesh.h")
 	#include "gxmesh.h"
 #endif
 #if __has_include("gxsampler.h")
 	#include "gxsampler.h"
 #endif
+
+// timestamp to indicate struct changes in other files
+static const char* __GX_RT_H_TIMESTAMP__ = _strdup(__TIMESTAMP__);
 
 //*************************************
 // 16-byte aligned light for direct lights
@@ -62,8 +62,8 @@ static_assert(sizeof(vpl_t)%16==0,	 "size of struct vpl_t should be aligned at 1
 
 // overloading light transformations to camera space
 inline area_light_t operator*( const mat4& view_matrix, const area_light_t& light ){ area_light_t l=light; l.pos.xyz=l.pos.a==0?(mat3(view_matrix)*l.pos.xyz):(view_matrix*l.pos).xyz; mat3 rotation_matrix=mat3(view_matrix); l.normal=rotation_matrix*light.normal; l.u=rotation_matrix*light.u; l.v=rotation_matrix*light.v; return l; }
-inline std::vector<area_light_t> operator*( const mat4& view_matrix, const std::vector<area_light_t>& lights ){ std::vector<area_light_t> v; if(lights.empty()) return v; v.reserve(lights.size()); for( const auto& l : lights ) v.emplace_back(view_matrix*l); return v; }
-inline std::vector<area_light_t> operator*( const mat4& view_matrix, const std::vector<area_light_t>* lights ){ std::vector<area_light_t> v; if(!lights||lights->empty()) return v; v.reserve(lights->size()); for(auto& l:*lights) v.emplace_back(view_matrix*l); return v; }
+inline vector<area_light_t> operator*( const mat4& view_matrix, const vector<area_light_t>& lights ){ vector<area_light_t> v; if(lights.empty()) return v; v.reserve(lights.size()); for( const auto& l : lights ) v.emplace_back(view_matrix*l); return v; }
+inline vector<area_light_t> operator*( const mat4& view_matrix, const vector<area_light_t>* lights ){ vector<area_light_t> v; if(!lights||lights->empty()) return v; v.reserve(lights->size()); for(auto& l:*lights) v.emplace_back(view_matrix*l); return v; }
 
 //*************************************
 // acceleration structures
@@ -90,7 +90,7 @@ struct bvh_t : public acc_t // two-level hierarchy: mesh or geometry
 		const bbox& box() const { return reinterpret_cast<const bbox&>(*this); }
 		__forceinline bool is_leaf() const { return axis==3; }
 	};
-	std::vector<node> nodes;
+	vector<node> nodes;
 
 	~bvh_t(){}
 	virtual void release()=0;
@@ -112,8 +112,8 @@ struct kdtree_t : public acc_t // single-level hierarchy
 		uint second_or_index:30, axis:2;
 		__forceinline bool is_leaf() const { return axis==3; }
 	};
-	std::vector<node>	nodes;
-	std::vector<ivec2>	prims; // ordered primitives (face index, geometry index)
+	vector<node>	nodes;
+	vector<ivec2>	prims; // ordered primitives (face index, geometry index)
 	virtual bool intersect( ray r, isect& h ) const;
 };
 
@@ -348,9 +348,9 @@ __noinline int find_up_vector( mesh* p_mesh )
 }
 
 // find area lights from mesh
-__noinline std::vector<area_light_t> find_area_lights( mesh* p_mesh )
+__noinline vector<area_light_t> find_area_lights( mesh* p_mesh )
 {
-	std::vector<area_light_t> lights; if(!p_mesh) return lights;
+	vector<area_light_t> lights; if(!p_mesh) return lights;
 	// aliases
 	auto& vertices = p_mesh->vertices;
 	auto& indices = p_mesh->indices;

@@ -121,7 +121,7 @@ inline LOGFONT& get_log_font_gui()
 
 inline CFont* get_default_gui_font( bool bBold=false, int deltaHeight=0 )
 {
-	static std::vector<CFont*>	fontList;
+	static vector<CFont*>	fontList;
 
 	LOGFONT target=get_log_font_gui();
 

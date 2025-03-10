@@ -18,15 +18,15 @@
 #ifndef __GX_MESH_H__
 #define __GX_MESH_H__
 
-// timestamp to indicate struct changes in other files
-static const char* __GX_MESH_H_TIMESTAMP__ = _strdup(__TIMESTAMP__);
-
 #if __has_include("gxmath.h")
 	#include "gxmath.h"
 #endif
 #if __has_include("gxfilesystem.h")
 	#include "gxfilesystem.h"
 #endif
+
+// timestamp to indicate struct changes in other files
+static const char* __GX_MESH_H_TIMESTAMP__ = _strdup(__TIMESTAMP__);
 
 //*************************************
 // OpenGL forward declarations
@@ -65,8 +65,8 @@ static_assert(sizeof(light_t)%16==0, "size of struct light_t should be aligned a
 
 // overloading light transformations to camera space
 inline light_t operator*( const mat4& view_matrix, const light_t& light ){ light_t l=light; l.pos.xyz=l.pos.a==0?(mat3(view_matrix)*l.pos.xyz):(view_matrix*l.pos).xyz; l.normal=mat3(view_matrix)*light.normal; return l; }
-inline std::vector<light_t> operator*( const mat4& view_matrix, const std::vector<light_t>& lights ){ std::vector<light_t> v; if(lights.empty()) return v; v.reserve(lights.size()); for( const auto& l : lights ) v.emplace_back(view_matrix*l); return v; }
-inline std::vector<light_t> operator*( const mat4& view_matrix, const std::vector<light_t>* lights ){ std::vector<light_t> v; if(!lights||lights->empty()) return v; v.reserve(lights->size()); for(auto& l:*lights) v.emplace_back(view_matrix*l); return v; }
+inline vector<light_t> operator*( const mat4& view_matrix, const vector<light_t>& lights ){ vector<light_t> v; if(lights.empty()) return v; v.reserve(lights.size()); for( const auto& l : lights ) v.emplace_back(view_matrix*l); return v; }
+inline vector<light_t> operator*( const mat4& view_matrix, const vector<light_t>* lights ){ vector<light_t> v; if(!lights||lights->empty()) return v; v.reserve(lights->size()); for(auto& l:*lights) v.emplace_back(view_matrix*l); return v; }
 
 //*************************************
 // ray for ray tracing
@@ -289,7 +289,7 @@ struct material_impl : public material
 	const uint	ID;
 	char		name[_MAX_PATH]={};
 	material_textures_t	texture={};
-	std::map<std::string,path> path;	// <key,path>: albedo, alpha, normal, ambient, rough, metal, emissive, ...
+	std::map<string,path> path;	// <key,path>: albedo, alpha, normal, ambient, rough, metal, emissive, ...
 
 	material_impl( uint id ):ID(id){}
 	material_impl& operator=(const material_impl& other){ memcpy(this,&other,sizeof(material)); const_cast<uint&>(ID)=other.ID; strcpy(name,other.name); texture=other.texture; path=other.path; return *this; }
@@ -360,13 +360,13 @@ static_assert(sizeof(geometry)==144,	"sizeof(geometry) should be 144, when align
 // a set of geometries for batch control (not related to the rendering)
 struct object
 {
-	uint				ID=-1;
-	uint				instance=0;
-	char				name[_MAX_PATH]={};
-	mesh*				root=nullptr;
-	bbox				box;
-	std::vector<uint>	geometries;					// child geometry indices
-	struct {bool dynamic=false,bg=false;} attrib;	// dynamic: potential matrix changes; background: backdrops such as floor/ground; set in other plugins (e.g., AnimateMesh)
+	uint			ID=-1;
+	uint			instance=0;
+	char			name[_MAX_PATH]={};
+	mesh*			root=nullptr;
+	bbox			box;
+	vector<uint>	geometries; // child geometry indices
+	struct {bool dynamic=false,bg=false;} attrib; // dynamic: potential matrix changes; background: backdrops such as floor/ground; set in other plugins (e.g., AnimateMesh)
 
 	object() = delete;  // no default ctor to enforce to assign parent
 	object( mesh* p_mesh ):root(p_mesh){}
@@ -417,12 +417,12 @@ struct object
 // a set of vertices, indices, objects, geometries, materials
 struct mesh
 {
-	std::vector<vertex>			vertices;
-	std::vector<uint>			indices;
-	std::vector<object>			objects;
-	std::vector<geometry>		geometries;
-	std::vector<material_impl>	materials;
-	std::vector<light_t>		lights;		// built-in object lights
+	vector<vertex>			vertices;
+	vector<uint>			indices;
+	vector<object>			objects;
+	vector<geometry>		geometries;
+	vector<material_impl>	materials;
+	vector<light_t>			lights;		// built-in object lights
 
 	// volitile spaces for GPU buffers
 	union buffers_t {
@@ -461,10 +461,10 @@ struct mesh
 	uint vertex_count() const { return uint(vertices.size())*instance_count; }
 	object* create_object( const char* name ){ objects.emplace_back(object(this, uint(objects.size()), name)); return &objects.back(); }
 	object*	find_object( const char* name ){ for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) return &objects[k]; return nullptr; }
-	std::vector<object*> find_objects( const char* name ){ std::vector<object*> v; for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) v.push_back(&objects[k]); return v; }
+	vector<object*> find_objects( const char* name ){ vector<object*> v; for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) v.push_back(&objects[k]); return v; }
 	mesh* create_proxy( bool double_sided=false, bool use_quads=false );	// proxy mesh helpers: e.g., bounding box
 	void update_proxy();													// update existing proxy with newer matrices
-	std::vector<material> pack_materials() const { std::vector<material> p; auto& m=materials; p.resize(m.size()); for(size_t k=0,kn=p.size();k<kn;k++) p[k]=m[k]; return p; }
+	vector<material> pack_materials() const { vector<material> p; auto& m=materials; p.resize(m.size()); for(size_t k=0,kn=p.size();k<kn;k++) p[k]=m[k]; return p; }
 	void dump_binary( const char* dir=""); // dump the vertex/index buffers as binary files
 
 	// bound, dynamic, intersection
@@ -560,18 +560,18 @@ __noinline void mesh::update_bound( bool b_recalc_tris )
 		box.expand(obj.update_bound());
 }
 
-__noinline std::vector<uint> get_box_indices( bool double_sided, bool quads )
+__noinline vector<uint> get_box_indices( bool double_sided, bool quads )
 {
-	std::vector<uint> v; // index definitions (CCW: counterclockwise by default)
+	vector<uint> v; // index definitions (CCW: counterclockwise by default)
 	if(quads)	v = { 0, 3, 2, 1, /*bottom*/ 4, 5, 6, 7, /*top*/ 0, 1, 5, 4, /*left*/ 2, 3, 7, 6, /*right*/ 1, 2, 6, 5, /*front*/ 3, 0, 4, 7 /*back*/ };
 	else		v = { 0, 2, 1, 0, 3, 2, /*bottom*/ 4, 5, 6, 4, 6, 7, /*top*/ 0, 1, 5, 0, 5, 4, /*left*/ 2, 3, 6, 3, 7, 6, /*right*/ 1, 2, 6, 1, 6, 5, /*front*/ 0, 4, 3, 3, 4, 7 /*back*/ };
 	if(double_sided){ for(size_t k=0, f=quads?4:3, kn=v.size()/f; k<kn; k++) for(size_t j=0; j<f; j++) v.emplace_back(v[(k+1)*f-j-1]); } // insert indices (for CW)
 	return v;
 }
 
-__noinline std::vector<uint> get_box_line_indices()
+__noinline vector<uint> get_box_line_indices()
 {
-	return std::vector<uint>{
+	return vector<uint>{
 		0, 3, 3, 2, 2, 1, 1, 0, /*bottom*/ 4, 5, 5, 6, 6, 7, 7, 4, /*top*/   0, 1, 1, 5, 5, 4, 4, 0, /*left*/
 		2, 3, 3, 7, 7, 6, 6, 2, /*right*/  1, 2, 2, 6, 6, 5, 5, 1, /*front*/ 3, 0, 0, 4, 4, 7, 7, 3 /*back*/ };
 }
@@ -586,12 +586,12 @@ __noinline mesh* create_box_mesh( bbox box=bbox{vec3(-1.0f),vec3(1.0f)}, const c
 	for( auto& c : box.corners() ) m->vertices.emplace_back(vertex{c,vec3(0.0f),vec2(0.0f)});
 
 	// create box triangle/quad elements
-	std::vector<uint> indices = std::move(get_box_indices( double_sided, quads ));
+	vector<uint> indices = std::move(get_box_indices( double_sided, quads ));
 	m->indices.insert(m->indices.end(),indices.begin(),indices.end());
 	m->create_object(name)->create_geometry(0,uint(m->indices.size()),(bbox*)&box,size_t(-1));
 
 	// create box line elements
-	std::vector<uint> line_indices = std::move(get_box_line_indices());
+	vector<uint> line_indices = std::move(get_box_line_indices());
 	m->indices.insert(m->indices.end(),line_indices.begin(),line_indices.end());
 	char buff[4096]; sprintf(buff,"%s.lines",name);
 	m->create_object(buff)->create_geometry(uint(indices.size()),uint(line_indices.size()),(bbox*)&box, size_t(-1));

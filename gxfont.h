@@ -42,7 +42,7 @@ struct font_engine
 	ivec4	char_pos( wchar_t c );			// (first_x,first_y,second_x,second_y): second is only for wide characters
 	int		line_height(){ const int DY=((TY*96/dpi)>8?-4:2)*dpi/96; return TY+DY; }
 	bool	is_wide( wchar_t c ){ auto it=char_map.find(c); return it==char_map.end()?false:(it->second.wide>0); }
-	std::vector<ivec4>& get_locations( const wchar_t* text );
+	vector<ivec4>& get_locations( const wchar_t* text );
 };
 
 inline BITMAPINFO* create_font_bitmap_info( int width, int height, int channels )
@@ -148,7 +148,7 @@ inline bool font_engine::raster( wchar_t c )
 	const int sof=std::min(2,std::max(1,(dpi+48)/96)); // shadow offsets
 
 	int w=buffer->width, hw=w/2, h=buffer->height;
-	static std::vector<image*> bmps;
+	static vector<image*> bmps;
 	if(bmps.empty()||(bmps.front()->width*bmps.front()->height)!=w*h)
 	{
 		for(auto* b:bmps)			rex::release_image(&b); bmps.clear();
@@ -194,7 +194,7 @@ inline bool font_engine::update( const wchar_t* str )
 	if(!hDC||!buffer) return false; // using existing table
 
 	// find dirty characters and trivial return
-	static std::vector<wchar_t> dirty_chars; dirty_chars.clear();
+	static vector<wchar_t> dirty_chars; dirty_chars.clear();
 	for(const wchar_t* p=str;*p;p++) if(char_map.find(*p)==char_map.end()) dirty_chars.emplace_back(*p);
 	if(dirty_chars.empty()) return false; // nothing to update
 
@@ -222,9 +222,9 @@ inline ivec4 font_engine::char_pos( wchar_t c )
 	return p;
 }
 
-inline std::vector<ivec4>& font_engine::get_locations( const wchar_t* text )
+inline vector<ivec4>& font_engine::get_locations( const wchar_t* text )
 {
-	static std::vector<ivec4> buffer; buffer.clear();
+	static vector<ivec4> buffer; buffer.clear();
 	for( uint k=0, kn=uint(wcslen(text)); k<kn; k++ )
 	{
 		ivec4 cpos = char_pos(text[k]);

@@ -57,16 +57,16 @@ struct stack_t
 	
 	// push
 	template <class T=void> void push( T v ) const {}
-	template<> void push<bool>( bool b ) const {				lua_pushboolean(L,b?1:0); }
-	template<> void push<int>( int i ) const {					lua_pushinteger(L,i); }
-	template<> void push<float>( float f ) const {				lua_pushnumber(L,(double)f); }
-	template<> void push<double>( double f ) const {			lua_pushnumber(L,f); }
-	template<> void push<void*>( void* ptr ) const {			lua_pushlightuserdata(L,ptr); }
-	template<> void push<std::string>( std::string s ) const {	lua_pushstring(L,s.c_str()); }
+	template<> void push<bool>( bool b ) const {		lua_pushboolean(L,b?1:0); }
+	template<> void push<int>( int i ) const {			lua_pushinteger(L,i); }
+	template<> void push<float>( float f ) const {		lua_pushnumber(L,(double)f); }
+	template<> void push<double>( double f ) const {	lua_pushnumber(L,f); }
+	template<> void push<void*>( void* ptr ) const {	lua_pushlightuserdata(L,ptr); }
+	template<> void push<string>( string s ) const {	lua_pushstring(L,s.c_str()); }
 	template<> void push<lua_CFunction>( lua_CFunction f ) const {	lua_pushcclosure(L,f,0); }
 	
 	void push_nil() const { lua_pushnil(L); }
-	void push_string( const std::string& s ) const { lua_pushstring(L,s.c_str()); }
+	void push_string( const string& s ) const { lua_pushstring(L,s.c_str()); }
 	void push_string( const char* s ) const { lua_pushstring(L,s); }
 	void push_pointer( void* ptr ) const { lua_pushlightuserdata(L,ptr); }
 	void push_function( lua_CFunction f, int num_upvalues=0 ) const { lua_pushcclosure(L,f,num_upvalues); }
@@ -79,7 +79,7 @@ struct stack_t
 	// accessors
 	template <class T> T		value( int i )				const;
 	template <> const char*		value<const char*>( int i )	const { return lua_tolstring(L,i,nullptr); }
-	template <> std::string		value<std::string>( int i )	const { return lua_tolstring(L,i,nullptr); }
+	template <> string			value<string>( int i )		const { return lua_tolstring(L,i,nullptr); }
 	template <> bool			value<bool>( int i )		const { return lua_toboolean(L,i)!=0; }
 	template <> int				value<int>( int i )			const { return (int) lua_tointegerx(L,i,nullptr); }
 	template <> uint			value<uint>( int i )		const { return (uint) lua_tointegerx(L,i,nullptr); }
@@ -105,7 +105,7 @@ struct lua_state_t
 	operator lua_State*(){ return L; }
 
 	// library
-	inline static int print( lua_State* L ){ std::string s; for(int i=1, nargs=lua_gettop(L);i<=nargs;i++){ if(lua_isstring(L, i)) s+=lua_tolstring(L,i,0); else if(lua_isnumber(L,i)) s+=dtoa(lua_tonumberx(L,i,0)); else if(lua_isinteger(L,i)) s+=itoa((int)lua_tointegerx(L,i,0)); else if(lua_type(L,i)==LUA_TBOOLEAN)	s+=btoa(lua_toboolean(L,i)); else if(lua_isuserdata(L,i)) s+=format("0x%p",lua_topointer(L,i)); } printf("%s",s.c_str()); return 0; }
+	inline static int print( lua_State* L ){ string s; for(int i=1, nargs=lua_gettop(L);i<=nargs;i++){ if(lua_isstring(L, i)) s+=lua_tolstring(L,i,0); else if(lua_isnumber(L,i)) s+=dtoa(lua_tonumberx(L,i,0)); else if(lua_isinteger(L,i)) s+=itoa((int)lua_tointegerx(L,i,0)); else if(lua_type(L,i)==LUA_TBOOLEAN)	s+=btoa(lua_toboolean(L,i)); else if(lua_isuserdata(L,i)) s+=format("0x%p",lua_topointer(L,i)); } printf("%s",s.c_str()); return 0; }
 	inline static void register_default_lib( lua_State* L ){ static const struct luaL_Reg libs[]={{"print",print},{0,0}}; lua_getglobal(L,"_G");luaL_newlib(L,libs);lua_settop(L,-3); }
 	void require_c( const char* name, lua_CFunction func ){ luaL_requiref(L,name,func,0); }
 	void require_string( const char* name, const char* src ){ luaL_getsubtable(L,LUA_REGISTRYINDEX,"_LOADED"); lua_getfield(L,-1,name ); if(!lua_toboolean(L,-1)){ do_string(src); lua_setfield(L,-3,name); } lua_settop(L,-3); /*restore the stack*/ } // equivalent to : package.loaded[name] = load(src)() in Lua code
@@ -126,7 +126,7 @@ struct lua_state_t
 	
 	// utilities: garbage collection, error handling
 	void gc(){ lua_gc( L, LUA_GCCOLLECT, 0 ); }
-	const char* error(){ static std::string msg; msg=lua_tolstring(L,-1,nullptr); lua_settop(L,-2); return msg.c_str(); }	
+	const char* error(){ static string msg; msg=lua_tolstring(L,-1,nullptr); lua_settop(L,-2); return msg.c_str(); }	
 	
 	// globals
 	bool get_global( const char* name ){ lua_getglobal(L,name); bool b=lua_toboolean(L,-1)!=0; if(!b) lua_settop(L,-2); return b; }
@@ -139,10 +139,10 @@ struct lua_state_t
 };
 
 // prefix for enabling logging
-inline std::string prefix;
+inline string prefix;
 
 template <class V>
-void log_dirty_value( const std::string& key, const V& dst )
+void log_dirty_value( const string& key, const V& dst )
 {
 	if(prefix.empty()) return;
 	printf( "[%s] ", prefix.c_str() );
@@ -151,7 +151,7 @@ void log_dirty_value( const std::string& key, const V& dst )
 }
 
 template <class T, class V>
-bool get_dirty_value( const T& proxy, std::string key, V& dst )
+bool get_dirty_value( const T& proxy, string key, V& dst )
 {
 	if(!proxy.valid()) return false;
 	V v; if(!strchr(key.c_str(),'.')){ auto t=proxy[key]; if(!t.valid()||(v=V(t))==dst) return false; }
@@ -162,13 +162,13 @@ bool get_dirty_value( const T& proxy, std::string key, V& dst )
 
 struct state : public sol::state
 {
-	state( std::string _prefix="", bool b_open_default_libs=true );
+	state( string _prefix="", bool b_open_default_libs=true );
 	void open_default_libraries(){ open_libraries(sol::lib::base,sol::lib::math); }
 	void open_gxmath();
 	void open_printf();
 
 	bool script( const char* src, bool b_safe=true ); // override default script
-	template <class V> bool get_dirty_value( std::string key, V& dst ){ auto t=this->operator[](key); V v; if(!t.valid()||(v=t)==dst) return false; dst=v; log_dirty_value(key,dst); return true; }
+	template <class V> bool get_dirty_value( string key, V& dst ){ auto t=this->operator[](key); V v; if(!t.valid()||(v=t)==dst) return false; dst=v; log_dirty_value(key,dst); return true; }
 	void gc(){ lua_gc( this->lua_state(), LUA_GCCOLLECT, 0 ); }
 protected:
 	std::set<string> _default_objects;
@@ -177,11 +177,11 @@ protected:
 // lua internal exception handler
 __noinline int lua_exception_handler( lua_State* L, sol::optional<const std::exception&> maybe_exception, sol::string_view desc )
 {
-	std::string m=maybe_exception?maybe_exception->what():std::string(desc.data(),static_cast<std::streamsize>(desc.size()));
+	string m=maybe_exception?maybe_exception->what():string(desc.data(),static_cast<std::streamsize>(desc.size()));
 	return sol::stack::push(L,m);
 }
 
-__noinline state::state( std::string _prefix, bool b_open_default_libs )
+__noinline state::state( string _prefix, bool b_open_default_libs )
 {
 	prefix=_prefix;
 	if(b_open_default_libs) open_default_libraries();
@@ -191,7 +191,7 @@ __noinline state::state( std::string _prefix, bool b_open_default_libs )
 
 __noinline sol::protected_function_result _exception_handler( lua_State* L, sol::protected_function_result result )
 {
-	printf("[%s] %s\n", prefix.c_str(), result.operator std::string().c_str());
+	printf("[%s] %s\n", prefix.c_str(), result.operator string().c_str());
 	return result;
 };
 
@@ -202,7 +202,7 @@ __noinline bool state::script( const char* src, bool b_safe )
 	return r.valid();
 }
 
-__noinline bool __lprint_impl( lua_State* L, std::string& r )
+__noinline bool __lprint_impl( lua_State* L, string& r )
 {
 	// refer to: luaB_print in lbaselib.c
 	int kn=lua_gettop(L);
@@ -222,14 +222,14 @@ __noinline bool __lprint_impl( lua_State* L, std::string& r )
 
 __noinline int lprint( lua_State* L )
 {
-	std::string r; if(!__lprint_impl(L,r)) return luaL_error(L, format("%s(): tostring must return a string\n",__func__) );
+	string r; if(!__lprint_impl(L,r)) return luaL_error(L, format("%s(): tostring must return a string\n",__func__) );
 	::printf("%s\n",r.c_str());
 	return 0;
 }
 
 __noinline int ltprint( lua_State* L )
 {
-	std::string r; if(!__lprint_impl(L,r)) return luaL_error(L, format("%s(): tostring must return a string\n",__func__) );
+	string r; if(!__lprint_impl(L,r)) return luaL_error(L, format("%s(): tostring must return a string\n",__func__) );
 	::tprintf("%s\n",r.c_str()); return 0;
 }
 
@@ -270,16 +270,16 @@ __noinline void state::open_printf()
 	lua_pop(L,1);						// []
 }
 
-__noinline std::string __call_tostring( sol::stack_object v, sol::this_state L )
+__noinline string __call_tostring( sol::stack_object v, sol::this_state L )
 {
 	sol::type t = v.get_type();
 	if(t==sol::type::boolean)	return v.as<bool>()?"true":"false";
 	if(t==sol::type::number)	return dtoa(v.as<double>());
-	if(t==sol::type::string)	return v.as<std::string>();
+	if(t==sol::type::string)	return v.as<string>();
 	if(t==sol::type::userdata)
 	{
 		lua_getglobal(L, "tostring"); lua_pushvalue(L,-1); lua_pushvalue(L,v.stack_index());  // [tosring, function to be called, value to print]
-		lua_call(L, 1, 1); const char* s=lua_tostring(L,-1); std::string r=s?s:"";
+		lua_call(L, 1, 1); const char* s=lua_tostring(L,-1); string r=s?s:"";
 		lua_pop(L, 2); // pop [output,string]
 		return r;
 	}
@@ -288,8 +288,8 @@ __noinline std::string __call_tostring( sol::stack_object v, sol::this_state L )
 
 __noinline sol::object concat( sol::stack_object left, sol::stack_object right, sol::this_state L )
 {
-	std::string l=__call_tostring(left,L);
-	std::string r=__call_tostring(right,L);
+	string l=__call_tostring(left,L);
+	string r=__call_tostring(right,L);
 	lua_pop(L, 2); // pop [left, right]
 	return sol::object( L, sol::in_place, l+r );
 }
@@ -300,11 +300,11 @@ __noinline sol::object concat( sol::stack_object left, sol::stack_object right, 
 
 // type helper macros
 #define SOL_DEMANGLE_ONCE(T) \
-	template <> inline std::string demangle_once<T>() { return #T; }\
-	template <> inline std::string short_demangle_once<T>() { return #T; }
+	template <> inline string demangle_once<T>() { return #T; }\
+	template <> inline string short_demangle_once<T>() { return #T; }
 
 #define SOL_DEMANGLE_ONCE2(T,N) \
-	template <> inline std::string demangle_once<T>() { return #N; }\
-	template <> inline std::string short_demangle_once<T>() { return #N; }
+	template <> inline string demangle_once<T>() { return #N; }\
+	template <> inline string short_demangle_once<T>() { return #N; }
 
 #endif __GX_LUA_H__

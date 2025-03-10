@@ -89,7 +89,7 @@ struct zipentry_t : public ZIPENTRY
 struct izip_t	// common interface to zip, 7zip, ...
 {
 	path file_path;
-	std::vector<zipentry_t> entries;
+	vector<zipentry_t> entries;
 
 	virtual ~izip_t(){}
 	virtual void release()=0;
@@ -157,7 +157,7 @@ struct resource_t : public mem_t
 	bool load( int res_id ){ return find(res_id)&&load(); }
 
 	// loading for specific types
-	std::string load_string(){ if(type!=MAKEINTRESOURCEW(6/*string 6*/)||!load()) return ""; std::wstring w; w.resize(size/sizeof(decltype(w)::value_type)); memcpy((void*)w.c_str(),ptr,size); return wtoa(w.c_str()); }
+	string load_string(){ if(type!=MAKEINTRESOURCEW(6/*string 6*/)||!load()) return ""; std::wstring w; w.resize(size/sizeof(decltype(w)::value_type)); memcpy((void*)w.c_str(),ptr,size); return wtoa(w.c_str()); }
 	izip_t* load_zip();
 };
 #endif // MAKEINTRESOURCEW
@@ -190,8 +190,8 @@ inline unsigned int crc32c( unsigned int crc0, const void* ptr, size_t size ){ r
 inline unsigned int crc32c( unsigned int crc0, sized_ptr_t<void> p ){ return crc32c(crc0,(const void*)p.ptr,p.size); }
 inline unsigned int crc32c( unsigned int crc0, const char* s ){ return crc32c(crc0,(const void*)s,strlen(s)); }
 inline unsigned int crc32c( unsigned int crc0, const wchar_t* s ){ return crc32c(crc0,(const void*)s,wcslen(s)); }
-template <class T> inline unsigned int crc32c( unsigned int crc0, const std::vector<T>& v ){ return v.empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
-template <class T> inline unsigned int crc32c( unsigned int crc0, const std::vector<T>* v ){ return !v||v->empty()?crc0:crc32c(crc0,v->data(),v->size()*sizeof(T)); }
+template <class T> inline unsigned int crc32c( unsigned int crc0, const vector<T>& v ){ return v.empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
+template <class T> inline unsigned int crc32c( unsigned int crc0, const vector<T>* v ){ return !v||v->empty()?crc0:crc32c(crc0,v->data(),v->size()*sizeof(T)); }
 template <class T, size_t N> inline unsigned int crc32c( unsigned int crc0, const std::array<T,N>& v ){ return v.empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
 template <class T, size_t N> inline unsigned int crc32c( unsigned int crc0, const std::array<T,N>* v ){ return !v||v->empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
 
@@ -199,8 +199,8 @@ inline unsigned int crc32c( const void* ptr, size_t size ){ return crc32c(0,ptr,
 inline unsigned int crc32c( sized_ptr_t<void> p ){ return crc32c(0,p); }
 inline unsigned int crc32c(	const char* s ){ return crc32c(0,s); }
 inline unsigned int crc32c(	const wchar_t* s ){ return crc32c(0,s); }
-template <class T> inline unsigned int crc32c( const std::vector<T>& v ){ return crc32c<T>(0,v); }
-template <class T> inline unsigned int crc32c( const std::vector<T>* v ){ return crc32c<T>(0,v); }
+template <class T> inline unsigned int crc32c( const vector<T>& v ){ return crc32c<T>(0,v); }
+template <class T> inline unsigned int crc32c( const vector<T>* v ){ return crc32c<T>(0,v); }
 template <class T, size_t N> inline unsigned int crc32c( const std::array<T,N>& v ){ return crc32c<T,N>(v); }
 template <class T, size_t N> inline unsigned int crc32c( const std::array<T,N>* v ){ return crc32c<T,N>(v); }
 
@@ -210,7 +210,7 @@ struct md5
 {
 	uint4 digest={0xd98c1dd4,0x4b2008f,0x980980e9,0x7e42f8ec}; // null digest
 	explicit md5(const char* str):md5(str,strlen(str)){}
-	explicit md5(std::string str):md5(str.c_str(),str.size()){}
+	explicit md5(string str):md5(str.c_str(),str.size()){}
 	md5(const void* ptr, size_t size){ if(ptr&&size) update(ptr,size); }
 	md5(sized_ptr_t<void> p):md5(p.ptr,p.size){}
 	const char* c_str() const { static char buff[64]; unsigned char* u=(unsigned char*)&digest; char* c=buff; for(int k=0;k<16;k++,u++,c+=2)sprintf(c,"%02x",*u); buff[32]=0; return buff; }
@@ -325,7 +325,7 @@ __noinline const char* __decoding_table()
 	return t;
 }
 
-__noinline std::string encode( const void* ptr, size_t size )
+__noinline string encode( const void* ptr, size_t size )
 {
 	static const char* table = __encoding_table();
 	static const auto encode3 = []( const char* t, uchar a, uchar b, uchar c )->char4
@@ -337,7 +337,7 @@ __noinline std::string encode( const void* ptr, size_t size )
 	if(size==0) return "";
 	uchar *src=(uchar*)ptr;
 	size_t mod = size%3;
-	std::vector<char4> v((size/3+mod)+1);
+	vector<char4> v((size/3+mod)+1);
 	char4* dst=v.data();
 
 	// out-of-bound values are zero-filled
@@ -346,11 +346,11 @@ __noinline std::string encode( const void* ptr, size_t size )
 	if(mod)dst->w='=';if(mod==1)dst->z='='; // padding
 	*++dst={0};
 
-	return std::string((char*)&v.front());
+	return string((char*)&v.front());
 }
 
 template <class T=void>
-__noinline sized_ptr_t<T> decode( const std::string& encoded )
+__noinline sized_ptr_t<T> decode( const string& encoded )
 {
 	sized_ptr_t<T> m = {};
 	if(encoded.empty()) return m;

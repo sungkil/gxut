@@ -2,15 +2,12 @@
 #ifndef __GX_INET_H__
 #define __GX_INET_H__
 
-#if __has_include("gxfilesystem.h")
-	#include "gxstring.h"
-	#include "gxfilesystem.h"
-#elif __has_include("../gxfilesystem.h")
-	#include "../gxstring.h"
-	#include "../gxfilesystem.h"
-#elif __has_include(<gxut/gxfilesystem.h>)
-	#include <gxut/gxstring.h>
-	#include <gxut/gxfilesystem.h>
+#if __has_include("gxut.h")
+	#include "gxut.h"
+#elif __has_include("../gxut.h")
+	#include "../gxut.h"
+#elif __has_include(<gxut/gxut.h>)
+	#include <gxut/gxut.h>
 #endif
 
 #include <winsock2.h>
@@ -31,11 +28,11 @@ inline bool is_offline(){ return !is_online(); }
 
 struct file_t
 {
-	HINTERNET		hfile=nullptr;
-	std::string		url;		// source url
-	path			tmp, dst;	// temporary and final target path; sequetially download and copy
-	size_t			file_size=0;
-	FILETIME		mfiletime={};
+	HINTERNET	hfile=nullptr;
+	string		url;		// source url
+	path		tmp, dst;	// temporary and final target path; sequetially download and copy
+	size_t		file_size=0;
+	FILETIME	mfiletime={};
 
 	virtual ~file_t(){ release(); }
 	void release(){ if(!hfile) return; InternetCloseHandle(hfile); hfile=nullptr; }
@@ -52,11 +49,11 @@ struct session_t
 	void release(){ if(!handle) return; InternetCloseHandle(handle); handle=nullptr; }
 	operator bool() const { return handle!=nullptr; }
 
-	inline bool download( std::string url, path dst ){ return download(std::vector<std::string>{url},dst); }
-	bool download( std::vector<std::string> urls, path dst );
+	inline bool download( string url, path dst ){ return download(vector<string>{url},dst); }
+	bool download( vector<string> urls, path dst );
 
 protected:
-	bool download_thread_func( std::vector<std::string> urls, path dst );
+	bool download_thread_func( vector<string> urls, path dst );
 };
 
 __noinline bool file_t::open( HINTERNET session, const char* url )
@@ -86,7 +83,7 @@ __noinline bool file_t::get_file_size( HINTERNET session )
 	return true;
 }
 
-__noinline bool session_t::download_thread_func( std::vector<std::string> urls, path dst )
+__noinline bool session_t::download_thread_func( vector<string> urls, path dst )
 {
 	if(!handle) return false;
 
@@ -103,7 +100,7 @@ __noinline bool session_t::download_thread_func( std::vector<std::string> urls, 
 		if(b_dst_exists&&!FileTimeGreater(f.mfiletime,f0)) return false; // older url file exists
 		
 		if(!f.get_file_size(handle)){ fprintf(stdout,"error: unable to get file size %s\n", dst.name() );return false;} // now try to get the file size
-		std::vector<char> buffer(f.file_size);
+		vector<char> buffer(f.file_size);
 		
 		if(!dst.dir().exists()) dst.dir().mkdir();
 		FILE* fp = dst.fopen("wb"); if(!fp){ fprintf(stdout,"error: unable to open %s\n", dst.name());return false;}
@@ -127,7 +124,7 @@ __noinline bool session_t::download_thread_func( std::vector<std::string> urls, 
 	return false;
 }
 
-__noinline bool session_t::download( std::vector<std::string> urls, path dst )
+__noinline bool session_t::download( vector<string> urls, path dst )
 {
 	if(is_offline()||!handle||urls.empty()||dst.empty()) return false;
 	auto t=std::async(std::launch::async,&session_t::download_thread_func,this,urls,dst);

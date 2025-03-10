@@ -45,7 +45,7 @@ inline const char* windir(){ return add_backslash(env::get("WINDIR")); }
 
 // forward decl.
 namespace os { int message_box( const char* msg, const char* title, HWND hwnd ); }
-#define __gxos_va__() va_list a;va_start(a,fmt);size_t l=size_t(vsnprintf(0,0,fmt,a));std::vector<char> v(l+1,0); char* b=v.data();vsnprintf(b,l+1,fmt,a);va_end(a)
+#define __gxos_va__() va_list a;va_start(a,fmt);size_t l=size_t(vsnprintf(0,0,fmt,a));vector<char> v(l+1,0); char* b=v.data();vsnprintf(b,l+1,fmt,a);va_end(a)
 __noinline bool confirm( HWND hwnd, __printf_format_string__ const char* fmt, ... ){ __gxos_va__(); return IDOK==os::message_box(b,"Warning",hwnd); }
 __noinline bool confirm( __printf_format_string__ const char* fmt, ... ){ __gxos_va__(); return IDOK==os::message_box(b,"Warning",nullptr); }
 __noinline bool mbox( __printf_format_string__ const char* fmt, ... ){ __gxos_va__(); return IDOK==os::message_box(b,"Message",nullptr); }
@@ -64,21 +64,20 @@ __noinline void flush_message( int sleepTime=1 ){MSG m;for(int k=0;k<100&&PeekMe
 
 inline const char* module_path( HMODULE h_module=nullptr ){ static char buff[_MAX_PATH]={}; wchar_t w[_MAX_PATH]; GetModuleFileNameW(h_module,w,_MAX_PATH); w[0]=::toupper(w[0]); return strcpy(buff,wtoa(w)); }
 inline const char* module_name( HMODULE h_module=nullptr ){ const char* f=module_path(h_module); for( int kn=int(strlen(f)), k=kn-1; k>=0; k-- ) if(f[k]==L'\\') return f+k+1; return f; }
-inline void exit( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); std::vector<char> buff(size_t(vsnprintf(0,0,fmt,a))+1); vsnprintf(&buff[0],buff.size(),fmt,a); va_end(a); fprintf( stdout, "[%s] %s", module_name(), &buff[0]); ::exit(EXIT_FAILURE); }
+inline void exit( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); vector<char> buff(size_t(vsnprintf(0,0,fmt,a))+1); vsnprintf(&buff[0],buff.size(),fmt,a); va_end(a); fprintf( stdout, "[%s] %s", module_name(), &buff[0]); ::exit(EXIT_FAILURE); }
 inline bool shutdown()
 {
 	HANDLE hToken; if(!OpenProcessToken(GetCurrentProcess(),TOKEN_ADJUST_PRIVILEGES|TOKEN_QUERY,&hToken)) return false;
 	TOKEN_PRIVILEGES tkp={}; LookupPrivilegeValue(NULL, SE_SHUTDOWN_NAME, &tkp.Privileges[0].Luid);
 	tkp.PrivilegeCount=1; tkp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
 	AdjustTokenPrivileges(hToken, FALSE, &tkp, 0, (PTOKEN_PRIVILEGES)NULL, 0); if(GetLastError()!=ERROR_SUCCESS) return false;
-#pragma warning( disable: 28159 ) // Consider using 'a design alternative' instead of 'InitiateSystemShutdownExW'. Reason: Rearchitect to avoid Reboot
+	#pragma warning( suppress: 28159 ) // Consider using 'a design alternative' instead of 'InitiateSystemShutdownExW'. Reason: Rearchitect to avoid Reboot
 	return InitiateSystemShutdownExW(nullptr,nullptr,0,TRUE,FALSE,SHTDN_REASON_FLAG_PLANNED|SHTDN_REASON_MAJOR_APPLICATION|SHTDN_REASON_MINOR_OTHER);
-#pragma warning( default: 28159 )
 }
 
 inline bool is_dos_cmd( const char* cmd )
 {
-	static std::set<std::string> dos_cmd_map = 
+	static std::set<string> dos_cmd_map = 
 	{
 		"append", "attrib",
 		"batch",
@@ -128,7 +127,7 @@ inline path temp()
 
 inline const char* userprofile()
 {
-	static std::string e; if(!e.empty()) return e.c_str();
+	static string e; if(!e.empty()) return e.c_str();
 	e=env::get("USERPROFILE");
 #ifdef _SHLOBJ_H_
 	wchar_t buff[_MAX_PATH]; if(e.empty()) SHGetFolderPathW(NULL, CSIDL_PROFILE, NULL, 0, buff ); e=wtoa(buff);
@@ -144,13 +143,13 @@ inline const char* home()
 
 inline const char* user()
 {
-	static std::string u=env::get("USERNAME");
+	static string u=env::get("USERNAME");
 	return u.c_str();
 }
 
 inline const char* local_appdata()
 {
-	static std::string e; if(!e.empty()) return e.c_str();
+	static string e; if(!e.empty()) return e.c_str();
 	e=env::get("LOCALAPPDATA");
 #ifdef _SHLOBJ_H_
 	wchar_t buff[_MAX_PATH]; if(e.empty()) SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, buff ); e=wtoa(buff);
@@ -161,7 +160,7 @@ inline const char* local_appdata()
 
 inline const char* appdata()
 {
-	static std::string e; if(!e.empty()) return e.c_str();
+	static string e; if(!e.empty()) return e.c_str();
 	e=env::get("APPDATA");
 #ifdef _SHLOBJ_H_
 	wchar_t buff[_MAX_PATH]; if(e.empty()) SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, 0, buff ); e=wtoa(buff);
@@ -196,9 +195,9 @@ inline mutex_t::mutex_t( const char* name, int wait_time ):wait_counter(wait_tim
 	if(e==ERROR_ALREADY_EXISTS) close();
 }
 
-inline std::vector<HWND> enum_windows( const char* filter=nullptr )
+inline vector<HWND> enum_windows( const char* filter=nullptr )
 {
-	struct params { std::vector<HWND> v; const char* filter=nullptr; };
+	struct params { vector<HWND> v; const char* filter=nullptr; };
 	auto __enum_windows_proc = []( HWND hwnd , LPARAM pParams )->BOOL
 	{
 		params* p = ((params*)pParams);
@@ -329,33 +328,33 @@ namespace reg { // read-only registry reader
 template <HKEY root=HKEY_CLASSES_ROOT> // HKEY_CLASSES_ROOT, HKEY_LOCAL_MACHINE, ...
 struct key_t
 {
-	key_t( __printf_format_string__ const char* fmt, ... ){ if(!fmt) return; va_list a; va_start(a,fmt); size_t len=size_t(vsnprintf(0,0,fmt,a)); std::vector<char> b; b.resize(len+1,0); vsnprintf(b.data(),len+1,fmt,a); va_end(a); if(b.back()==L'\\'||b.back()==L'/') b.back()=0; this->key=atow(b.data()); }
+	key_t( __printf_format_string__ const char* fmt, ... ){ if(!fmt) return; va_list a; va_start(a,fmt); size_t len=size_t(vsnprintf(0,0,fmt,a)); vector<char> b; b.resize(len+1,0); vsnprintf(b.data(),len+1,fmt,a); va_end(a); if(b.back()==L'\\'||b.back()==L'/') b.back()=0; this->key=atow(b.data()); }
 	~key_t(){ if(hkey) RegCloseKey(hkey); }
 
 	operator bool() const { return hkey!=nullptr; }
 	bool open(){ if(hkey) return true; if(key.empty()) return false; LONG r=RegOpenKeyExW(root, key.c_str(),0,KEY_READ,&hkey); if(r!=ERROR_SUCCESS) hkey=nullptr; return hkey!=nullptr; }
 	const wchar_t* c_str() const { return format( L"[%s\\%s]", _root_str(), key.c_str() ); }
-	template <class T=std::string> T get( const char* name=nullptr );
+	template <class T=string> T get( const char* name=nullptr );
 
 	// template specialization
-	template <> inline std::string get<std::string>( const char* name )
+	template <> inline string get<string>( const char* name )
 	{
-		std::vector<BYTE> v; DWORD t; if(!_query( name, &v, &t )) return "";
-		if(t==REG_SZ)		return std::string((char*)v.data());
+		vector<BYTE> v; DWORD t; if(!_query( name, &v, &t )) return "";
+		if(t==REG_SZ)		return string((char*)v.data());
 		if(t==REG_DWORD){ char b[256]; snprintf(b,256,"%u",*((DWORD*)v.data())); return b; }
 		return "";
 	}
-	template <> inline path get<path>( const char* name ){ return path(get<std::string>(name).c_str()); }
+	template <> inline path get<path>( const char* name ){ return path(get<string>(name).c_str()); }
 	template <> inline DWORD get<DWORD>( const char* name )
 	{
-		std::vector<BYTE> v; DWORD t; if(!_query( name, &v, &t )) return 0;
+		vector<BYTE> v; DWORD t; if(!_query( name, &v, &t )) return 0;
 		if(t==REG_DWORD)	return *((DWORD*)v.data());
 		if(t==REG_SZ)		return DWORD(atoi((char*)v.data()));
 		return 0;
 	}
 
 protected:
-	bool _query( const char* name, std::vector<BYTE>* v, DWORD* t )
+	bool _query( const char* name, vector<BYTE>* v, DWORD* t )
 	{
 		if(!hkey&&!open()) return false;
 		DWORD n=4096; LONG r=RegQueryValueExW(hkey,atow(name),0,t,nullptr,&n); if(r!=ERROR_SUCCESS) return false;

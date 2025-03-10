@@ -20,7 +20,6 @@
 
 #include "gxmath.h"
 #include "gxstring.h"
-#include "gxfilesystem.h"
 #include <malloc.h> // _get_heap_handle()
 
 #if __has_include("gxtimer.h")
@@ -72,13 +71,10 @@
 	#endif
 #endif
 
-#ifdef GX_CUDA_GL_INTEROP
-	#pragma warning( push )
+#if defined(GX_CUDA_GL_INTEROP) && __has_include(<cuda_gl_interop.h>)
 	#pragma warning( disable: 4819 )	// disable waring on the foreign codepage
-	#if __has_include(<cuda_gl_interop.h>)
-		#include <cuda_gl_interop.h>	// this should be located after glew/glad/gxcorearb.h
-	#endif
-	#pragma warning( pop )
+	#include <cuda_gl_interop.h>		// this should be located after glew/glad/gxcorearb.h
+	#pragma warning( default: 4819 )
 #endif
 
 //***********************************************
@@ -152,9 +148,8 @@ inline GLint	gxGetTextureBPP( GLint internal_format ){ return gxGetTextureBPC(in
 inline GLenum	gxGetImageTextureInternalFormat( int depth, int channels ){ if(depth==8) return channels==1?GL_R8:channels==2?GL_RG8:channels==3?GL_RGB8:channels==4?GL_RGBA8:0; else if(depth==16)	return channels==1?GL_R16F:channels==2?GL_RG16F:channels==3?GL_RGB16F:channels==4?GL_RGBA16F:0; else if(depth==32)	return channels==1?GL_R32F:channels==2?GL_RG32F:channels==3?GL_RGB32F:channels==4?GL_RGBA32F:0; return 0; }
 inline bool		gxIsSamplerType( GLenum uniformType ){ GLenum t=uniformType; if(t>=GL_SAMPLER_1D && t<=GL_SAMPLER_2D_SHADOW) return true; if(t>=GL_SAMPLER_1D_ARRAY && t<=GL_SAMPLER_CUBE_SHADOW) return true; if(t>=GL_INT_SAMPLER_1D && t<=GL_UNSIGNED_INT_SAMPLER_2D_ARRAY) return true; if(t>=GL_SAMPLER_2D_RECT && t<=GL_SAMPLER_2D_RECT_SHADOW ) return true; if(t>=GL_SAMPLER_BUFFER && t<=GL_UNSIGNED_INT_SAMPLER_BUFFER ) return true; if(t>=GL_SAMPLER_CUBE_MAP_ARRAY && t<=GL_UNSIGNED_INT_SAMPLER_CUBE_MAP_ARRAY ) return true; if(t>=GL_SAMPLER_2D_MULTISAMPLE && t<=GL_UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE_ARRAY ) return true; /* TODO: if(t>=GL_SAMPLER_RENDERBUFFER_NV && t<=GL_UNSIGNED_INT_SAMPLER_RENDERBUFFER_NV ) return true;*/ return false; }
 inline bool		gxIsImageType( GLenum uniformType ){ GLenum t=uniformType; if(t>=GL_IMAGE_1D && t<=GL_UNSIGNED_INT_IMAGE_2D_MULTISAMPLE_ARRAY) return true; return false; }
-inline path		gxGetProgramBinaryPath( const char* name ){ path p=path::temp()+"glfx\\binary\\"+name+".bin"; if(!p.dir().exists()) p.dir().mkdir(); return p; }
-inline int		gxGetMipLevels( int width, int height=1, int depth=1 ){ int l=0,s=uint(max(max(width,height),depth)); while(s){s=s>>1;l++;} return l; }
-inline uint		gxGetMipLevels( uint width, uint height=1, uint depth=1 ){ uint l=0,s=uint(max(max(width,height),depth)); while(s){s=s>>1;l++;} return l; }
+inline int		gxGetMipLevels( int width, int height=1, int depth=1 ){ int l=0,s=uint(std::max(std::max(width,height),depth)); while(s){s=s>>1;l++;} return l; }
+inline uint		gxGetMipLevels( uint width, uint height=1, uint depth=1 ){ uint l=0,s=uint(std::max(std::max(width,height),depth)); while(s){s=s>>1;l++;} return l; }
 inline GLuint	gxCreateQuery( GLenum target ){ GLuint idx; if(glCreateQueries) glCreateQueries(target,1,&idx); else glGenQueries(1,&idx); return idx; }
 inline GLuint	gxCreateTexture( GLenum target ){ GLuint idx; if(glCreateTextures) glCreateTextures( target, 1, &idx ); else{ GLuint b0=gxGetBinding(target); glGenTextures(1,&idx); glBindTexture(target,idx); glBindTexture(target,b0); } return idx; }
 inline GLuint	gxCreateRenderBuffer(){ GLuint idx; if(glCreateRenderbuffers) glCreateRenderbuffers(1,&idx); else { GLuint b0=gxGetBinding(GL_RENDERBUFFER); glGenRenderbuffers(1,&idx); glBindRenderbuffer(GL_RENDERBUFFER,idx); glBindRenderbuffer(GL_RENDERBUFFER,b0); } return idx; }
@@ -170,7 +165,9 @@ template <> constexpr	GLenum gxTypeToInternalFormat<char>(){	return GL_R8I; }
 template <> constexpr	GLenum gxTypeToInternalFormat<uchar>(){	return GL_R8UI; }
 template <> constexpr	GLenum gxTypeToInternalFormat<int>(){	return GL_R32I; }
 template <> constexpr	GLenum gxTypeToInternalFormat<uint>(){	return GL_R32UI; }
+#ifdef __GXMATH_HALF__
 template <> constexpr	GLenum gxTypeToInternalFormat<half>(){	return GL_R16F; }
+#endif
 template <> constexpr	GLenum gxTypeToInternalFormat<float>(){	return GL_R32F; }
 
 //***********************************************
@@ -283,18 +280,18 @@ namespace gl {
 		__forceinline bool base_bindable( GLenum target1 ){ return target1==GL_SHADER_STORAGE_BUFFER||target1==GL_UNIFORM_BUFFER||target1==GL_TRANSFORM_FEEDBACK_BUFFER||target1==GL_ATOMIC_COUNTER_BUFFER; }
 
 		void set_sub_data( const GLvoid* data, GLsizeiptr size, GLintptr offset=0 ){ if(glNamedBufferSubData) glNamedBufferSubData(ID,offset,size,data); else { GLuint b0=bind(); glBufferSubData(target,offset,size,data); glBindBuffer(target,b0); } }
-		template <class T> void set_sub_data( const std::vector<T>& data, GLintptr offset=0 ){ set_sub_data(data.data(),GLsizeiptr(sizeof(T)*data.size()),offset); }
+		template <class T> void set_sub_data( const vector<T>& data, GLintptr offset=0 ){ set_sub_data(data.data(),GLsizeiptr(sizeof(T)*data.size()),offset); }
 		template <class T, size_t N> void set_sub_data( const std::array<T,N>& data, GLintptr offset=0 ){ set_sub_data(data.data(),GLsizeiptr(sizeof(T)*N),offset); }
 		template <class T> void set_data( const T* data, GLsizeiptr count ){ set_sub_data((const GLvoid*)data,sizeof(T)*count,0); }
 		template <class T> void set_data( T data ){ set_sub_data(&data,GLsizeiptr(sizeof(T)),0); }
-		template <class T> void set_data( const std::vector<T>& data ){ set_sub_data(data.data(),GLsizeiptr(sizeof(T)*data.size()),0); }
+		template <class T> void set_data( const vector<T>& data ){ set_sub_data(data.data(),GLsizeiptr(sizeof(T)*data.size()),0); }
 		template <class T, size_t N> void set_data( const std::array<T,N>& data ){ set_sub_data(data.data(),GLsizeiptr(sizeof(T)*N),0); }
 		void copy_data( Buffer* write_buffer, GLsizeiptr size=0 ){ copy_sub_data( write_buffer, size?size:this->size() ); }
 		void copy_sub_data( Buffer* write_buffer, GLsizeiptr size, GLintptr read_offset=0, GLintptr write_offset=0 ){ if(glCopyNamedBufferSubData) glCopyNamedBufferSubData(ID,write_buffer->ID,read_offset,write_offset,size); else printf("Buffer::copySubData(): glCopyNamedBufferSubData==nullptr (only supports named mode)\n" ); }
 		template <class T> void clear( const T value ){ constexpr GLenum iformat=gxTypeToInternalFormat<T>(); static GLenum format=gxGetTextureFormat(iformat), type=gxGetTextureType(iformat); if(glClearNamedBufferData) glClearNamedBufferData(ID,iformat,format,type,&value); else if(glClearBufferData){ GLuint b0=bind(); glClearBufferData(target,iformat,format,type,&value); bind(b0); } }
 		void get_sub_data( GLvoid* data, GLsizeiptr size, GLintptr offset=0 ){ if(glGetNamedBufferSubData) glGetNamedBufferSubData(ID,offset,size?size:this->size(),data); else if(glGetBufferSubData){ GLuint b0=bind(); glGetBufferSubData(target,offset,size?size:this->size(),data); glBindBuffer(target,b0); } }
 		template <class T> T get_data(){ T v=0; get_sub_data(&v,sizeof(T),0); return v; }
-		template <class T> std::vector<T> get_data( GLsizeiptr count ){ std::vector<T> v; v.resize(count); get_sub_data(v.data(),sizeof(T)*count,0); return v; }
+		template <class T> vector<T> get_data( GLsizeiptr count ){ vector<T> v; v.resize(count); get_sub_data(v.data(),sizeof(T)*count,0); return v; }
 		void* map( GLenum access=GL_READ_ONLY, GLenum target=0 ){ if(target==0) return glMapNamedBuffer(ID,access); bind(); return glMapBuffer(target,access); }
 		void* map_range( GLintptr offset, GLsizeiptr length, GLenum access=GL_MAP_READ_BIT, GLenum target=0 ){ if(is_map_persistent()) access|=GL_MAP_PERSISTENT_BIT|GL_MAP_COHERENT_BIT; if(target==0) return glMapNamedBufferRange(ID,offset,length,access); bind(); return glMapBufferRange(target,offset,length,access); }
 		void unmap( GLenum target=0 ){ if(target==0&&glUnmapNamedBuffer) glUnmapNamedBuffer(ID); else glUnmapBuffer(target); }
@@ -355,19 +352,19 @@ namespace gl {
 
 		// texture dimension queries: pre-recorded when creating this
 		GLint mip_levels() const {				return _levels; } // on-demand query: is_immutable()?get_texture_parameteriv(GL_TEXTURE_VIEW_NUM_LEVELS):get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)-get_texture_parameteriv(GL_TEXTURE_BASE_LEVEL)+1; }
-		GLint width( GLint level=0 ) const {	return max(1,_width>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_WIDTH, level )
-		GLint height( GLint level=0 ) const {	return (target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY||target==GL_TEXTURE_BUFFER)?1:max(1,_height>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_HEIGHT, level );
-		GLint depth( GLint level=0 ) const {	return (target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY||target==GL_TEXTURE_BUFFER||target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_RECTANGLE)?1:(target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY)?_depth:max(1,_depth>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_DEPTH, level );
+		GLint width( GLint level=0 ) const {	return std::max(1,_width>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_WIDTH, level )
+		GLint height( GLint level=0 ) const {	return (target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY||target==GL_TEXTURE_BUFFER)?1:std::max(1,_height>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_HEIGHT, level );
+		GLint depth( GLint level=0 ) const {	return (target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY||target==GL_TEXTURE_BUFFER||target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_RECTANGLE)?1:(target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY)?_depth:std::max(1,_depth>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_DEPTH, level );
 		GLint layers( GLint level=0 ) const {	return (target==GL_TEXTURE_1D_ARRAY)?height(level):(target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_3D)?depth(level):target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY?depth(level):1; }
 
 		// texture size helpers for the first mip level
-		ivec2 size( GLint level=0 ) const {		return ivec2(width(level),height(level)); }
-		vec2  sizef( GLint level=0 ) const {	return vec2(float(width(level)),float(height(level))); }
+		ivec2	size( GLint level=0 ) const {	return ivec2{width(level),height(level)}; }
+		vec2	sizef( GLint level=0 ) const {	return vec2{float(width(level)),float(height(level))}; }
 
 		// other texture queries
-		ivec2 mip_range() const {	ivec2 range=ivec2(get_texture_parameteriv(GL_TEXTURE_BASE_LEVEL),get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)); return ivec2(range.x,range.y-range.x+1); }
-		ivec2 filter() const {		return ivec2(get_texture_parameteriv(GL_TEXTURE_MIN_FILTER),get_texture_parameteriv(GL_TEXTURE_MAG_FILTER)); }
-		ivec3 wrap() const {		ivec3 w(get_texture_parameteriv(GL_TEXTURE_WRAP_S),get_texture_parameteriv(GL_TEXTURE_WRAP_T),0); if(target==GL_TEXTURE_3D||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY) w.z=get_texture_parameteriv(GL_TEXTURE_WRAP_R); return w; }
+		ivec2 mip_range() const {	ivec2 range=ivec2{get_texture_parameteriv(GL_TEXTURE_BASE_LEVEL),get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)}; return ivec2{range.x,range.y-range.x+1}; }
+		ivec2 filter() const {		return ivec2{get_texture_parameteriv(GL_TEXTURE_MIN_FILTER),get_texture_parameteriv(GL_TEXTURE_MAG_FILTER)}; }
+		ivec3 wrap() const {		ivec3 w{get_texture_parameteriv(GL_TEXTURE_WRAP_S),get_texture_parameteriv(GL_TEXTURE_WRAP_T),0}; if(target==GL_TEXTURE_3D||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY) w.z=get_texture_parameteriv(GL_TEXTURE_WRAP_R); return w; }
 		GLint base_level() const {	return get_texture_parameteriv(GL_TEXTURE_BASE_LEVEL); }
 		GLint max_level() const {	return get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL); }
 		GLint min_filter() const {	return get_texture_parameteriv(GL_TEXTURE_MIN_FILTER); }
@@ -402,10 +399,10 @@ namespace gl {
 		void set_min_LOD( GLfloat min_LOD ){ texture_parameterf(GL_TEXTURE_MIN_LOD,min_LOD); }
 		void set_max_LOD( GLfloat max_LOD ){ texture_parameterf(GL_TEXTURE_MAX_LOD,max_LOD); }
 		void set_LOD( GLfloat min_LOD, GLfloat max_LOD ){ texture_parameterf(GL_TEXTURE_MIN_LOD,min_LOD); texture_parameterf(GL_TEXTURE_MAX_LOD,max_LOD); }
-		void set_border_color( const vec4& color ){ texture_parameterfv(GL_TEXTURE_BORDER_COLOR, color); }
+		void set_border_color( const vec4& color ){ texture_parameterfv(GL_TEXTURE_BORDER_COLOR, &color.x ); }
 
 		// clear colors
-		void clear( const vec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_HALF_FLOAT){ half4 h={}; ftoh(color,h,channels()); glClearTexImage(ID,level,f,t,h);} else if(t==GL_FLOAT) glClearTexImage(ID,level,format(),t,&color); else printf( "%s->clear(): texture is not one of float/half types\n", _name ); }
+		void clear( const vec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_HALF_FLOAT){ half4 h={}; ftoh(color,h,channels()); glClearTexImage(ID,level,f,t,h); } else if(t==GL_FLOAT) glClearTexImage(ID,level,format(),t,&color); else printf( "%s->clear(): texture is not one of float/half types\n", _name ); }
 		void cleari( const ivec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_INT) glClearTexImage(ID,level,f,t,color); else if(t==GL_SHORT){ short4 i={short(color.x),short(color.y),short(color.z),short(color.w)}; glClearTexImage(ID,level,f,t,&i); } else if(t==GL_BYTE){ char4 i={char(color.x),char(color.y),char(color.z),char(color.w)}; glClearTexImage(ID,level,f,t,&i); } else printf( "%s->cleari(): texture is not one of byte/short/int types\n", _name ); }
 		void clearui( const uvec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_UNSIGNED_INT) glClearTexImage(ID,level,f,t,color); else if(t==GL_UNSIGNED_SHORT){ ushort4 i={ushort(color.x),ushort(color.y),ushort(color.z),ushort(color.w)}; glClearTexImage(ID,level,f,t,&i); } else if(t==GL_UNSIGNED_BYTE){ uchar4 i={uchar(color.x),uchar(color.y),uchar(color.z),uchar(color.w)}; glClearTexImage(ID,level,f,t,&i); } else printf( "%s->clearui(): texture is not one of unsigned byte/short/int types\n", _name ); }
 
@@ -529,7 +526,7 @@ namespace gl {
 		inline void multi_draw_elements_indirect_count( GLsizei max_draw_count, GLsizei stride=sizeof(DrawElementsIndirectCommand), const void* indirect=0 /* GL_DRAW_INDIRECT_BUFFER */, GLintptr draw_count=0 /* GL_PARAMETER_BUFFER_ARB */, GLenum mode=GL_TRIANGLES, bool b_bind=true ){ if(index_buffer==nullptr) return; if(b_bind) bind(); glMultiDrawElementsIndirectCount(mode,GL_UNSIGNED_INT,indirect,draw_count,max_draw_count,stride); }
 
 		inline GLvoid* uint_offset( GLuint first ){ return (GLvoid*)(first*sizeof(GLuint)); }
-		inline const GLvoid* const* uint_offset( GLuint* pfirst, GLsizei draw_count ){ static std::vector<GLvoid*> offsets; if(offsets.size()<uint(draw_count)) offsets.resize(draw_count); for( int k=0; k<draw_count; k++ ) offsets[k] = (GLvoid*)(pfirst[k]*sizeof(GLuint)); return &offsets[0]; }
+		inline const GLvoid* const* uint_offset( GLuint* pfirst, GLsizei draw_count ){ static vector<GLvoid*> offsets; if(offsets.size()<uint(draw_count)) offsets.resize(draw_count); for( int k=0; k<draw_count; k++ ) offsets[k] = (GLvoid*)(pfirst[k]*sizeof(GLuint)); return &offsets[0]; }
 
 		Buffer*		vertex_buffer;
 		Buffer*		index_buffer;
@@ -562,7 +559,7 @@ namespace gl {
 		void set_viewport( ivec4 origin_size ){ glViewport( origin_size.x, origin_size.y, origin_size.z, origin_size.w ); }
 		void set_viewport( ivec2 origin, ivec2 size ){ glViewport( origin.x, origin.y, size.x, size.y ); }
 		void set_viewport( ivec2 size ){ glViewport( 0, 0, size.x, size.y ); }
-		ivec4 get_viewport(){ ivec4 i={}; glGetIntegerv( GL_VIEWPORT, (int*)i); return i; }
+		ivec4 get_viewport(){ ivec4 i={}; glGetIntegerv( GL_VIEWPORT, (int*)&i.x); return i; }
 		void set_color_mask( bool mask, bool b_force_mask=false ){ if(!b_force_mask&&mask==_b_color_mask) return; GLboolean b=(_b_color_mask=mask)?GL_TRUE:GL_FALSE; glColorMask(b,b,b,b); }
 		void set_depth_mask( bool mask, bool b_force_mask=false ){ if(!b_force_mask&&mask==_b_depth_mask) return; GLboolean b=(_b_depth_mask=mask)?GL_TRUE:GL_FALSE; glDepthMask(b); }
 		void set_color_depth_mask( bool mask, bool b_force_mask=false ){ set_color_mask(mask,b_force_mask); set_depth_mask(mask,b_force_mask); }
@@ -578,7 +575,7 @@ namespace gl {
 		static void set_blend_func_separate( GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha ){ glBlendFuncSeparate( sfactorRGB, dfactorRGB, sfactorAlpha, dfactorAlpha ); }
 		static void set_multisample( bool b_multisample ){ b_multisample ? glEnable(GL_MULTISAMPLE):glDisable(GL_MULTISAMPLE); }
 		static const GLenum* draw_buffers( uint index=0 ){ static GLenum d[MAX_COLOR_ATTACHMENTS]={GL_COLOR_ATTACHMENT0,GL_COLOR_ATTACHMENT1,GL_COLOR_ATTACHMENT2,GL_COLOR_ATTACHMENT3,GL_COLOR_ATTACHMENT4,GL_COLOR_ATTACHMENT5,GL_COLOR_ATTACHMENT6,GL_COLOR_ATTACHMENT7}; return &d[index]; }
-		void clear( const vec4& color=vec4(.0f,.0f,.0f,.0f) ){ for( uint k=0;k<MAX_COLOR_ATTACHMENTS;k++) if(_active_targets[k]) clear_color_buffer( k, color, false ); clear_depth_buffer(); }
+		void clear( const vec4& color=0 ){ for( uint k=0;k<MAX_COLOR_ATTACHMENTS;k++) if(_active_targets[k]) clear_color_buffer( k, color, false ); clear_depth_buffer(); }
 		void clear_depth_buffer( float depth=1.0f ){ if(glClearNamedFramebufferfv) glClearNamedFramebufferfv( ID, GL_DEPTH, 0, &depth ); else glClearBufferfv( GL_DEPTH, 0, &depth ); }
 		void clear_color_buffer( GLint draw_buffer, const vec4& color, bool b_clear_depth=false ){ if(draw_buffer>=GL_DRAW_BUFFER0) draw_buffer-=GL_DRAW_BUFFER0; if(glClearNamedFramebufferfv) glClearNamedFramebufferfv( ID, GL_COLOR, draw_buffer, (GLfloat*)&color ); else glClearBufferfv( GL_COLOR, draw_buffer, color ); if(b_clear_depth) clear_depth_buffer(); }
 		void clear_color_bufferi( GLint draw_buffer, const ivec4& color, bool b_clear_depth=false ){ if(draw_buffer>=GL_DRAW_BUFFER0) draw_buffer-=GL_DRAW_BUFFER0; if(glClearNamedFramebufferiv) glClearNamedFramebufferiv( ID, GL_COLOR, draw_buffer, color ); else glClearBufferiv( GL_COLOR, draw_buffer, color ); if(b_clear_depth) clear_depth_buffer(); }
@@ -772,7 +769,7 @@ namespace gl {
 		}
 		
 		// template specialization on bool array
-		template<> inline void set<bool>( GLuint program_ID, bool* v, GLsizei count ){ if(ID==-1) return; std::vector<int> i(count);for(int k=0;k<count;k++)i[k]=int(v[k]); glProgramUniform1iv( program_ID, ID, count, &i[0] ); }
+		template<> inline void set<bool>( GLuint program_ID, bool* v, GLsizei count ){ if(ID==-1) return; vector<int> i(count);for(int k=0;k<count;k++)i[k]=int(v[k]); glProgramUniform1iv( program_ID, ID, count, &i[0] ); }
 
 		const char* type_name()
 		{
@@ -804,29 +801,29 @@ namespace gl {
 		const char* get_value( GLuint prog )
 		{
 			if(ID==-1) return "";
-			static float4 f; static int4 i; static uint4 u; static mat2 m2; static mat3 m3; static mat4 m4;
-
+			static float4 f; static int4 i; static uint4 u; static float m[16];
+			
 			switch(type)
 			{
-			case GL_FLOAT:				glGetUniformfv(prog,ID,&f.x); return ftoa(f.x);
-			case GL_FLOAT_VEC2:			glGetUniformfv(prog,ID,&f.x); return ftoa(reinterpret_cast<float2&>(f.x));
-			case GL_FLOAT_VEC3:			glGetUniformfv(prog,ID,&f.x); return ftoa(reinterpret_cast<float3&>(f.x));
-			case GL_FLOAT_VEC4:			glGetUniformfv(prog,ID,&f.x); return ftoa(f);
-			case GL_INT:				glGetUniformiv(prog,ID,&i.x); return itoa(i.x);
-			case GL_INT_VEC2:			glGetUniformiv(prog,ID,&i.x); return itoa(reinterpret_cast<int2&>(i.x));
-			case GL_INT_VEC3:			glGetUniformiv(prog,ID,&i.x); return itoa(reinterpret_cast<int3&>(i.x));
-			case GL_INT_VEC4:			glGetUniformiv(prog,ID,&i.x); return itoa(i);
-			case GL_UNSIGNED_INT:		glGetUniformuiv(prog,ID,&u.x); return utoa(u.x);
-			case GL_UNSIGNED_INT_VEC2:	glGetUniformuiv(prog,ID,&u.x); return utoa(reinterpret_cast<uint2&>(u.x));
-			case GL_UNSIGNED_INT_VEC3:	glGetUniformuiv(prog,ID,&u.x); return utoa(reinterpret_cast<uint3&>(u.x));
-			case GL_UNSIGNED_INT_VEC4:	glGetUniformuiv(prog,ID,&u.x); return utoa(u);
-			case GL_BOOL:				glGetUniformiv(prog,ID,&i.x); return itoa(i.x);
-			case GL_BOOL_VEC2:			glGetUniformiv(prog,ID,&i.x); return itoa(reinterpret_cast<int2&>(i.x));
-			case GL_BOOL_VEC3:			glGetUniformiv(prog,ID,&i.x); return itoa(reinterpret_cast<int3&>(i.x));
-			case GL_BOOL_VEC4:			glGetUniformiv(prog,ID,&i.x); return itoa(i);
-			case GL_FLOAT_MAT2:			glGetUniformfv(prog,ID,&m2._11); return ftoa(m2.transpose());
-			case GL_FLOAT_MAT3:			glGetUniformfv(prog,ID,&m3._11); return ftoa(m3.transpose());
-			case GL_FLOAT_MAT4:			glGetUniformfv(prog,ID,&m4._11); return ftoa(m4.transpose());
+			case GL_FLOAT:				glGetUniformfv(prog,ID,&f.x); return format("%g",f.x);
+			case GL_FLOAT_VEC2:			glGetUniformfv(prog,ID,&f.x); return format("%g %g",f.x,f.y);
+			case GL_FLOAT_VEC3:			glGetUniformfv(prog,ID,&f.x); return format("%g %g %g",f.x,f.y,f.z);
+			case GL_FLOAT_VEC4:			glGetUniformfv(prog,ID,&f.x); return format("%g %g %g %g",f.x,f.y,f.z,f.w);
+			case GL_INT:				glGetUniformiv(prog,ID,&i.x); return format("%d",i.x);
+			case GL_INT_VEC2:			glGetUniformiv(prog,ID,&i.x); return format("%d %d",i.x,i.y);
+			case GL_INT_VEC3:			glGetUniformiv(prog,ID,&i.x); return format("%d %d %d",i.x,i.y,i.z);
+			case GL_INT_VEC4:			glGetUniformiv(prog,ID,&i.x); return format("%d %d %d %d",i.x,i.y,i.z,i.w);
+			case GL_UNSIGNED_INT:		glGetUniformuiv(prog,ID,&u.x); return format("%u",u.x);
+			case GL_UNSIGNED_INT_VEC2:	glGetUniformuiv(prog,ID,&u.x); return format("%u %u",u.x,u.y);
+			case GL_UNSIGNED_INT_VEC3:	glGetUniformuiv(prog,ID,&u.x); return format("%u %u %u",u.x,u.y,u.z);
+			case GL_UNSIGNED_INT_VEC4:	glGetUniformuiv(prog,ID,&u.x); return format("%u %u %u %u",u.x,u.y,u.z,u.w);
+			case GL_BOOL:				glGetUniformiv(prog,ID,&i.x); return format("%d",i.x);
+			case GL_BOOL_VEC2:			glGetUniformiv(prog,ID,&i.x); return format("%d %d",i.x,i.y);
+			case GL_BOOL_VEC3:			glGetUniformiv(prog,ID,&i.x); return format("%d %d %d",i.x,i.y,i.z);
+			case GL_BOOL_VEC4:			glGetUniformiv(prog,ID,&i.x); return format("%d %d %d %d",i.x,i.y,i.z,i.w);
+			case GL_FLOAT_MAT2:			glGetUniformfv(prog,ID,m); return format("%g %g %g %g",m[0],m[2],m[1],m[3]);
+			case GL_FLOAT_MAT3:			glGetUniformfv(prog,ID,m); return format("%g %g %g %g %g %g %g %g %g",m[0],m[3],m[6],m[1],m[4],m[7],m[2],m[5],m[8]);
+			case GL_FLOAT_MAT4:			glGetUniformfv(prog,ID,m); return format("%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g", m[0],m[4],m[8],m[12],m[1],m[5],m[9],m[13],m[2],m[6],m[10],m[14],m[3],m[7],m[11],m[15]);
 			}
 			return "";
 		}
@@ -836,22 +833,22 @@ namespace gl {
 
 	//***********************************************
 	// shader/program/effect source structures
-	struct shader_macro_t : public std::vector<std::string>
+	struct shader_macro_t : public vector<string>
 	{
 		void append( __printf_format_string__ const char* m, ... ){ char b[4096];va_list a;va_start(a,m);size_t len=size_t(vsnprintf(0,0,m,a));vsnprintf(b,len+1,m,a);va_end(a); for(auto& s:*this) if(strcmp(s.c_str(),b)==0) return; emplace_back(b); }
-		std::string merge() const { std::string m; for(auto& s:*this){ m+=s; if(s.back()!='\n') m+='\n'; } if(!m.empty()) m+='\n'; return m; }
+		string merge() const { string m; for(auto& s:*this){ m+=s; if(s.back()!='\n') m+='\n'; } if(!m.empty()) m+='\n'; return m; }
 	};
-	struct named_string_t { std::string name, value; };
-	struct shader_source_t : public std::vector<named_string_t> // a list of source strings
+	struct named_string_t { string name, value; };
+	struct shader_source_t : public vector<named_string_t> // a list of source strings
 	{
-		using std::vector<named_string_t>::vector;		// inherit ctors
-		using std::vector<named_string_t>::operator=;	// inherit operator=
-		std::string flatten() const
+		using vector<named_string_t>::vector;		// inherit ctors
+		using vector<named_string_t>::operator=;	// inherit operator=
+		string flatten() const
 		{
 			static const bool TRIM_LINE_DIRECTIVE=true;
 			static const bool TRIM_TRIPLE_NEWLINES=true;
 
-			std::string f;
+			string f;
 			for( size_t k=0; k < size(); k++ )
 			{
 				for( auto& l : explode_conservative(at(k).value.c_str(),'\n') )
@@ -868,10 +865,12 @@ namespace gl {
 			return f;
 		}
 		
-		void flatten( path file_path ) const
+		void flatten( const char* file_path ) const
 		{
-			if(!file_path.dir().exists()) file_path.dir().mkdir();
-			file_path.write_file(flatten().c_str());
+			string d=dir(file_path); if(!file_exists(d.c_str())) mkdir(d.c_str());
+			FILE* fp=fopen(file_path,"wb"); if(!fp) return;
+			string f=flatten(); fwrite(f.c_str(),1,f.size(),fp); fclose(fp);
+			fclose(fp);
 		}
 	};
 
@@ -881,19 +880,19 @@ namespace gl {
 		using std::map<GLuint,shader_source_t>::operator=;	// inherit operator=
 
 		shader_source_t get_shader_source( GLuint shader_type ) const { auto it=find(shader_type); return it==end()?shader_source_t():it->second; }
-		void export_shader_sources( path dir, path name ){ for( auto it : *this ) export_shader_source( it.first, dir, name ); }
-		void export_shader_source( GLuint shader_type, path dir, path name, bool b_print_log=true )
+		void export_shader_sources( const char* dir, const char* name ){ for( auto it : *this ) export_shader_source( it.first, dir, name ); }
+		void export_shader_source( GLuint shader_type, const char* dir, const char* name, bool b_print_log=true )
 		{
-			path ext = get_shader_extension_name( shader_type ); if(ext.empty()){ printf( "unable to find shader_type %d\n", int(shader_type) ); return; }
-			path file_path = dir+name+"."+ext;
-			if(b_print_log) printf( "%s\n", file_path.relative(exe::dir()).slash());
-			get_shader_source(shader_type).flatten( file_path );
+			const char* ext = get_shader_extension_name( shader_type ); if(!ext||!*ext){ printf( "unable to find shader_type %d\n", int(shader_type) ); return; }
+			string file_path = string(add_backslash(dir))+name+"."+ext;
+			if(b_print_log) printf( "%s.%s\n", name, ext );
+			get_shader_source(shader_type).flatten( file_path.c_str() );
 		}
-		path get_shader_extension_name( GLuint shader_type ) const
+		const char* get_shader_extension_name( GLuint shader_type ) const
 		{
 			// extension names: https://www.khronos.org/opengles/sdk/tools/Reference-Compiler/
-			static const std::map<GLuint,std::string> m = { {GL_VERTEX_SHADER, "vert"}, {GL_FRAGMENT_SHADER, "frag"}, {GL_GEOMETRY_SHADER, "geom"}, {GL_TESS_EVALUATION_SHADER, "tesc"}, {GL_TESS_CONTROL_SHADER, "tese"}, {GL_COMPUTE_SHADER, "comp"}, };
-			auto it=m.find(shader_type); return it==m.end() ? path():it->second.c_str();
+			static const std::map<GLuint,string> m = { {GL_VERTEX_SHADER, "vert"}, {GL_FRAGMENT_SHADER, "frag"}, {GL_GEOMETRY_SHADER, "geom"}, {GL_TESS_EVALUATION_SHADER, "tesc"}, {GL_TESS_CONTROL_SHADER, "tese"}, {GL_COMPUTE_SHADER, "comp"}, };
+			auto it=m.find(shader_type); return it==m.end() ? "":it->second.c_str();
 		}
 	};
 
@@ -919,26 +918,37 @@ namespace gl {
 
 		// set_uniform
 		template <class T>
-		void set_uniform( const char* name, T* v, GLsizei count=1 ){			Uniform* u=get_uniform(name); if(!u) return; u->set(ID,v,count); }
-		void set_uniform( const char* name, const float& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const vec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const vec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const vec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const int& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
-		void set_uniform( const char* name, const ivec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
-		void set_uniform( const char* name, const ivec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
-		void set_uniform( const char* name, const ivec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
-		void set_uniform( const char* name, const uint& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
+		void set_uniform( const char* name, T* v, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; u->set(ID,v,count); }
+		void set_uniform( const char* name, float v, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, float2 v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, float3 v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, float4 v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, vec2 v, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, vec3 v, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, vec4 v, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, int v, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, int2 v, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, int3 v, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, int4 v, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, ivec2 v, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, ivec3 v, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, ivec4 v, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(int*)&v,count); }
+		void set_uniform( const char* name, uint v, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
 #if defined(_M_X64)||defined(__LP64__)
-		void set_uniform( const char* name, const size_t& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; if(count==1) u->set(ID,(uint*)&v,count); else {std::vector<uint> l(count);for(int j=0;j<count;j++)l[j]=uint((&v)[j]);u->set(ID,(uint*)&l[0],count);} }
+		void set_uniform( const char* name, size_t v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; if(count==1) u->set(ID,(uint*)&v,count); else {vector<uint> l(count);for(int j=0;j<count;j++)l[j]=uint((&v)[j]);u->set(ID,(uint*)&l[0],count);} }
 #endif
-		void set_uniform( const char* name, const uvec2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
-		void set_uniform( const char* name, const uvec3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
-		void set_uniform( const char* name, const uvec4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
-		void set_uniform( const char* name, const bool& b, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; int v=b?1:0; u->set(ID,(int*)&v,count); }
-		void set_uniform( const char* name, const mat4& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const mat3& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
-		void set_uniform( const char* name, const mat2& v, GLsizei count=1 ){	Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, uint2 v, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
+		void set_uniform( const char* name, uint3 v, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
+		void set_uniform( const char* name, uint4 v, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
+		void set_uniform( const char* name, uvec2 v, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
+		void set_uniform( const char* name, uvec3 v, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
+		void set_uniform( const char* name, uvec4 v, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(uint*)&v,count); }
+		void set_uniform( const char* name, bool b, GLsizei count=1 ){		Uniform* u=get_uniform(name); if(!u) return; int v=b?1:0; u->set(ID,(int*)&v,count); }
+#ifdef __GX_MATH_H__
+		void set_uniform( const char* name, const mat2& v, GLsizei count=1){Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const mat3& v, GLsizei count=1){Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+		void set_uniform( const char* name, const mat4& v, GLsizei count=1){Uniform* u=get_uniform(name); if(!u) return; u->set(ID,(float*)&v,count); }
+#endif
 		void set_uniform( const char* name, Texture* t ){ if(!t) return;		Uniform* u=get_uniform(name); if(!u) return; if(u->ID<0||u->textureID<0) return; if(binding()!=ID) glUseProgram(ID); u->texture=t; glProgramUniform1i(ID,u->ID,u->textureID); if(glBindTextureUnit) glBindTextureUnit(u->textureID,u->texture->ID); else { glActiveTexture(GL_TEXTURE0+u->textureID);u->texture->bind();} }
 
 		// bind image texture
@@ -962,7 +972,7 @@ namespace gl {
 
 		// query for uniform, program, and compute
 		GLint get_active_uniform_count(){ GLint count=0; if(glGetProgramInterfaceiv) glGetProgramInterfaceiv( ID, GL_UNIFORM, GL_ACTIVE_RESOURCES, &count ); else if(glGetProgramiv) glGetProgramiv( ID, GL_ACTIVE_UNIFORMS, &count ); return count; }
-		std::vector<Uniform> get_active_uniforms( bool b_bind=true );
+		vector<Uniform> get_active_uniforms( bool b_bind=true );
 		UniformBlock* get_uniform_block( const char* name ){ auto it=_uniform_block_map.find(name); return it==_uniform_block_map.end() ? nullptr : &it->second; }
 		GLuint get_uniform_block_binding( const char* name ){ auto* ub=get_uniform_block(name); return ub?ub->get_binding():-1; }
 		GLuint get_shader_storage_block_binding( const char* name ){ auto it=_shader_storage_block_binding_map.find(name); if(it!=_shader_storage_block_binding_map.end()) return it->second; const GLenum prop=GL_BUFFER_BINDING; GLint binding;glGetProgramResourceiv(ID,GL_SHADER_STORAGE_BLOCK,glGetProgramResourceIndex(ID,GL_SHADER_STORAGE_BLOCK,name),1,&prop,1,nullptr,&binding); return _shader_storage_block_binding_map[name]=binding; }
@@ -980,12 +990,12 @@ namespace gl {
 		program_source_t					source;
 
 	protected:
-		std::map<std::string,Uniform>		_uniform_cache;
-		std::set<std::string>				_invalid_uniform_cache;
-		std::map<std::string,GLint>			_shader_storage_block_binding_map;
-		std::map<std::string,GLint>			_atomic_counter_buffer_binding_map;
-		std::map<std::string,UniformBlock>	_uniform_block_map;
-		ivec3								_compute_work_group_size={}; // cache for get_compute_work_group_size()
+		std::map<string,Uniform>		_uniform_cache;
+		std::set<string>				_invalid_uniform_cache;
+		std::map<string,GLint>			_shader_storage_block_binding_map;
+		std::map<string,GLint>			_atomic_counter_buffer_binding_map;
+		std::map<string,UniformBlock>	_uniform_block_map;
+		ivec3							_compute_work_group_size={}; // cache for get_compute_work_group_size()
 	};
 
 	// bind
@@ -1003,10 +1013,10 @@ namespace gl {
 	}
 
 	// late implementations of Program
-	inline std::vector<gl::Uniform> gl::Program::get_active_uniforms( bool b_bind )
+	inline vector<gl::Uniform> gl::Program::get_active_uniforms( bool b_bind )
 	{
 		GLint program0=-1; if(b_bind&&glProgramUniform1i) glGetIntegerv(GL_CURRENT_PROGRAM,&program0); if(program0>=0) glUseProgram(ID);
-		std::vector<Uniform> v;
+		vector<Uniform> v;
 		for(int k=0,kn=get_active_uniform_count();k<kn;k++)
 		{
 			static const GLenum pnames[]={GL_BLOCK_INDEX,GL_LOCATION,GL_NAME_LENGTH,GL_TYPE,GL_OFFSET,GL_ARRAY_SIZE,GL_ARRAY_STRIDE,GL_MATRIX_STRIDE,GL_IS_ROW_MAJOR,GL_ATOMIC_COUNTER_BUFFER_INDEX};
@@ -1055,7 +1065,7 @@ namespace gl {
 
 	inline const char* gl::Program::dump_uniforms( bool b_matrix, bool b_array )
 	{
-		static std::string buff; buff.clear();
+		static string buff; buff.clear();
 		int texID=0; for( auto& u : get_active_uniforms(false) )
 		{
 			if(!b_array&&strchr(u.name,'[')) continue;
@@ -1066,37 +1076,37 @@ namespace gl {
 	}
 
 	// string with index in a source
-	struct indexed_string_t : public std::string
+	struct indexed_string_t : public string
 	{
 		int index=0;
-		using std::string::string;		// inherit ctors
-		using std::string::operator=;	// inherit operator=
+		using string::string;		// inherit ctors
+		using string::operator=;	// inherit operator=
 	};
 
-	struct effect_source_t : public std::vector<named_string_t>
+	struct effect_source_t : public vector<named_string_t>
 	{
 		shader_macro_t macro; // embedded macro
 
 		effect_source_t() = default;
-		effect_source_t( const std::vector<value_type>& v ){ reinterpret_cast<std::vector<value_type>&>(*this)=v; }
-		effect_source_t( const std::initializer_list<value_type>& v ){ reinterpret_cast<std::vector<value_type>&>(*this)=v; }
+		effect_source_t( const vector<value_type>& v ){ reinterpret_cast<vector<value_type>&>(*this)=v; }
+		effect_source_t( const std::initializer_list<value_type>& v ){ reinterpret_cast<vector<value_type>&>(*this)=v; }
 
 		// override and extend members
 		void clear() noexcept { __super::clear(); macro.clear(); }
-		iterator find( std::string name ){ for( auto it=begin(); it!=end(); it++ ) if(_stricmp(it->name.c_str(),name.c_str())==0) return it; return end(); }
-		void append( std::string name, std::string source ){ if(!name.empty()){for(auto& s:*this) if(_stricmp(s.name.c_str(),name.c_str())==0){ s.value=source; return; }} emplace_back( value_type{name,source} ); }
-		bool replace( std::string _Where, std::string name, std::string source ){ auto it=find(_Where); if(it==end()) return false; it->name = name; it->value = source; return true; }
-		bool replace( iterator _Where, std::string name, std::string source ){ if(_Where==end()) return false; _Where->name = name; _Where->value = source; return true; }
+		iterator find( string name ){ for( auto it=begin(); it!=end(); it++ ) if(_stricmp(it->name.c_str(),name.c_str())==0) return it; return end(); }
+		void append( string name, string source ){ if(!name.empty()){for(auto& s:*this) if(_stricmp(s.name.c_str(),name.c_str())==0){ s.value=source; return; }} emplace_back( value_type{name,source} ); }
+		bool replace( string _Where, string name, string source ){ auto it=find(_Where); if(it==end()) return false; it->name = name; it->value = source; return true; }
+		bool replace( iterator _Where, string name, string source ){ if(_Where==end()) return false; _Where->name = name; _Where->value = source; return true; }
 		
-		std::string get_name( int index ) const { if(!macro.empty()){ if(index==0) return "macro.fx"; index--; } return this->at(index).name; }
-		std::vector<std::string> names() const { std::vector<std::string> vs; if(!macro.empty()) vs.emplace_back("macro.fx"); for( auto& s:*this) vs.emplace_back(s.name); return vs; }
-		std::vector<std::string> sources() const { std::vector<std::string> vs; if(!macro.empty()) vs.emplace_back(macro.merge()); for( auto& s:*this) vs.emplace_back(s.value); return vs; }
-		std::string merge() const { std::string m=macro.merge(); for(auto& s:*this) m+=s.value+'\n'; return m; }
-		std::vector<std::string> explode_parsed( const char* parsed ) const;
+		string get_name( int index ) const { if(!macro.empty()){ if(index==0) return "macro.fx"; index--; } return this->at(index).name; }
+		vector<string> names() const { vector<string> vs; if(!macro.empty()) vs.emplace_back("macro.fx"); for( auto& s:*this) vs.emplace_back(s.name); return vs; }
+		vector<string> sources() const { vector<string> vs; if(!macro.empty()) vs.emplace_back(macro.merge()); for( auto& s:*this) vs.emplace_back(s.value); return vs; }
+		string merge() const { string m=macro.merge(); for(auto& s:*this) m+=s.value+'\n'; return m; }
+		vector<string> explode_parsed( const char* parsed ) const;
 
 		// recursive append with template parameter pack
 		template <typename T, class... Ts> void append_r( T arg, Ts... args ){ append("",arg); append_r(args...); }
-		void append_r( std::string arg ){ if(!arg.empty()) append("",arg); }
+		void append_r( string arg ){ if(!arg.empty()) append("",arg); }
 		void append_r( const char* arg ){ if(arg&&*arg) append("",arg); }
 	};
 
@@ -1105,9 +1115,9 @@ namespace gl {
 //***********************************************
 
 // explode shader source by exploiting #line directives
-inline std::vector<gl::indexed_string_t> gxExplodeShaderSource( const char* source, int first_index=1 )
+inline vector<gl::indexed_string_t> gxExplodeShaderSource( const char* source, int first_index=1 )
 {
-	std::vector<gl::indexed_string_t> v;
+	vector<gl::indexed_string_t> v;
 	auto vs = explode_conservative(source,'\n');
 
 	for( int k=0, kn=int(vs.size()), idx=first_index; k<kn; k++ )
@@ -1122,21 +1132,21 @@ inline std::vector<gl::indexed_string_t> gxExplodeShaderSource( const char* sour
 	return v;
 }
 
-inline std::map<int,std::string> gxExplodeShaderSourceMap( const char* source, int first_index=1 )
+inline std::map<int,string> gxExplodeShaderSourceMap( const char* source, int first_index=1 )
 {
-	std::map<int,std::string> m;
+	std::map<int,string> m;
 	for( const auto& s : gxExplodeShaderSource(source,first_index) )
 		if(!strstr(s.c_str(),"#line")) m.emplace(s.index,s);
 	return m;
 }
 
-inline std::vector<std::string> gl::effect_source_t::explode_parsed( const char* parsed ) const
+inline vector<string> gl::effect_source_t::explode_parsed( const char* parsed ) const
 {
-	if(!parsed||!*parsed) return std::vector<std::string>();
-	auto ss=sources(); if(ss.empty()) return std::vector<std::string>();
-	std::vector<int> n; int c0=0; for(auto& e:ss){ int c=1; for(const char* p=e.c_str();*p;p++){if(*p=='\n')c++;} n.push_back(c0+=c); }
+	if(!parsed||!*parsed) return vector<string>();
+	auto ss=sources(); if(ss.empty()) return vector<string>();
+	vector<int> n; int c0=0; for(auto& e:ss){ int c=1; for(const char* p=e.c_str();*p;p++){if(*p=='\n')c++;} n.push_back(c0+=c); }
 
-	std::vector<std::string> v; v.resize(ss.size());
+	vector<string> v; v.resize(ss.size());
 	int page_index=0; for( auto& l : gxExplodeShaderSource(parsed) )
 	{
 		if(l.index>=n[page_index]) page_index++;
@@ -1172,7 +1182,7 @@ namespace gl {
 		template <class... Ts> bool append( Ts... args ){ gl::effect_source_t source; source.append_r(args...); return append(source); }
 
 		Uniform* get_uniform( const char* name ){ if(active_program) return active_program->get_uniform(name); printf("%s.%s(%s): no program is bound.",this->name(),__func__,name); return nullptr; }
-		Uniform* get_uniform( const std::string& name ){ return get_uniform(name.c_str()); }
+		Uniform* get_uniform( const string& name ){ return get_uniform(name.c_str()); }
 
 		void set_uniform( const char* name, Texture* t ){ auto* p=_get_or_find_program_for_uniform(name,__func__); if(p) p->set_uniform(name, t); }
 		template <class T> void set_uniform( const char* name, const T& v, GLsizei count=1 )
@@ -1187,15 +1197,15 @@ namespace gl {
 			auto* u=p->get_uniform(name); if(!u) return; if(u->block_index==-1) p->set_uniform(name, v, count);
 			if(!u->block_name[0]||u->block_offset==-1) return; auto* b=get_uniform_buffer(u->block_name); if(!b) return; if(v) b->set_sub_data(v,sizeof(T)*count,u->block_offset);
 		}
-		void set_uniform( const std::string& name, Texture* t ){ set_uniform(name.c_str(),t); }
-		template <class T> void set_uniform( const std::string& name, const T& v, GLsizei count=1 ){ set_uniform(name.c_str(),v,count); }
-		template <class T> void set_uniform( const std::string& name, T* v, GLsizei count=1 ){ set_uniform(name.c_str(),v,count); }
+		void set_uniform( const string& name, Texture* t ){ set_uniform(name.c_str(),t); }
+		template <class T> void set_uniform( const string& name, const T& v, GLsizei count=1 ){ set_uniform(name.c_str(),v,count); }
+		template <class T> void set_uniform( const string& name, T* v, GLsizei count=1 ){ set_uniform(name.c_str(),v,count); }
 
 		// image textures
 		void bind_image_texture( const char* name, Texture* t, GLenum access=GL_READ_WRITE /* or GL_WRITE_ONLY or GL_READ_ONLY */, GLint level=0, GLenum format=0, bool bLayered=false, GLint layer=0 ){ if(!active_program) return void(printf("%s.%s(%s): no program is bound.\n",this->name(),__func__,name)); active_program->bind_image_texture(name,t,access,level,format,bLayered,layer); }
 
 		// uniform buffer/block
-		gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name); if(b&&b->size()!=size){ static std::set<std::string> warns; auto it=warns.find(name); if(it==warns.end()){ warns.insert(name); printf("[%s] %s(): uniform_buffer(%s).size(=%d)!=%d\n",this->_name,__func__,name,int(b->size()),int(size));} } if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr,GL_MAP_WRITE_BIT|GL_DYNAMIC_STORAGE_BIT,false); if(!b){ printf("[%s] unable to create uniform buffer [%s]\n", this->_name, name); return nullptr; } return uniform_buffer_map[name]=b; }
+		gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name); if(b&&b->size()!=size){ static std::set<string> warns; auto it=warns.find(name); if(it==warns.end()){ warns.insert(name); printf("[%s] %s(): uniform_buffer(%s).size(=%d)!=%d\n",this->_name,__func__,name,int(b->size()),int(size));} } if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr,GL_MAP_WRITE_BIT|GL_DYNAMIC_STORAGE_BIT,false); if(!b){ printf("[%s] unable to create uniform buffer [%s]\n", this->_name, name); return nullptr; } return uniform_buffer_map[name]=b; }
 		gl::Buffer* get_uniform_buffer( const char* name ){ auto it=uniform_buffer_map.find(name); return it==uniform_buffer_map.end()?nullptr:it->second; }
 		GLint get_uniform_block_binding( const char* name ){ GLint binding=active_program?active_program->get_uniform_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_uniform_block_binding(name); if(b!=-1) return b; } return -1; }
 		gl::Buffer* bind_uniform_buffer( const char* name, gl::Buffer* ub=nullptr /* if nullptr, use default buffer */ ){ gl::Buffer* b=ub?ub:get_uniform_buffer(name); GLuint binding=get_uniform_block_binding(name); if(b&&binding!=-1){ if(b->target==GL_UNIFORM_BUFFER) b->bind_base(binding); else b->bind_base_as(GL_UNIFORM_BUFFER,binding); return b; }
@@ -1213,20 +1223,21 @@ namespace gl {
 		inline void draw_points_no_attrib( GLsizei count ){ GLuint v=0; if(context::is_core_profile()){ auto it=pts.find(0);VertexArray* va=it!=pts.end()?it->second:(pts[0]=gxCreatePointVertexArray(0,0)); if(va)v=va->ID; } glBindVertexArray(v); glDrawArrays( GL_POINTS, 0, count ); } // core profile should bind non-empty VAO; attribute-less rendering without binding any vertex array: simply using gl_VertexID in vertex shaders
 		inline void dispatch_compute_indirect( GLintptr indirect ){ glDispatchComputeIndirect( indirect ); }
 		inline void dispatch_compute_groups( GLuint gx, GLuint gy=1, GLuint gz=1 ){ glDispatchCompute( gx,gy,gz ); }
-		inline void dispatch_compute_threads( GLuint tx, GLuint ty=1, GLuint tz=1 ){ auto* p=get_program_by_id(gxGetIntegerv(GL_CURRENT_PROGRAM)); if(!p){ printf("%s(): no program is bound\n",__func__); return; } uvec3 s=p->get_compute_work_group_size(); glDispatchCompute(max((tx+s.x-1)/s.x,1u),max((ty+s.y-1)/s.y,1u),max((tz+s.z-1)/s.z,1u)); }
+		inline void dispatch_compute_threads( GLuint tx, GLuint ty=1, GLuint tz=1 ){ auto* p=get_program_by_id(gxGetIntegerv(GL_CURRENT_PROGRAM)); if(!p){ printf("%s(): no program is bound\n",__func__); return; } ivec3 s=p->get_compute_work_group_size(); glDispatchCompute(std::max((tx+s.x-1)/s.x,1u),std::max((ty+s.y-1)/s.y,1u),std::max((tz+s.z-1)/s.z,1u)); }
 
 		// shader source files
-		void export_shader_sources( path dir, path fxname="" )
+		void export_shader_sources( const char* dir, const char* fxname="" )
 		{
-			dir = dir.to_backslash(); if(!dir.empty()&&!dir.ext().empty()&&dir.back()!=L'\\') dir=dir.dir(); dir += "glsl\\";
-			fxname = fxname.empty() ? _name : fxname.remove_extension();
-			for( auto* p : programs ) p->source.export_shader_sources( dir, fxname+"."+p->name() );
+			string d=to_backslash(dir), dx=extension(dir);
+			if(!d.empty()&&dx.empty()&&d.back()!='\\') d=::dir(d.c_str()); d += "glsl\\";
+			string f=!fxname||!*fxname?_name:stem(fxname);
+			for( auto* p : programs ) p->source.export_shader_sources( dir, (f+"."+p->name()).c_str() );
 		}
 
 		// internal members
 		Program*						active_program=nullptr;
-		std::vector<Program*>			programs;
-		std::map<std::string,Buffer*>	uniform_buffer_map;	// do not define uniform buffers in each program, since they are shared across programs.
+		vector<Program*>				programs;
+		std::map<string,Buffer*>		uniform_buffer_map;	// do not define uniform buffers in each program, since they are shared across programs.
 		std::map<uint64_t,VertexArray*>	pts;				// point vertex array
 		VertexArray*					quad=nullptr;
 	
@@ -1281,7 +1292,7 @@ inline gl::Buffer* gxCreateBuffer( const char* name, GLenum target, GLsizeiptr s
 	return buffer;
 }
 
-template <class T> gl::Buffer* gxCreateBuffer(const char* name, GLenum target, const std::vector<T>& data, GLenum usage, GLbitfield storage_flags=GL_MAP_READ_BIT|GL_MAP_WRITE_BIT|GL_DYNAMIC_STORAGE_BIT, bool persistent=false){ return gxCreateBuffer(name,target,GLsizeiptr(data.size()*sizeof(T)),usage,(const void*)data.data(),storage_flags,persistent); }
+template <class T> gl::Buffer* gxCreateBuffer(const char* name, GLenum target, const vector<T>& data, GLenum usage, GLbitfield storage_flags=GL_MAP_READ_BIT|GL_MAP_WRITE_BIT|GL_DYNAMIC_STORAGE_BIT, bool persistent=false){ return gxCreateBuffer(name,target,GLsizeiptr(data.size()*sizeof(T)),usage,(const void*)data.data(),storage_flags,persistent); }
 template <class T, size_t N> gl::Buffer* gxCreateBuffer(const char* name, GLenum target, const std::array<T,N>& data, GLenum usage, GLbitfield storage_flags=GL_MAP_READ_BIT|GL_MAP_WRITE_BIT|GL_DYNAMIC_STORAGE_BIT, bool persistent=false){ return gxCreateBuffer(name,target,GLsizeiptr(N*sizeof(T)),usage,(const void*)data.data(),storage_flags,persistent); }
 
 inline gl::VertexArray* gxCreateVertexArray( const char* name, const vertex* p_vertices, size_t vertex_count, const uint* p_indices=nullptr, size_t index_count=0, GLenum usage=GL_STATIC_DRAW )
@@ -1310,12 +1321,12 @@ inline gl::VertexArray* gxCreateVertexArray( const char* name, const vertex* p_v
 	return va;
 }
 
-inline gl::VertexArray* gxCreateVertexArray( const char* name, const std::vector<vertex>& vertices, GLenum usage=GL_STATIC_DRAW )
+inline gl::VertexArray* gxCreateVertexArray( const char* name, const vector<vertex>& vertices, GLenum usage=GL_STATIC_DRAW )
 {
 	return vertices.empty()?nullptr:gxCreateVertexArray(name,&vertices[0],vertices.size(),nullptr,0,usage);
 }
 
-inline gl::VertexArray* gxCreateVertexArray( const char* name, const std::vector<vertex>& vertices, const std::vector<uint>& indices, GLenum usage=GL_STATIC_DRAW )
+inline gl::VertexArray* gxCreateVertexArray( const char* name, const vector<vertex>& vertices, const vector<uint>& indices, GLenum usage=GL_STATIC_DRAW )
 {
 	return vertices.empty()?nullptr:gxCreateVertexArray(name,vertices.data(),vertices.size(),indices.empty()?nullptr:indices.data(),indices.size(),usage);
 }
@@ -1329,7 +1340,7 @@ inline gl::VertexArray* gxCreateVertexArray( const char* name, mesh* p_mesh, GLe
 
 inline gl::VertexArray* gxCreateQuadVertexArray()
 {
-	static vertex vertices[] = { {vec3(-1,-1,0),vec3(0,0,1),vec2(0,0)}, {vec3(1,-1,0),vec3(0,0,1),vec2(1,0)}, {vec3(-1,1,0),vec3(0,0,1),vec2(0,1)}, {vec3(1,1,0),vec3(0,0,1),vec2(1,1)} }; // strip ordering [0, 1, 3, 2]
+	static vertex vertices[] = { {{-1,-1,0},{0,0,1},{0,0}}, {{1,-1,0},{0,0,1},{1,0}}, {{-1,1,0},{0,0,1},{0,1}}, {{1,1,0},{0,0,1},{1,1}} }; // strip ordering [0, 1, 3, 2]
 	gl::VertexArray* va = gxCreateVertexArray( "QUAD", vertices, std::extent<decltype(vertices)>::value ); if(!va) printf( "%s(): Unable to create QUAD\n", __func__ );
 	return va;
 }
@@ -1340,20 +1351,28 @@ inline gl::VertexArray* gxCreatePointVertexArray( GLsizei width, GLsizei height 
 	if(width==0||height==0) va = gxCreateVertexArray( "PTS", (vertex*)nullptr,0 );
 	else
 	{
-		std::vector<vertex> pts(size_t(width)*size_t(height));
+		vector<vertex> pts(size_t(width)*size_t(height));
 		for(size_t y=0,k=0;y<height;y++)
 			for(int x=0;x<width;x++,k++)
-				pts[k] = {vec3(float(x),float(y),0.0f),vec3(0.0f,0.0f,1.0f),vec2(x/float(width-1),y/float(height-1))};
+				pts[k] = {{float(x),float(y),0},{0,0,1.0f},{x/float(width-1),y/float(height-1)}};
 		va = gxCreateVertexArray( "PTS", &pts[0], pts.size() );
 	}
 	return va;
 }
 
+inline const char* gxGetProgramBinaryPath( const char* name )
+{
+	string d = getenv("LOCALAPPDATA"); if(d.empty()){ d.reserve(PATH_MAX); GetTempPathA(PATH_MAX,d.data()); } if(d.empty()) return format("%s.bin",name);
+	vector<string> v = {d,path_key(exe::name()),"local\\",path_key(exe::dir()),"glfx\\","binary\\"};
+	d.clear(); for( const auto& e : v ){ d += add_backslash(e.c_str()); if(!file_exists(d.c_str())) mkdir(d.c_str()); }
+	return format("%s%s.bin",d.c_str(),name);
+}
+
 inline void gxSaveProgramBinary( const char* name, GLuint ID, uint crc )
 {
-	std::vector<char> program_binary(gxGetProgramiv( ID, GL_PROGRAM_BINARY_LENGTH ),0);
+	vector<char> program_binary(gxGetProgramiv( ID, GL_PROGRAM_BINARY_LENGTH ),0);
 	GLenum binary_format=0; glGetProgramBinary( ID, GLsizei(program_binary.size()), nullptr, &binary_format, &program_binary[0] );
-	FILE* fp = gxGetProgramBinaryPath(name).fopen("wb");
+	FILE* fp = fopen(gxGetProgramBinaryPath(name),"wb");
 	fwrite( &crc, sizeof(crc), 1, fp );
 	fwrite( &binary_format, sizeof(GLenum), 1, fp );
 	fwrite( &program_binary[0], sizeof(char), program_binary.size(), fp );
@@ -1362,27 +1381,27 @@ inline void gxSaveProgramBinary( const char* name, GLuint ID, uint crc )
 
 inline GLuint gxLoadProgramBinary( const char* name, uint crc )
 {
-	path program_binary_path = gxGetProgramBinaryPath(name); if(!program_binary_path.exists()) return 0;
+	string program_binary_path = gxGetProgramBinaryPath(name); if(!file_exists(program_binary_path.c_str())) return 0;
 	size_t crc_size=sizeof(crc), offset=crc_size+sizeof(GLenum);
-	size_t program_binary_size = program_binary_path.file_size();
-	if(program_binary_size<offset) return 0; // no md5 hash and binary format exists
-	std::vector<char> buff(program_binary_size);
-	FILE* fp = program_binary_path.fopen("rb"); if(fp==nullptr) return 0; fread(&buff[0], sizeof(char), program_binary_size, fp); fclose(fp);
-	if( memcmp( &buff[0], &crc, crc_size ) !=0 ) return 0;
+	FILE* fp = fopen(program_binary_path.c_str(),"rb"); if(!fp) return 0;
+	_fseeki64(fp,0,SEEK_END); size_t program_binary_size=_ftelli64(fp); _fseeki64(fp,0,SEEK_SET);
+	if(program_binary_size<offset){ fclose(fp); return 0; } // no md5 hash and binary format exists
+	vector<char> buff(program_binary_size); fread(&buff[0], sizeof(char), program_binary_size, fp); fclose(fp);
+	if( memcmp(&buff[0],&crc,crc_size)!=0) return 0;
 	GLenum binary_format=0; memcpy( &binary_format, (&buff[0])+crc_size, sizeof(GLenum) );
 	GLuint ID = glCreateProgram(); glProgramBinary( ID, binary_format, (&buff[0])+offset, GLsizei(program_binary_size-offset) );
 	return ID;
 }
 
-inline void gxInfoLog( const char* name, const char* msg, const std::vector<gl::named_string_t>* p_source=nullptr )
+inline void gxInfoLog( const char* name, const char* msg, const vector<gl::named_string_t>* p_source=nullptr )
 {
 	char L[53]={}; for(int k=0;k<50;k++)L[k]='_'; L[50]=L[51]='\n'; printf("\n%s",L);
 
 	if(!p_source){ for( auto& v : explode(msg,"\n") ) printf("%s: %s\n", name, v.c_str() ); }
 	else
 	{
-		struct line_t { int page; int offset; std::string s; }; std::map<size_t,line_t> lines;
-		std::vector<int> offsets; offsets.resize(p_source->size(),0);
+		struct line_t { int page; int offset; string s; }; std::map<size_t,line_t> lines;
+		vector<int> offsets; offsets.resize(p_source->size(),0);
 		for( int k=0, kn=int(p_source->size()); k<kn; k++ )
 		{
 			if(k>0&&!lines.empty()) offsets[k] = int(lines.rbegin()->first);
@@ -1393,13 +1412,13 @@ inline void gxInfoLog( const char* name, const char* msg, const std::vector<gl::
 			}
 		}
 
-		auto extract = [&]( std::string& m, int idx, bool b_replace=false )->std::string
+		auto extract = [&]( string& m, int idx, bool b_replace=false )->string
 		{
 			if(idx<0) return "";
 			auto it=lines.find(size_t(idx)); if(it==lines.end()) return "";
 			auto& l = it->second; if(idx<=l.offset) return "";
-			std::string pname = p_source->at(l.page).name;
-			std::string pl = pname.empty()?format("%d(%d)",l.page,idx-l.offset):format("%s(%d)",pname.c_str(),idx-l.offset);
+			string pname = p_source->at(l.page).name;
+			string pl = pname.empty()?format("%d(%d)",l.page,idx-l.offset):format("%s(%d)",pname.c_str(),idx-l.offset);
 			if(b_replace) m = str_replace(m.c_str(),format("0(%d)",idx),pl.c_str());
 			l.s = trim(str_replace(l.s.c_str(),"%", "%%")); // % causes crash in gprintf
 			return l.s.empty() ? "": format( "\n%s> %s", pl.c_str(), l.s.c_str() );
@@ -1419,9 +1438,9 @@ inline void gxInfoLog( const char* name, const char* msg, const std::vector<gl::
 	printf("%s",L);
 }
 
-inline GLuint gxCompileShader( GLenum shader_type, const char* name, const std::vector<gl::named_string_t>& source )
+inline GLuint gxCompileShader( GLenum shader_type, const char* name, const vector<gl::named_string_t>& source )
 {
-	std::vector<const char*> ps; for( auto& s : source ) ps.push_back(s.value.c_str());
+	vector<const char*> ps; for( auto& s : source ) ps.push_back(s.value.c_str());
 	
 	GLuint ID = glCreateShader( shader_type ); if(ID==0){ printf("%s(): unable to glCreateShader(%u)\n", __func__, shader_type); return 0; }
 	glShaderSource( ID, GLsizei(ps.size()), ps.data(), nullptr );
@@ -1453,8 +1472,8 @@ inline bool gxValidateProgram( const char* name, GLuint ID, bool bLog=true ) // 
 
 namespace gl { struct directive_t
 {
-	std::string version, extension, pragma, layout;
-	std::string merge() const { return version+extension+pragma+layout; }
+	string version, extension, pragma, layout;
+	string merge() const { return version+extension+pragma+layout; }
 	directive_t& operator+=( const directive_t& other )
 	{
 		if(!other.version.empty())		version+=other.version;
@@ -1465,15 +1484,15 @@ namespace gl { struct directive_t
 	}
 };}
 
-inline gl::directive_t gxPreprocessShaderDirectives( uint shader_type, std::string& src, bool keep_blank=true )
+inline gl::directive_t gxPreprocessShaderDirectives( uint shader_type, string& src, bool keep_blank=true )
 {
 	static const char v[]="#version", e[]="#extension", p[]="#pragma", l[]="layout", h[]="shared";
 	constexpr size_t le=sizeof(e)-1, lp=sizeof(p)-1, lv=sizeof(v)-1, ll=sizeof(l)-1, lh=sizeof(l)-1; // exclude trailing zeros
 
-	gl::directive_t d; std::string src0=src; src.clear();
+	gl::directive_t d; string src0=src; src.clear();
 	for( auto& j : gxExplodeShaderSource(src0.c_str()) )
 	{
-		std::string* pd=nullptr;
+		string* pd=nullptr;
 		const char* s=str_replace(trim(j.c_str()),"\t"," "); if(s[0]=='#')
 		{
 			if(strncmp(s,v,lv)==0){ pd=&d.version; if(gl::context::is_core_profile()&&!strstr(s,"core")) j+=" core"; } // add "core" to core profile version
@@ -1494,10 +1513,10 @@ inline gl::directive_t gxPreprocessShaderDirectives( uint shader_type, std::stri
 	return d;
 }
 
-inline gl::Program* gxCreateProgram( std::string prefix, std::string name, const gl::program_source_t& source )
+inline gl::Program* gxCreateProgram( string prefix, string name, const gl::program_source_t& source )
 {
 	if(!prefix.empty()) prefix+='.';
-	std::string pname_s = prefix+name; const char* pname = pname_s.c_str();
+	string pname_s = prefix+name; const char* pname = pname_s.c_str();
 
 	// 1. extract directives, and add layout qualifier
 	for( auto& it : source )
@@ -1508,10 +1527,10 @@ inline gl::Program* gxCreateProgram( std::string prefix, std::string name, const
 		directives.layout = it.first==GL_FRAGMENT_SHADER?"layout(pixel_center_integer) in vec4 gl_FragCoord;\n":"";
 		for( auto& f: it.second )
 		{
-			auto& s = const_cast<std::string&>(f.value); // source element
+			auto& s = const_cast<string&>(f.value); // source element
 			directives += gxPreprocessShaderDirectives(it.first,s);
 		}
-		auto& first = const_cast<std::string&>(it.second.front().value); // first source element
+		auto& first = const_cast<string&>(it.second.front().value); // first source element
 		first = directives.merge()+first; // merge all together
 	}
 
@@ -1521,7 +1540,7 @@ inline gl::Program* gxCreateProgram( std::string prefix, std::string name, const
 	if(!vertex_shader_exists&&!compute_shader_exists) return new gl::Program(0,name.c_str());
 
 	// 3. create md5 hash of shader souces
-	std::string crcsrc=pname; for( auto& it : source ){ for( auto& s : it.second ) crcsrc += s.value; }
+	string crcsrc=pname; for( auto& it : source ){ for( auto& s : it.second ) crcsrc += s.value; }
 	uint crc = crc32(0,crcsrc.c_str(),crcsrc.size()*sizeof(decltype(crcsrc)::value_type));
 
 	// 4. try to load binary cache
@@ -1544,7 +1563,7 @@ inline gl::Program* gxCreateProgram( std::string prefix, std::string name, const
 	__int64 tbegin=0;	QueryPerformanceCounter((LARGE_INTEGER*)&tbegin);
 	printf( "compiling %s ... ", pname );
 
-	std::vector<GLuint> attached_shaders;
+	vector<GLuint> attached_shaders;
 	for( auto& it : program->source )
 	{
 		if(it.second.empty()) continue;
@@ -1660,7 +1679,7 @@ inline gl::Effect* __gxCreateEffectImpl( gl::Effect* parent, const char* fxname,
 		gl::program_source_t ss;
 		for( int j=0, jn=parser->shader_count(k); j<jn; j++ )
 		{
-			std::vector<gl::named_string_t> ns;
+			vector<gl::named_string_t> ns;
 			auto ev = source.explode_parsed(parser->shader_source(k,j));
 			for( int i=0, ni=int(ev.size()); i<ni; i++ ) ns.emplace_back( gl::named_string_t{source.get_name(i), ev[i]} );
 			ss[parser->shader_type(k,j)] = ns;
@@ -1763,7 +1782,7 @@ inline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsizei w
 
 	// multipsamples
 	GLint max_samples = multisample?gxGetInternalFormativ( target, internal_format, GL_SAMPLES ):1;
-	texture->_multisamples = multisample?min(multisamples,max_samples):1;
+	texture->_multisamples = multisample?std::min(multisamples,max_samples):1;
 	if(multisample&&multisamples>max_samples) printf("%s(): input multisamples (=%d) is clamped to max_samples (=%d)\n", __func__, multisamples, max_samples );
 
 	// allocate storage

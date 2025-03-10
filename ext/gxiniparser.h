@@ -2,9 +2,12 @@
 #ifndef __GX_INIPARSER_H__
 #define __GX_INIPARSER_H__
 
-#if __has_include("gxstring.h")&&__has_include("gxfilesystem.h")
-	#include "gxstring.h"
-	#include "gxfilesystem.h"
+#if __has_include("gxut.h")
+	#include "gxut.h"
+#elif __has_include("../gxut.h")
+	#include "../gxut.h"
+#elif __has_include(<gxut/gxut.h>)
+	#include <gxut/gxut.h>
 #endif
 
 //*************************************
@@ -16,7 +19,7 @@ namespace ini {
 
 struct entry_t
 {
-	size_t index; std::string section, key; std::string value;
+	size_t index; string section, key; string value;
 	entry_t( size_t idx, const char* _sec, const char* _key ):index(idx),section(_sec),key(_key){};
 	static bool compare_by_index( entry_t* e0, entry_t* e1 ){ return e0->index < e1->index; }
 };
@@ -29,7 +32,7 @@ struct auto_lock_t
 };
 
 struct file_time_t { int s,m,h,d,M,y; };	// sec, min, hour, day, month, year: aligned by the struct tm
-using dictionary_t = logical::map<std::string,entry_t*>;
+using dictionary_t = logical::map<string,entry_t*>;
 
 struct parser_t
 {
@@ -58,14 +61,14 @@ public:
 	bool key_exists( const char* key ) const { if(key==nullptr||key[0]=='\0') return false; return dic.find(key)!=dic.end(); }
 	bool key_exists( const char* sec, const char* key ) const { if(!key||!*key) return false; if(!sec||!*sec) return key_exists(key); char sk[4096]; snprintf(sk,4096,"%s:%s",sec,key); return dic.find(sk)!=dic.end(); }
 	bool section_exists( const char* sec ) const { if(sec==nullptr||sec[0]=='\0') return false; for(auto& it:dic) if(_stricmp(it.second->section.c_str(),sec)==0) return true; return false; }
-	std::set<std::string> section_set() const { std::set<std::string> ss;for(auto& it:dic)ss.emplace(it.second->section);return ss;}
-	std::vector<std::string> sections(){ std::vector<std::string> sl; std::set<std::string> ss; for(auto& it:entries()){ if(ss.find(it->section.c_str())!=ss.end()) continue; sl.emplace_back(it->section); ss.emplace(it->section); } return sl; }
-	std::vector<entry_t*> entries( const char* sec=nullptr ){ std::vector<entry_t*> el; for(auto& it:dic) if(sec==nullptr||_stricmp(it.second->section.c_str(),sec)==0) el.emplace_back(it.second); std::sort(el.begin(),el.end(),entry_t::compare_by_index); return el; } // return all entries if no section is given
+	std::set<string> section_set() const { std::set<string> ss;for(auto& it:dic)ss.emplace(it.second->section);return ss;}
+	vector<string> sections(){ vector<string> sl; std::set<string> ss; for(auto& it:entries()){ if(ss.find(it->section.c_str())!=ss.end()) continue; sl.emplace_back(it->section); ss.emplace(it->section); } return sl; }
+	vector<entry_t*> entries( const char* sec=nullptr ){ vector<entry_t*> el; for(auto& it:dic) if(sec==nullptr||_stricmp(it.second->section.c_str(),sec)==0) el.emplace_back(it.second); std::sort(el.begin(),el.end(),entry_t::compare_by_index); return el; } // return all entries if no section is given
 
 	// clear
 	void clear( const char* seckey ){ auto it=dic.find(seckey);if(it==dic.end())return; delete it->second; dic.erase(it); save(); }
 	void clear( const char* sec, const char* key ){ char sk[4096]; snprintf(sk,4096,"%s:%s",sec,key); clear(sk); save(); }
-	void clear_section( const std::string& sec ){ bool b_save=false; for(auto it=dic.begin();it!=dic.end();){if(_stricmp(it->second->section.c_str(),sec.c_str())==0){delete it->second;it=dic.erase(it);b_save=true; }else it++;} save(); }
+	void clear_section( const string& sec ){ bool b_save=false; for(auto it=dic.begin();it!=dic.end();){if(_stricmp(it->second->section.c_str(),sec.c_str())==0){delete it->second;it=dic.erase(it);b_save=true; }else it++;} save(); }
 
 	// load/save
 	void begin_update(){ b_batch=true; }
@@ -149,7 +152,7 @@ __noinline bool parser_t::save_as( const path& file_path )
 	if(fp==nullptr){ printf( "%s(): Unable to open %s to write", __func__, file_path.c_str() ); return false; }
 	_fseeki64( fp, 0, SEEK_SET ); // remove BOM
 	
-	std::string sec; bool bLine0=true;
+	string sec; bool bLine0=true;
 	for( auto it=dic.begin(); it!=dic.end(); )
 	{
 		entry_t* e=it->second;
@@ -169,7 +172,7 @@ __noinline bool parser_t::save_as( const path& file_path )
 }
 
 // template specializations for get()
-template<> __noinline std::string parser_t::get<std::string>(const char* key){	auto* v=get(key); return *v==0?"":std::string(v); }
+template<> __noinline string parser_t::get<string>(const char* key){			auto* v=get(key); return *v==0?"":string(v); }
 template<> __noinline path parser_t::get<path>( const char* key ){				auto* v=get(key); return *v==0?path():path(v); }
 template<> __noinline bool parser_t::get<bool>( const char* key ){				auto* v=get(key); return *v==0?false:atob(v); }
 template<> __noinline int parser_t::get<int>( const char* key ){				auto* v=get(key); return *v==0?0:atoi(v); }

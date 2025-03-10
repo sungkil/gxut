@@ -18,6 +18,10 @@
 #ifndef __GX_REX_H__
 #define __GX_REX_H__
 
+#if !defined(__GXUT_H__) && __has_include(<gxut/gxut.h>)
+	#include <gxut/gxut.h>
+#endif
+
 //*************************************
 namespace rex {
 //*************************************

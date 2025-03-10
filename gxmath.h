@@ -15,10 +15,16 @@
 //*********************************************************
 
 #pragma once
-#ifndef __GX_MATH__
-#define __GX_MATH__
+#ifndef __GX_MATH_H__
+#define __GX_MATH_H__
 
-#include "gxlib.h"
+// include gxut.h without other headers
+#ifndef __GXUT_H__
+#pragma push_macro("__GXUT_EXCLUDE_HEADERS__")
+#define __GXUT_EXCLUDE_HEADERS__
+#include "gxut.h"
+#pragma pop_macro("__GXUT_EXCLUDE_HEADERS__")
+#endif
 
 #include <limits.h>
 #include <float.h>
@@ -276,8 +282,8 @@ static_assert(sizeof(vec2)==(sizeof(float)*2),"sizeof(vec2)!=sizeof(float)*2" );
 static_assert(sizeof(vec3)==(sizeof(float)*3),"sizeof(vec3)!=sizeof(float)*3" );
 static_assert(sizeof(vec4)==(sizeof(float)*4),"sizeof(vec4)!=sizeof(float)*4" );
 
-// basic math types for computer graphics
-struct vertex { vec3 pos; vec3 norm; vec2 tex; };	// default vertex layout
+// fundamental types for computer graphics
+struct vertex { vec3 pos; vec3 norm; vec2 tex; }; // default vertex layout
 struct bbox_t { vec3 m=3.402823466e+38F; uint __0; vec3 M=-3.402823466e+38F; uint __1; }; // bounding box in std140 layout; FLT_MAX = 3.402823466e+38F; __0, __1: padding
 
 //*************************************
@@ -308,6 +314,7 @@ namespace std
 //*************************************
 // half-precision float and conversion
 #ifndef __GXMATH_NO_HALF__
+#define __GXMATH_HALF__
 struct half { unsigned short mantissa:10,exponent:5,sign:1; __forceinline operator float() const; };	// IEEE 754-2008 half-precision (16-bit) floating-point storage. // https://github.com/HeliumProject/Helium/blob/master/Math/Float16.cpp
 __forceinline float	htof( half value ){ struct _float32_t {uint mantissa:23,exponent:8,sign:1;}; _float32_t result={};result.sign = value.sign;uint exponent=value.exponent,mantissa=value.mantissa; if(exponent==31){result.exponent=255;result.mantissa=0;} else if(exponent==0&&mantissa==0){result.exponent=0;result.mantissa=0;} else if(exponent==0){uint mantissa_shift=10-static_cast<uint>(log2(float(mantissa)));result.exponent=127-(15-1)-mantissa_shift;result.mantissa=mantissa<<(mantissa_shift+23-10);} else{result.exponent=127-15+exponent;result.mantissa=static_cast<uint>(value.mantissa)<<(23-10);} return reinterpret_cast<float&>(result); }
 __forceinline half::operator float() const {return htof(*this);}
@@ -796,7 +803,6 @@ template <class T> T bezier( T v0, T v1, T v2, T v3, double t )
 	double t2=1.0-t, a[4] = { t2*t2*t2, 3*t2*t2*t, 3*t2*t*t, t*t*t };
 	return v0*a[0]+v1*a[1]+v2*a[2]+v3*a[3];
 }
-#pragma warning( default: 4244 )
 
 //*************************************
 namespace gx {
@@ -855,13 +861,13 @@ template <class RandomIt>
 void random_shuffle( RandomIt first, RandomIt last, uint seed=0 ){ std::mt19937 e=seed?std::mt19937(seed):std::mt19937(std::random_device()()); std::shuffle(first,last,e); }
 
 template <class T=uint>
-std::vector<T> random_shuffle_indices( size_t count, uint seed=0 )
+vector<T> random_shuffle_indices( size_t count, uint seed=0 )
 {
-	std::vector<T> v; v.resize(count);
+	vector<T> v; v.resize(count);
 	std::iota( v.begin(), v.end(), 0 );
 	random_shuffle( v.begin(), v.end(), seed );
 	return v;
 }
 
 //*************************************
-#endif // __GX_MATH__
+#endif // __GX_MATH_H__

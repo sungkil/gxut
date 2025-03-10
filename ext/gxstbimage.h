@@ -1,12 +1,12 @@
 ﻿#ifndef __GX_STBIMAGE__
 #define __GX_STBIMAGE__
 
-#if __has_include("gxlib.h")
-	#include "gxlib.h"
-#elif __has_include("../gxlib.h")
-	#include "../gxlib.h"
-#elif __has_include(<gxut/gxlib.h>)
-	#include <gxut/gxlib.h>
+#if __has_include("gxut.h")
+	#include "gxut.h"
+#elif __has_include("../gxut.h")
+	#include "../gxut.h"
+#elif __has_include(<gxut/gxut.h>)
+	#include <gxut/gxut.h>
 #endif
 
 #include <stdio.h>

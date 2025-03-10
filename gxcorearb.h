@@ -23,6 +23,9 @@ extern "C" {
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN 1
 #endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #endif
 
@@ -4015,6 +4018,13 @@ f(SUBPIXELPRECISIONBIASNV,SubpixelPrecisionBiasNV)
 f(CONSERVATIVERASTERPARAMETERFNV,ConservativeRasterParameterfNV)
 f(CONSERVATIVERASTERPARAMETERINV,ConservativeRasterParameteriNV)
 #undef f
+
+#include <string>
+#include <vector>
+#include <unordered_set>
+
+using std::string;
+using std::vector;
 
 inline PROC (WINAPI* __wglGetProcAddress)(LPCSTR) = nullptr;
 inline void* (*__xglGetProcAddress)(LPCSTR) = nullptr;

@@ -16,21 +16,21 @@ static bool b_dirty = false;
 
 struct mtl_item_t
 {
-	std::string key;
-	std::vector<std::string> tokens; // tokens excluding key
+	string key;
+	vector<string> tokens; // tokens excluding key
 
 	// attributes
 	uint crc = 0; // for maps
 	bool b_map_type = false;
 
-	mtl_item_t( const std::string& _key, const char* first_token=nullptr );
+	mtl_item_t( const string& _key, const char* first_token=nullptr );
 	void clear(){ key.clear(); tokens.clear(); crc=0; b_map_type=false; }
 	bool empty() const { return tokens.empty(); }
 	size_t size() const { return tokens.size(); }
-	std::string& front() { return tokens.front(); }
-	std::string& back() { return tokens.back(); }
+	string& front() { return tokens.front(); }
+	string& back() { return tokens.back(); }
 
-	std::string str() const { return tokens.empty()?"":(key.empty()?std::string():(key+" "))+join(tokens); }
+	string str() const { return tokens.empty()?"":(key.empty()?string():(key+" "))+join(tokens); }
 	const char* token( int index=0 ) const { return tokens[index].c_str(); }
 	float value( int index=0 ) const { return float(fast::atof(tokens[index].c_str())); }
 	int	valuei( int index=0 ) const { return int(fast::atoi(tokens[index].c_str())); }
@@ -42,20 +42,20 @@ struct mtl_item_t
 
 struct mtl_section_t
 {
-	std::string					name;
-	std::vector<mtl_item_t>		items;
+	string				name;
+	vector<mtl_item_t>	items;
 
 	mtl_section_t(){ items.reserve(256); }
-	mtl_section_t( const std::string& _name ):name(_name){ items.reserve(64); }
+	mtl_section_t( const string& _name ):name(_name){ items.reserve(64); }
 
 	bool empty() const { return name.empty()||items.empty(); }
 	auto begin(){ return items.begin(); }
 	auto end(){ return items.end(); }
-	auto maps(){ std::vector<mtl_item_t*> v;for(auto& t:items){if(t.is_map_type())v.emplace_back(&t);} return v; }
+	auto maps(){ vector<mtl_item_t*> v;for(auto& t:items){if(t.is_map_type())v.emplace_back(&t);} return v; }
 
 	mtl_item_t* find( const char* key ) const { for(auto& t:items){ if(!items.empty()&&_stricmp(t.key.c_str(),key)==0) return (mtl_item_t*)&t; } return nullptr; }
 	int find_index( const char* key ) const	{ for( int k=0, kn=int(items.size()); k<kn; k++ ){ if(items[k].empty()) continue; if(_stricmp(items[k].key.c_str(),key)==0) return k; } return -1; }
-	mtl_item_t* add_norm( std::string token )
+	mtl_item_t* add_norm( string token )
 	{
 		if(find("norm")) printf( "%s(%s): norm already exists\n", __func__, token.c_str() );
 		mtl_item_t t("norm",token.c_str());
@@ -65,10 +65,10 @@ struct mtl_section_t
 	}
 };
 
-mtl_item_t::mtl_item_t( const std::string& _key, const char* first_token ):key(_key)
+mtl_item_t::mtl_item_t( const string& _key, const char* first_token ):key(_key)
 {
 	if(first_token&&*first_token) tokens.emplace_back(first_token);
-	static nocase::set<std::string> map_keys = {"bump","refl","norm","pc","pcr","aniso","anisor"};
+	static nocase::set<string> map_keys = {"bump","refl","norm","pc","pcr","aniso","anisor"};
 	b_map_type = (key.size()>4&&_strnicmp(key.c_str(),"map_",4)==0)||map_keys.find(key)!=map_keys.end();
 }
 
@@ -89,7 +89,7 @@ bool mtl_item_t::make_canonical_relative_path()
 	return _stricmp(b0.c_str(),b.c_str())!=0; // return change exists
 }
 
-static const std::vector<vec2> halton_samples =
+static const vector<vec2> halton_samples =
 {
 	{0.015625f,0.061224f}, {0.515625f,0.204082f}, {0.265625f,0.346939f}, {0.765625f,0.489796f}, {0.140625f,0.632653f}, {0.640625f,0.775510f}, {0.390625f,0.918367f}, {0.890625f,0.081633f},
 	{0.078125f,0.224490f}, {0.578125f,0.367347f}, {0.328125f,0.510204f}, {0.828125f,0.653061f}, {0.203125f,0.795918f}, {0.703125f,0.938776f}, {0.453125f,0.102041f}, {0.953125f,0.244898f},
@@ -216,10 +216,10 @@ static path get_normal_path( const path& bump_path, nocase::map<path,path>& bton
 	return "";
 }
 
-static std::map<uint,std::string> build_crc_lut( std::vector<mtl_section_t>& sections )
+static std::map<uint,string> build_crc_lut( vector<mtl_section_t>& sections )
 {
 	// scan crc
-	logical::map<std::string,uint> crc_map; // sorted by path
+	logical::map<string,uint> crc_map; // sorted by path
 	for( auto& section : sections ) for( auto* t: section.maps() )
 	{
 		auto it = crc_map.find(t->back()); if(it!=crc_map.end()){ t->crc = it->second; continue; }
@@ -227,13 +227,13 @@ static std::map<uint,std::string> build_crc_lut( std::vector<mtl_section_t>& sec
 	}
 
 	// invert lookup table for crc-unique maps
-	std::map<uint,std::string> lut;
+	std::map<uint,string> lut;
 	for( auto& [token,crc] : crc_map ) if(auto it=lut.find(crc); it==lut.end()) lut[crc] = token;
 
 	return lut;
 }
 
-static float optimize_textures( path file_path, std::vector<mtl_section_t>& sections )
+static float optimize_textures( path file_path, vector<mtl_section_t>& sections )
 {
 	gx::timer_t timer;
 
@@ -305,7 +305,7 @@ static float optimize_textures( path file_path, std::vector<mtl_section_t>& sect
 	return float(timer.end());
 }
 
-static bool save_mtl( path file_path, const std::vector<mtl_section_t>& sections, float opt_time )
+static bool save_mtl( path file_path, const vector<mtl_section_t>& sections, float opt_time )
 {
 	auto mfiletime0 = file_path.mfiletime();
 	FILE* fp = file_path.fopen("w"); if(!fp){ printf("%s(): failed to open %s\n", __func__, file_path.slash() ); return false; }
@@ -317,7 +317,7 @@ static bool save_mtl( path file_path, const std::vector<mtl_section_t>& sections
 		if(!section.name.empty()) fprintf(fp,"newmtl %s\n", section.name.c_str() );
 		for( auto& t : section.items )
 		{
-			std::string r = std::move(t.str());
+			string r = std::move(t.str());
 			if(!r.empty()) fprintf( fp, "%s\n", r.c_str() );
 		}
 		if(k==0||(!section.name.empty()&&k<kn-1)) fprintf(fp,"\n");
@@ -329,9 +329,9 @@ static bool save_mtl( path file_path, const std::vector<mtl_section_t>& sections
 	return true;
 }
 
-std::vector<mtl_section_t> parse_mtl( path file_path )
+vector<mtl_section_t> parse_mtl( path file_path )
 {
-	std::vector<mtl_section_t> v; v.reserve(1024);
+	vector<mtl_section_t> v; v.reserve(1024);
 
 	if(!file_path.exists()){ printf("%s(): %s not exists\n", __func__, file_path.c_str() ); return v; }
 	FILE* fp = file_path.fopen("r"); if(!fp){ printf("%s(): unable to open %s\n", __func__, file_path.c_str()); return v; }
@@ -354,9 +354,9 @@ std::vector<mtl_section_t> parse_mtl( path file_path )
 			continue;
 		}
 
-		std::vector<std::string> vs = std::move(explode(b));
+		vector<string> vs = std::move(explode(b));
 		if(vs.size()<2){ b_dirty=true; continue; } // cull no-value lines
-		const std::string& key = vs[0];
+		const string& key = vs[0];
 		
 		if(_stricmp(key.c_str(),"newmtl")==0)
 		{
@@ -385,14 +385,14 @@ std::vector<mtl_section_t> parse_mtl( path file_path )
 namespace mtl {
 //*************************************
 
-uint find_material( std::vector<material_impl>& materials, const char* name )
+uint find_material( vector<material_impl>& materials, const char* name )
 {
 	for(uint k=0,kn=uint(materials.size());k<kn;k++)
 		if(_stricmp(name,materials[k].name)==0) return k;
 	return -1;
 }
 
-void create_default_material( std::vector<material_impl>& materials )
+void create_default_material( vector<material_impl>& materials )
 {
 	materials.emplace_back(material_impl(uint(materials.size())));
 	auto& m = materials.back();
@@ -410,7 +410,7 @@ material_impl create_light_material( uint ID )
 	return m;
 }
 
-bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_cache )
+bool load_mtl( path file_path, vector<material_impl>& materials, bool with_cache )
 {
 	gx::timer_t timer;
 
@@ -419,7 +419,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 	b_dirty = false; // something changed?
 
 	// pre-parse raw lines
-	std::vector<mtl_section_t> sections = std::move(parse_mtl(file_path)); if(sections.empty()) return false;
+	vector<mtl_section_t> sections = std::move(parse_mtl(file_path)); if(sections.empty()) return false;
 	
 	// default material for light source (mat_index==0 or emissive>0)
 	materials.clear();
@@ -428,7 +428,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 	float opt_time = with_cache ? 0.0f : optimize_textures( file_path, sections );
 
 	// tags to bypass
-	static nocase::set<std::string> passtags
+	static nocase::set<string> passtags
 	{
 		"ka",		// ambient materials
 		"map_ks",	// specular map
@@ -455,7 +455,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 		// preprocess illum
 		for(auto& t: section.items)
 		{
-			std::string key = tolower(t.key.c_str());
+			string key = tolower(t.key.c_str());
 			if(key=="illum")
 			{
 				int i=t.valuei(); // https://paulbourke.net/dataformats/mtl/
@@ -476,7 +476,7 @@ bool load_mtl( path file_path, std::vector<material_impl>& materials, bool with_
 		vec4 emit=vec4(0);
 		for(auto& t: section.items)
 		{
-			std::string key = tolower(t.key.c_str());
+			string key = tolower(t.key.c_str());
 
 			if(key.empty()||t.empty()) continue;
 			else if(key=="newmtl"); // already processed
