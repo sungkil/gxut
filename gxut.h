@@ -446,43 +446,45 @@ __noinline bool iglob( const T* str, size_t slen, const T* pattern, size_t plen 
 	return j==m;
 }
 
+// forward decls.
+namespace exe { const string& dir(); }
+
+//*************************************
+namespace gx {
+//*************************************
+
 // path queries
-inline bool file_exists( const char* path ){ return path&&*path&&access(path,0)==0; }
-inline bool is_pipe_path( const char* path ){ if(!path||!*path) return false; return strcmp(path,"-")==0||_strnicmp(path,"pipe:",5)==0; }
+inline bool file_exists( const string& path ){ return !path.empty()&&access(path.c_str(), 0)==0; }
+inline bool is_pipe_path( const string& path ){ if(path.empty()) return false; return path=="-"||_strnicmp(path.c_str(), "pipe:", 5)==0; }
 inline bool is_fifo( FILE* fp ){ if(!fp) return false; struct stat s; return fstat(_fileno(fp),&s)==0?(s.st_mode&_S_IFIFO?true:false):false; } // posix-like or std::filesystem-like utilities
 inline bool is_unc_path( const string& path ){ if(path.empty()) return false; return (path[0]=='\\'&&path[1]=='\\')||(path[0]=='/'&&path[1]=='/'); }
-inline bool is_rsync_path( const char* path ){ if(!path||!*path) return false; auto* p=strstr(path,":\\"); if(!p) p=strstr(path,":/"); return p!=nullptr&&p>path+1; }
-inline bool is_http_url( const char* path ){ if(!path||!*path) return false; return _strnicmp(path,"http://",7)==0||_strnicmp(path,"https://",8)==0; }
-inline bool is_ssh_path( const char* path ){ if(!path||!*path) return false; return strstr(path+2,":\\")!=nullptr||strstr(path+2,":/")!=nullptr; }
-inline bool is_remote_path( const char* path ){ if(!path||!*path) return false;	return is_http_url(path)||is_ssh_path(path); }
-inline bool is_absolute_path( const char* path ){ if(!path||!*path) return false; return path[0]=='/'||path[1]==':'||is_unc_path(path)||is_rsync_path(path)||is_remote_path(path); }
-inline bool is_relative_path( const char* path ){ if(!path||!*path) return false; return !is_pipe_path(path)&&!is_absolute_path(path); }
-#define __alloc_path()	((char*)calloc(PATH_MAX+1,1))
+inline bool is_rsync_path( const string& path ){ if(path.empty()) return false; auto* p=strstr(path.c_str(), ":\\"); if(!p) p=strstr(path.c_str(), ":/"); return p&&p>path.c_str()+1; }
+inline bool is_http_url( const string& path ){ if(path.empty()) return false; return _strnicmp(path.c_str(),"http://",7)==0||_strnicmp(path.c_str(),"https://",8)==0; }
+inline bool is_ssh_path( const string& path ){ if(path.empty()) return false; return strstr(path.c_str()+2,":\\")!=nullptr||strstr(path.c_str()+2,":/")!=nullptr; }
+inline bool is_remote_path( const string& path ){ if(path.empty()) return false; return is_http_url(path)||is_ssh_path(path); }
+inline bool is_absolute_path( const string& path ){ if(path.empty()) return false; return path[0]=='/'||path[1]==':'||is_unc_path(path)||is_rsync_path(path)||is_remote_path(path); }
+inline bool is_relative_path( const string& path ){ if(path.empty()) return false; return !is_pipe_path(path)&&!is_absolute_path(path); }
 #define __pathbuf()		(__strbuf<char>(PATH_MAX))
 #ifdef __msvc__
 	#define PATH_MAX _MAX_PATH // _MAX_PATH = 260 in Windows
-	inline const char* cwd(){ static char* c=__alloc_path(); if(*c) return c; _getcwd(c,PATH_MAX); size_t l=strlen(c); if(*c&&c[l-1]!='\\'){ c[l]='\\'; c[l+1]=0; } return c; } // current working directory
-	// decomposition
-	inline const char* dir( const char* path ){ if(!path) return nullptr; static char* d=__alloc_path(); char* a=__pathbuf(); _splitpath_s(path, d, PATH_MAX, a, PATH_MAX, 0, 0, 0, 0); strcat(d, a); return d; }
-	inline const char* filename( const char* path ){ if(!path) return nullptr; static char* b=__alloc_path(); char* a=__pathbuf(); _splitpath_s(path,0,0,0,0,b,PATH_MAX,a,PATH_MAX); strcat(b,a); return b; }
-	inline const char* stem( const char* path ){ if(!path) return nullptr; static char* b=__alloc_path(); _splitpath_s(path,0,0,0,0,b,PATH_MAX,0,0); return b; } // filename without extension
-	inline const char* extension( const char* path ){ if(!path) return nullptr; static char* x=__alloc_path(); _splitpath_s(path,0,0,0,0,0,0,x,PATH_MAX); return (x&&*x=='.')?x+1:x; }
-	inline bool is_dir( const char* path ){ if(!path||!*path||access(path,0)!=0) return false; stat_t s; if(!_stat64(path,&s)) return false; return s.st_mode&S_IFDIR?true:false; }
-	inline const char* absolute_path( const char* path, const char* base="" ){ if(!path||!*path||is_absolute_path(path)) return path; return _fullpath(__pathbuf(),base&&*base?strcat(strcpy(__pathbuf(),add_backslash(base)),path):path,PATH_MAX); }
+	inline string dir( const string& path ){ if(path.empty()) return ""; char *d=__pathbuf(), *a=__pathbuf(); _splitpath_s(path.c_str(),d,PATH_MAX,a,PATH_MAX,0,0,0,0); strcat(d, a); return d; }
+	inline string filename( const string& path ){ if(path.empty()) return ""; char *b=__pathbuf(), *a=__pathbuf(); _splitpath_s(path.c_str(),0,0,0,0,b,PATH_MAX,a,PATH_MAX); strcat(b, a); return b; }
+	inline string stem( const string& path ){ if(path.empty()) return ""; char* b=__pathbuf(); _splitpath_s(path.c_str(),0,0,0,0,b,PATH_MAX,0,0); return b; } // filename without extension
+	inline string extension( const string& path ){ if(path.empty()) return ""; char* x=__pathbuf(); _splitpath_s(path.c_str(),0,0,0,0,0,0,x,PATH_MAX); return (x&&*x=='.')?x+1:x; }
+	inline bool is_dir( const string& path ){ if(path.empty()||access(path.c_str(),0)!=0) return false; stat_t s; if(!_stat64(path.c_str(), &s)) return false; return s.st_mode&S_IFDIR?true:false; }
+	inline string absolute_path( const string& path, const string& base="" ){ if(path.empty()||is_absolute_path(path)) return path; auto* b=_fullpath(__pathbuf(),base.empty()?path.c_str():strcat(strcpy(__pathbuf(),add_backslash(base.c_str())),path.c_str()),PATH_MAX); return b?b:""; }
 #elif defined(__gcc__)
 	#define _MAX_PATH PATH_MAX // PATH_MAX = 4096 in linux
-	inline const char* cwd(){ static char* c=__alloc_path(); if(*c) return c; getcwd(c); size_t l=strlen(c); if(*c&&c[l-1]!='/'){ c[l]='/'; c[l+1]=0; } return c; } // current working directory
-	// decomposition
-	inline const char* dir( const char* path ){ if(!path) return nullptr; static char* d=__alloc_path(); fs::path f=path; return strcpy(d,f.remove_filename().c_str()); }
-	inline const char* filename( const char* path ){ if(!path) return nullptr; static char* d=__alloc_path(); fs::path f=path; return strcpy(d,f.filename().c_str()); }
-	inline const char* stem( const char* path ){ if(!path) return nullptr; static char* d=__alloc_path(); fs::path f=path; return strcpy(d,f.stem().c_str()); } // filename without extension
-	inline const char* extension( const char* path ){ if(!path) return nullptr; static char* x=__alloc_path(); fs::path f=path; strcpy(x,f.extension().c_str()); return x&&*x=='.')?x+1:x; }
-	inline bool is_dir( const char* path ){ stat_t s; if(!stat64(path,&s)) return false; return s.st_mode&S_IFDIR?true:false; }
+	inline string dir( const string& path ){ if(path.empty()) return ""; return fs::path(path).remove_filename().c_str(); }
+	inline string filename( const string& path ){ if(path.empty()) return ""; return fs::path(path).filename().c_str(); }
+	inline string stem( const string& path ){ if(path.empty()) return ""; return fs::path(path).stem().c_str(); } // filename without extension
+	inline string extension( const string& path ){ if(path.empty()) return ""; string x=fs::path(path).extension().c_str(); return !x.empty()&&x.front()=='.')?x.substr(1):x; }
+	inline bool is_dir( const string& path ){ if(path.empty()||access(path.c_str(),0)!=0) return false;  stat_t s; if(!stat64(path.c_str(), &s)) return false; return s.st_mode&S_IFDIR?true:false; }
 #endif
-inline const char* path_key( const char* path )
+inline string path_key( const string& path )
 {
-	if(!path||!*path) return "";
-	size_t l=strlen(path); char* d=__strbuf(l);
+	if(path.empty()) return "";
+	size_t l=path.size(); char* d=__strbuf(l);
 	size_t n=0; for(size_t k=0;k<l; k++){ char c=path[k]; if(c!=':'&&c!=' ') d[n++]=(c=='\\'||c=='/')?'.':(::tolower(c)); }
 	if(d[n-1]=='.') n--; d[n]=0; return d;
 }
@@ -496,48 +498,52 @@ __noinline string unc_root( const string& path )
 	return p ? r.substr(0,p-r.c_str()) : r;
 }
 
-//__noinline vector<string> ancestors( const char* path, const char* root="" )
-//{
-//	if(!path||!*path) return vector<string>();
-//	if(!root||!*root) root = is_unc_path(path)?unc_root(path):exe::dir();
-//	path d=dir();
-//	int l=int(d.size()),rl=int(root.size());
-//	bool r=_strnicmp(d._data,root._data,rl)==0;
-//	vector<path> a;a.reserve(4); for(int k=l-1,e=r?rl-1:0;k>=e;k--)
-//	{
-//		if(d._data[k]!=__backslash&&d._data[k]!=__slash) continue;
-//		d._data[k+1]=0; a.emplace_back(d);
-//	}
-//	return a;
-//}
+__noinline vector<string> ancestors( const string& path, string root="" )
+{
+	if(path.empty()) return vector<string>();
+	if(root.empty()) root = is_unc_path(path)?unc_root(path):string(exe::dir());
+	string d = dir(path); int l=int(d.size()),rl=int(root.size());
+	bool r=_strnicmp(d.c_str(),root.c_str(),rl)==0;
+	vector<string> a; a.reserve(4); for(int k=l-1,e=r?rl-1:0;k>=e;k--){ if(d[k]=='\\'||d[k]=='/') a.emplace_back(d.substr(k)); }
+	return a;
+}
 
-//template <bool recurse=true>
-//__noinline bool mkdir( const char* dir ) // make all super directories
-//{
-//	if(!dir||!*dir||file_exists(dir)) return false;
-//	auto v = to_backslash().dir().ancestors();
-//	
-//	if(v.empty()) return false; auto bl=v.back().size();
-//	if(is_unc()){ auto r=dir().unc_root();size_t rl=r.size();if(bl<=rl+1){v.pop_back();bl=v.back().size();}if(bl<=rl+1)v.pop_back(); }
-//	else if(bl<=3){ if(v.back()[1]==':')v.pop_back();else if(bl<=1)v.pop_back(); }
-//	for( auto it=v.rbegin(); it!=v.rend(); it++ ){ if(!it->exists()&&::mkdir(it->_data)!=0) return false; }
-//	return true;
-//}
+__noinline bool mkdir( const string& dir_path ) // make all super directories recursively
+{
+	if(dir_path.empty()||file_exists(dir_path)) return false;
+	auto v = ancestors(dir(to_backslash(dir_path.c_str()))); if(v.empty()) return false;
+	auto bl=v.back().size();
+	if(is_unc_path(dir_path)){ auto r=unc_root(dir(dir_path));size_t rl=r.size();if(bl<=rl+1){v.pop_back();bl=v.back().size();}if(bl<=rl+1)v.pop_back(); }
+	else if(bl<=3){ if(v.back()[1]==':')v.pop_back();else if(bl<=1)v.pop_back(); }
+	for( auto it=v.rbegin(); it!=v.rend(); it++ ){ if(!file_exists(*it)&&::mkdir(it->c_str())!=0) return false; }
+	return true;
+}
+
+//*************************************
+} // end namespace gx
+//*************************************
+
+// global path functions
+#ifdef __msvc__
+	inline const char* cwd(){ static char c[PATH_MAX]={}; _getcwd(c, PATH_MAX); size_t l=strlen(c); if(*c&&c[l-1]!='\\'){ c[l]='\\'; c[l+1]=0; } return c; } // current working directory
+#elif defined(__gcc__)
+	inline const char* cwd(){ static char c[PATH_MAX]={}; getcwd(c); size_t l=strlen(c); if(*c&&c[l-1]!='/'){ c[l]='/'; c[l+1]=0; } return c; } // current working directory
+#endif
+inline int chdir( const string& dir ){ return ::chdir(dir.c_str()); }
 
 //*************************************
 namespace exe {
 //*************************************
 #ifdef __msvc__
-inline const char* path(){	static char* e=__alloc_path(); if(*e) return e; GetModuleFileNameA(nullptr,e,PATH_MAX); return e; }
+inline const string& path(){	static string e; if(!e.empty()) return e; auto* b=__pathbuf(); GetModuleFileNameA(nullptr,b,PATH_MAX); return e=b; }
 #elif defined(__gcc__)
-inline const char* path(){	static char* e=__alloc_path(); if(*e) return e; if(!readlink("/proc/self/exe",e,PATH_MAX)>0) *m=0; return m; }
+inline const string& path(){	static string e; if(!e.empty()) return e; auto* b=__pathbuf(); if(!readlink("/proc/self/exe",e,PATH_MAX)>0) *m=0; return e=b; }
 #endif
-inline const char* dir(){	static char* d=_strdup(::dir(path())); return d; }
-inline const char* name(){	static char* n=_strdup(::stem(path())); return n; }
+inline const string& dir(){		static auto d=gx::dir(path()); return d; }
+inline const string& name(){	static auto n=gx::stem(path()); return n; }
 //*************************************
 } // end namespace exe
 //*************************************
-#undef __alloc_path
 #undef __pathbuf
 
 //*************************************
@@ -570,13 +576,13 @@ inline vector<string> paths()
 inline const char* where( const char* file_name )
 {
 	if(!file_name||!*file_name) return "";
-	if(is_absolute_path(file_name)&&file_exists(file_name)) return file_name;
-	vector<string> v={file_name}; string x=extension(file_name);
+	if(gx::is_absolute_path(file_name)&&gx::file_exists(file_name)) return file_name;
+	vector<string> v={file_name}; string x=gx::extension(file_name);
 #ifdef __msvc__
 	if(x.empty()){for(auto e:{".com",".exe",".bat",".cmd"}) v.emplace_back(string(file_name)+e);} // add the executable extensions
 #endif
-	for(auto& f:v) if(file_exists(f.c_str())) return absolute_path(f.c_str(),cwd());
-	for(const auto& e:paths() ){ for(auto& p:v) if(file_exists((e+p).c_str())) return __strdup((e+p).c_str()); }
+	for(auto& f:v) if(gx::file_exists(f.c_str())) return __strdup(gx::absolute_path(f.c_str(),cwd()).c_str());
+	for(const auto& e:paths() ){ for(auto& p:v) if(gx::file_exists((e+p).c_str())) return __strdup((e+p).c_str()); }
 	return "";
 }
 
@@ -586,7 +592,7 @@ inline void add_paths( const vector<string>& dirs )
 	std::set<string> m; for( auto& p : paths() ) m.insert(tolower(p.c_str()));
 	string v; for( auto d : dirs )
 	{
-		d = is_relative_path(d.c_str())?absolute_path(d.c_str()):d;
+		d = gx::is_relative_path(d.c_str())?gx::absolute_path(d.c_str()):d;
 		if(m.find(tolower(d.c_str()))==m.end()){ v += d.c_str(); v += ';'; }
 	}
 	put("PATH",(v+get("PATH")).c_str());

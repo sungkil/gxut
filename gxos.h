@@ -54,8 +54,8 @@ __noinline string __build_process_cmd( const char* const app, const char* args )
 	{
 		strcpy(buf,args); char *ctx=nullptr, *token=strtok_s(buf," \t\n",&ctx);
 		const char* t=to_backslash(token);
-		string e=env::where(t); const char* x=extension(t);
-		if(!file_exists(t)&&(!x||!*x)&&!e.empty()&&strcmp(x,"com")==0) args=strcpy(buf,strcat(strcat(strcpy(cmd,token),".com "),buf+strlen(token)+1)); // use cmd as temp
+		string e=env::where(t), x=gx::extension(t);
+		if(!gx::file_exists(t)&&x.empty()&&!e.empty()&&x=="com") args=strcpy(buf, strcat(strcat(strcpy(cmd, token), ".com "), buf+strlen(token)+1)); // use cmd as temp
 	}
 
 	// build cmdline, which should also embed app path

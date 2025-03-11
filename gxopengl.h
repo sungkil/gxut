@@ -867,7 +867,7 @@ namespace gl {
 		
 		void flatten( const char* file_path ) const
 		{
-			string d=dir(file_path); if(!file_exists(d.c_str())) mkdir(d.c_str());
+			string d=gx::dir(file_path); if(!gx::file_exists(d.c_str())) mkdir(d.c_str());
 			FILE* fp=fopen(file_path,"wb"); if(!fp) return;
 			string f=flatten(); fwrite(f.c_str(),1,f.size(),fp); fclose(fp);
 			fclose(fp);
@@ -1228,9 +1228,9 @@ namespace gl {
 		// shader source files
 		void export_shader_sources( const char* dir, const char* fxname="" )
 		{
-			string d=to_backslash(dir), dx=extension(dir);
-			if(!d.empty()&&dx.empty()&&d.back()!='\\') d=::dir(d.c_str()); d += "glsl\\";
-			string f=!fxname||!*fxname?_name:stem(fxname);
+			string d=to_backslash(dir), dx=gx::extension(dir);
+			if(!d.empty()&&dx.empty()&&d.back()!='\\') d=gx::dir(d.c_str()); d += "glsl\\";
+			string f=!fxname||!*fxname?_name:gx::stem(fxname);
 			for( auto* p : programs ) p->source.export_shader_sources( dir, (f+"."+p->name()).c_str() );
 		}
 
@@ -1363,8 +1363,8 @@ inline gl::VertexArray* gxCreatePointVertexArray( GLsizei width, GLsizei height 
 inline const char* gxGetProgramBinaryPath( const char* name )
 {
 	string d = getenv("LOCALAPPDATA"); if(d.empty()){ d.reserve(PATH_MAX); GetTempPathA(PATH_MAX,d.data()); } if(d.empty()) return format("%s.bin",name);
-	vector<string> v = {d,path_key(exe::name()),"local\\",path_key(exe::dir()),"glfx\\","binary\\"};
-	d.clear(); for( const auto& e : v ){ d += add_backslash(e.c_str()); if(!file_exists(d.c_str())) mkdir(d.c_str()); }
+	d = string(add_backslash(d.c_str()))+add_backslash(gx::path_key(exe::name()).c_str())+"local\\"+add_backslash(gx::path_key(exe::dir()).c_str())+"glfx\\binary\\";
+	if(!gx::file_exists(d.c_str())) gx::mkdir(d.c_str());
 	return format("%s%s.bin",d.c_str(),name);
 }
 
@@ -1372,7 +1372,9 @@ inline void gxSaveProgramBinary( const char* name, GLuint ID, uint crc )
 {
 	vector<char> program_binary(gxGetProgramiv( ID, GL_PROGRAM_BINARY_LENGTH ),0);
 	GLenum binary_format=0; glGetProgramBinary( ID, GLsizei(program_binary.size()), nullptr, &binary_format, &program_binary[0] );
-	FILE* fp = fopen(gxGetProgramBinaryPath(name),"wb");
+
+	string cache_path = gxGetProgramBinaryPath(name); if(cache_path.empty()){ printf("%s(): cache_path is empty\n",__func__); return; }
+	FILE* fp = fopen(cache_path.c_str(), "wb"); if(!fp){ printf("unable to open %s\n",cache_path.c_str()); return; }
 	fwrite( &crc, sizeof(crc), 1, fp );
 	fwrite( &binary_format, sizeof(GLenum), 1, fp );
 	fwrite( &program_binary[0], sizeof(char), program_binary.size(), fp );
@@ -1381,7 +1383,7 @@ inline void gxSaveProgramBinary( const char* name, GLuint ID, uint crc )
 
 inline GLuint gxLoadProgramBinary( const char* name, uint crc )
 {
-	string program_binary_path = gxGetProgramBinaryPath(name); if(!file_exists(program_binary_path.c_str())) return 0;
+	string program_binary_path = gxGetProgramBinaryPath(name); if(!gx::file_exists(program_binary_path.c_str())) return 0;
 	size_t crc_size=sizeof(crc), offset=crc_size+sizeof(GLenum);
 	FILE* fp = fopen(program_binary_path.c_str(),"rb"); if(!fp) return 0;
 	_fseeki64(fp,0,SEEK_END); size_t program_binary_size=_ftelli64(fp); _fseeki64(fp,0,SEEK_SET);

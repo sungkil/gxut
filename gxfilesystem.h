@@ -80,44 +80,46 @@ public:
 	path() noexcept { alloc(); clear_cache(); }
 	path( const path& p ) noexcept { strcpy(alloc(),p._data); cache()=p.cache(); }
 	path( path&& p ) noexcept { _data=p._data; p._data=nullptr; } // cache moves as well
-	path( const char* s ) noexcept : path() { if(s) strcpy(_data,s); }
-	explicit path( const string_type& s ) noexcept : path() { strcpy(_data,s.c_str()); }
+	path( const value_type* s ) noexcept : path() { if(s) strcpy(_data,s); }
+	path( const string_type& s ) noexcept : path() { strcpy(_data,s.c_str()); }
 	~path() noexcept { if(_data){ free(_data); _data=nullptr; } }
 
 	// operator overloading: assignment
 	path& operator=( const path& p ) noexcept { strcpy(_data,p._data); cache()=p.cache(); return *this; }
 	path& operator=( path&& p ) noexcept { if(_data) free(_data); _data=p._data; p._data=nullptr; return *this; }
-	path& operator=( const char* s ) noexcept { if(s) strcpy(_data,s); return *this; }
+	path& operator=( const value_type* s ) noexcept { if(s) strcpy(_data,s); return *this; }
 	path& operator=( const string_type& s ) noexcept { strcpy(_data,s.c_str()); return *this; }
 
 	// operator overloading: concatenations
 	path& operator+=( const path& p ){ strcat(_data,p._data+((p._data[0]==value_type('.')&&p._data[1]==value_type(preferred_separator)&&p._data[2])?2:0)); return *this; }
-	path& operator+=( const char* s ){ if(s[0]=='.'&&s[1]==__backslash&&s[2]) s+=2; size_t l=strlen(_data); strcpy(_data+l,s); return *this; }
+	path& operator+=( const value_type* s ){ if(s[0]=='.'&&s[1]==__backslash&&s[2]) s+=2; size_t l=strlen(_data); strcpy(_data+l,s); return *this; }
 	path& operator+=( const string_type& s ){ return operator+=(s.c_str()); }
-	path& operator+=( char c ){ size_t l=strlen(_data); _data[l]=value_type(c); _data[l+1]=0; return *this; }
+	path& operator+=( value_type c ){ size_t l=strlen(_data); _data[l]=value_type(c); _data[l+1]=0; return *this; }
 
 	path& operator/=( const path& p ){ return *this=add_preferred()+p; }
-	path& operator/=( const char* s ){ return *this=add_preferred()+s; }
+	path& operator/=( const value_type* s ){ return *this=add_preferred()+s; }
 	path& operator/=( const string_type& s ){ return *this=add_preferred()+s.c_str(); }
-	path& operator/=( char c ){ return *this=add_preferred()+c; }
+	path& operator/=( value_type c ){ return *this=add_preferred()+c; }
 
 	path operator+( const path& p ) const { return path(*this).operator+=(p); }
-	path operator+( const char* s ) const { return path(*this).operator+=(s); }
+	path operator+( const value_type* s ) const { return path(*this).operator+=(s); }
 	path operator+( const string_type& s ) const { return path(*this).operator+=(s.c_str()); }
-	path operator+( char c ){ return path(*this).operator+=(c); }
+	path operator+( value_type c ){ return path(*this).operator+=(c); }
 
 	path operator/( const path& p ) const { return path(*this).operator/=(p); }
-	path operator/( const char* s ) const { return path(*this).operator/=(s); }
+	path operator/( const value_type* s ) const { return path(*this).operator/=(s); }
 	path operator/( const string_type& s ) const { return path(*this).operator/=(s.c_str()); }
-	path operator/( char c ) const { return path(*this).operator/=(c); }
+	path operator/( value_type c ) const { return path(*this).operator/=(c); }
 
 	// operator overloading: comparisons
 	bool operator==( const path& p ) const { return _stricmp(_data,p._data)==0; }
-	bool operator==( const char* s ) const { return _stricmp(_data,s)==0; }
+	bool operator==( const string_type& p ) const { return _stricmp(_data,p.c_str())==0; }
+	bool operator==( const value_type* s ) const { return _stricmp(_data,s)==0; }
 	bool operator!=( const path& p ) const { return _stricmp(_data,p._data)!=0; }
-	bool operator!=( const char* s ) const { return _stricmp(_data,s)!=0; }
-	bool operator<( const path& p )	 const { return ::_strcmplogical(_data,p._data)<0; }
-	bool operator>( const path& p )	 const { return ::_strcmplogical(_data,p._data)>0; }
+	bool operator!=( const string_type& p ) const { return _stricmp(_data,p.c_str())!=0; }
+	bool operator!=( const value_type* s ) const { return _stricmp(_data,s)!=0; }
+	bool operator<( const path& p ) const { return ::_strcmplogical(_data,p._data)<0; }
+	bool operator>( const path& p ) const { return ::_strcmplogical(_data,p._data)>0; }
 	bool operator<=( const path& p ) const { return ::_strcmplogical(_data,p._data)<=0; }
 	bool operator>=( const path& p ) const { return ::_strcmplogical(_data,p._data)>=0; }
 
@@ -225,7 +227,7 @@ public:
 	path filename( bool with_ext=true ) const { auto s=split(false,false,true,with_ext); if(!with_ext||!s.ext||!*s.ext) return s.fname; return strcat(strcpy(__strbuf(capacity),s.fname),s.ext); }
 	path ext() const { auto s=split(false,false,false,true); return *s.ext?s.ext+1:""; }
 	path parent() const { return dir().remove_backslash().dir(); }
-	vector<path> ancestors( path root="" ) const { if(empty()) return vector<path>(); if(root._data[0]==0) root=is_unc()?unc_root():exe::dir(); path d=dir(); int l=int(d.size()),rl=int(root.size()); bool r=_strnicmp(d._data,root._data,rl)==0; vector<path> a;a.reserve(4); for(int k=l-1,e=r?rl-1:0;k>=e;k--){ if(d._data[k]!=__backslash&&d._data[k]!=__slash) continue; d._data[k+1]=0; a.emplace_back(d); } return a; }
+	vector<path> ancestors( path root="" ) const { if(empty()) return vector<path>(); if(root._data[0]==0) root=is_unc()?unc_root():exe::dir().c_str(); path d=dir(); int l=int(d.size()),rl=int(root.size()); bool r=_strnicmp(d._data,root._data,rl)==0; vector<path> a;a.reserve(4); for(int k=l-1,e=r?rl-1:0;k>=e;k--){ if(d._data[k]!=__backslash&&d._data[k]!=__slash) continue; d._data[k+1]=0; a.emplace_back(d); } return a; }
 	path junction() const { path t; if(!*_data||!exists()) return t; bool b_dir=is_dir(),j=false; for(auto& d:b_dir?ancestors():dir().ancestors()){ if(d.is_drive()) break; if((d.attributes()&FILE_ATTRIBUTE_REPARSE_POINT)!=0){j=true;break;} } if(!j) return t; HANDLE h=CreateFileW(atow(c_str()), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0); if(h==INVALID_HANDLE_VALUE) return t; auto* w=__strbuf<wchar_t>(capacity); GetFinalPathNameByHandleW(h, w, t.capacity, FILE_NAME_NORMALIZED); CloseHandle(h); strcpy(t._data,wtoa(w)); if(strncmp(t._data, "\\\\?\\", 4)==0) t=path(t._data+4); return b_dir?t.add_backslash():t; }
 	
 	// shortcuts to C-string
@@ -506,8 +508,8 @@ __noinline path path::temp( bool local, path local_dir )
 {
 	// get local_appdata
 	char* buff=getenv("LOCALAPPDATA");
-	static path r=path(buff?buff:"").add_backslash()+path_key(exe::name())+__backslash;
-	path t=r; if(local){ if(local_dir.empty()) local_dir=exe::dir(); t+=path("local\\")+::add_backslash(path_key(local_dir.c_str())); }
+	static path r=path(buff?buff:"").add_backslash()+gx::path_key(exe::name())+__backslash;
+	path t=r; if(local){ if(local_dir.empty()) local_dir=exe::dir(); t+=path("local\\")+::add_backslash(gx::path_key(local_dir.c_str()).c_str()); }
 	if(!t.exists()) t.mkdir();
 	return t;
 }
@@ -619,6 +621,9 @@ struct volume_t
 	bool is_fat32() const { return _wcsicmp(filesystem.name,L"FAT32")==0; }
 };
 #endif
+
+// global functions with path arguments
+inline int chdir( const path& dir ){ return ::chdir(dir.c_str()); }
 
 //***********************************************
 #endif // __GX_FILESYSTEM_H__

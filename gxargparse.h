@@ -89,7 +89,7 @@ struct parser_t
 	using callback_t = bool(*)(parser_t&);
 
 	// ctor/dtor
-	parser_t(){ strcpy(attrib.name,exe::name());  }
+	parser_t(){ strcpy(attrib.name,exe::name().c_str());  }
 	virtual ~parser_t(){ for(auto& c:commands)safe_delete(c); for(auto& a:arguments)safe_delete(a); for(auto& o:options)safe_delete(o); }
 
 	// attributes
