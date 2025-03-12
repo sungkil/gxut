@@ -36,10 +36,13 @@
 // common macros
 #ifdef __msvc__
 	#ifndef _CRT_SECURE_NO_WARNINGS
-		#define _CRT_SECURE_NO_WARNINGS
+		#define _CRT_SECURE_NO_WARNINGS 1
 	#endif
 	#ifndef _CRT_NONSTDC_NO_WARNINGS
-		#define _CRT_NONSTDC_NO_WARNINGS
+		#define _CRT_NONSTDC_NO_WARNINGS 1
+	#endif
+	#ifndef _CRT_DECLARE_NONSTDC_NAMES
+		#define _CRT_DECLARE_NONSTDC_NAMES 1
 	#endif
 	#ifndef _HAS_EXCEPTIONS
 		#ifdef __cpp_exceptions
@@ -130,7 +133,6 @@
 #include <cwchar>
 #include <stdlib.h>
 #include <string.h>
-#include <io.h> // low-level io functions
 
 // compile-time test of printf-style format string
 #ifdef __msvc__
@@ -180,21 +182,26 @@ using std::vector;
 // platform-specific header files
 #ifdef __msvc__
 	#include <windows.h>
-	#include <intrin.h> // cpu info
-	#include <direct.h> // directory control
-	typedef struct _stat64 stat_t; // use "struct _stat" instead of "_stat" for C-compatibility
+	#include <direct.h>	// directory control
+	#include <intrin.h>	// cpu info
+	#include <io.h>		// low-level io functions
+	typedef struct _stat64 stat_t;
 	template <typename T> struct dll_function_t { HMODULE hdll=nullptr;T ptr=nullptr; dll_function_t(const char* dll,const char* func){if((hdll=LoadLibraryA(dll)))ptr=T(GetProcAddress(hdll,func));} ~dll_function_t(){if(hdll){FreeLibrary(hdll);hdll=nullptr;}} operator T(){return ptr;} }; // dll function wrapper: load from dll and operates as a function without auto dll release
 	template <class T> T*& safe_release( T*& p ){if(p) p->Release(); return p=nullptr; }
 	inline HANDLE& safe_close_handle( HANDLE& h ){ if(h!=INVALID_HANDLE_VALUE) CloseHandle(h); return h=INVALID_HANDLE_VALUE; }
 #elif defined(__gcc__)
-	#include <sys/types.h>
-	#include <sys/stat.h>	
 	#include <unistd.h>
 	#include <linux/limits.h>
 	#include <cpuid.h>
 	typedef struct stat64 stat_t;
 #elif defined(__clang__)
 #endif
+
+// platform-independent posix headers
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/utime.h>
+#include <time.h>
 
 // deallocation functions
 template <class T> T*& safe_free( T*& p ){if(p) free((void*)p); return p=nullptr; }
@@ -447,7 +454,7 @@ __noinline bool iglob( const T* str, size_t slen, const T* pattern, size_t plen 
 }
 
 // forward decls.
-namespace exe { const string& dir(); }
+namespace exe { const char* dir(); }
 
 //*************************************
 namespace gx {
@@ -519,6 +526,20 @@ __noinline bool mkdir( const string& dir_path ) // make all super directories re
 	return true;
 }
 
+// time-related functions
+__noinline time_t mtime( const string& path )
+{
+	stat_t t; if(_stat64( path.c_str(), &t )!=0) return 0;
+	return t.st_mtime;
+}
+
+__noinline bool utime( const string& path, time_t mtime )
+{
+	stat_t t; if(_stat64( path.c_str(), &t )!=0) return 0;
+	utimbuf u = { t.st_atime, mtime };
+	return ::utime( path.c_str(), &u )==0;
+}
+
 //*************************************
 } // end namespace gx
 //*************************************
@@ -535,12 +556,12 @@ inline int chdir( const string& dir ){ return ::chdir(dir.c_str()); }
 namespace exe {
 //*************************************
 #ifdef __msvc__
-inline const string& path(){	static string e; if(!e.empty()) return e; auto* b=__pathbuf(); GetModuleFileNameA(nullptr,b,PATH_MAX); return e=b; }
+inline const char* path(){	static string e; if(!e.empty()) return e.c_str(); auto* b=__pathbuf(); GetModuleFileNameA(nullptr,b,PATH_MAX); return (e=b).c_str(); }
 #elif defined(__gcc__)
-inline const string& path(){	static string e; if(!e.empty()) return e; auto* b=__pathbuf(); if(!readlink("/proc/self/exe",e,PATH_MAX)>0) *m=0; return e=b; }
+inline const char* path(){	static string e; if(!e.empty()) return e.c_str(); auto* b=__pathbuf(); if(!readlink("/proc/self/exe",e,PATH_MAX)>0) *m=0; return (e=b).c_str(); }
 #endif
-inline const string& dir(){		static auto d=gx::dir(path()); return d; }
-inline const string& name(){	static auto n=gx::stem(path()); return n; }
+inline const char* dir(){	static auto d=gx::dir(path()); return d.c_str(); }
+inline const char* name(){	static auto n=gx::stem(path()); return n.c_str(); }
 //*************************************
 } // end namespace exe
 //*************************************
@@ -558,7 +579,8 @@ inline const char* get( const char* key )
 
 inline bool put( const char* key, const char* value )
 {
-	return 0==putenv((string(key)+"="+value).c_str()); // SetEnvironmentVariableA(key,value);
+	if(!key||!*key||!value||!*value) return false;
+	return 0==putenv((string(key)+"="+value).c_str());
 }
 
 inline vector<string> paths()
