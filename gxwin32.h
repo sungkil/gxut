@@ -112,7 +112,8 @@ inline const char* computer_name( bool b_lowercase=true )
 	return strcpy(cname,wtoa(w));
 }
 
-inline path temp()
+// windows user/system temp directory
+inline path usertemp()
 {
 	static path t; if(!t.empty()) return t;
 	wchar_t b[path::capacity]; GetTempPathW(path::capacity,b); t=wtoa(b); t=t.absolute().add_backslash();

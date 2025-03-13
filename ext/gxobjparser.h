@@ -25,6 +25,6 @@ namespace mtl
 namespace obj::cache
 {
 	inline uint64_t get_parser_id( path file_path );
-	inline path& get_dir(){ static path d = path::temp(false)+"global\\mesh\\"; if(!d.exists()&&!d.mkdir()) printf("Unable to create %s\n",d.c_str()); return d; }
+	inline path& get_dir(){ static path d = gx::apptemp()+"mesh\\"; if(!d.exists()&&!d.mkdir()) printf("Unable to create %s\n",d.c_str()); return d; }
 	inline path get_path( path file_path ){ return get_dir()+file_path.name()+".rxb"; }
 }

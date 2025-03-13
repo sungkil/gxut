@@ -56,6 +56,7 @@ struct path
 {
 	using value_type		= char; // follow posix-system definitions
 	using string_type		= std::basic_string<value_type>;
+	using string_view_type	= std::basic_string_view<value_type>;
 	using iterator			= value_type*;
 	using const_iterator	= const value_type*;
 	using attrib_t			= WIN32_FILE_ATTRIBUTE_DATA; // auxiliary cache information from scan()
@@ -81,46 +82,67 @@ public:
 	path( path&& p ) noexcept { _data=p._data; p._data=nullptr; } // cache moves as well
 	path( const value_type* s ) noexcept : path() { if(s) strcpy(_data,s); }
 	path( const string_type& s ) noexcept : path() { strcpy(_data,s.c_str()); }
+	path( string_view_type s ) noexcept : path() { strcpy(_data,s.data()); }
 	~path() noexcept { if(_data){ free(_data); _data=nullptr; } }
 
 	// operator overloading: assignment
-	path& operator=( const path& p ) noexcept { strcpy(_data,p._data); cache()=p.cache(); return *this; }
 	path& operator=( path&& p ) noexcept { if(_data) free(_data); _data=p._data; p._data=nullptr; return *this; }
+	path& operator=( const path& p ) noexcept { strcpy(_data,p._data); cache()=p.cache(); return *this; }
 	path& operator=( const value_type* s ) noexcept { if(s) strcpy(_data,s); return *this; }
+	path& operator=( value_type c ){ _data[0]=c; _data[1]=0; return *this; }
 	path& operator=( const string_type& s ) noexcept { strcpy(_data,s.c_str()); return *this; }
+	path& operator=( string_view_type s ) noexcept{ strcpy(_data,s.data()); return *this; }
 
 	// operator overloading: concatenations
 	path& operator+=( const path& p ){ strcat(_data,p._data+((p._data[0]==value_type('.')&&p._data[1]==value_type(preferred_separator)&&p._data[2])?2:0)); return *this; }
 	path& operator+=( const value_type* s ){ if(s[0]=='.'&&s[1]==__backslash&&s[2]) s+=2; size_t l=strlen(_data); strcpy(_data+l,s); return *this; }
+	path& operator+=( value_type c ){ size_t l=strlen(_data); _data[l]=c; _data[l+1]=0; return *this; }
 	path& operator+=( const string_type& s ){ return operator+=(s.c_str()); }
-	path& operator+=( value_type c ){ size_t l=strlen(_data); _data[l]=value_type(c); _data[l+1]=0; return *this; }
+	path& operator+=( string_view_type s ){ return operator+=(s.data()); }
 
 	path& operator/=( const path& p ){ return *this=add_preferred()+p; }
 	path& operator/=( const value_type* s ){ return *this=add_preferred()+s; }
-	path& operator/=( const string_type& s ){ return *this=add_preferred()+s.c_str(); }
 	path& operator/=( value_type c ){ return *this=add_preferred()+c; }
+	path& operator/=( const string_type& s ){ return *this=add_preferred()+s.c_str(); }
+	path& operator/=( string_view_type s ){ return *this=add_preferred()+s.data(); }
 
 	path operator+( const path& p ) const { return path(*this).operator+=(p); }
 	path operator+( const value_type* s ) const { return path(*this).operator+=(s); }
-	path operator+( const string_type& s ) const { return path(*this).operator+=(s.c_str()); }
 	path operator+( value_type c ){ return path(*this).operator+=(c); }
+	path operator+( const string_type& s ) const { return path(*this).operator+=(s.c_str()); }
+	path operator+( string_view_type s ) const { return path(*this).operator+=(s.data()); }
 
 	path operator/( const path& p ) const { return path(*this).operator/=(p); }
 	path operator/( const value_type* s ) const { return path(*this).operator/=(s); }
-	path operator/( const string_type& s ) const { return path(*this).operator/=(s.c_str()); }
 	path operator/( value_type c ) const { return path(*this).operator/=(c); }
+	path operator/( const string_type& s ) const { return path(*this).operator/=(s.c_str()); }
+	path operator/( string_view_type s ) const { return path(*this).operator/=(s.data()); }
 
 	// operator overloading: comparisons
 	bool operator==( const path& p ) const { return _stricmp(_data,p._data)==0; }
-	bool operator==( const string_type& p ) const { return _stricmp(_data,p.c_str())==0; }
 	bool operator==( const value_type* s ) const { return _stricmp(_data,s)==0; }
+	bool operator==( const string_type& p ) const { return _stricmp(_data,p.c_str())==0; }
+	bool operator==( string_view_type p ) const { return _stricmp(_data,p.data())==0; }
 	bool operator!=( const path& p ) const { return _stricmp(_data,p._data)!=0; }
-	bool operator!=( const string_type& p ) const { return _stricmp(_data,p.c_str())!=0; }
 	bool operator!=( const value_type* s ) const { return _stricmp(_data,s)!=0; }
+	bool operator!=( const string_type& p ) const { return _stricmp(_data,p.c_str())!=0; }
+	bool operator!=( string_view_type p ) const { return _stricmp(_data,p.data())!=0; }
 	bool operator<( const path& p ) const { return ::_strcmplogical(_data,p._data)<0; }
+	bool operator<( const value_type* s ) const { return _strcmplogical(_data,s)<0; }
+	bool operator<( const string_type& s ) const { return _strcmplogical(_data,s.c_str())<0; }
+	bool operator<( string_view_type s ) const { return _strcmplogical(_data,s.data())<0; }
 	bool operator>( const path& p ) const { return ::_strcmplogical(_data,p._data)>0; }
+	bool operator>( const value_type* s ) const { return _strcmplogical(_data,s)>0; }
+	bool operator>( const string_type& s ) const { return _strcmplogical(_data,s.c_str())>0; }
+	bool operator>( string_view_type s ) const { return _strcmplogical(_data,s.data())>0; }
 	bool operator<=( const path& p ) const { return ::_strcmplogical(_data,p._data)<=0; }
+	bool operator<=( const value_type* s ) const { return _strcmplogical(_data,s)<=0; }
+	bool operator<=( const string_type& s ) const { return _strcmplogical(_data,s.c_str())<=0; }
+	bool operator<=( string_view_type s ) const { return _strcmplogical(_data,s.data())<=0; }
 	bool operator>=( const path& p ) const { return ::_strcmplogical(_data,p._data)>=0; }
+	bool operator>=( const value_type* s ) const { return _strcmplogical(_data,s)>=0; }
+	bool operator>=( const string_type& s ) const { return _strcmplogical(_data,s.c_str())>=0; }
+	bool operator>=( string_view_type s ) const { return _strcmplogical(_data,s.data())>=0; }
 
 	// operator overloading: array operator
 	inline value_type& operator[]( ptrdiff_t i ){ return _data[i]; }
@@ -129,53 +151,36 @@ public:
 	// operator overloading: casting and conversion
 	value_type* data(){ return _data; }
 	const value_type* c_str() const { return _data; }
+	operator string_view_type () const { return {_data,size()}; }
 
 	// iterators
 	iterator begin() const { return _data; }
-	iterator end() const { return _data+strlen(_data); }
+	iterator end() const { return _data+size(); }
 	value_type& front() const { return *_data; }
-	value_type& back() const { return *_data==0?*_data:_data[strlen(_data)-1]; }
+	value_type& back() const { return *_data==0?*_data:_data[size()-1]; }
 
 	// size
-	void clear(){ _data[0]=0; clear_cache(); }
-	bool empty() const { return _data[0]==0; }
-	size_t size() const { return strlen(_data); }
+	__forceinline void clear(){ _data[0]=0; clear_cache(); }
+	__forceinline bool empty() const { return _data[0]==0; }
+	__forceinline size_t size() const { return strlen(_data); }
 
 	// crc32c/md5 checksums of the file content
 	inline uint crc() const;	// implemented in gxmemory.h
 	inline uint4 md5() const;	// implemented in gxmemory.h
 
-	// in-place transforms
-	void make_preferred()	const {	value_type* t=_data; for(size_t k=0,l=strlen(t);k<l;k++,t++) if(*t==__slash) *t=__backslash; }
-protected:
-	void canonicalize(); // remove redundancies in directories (e.g., "../some/..", "./" )
-public:
-
-	// system-related: slash, backslash, unix, quote
+	// separator opertions
+	void make_preferred()	const {	value_type* t=_data; for(size_t k=0,l=strlen(t);k<l;k++,t++) if(*t==__slash) *t=__backslash; } // in-place transforms
 	path to_preferred()		const { return preferred_separator==__backslash?to_backslash():to_slash(); }
 	path to_backslash()		const {	path p(*this); value_type* t=p._data; for(size_t k=0,l=p.size();k<l;k++,t++) if(*t==__slash) *t=__backslash; return p; }
 	path to_slash()			const {	path p(*this); value_type* t=p._data; for(size_t k=0,l=p.size();k<l;k++,t++) if(*t==__backslash) *t=__slash; return p; }
-	path to_dot()			const {	path p(*this); value_type* t=p._data; for(size_t k=0,l=p.size();k<l;k++,t++) if(*t==__backslash||*t==__slash) *t='.'; return p; }
 	path add_preferred()	const { return preferred_separator==__backslash?add_backslash():add_slash(); }
 	path add_backslash()	const { path p(*this); size_t l=p.size(); if(l&&p._data[l-1]==__slash) p._data[l-1]=__backslash; else if(l&&p._data[l-1]!=__backslash){p._data[l]=__backslash;p._data[l+1]='\0';} return p; }
 	path add_slash()		const { path p(*this); size_t l=p.size(); if(l&&p._data[l-1]==__backslash) p._data[l-1]=__slash; else if(l&&p._data[l-1]!=__slash){p._data[l]=__slash;p._data[l+1]='\0';} return p; }
 	path remove_backslash()	const { path p(*this); size_t l=p.size(); if(l&&(p._data[l-1]==__backslash||p._data[l-1]==__slash)) p._data[l-1]='\0'; return p; }
 	path remove_slash()		const { path p(*this); size_t l=p.size(); if(l&&(p._data[l-1]==__backslash||p._data[l-1]==__slash)) p._data[l-1]='\0'; return p; }
+	//path to_dot()			const {	path p(*this); value_type* t=p._data; for(size_t k=0,l=p.size();k<l;k++,t++) if(*t==__backslash||*t==__slash) *t='.'; return p; }
 	path unix()				const {	path p(*this); p.canonicalize(); p=p.to_slash(); if(p.size()<2||p.is_relative()||p.is_unc()||p.is_rsync()||p.is_remote()) return p; if(p._data[1]==':'){ p._data[1]=value_type(tolower(p._data[0])); p._data[0]=__slash; } return p; }
 	path cygwin()			const { path p(*this); p.canonicalize(); p=p.to_slash(); if(p.size()<2||p.is_relative()||p.is_unc()||p.is_rsync()||p.is_remote()) return p; path p2; snprintf( p2._data, capacity, "/cygdrive/%c%s", tolower(p[0]), p._data+2 ); return p2; }
-
-	// split path
-	struct split_t { value_type *drive, *dir, *fname, *ext; };
-	__forceinline split_t split( bool drive=false, bool dir=false, bool fname=false, bool ext=false ) const
-	{
-		auto* r=drive?__strbuf<wchar_t>(_MAX_DRIVE):nullptr;
-		auto* d=dir?__strbuf<wchar_t>(_MAX_DIR):nullptr;
-		auto* n=fname?__strbuf<wchar_t>(_MAX_FNAME):nullptr;
-		auto* x=ext?__strbuf<wchar_t>(_MAX_EXT):nullptr;
-		_wsplitpath_s(atow(_data),r,r?_MAX_DRIVE:0,d,d?_MAX_DIR:0,n,n?_MAX_FNAME:0,x,x?_MAX_EXT:0);
-		if(r&&*r) *r=value_type(toupper(*r));
-		return split_t{(value_type*)wtoa(r),(value_type*)wtoa(d),(value_type*)wtoa(n),(value_type*)wtoa(x)};
-	}
 
 	// helpers for C-string functions
 	bool find( const char* s, bool case_insensitive=true ){ return (case_insensitive?_stristr(_data,s):strstr(_data,s))!=nullptr; }
@@ -236,15 +241,16 @@ public:
 
 	// content manipulations
 	path remove_first_dot()	const { return (strlen(_data)>2&&_data[0]=='.'&&_data[1]==__backslash) ? path(_data+2) : *this; }
-	path remove_extension() const { split_t si=split(true,true,true); auto* b=__strbuf(capacity); snprintf(b,capacity,"%s%s%s",si.drive, si.dir, si.fname); return b; }
-	path replace_extension( path ext ) const { if(ext.empty()) return *this; split_t si=split(true,true,true); path p; snprintf(p._data, capacity, "%s%s%s%s%s", si.drive, si.dir, si.fname, ext[0]=='.'?"":".", ext._data); return p; }
+	path remove_extension() const { auto si=split(true,true,true); auto* b=__strbuf(capacity); snprintf(b,capacity,"%s%s%s",si.drive, si.dir, si.fname); return b; }
+	path replace_extension( path ext ) const { if(ext.empty()) return *this; auto si=split(true,true,true); path p; snprintf(p._data, capacity, "%s%s%s%s%s", si.drive, si.dir, si.fname, ext[0]=='.'?"":".", ext._data); return p; }
 	vector<path> explode( char delim=preferred_separator ) const { vector<path> L; path s=preferred_separator==__slash?to_slash():*this; L.reserve(16); value_type* ctx=nullptr; const value_type d[2]={delim,0}; for(value_type* t=strtok_s(s._data,d,&ctx); t; t=strtok_s(0,d,&ctx)) L.emplace_back(t); return L; }
 
 	// directory attributes
 	bool has_file( const path& file_name ) const { return is_dir()&&operator/(file_name).exists(); }
 
-	// chdir/make/copy/delete file/dir operations
-	bool mkdir() const; // make all super directories
+	// file/dir operations
+	// make all super directories recursively
+	bool mkdir() const { return gx::mkdir(_data); }
 	bool copy_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()||dst.empty()) return false; if(dst.is_dir()||dst.back()==__backslash) dst=dst.add_backslash()+name(); dst.dir().mkdir(); if(dst.exists()&&overwrite){ if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } return bool(CopyFileW( atow(c_str()), atow(dst.c_str()), overwrite?FALSE:TRUE)); }
 	bool move_file( path dst ) const { return !*_data||!dst._data||is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(atow(_data),atow(dst._data))!=0 : !copy_file(dst,true) ? false: rmfile(); }
 #ifndef _INC_SHELLAPI
@@ -263,18 +269,12 @@ public:
 	void open_dir() const { dir().open(nullptr,true); }
 #endif
 
-	// time stamp
+	// time functions
 	static const char* timestamp( const struct tm* t ){char* buff=__strbuf(capacity);sprintf(buff,"%04d%02d%02d%02d%02d%02d",t->tm_year+1900,t->tm_mon+1,t->tm_mday,t->tm_hour,t->tm_min,t->tm_sec);return buff;}
 	static const char* timestamp( FILETIME f ){ SYSTEMTIME s;FileTimeToSystemTime(&f,&s);char* buff=__strbuf(capacity);sprintf(buff,"%04d%02d%02d%02d%02d%02d",s.wYear,s.wMonth,s.wDay,s.wHour,s.wMinute,s.wSecond);return buff; }
-	const char* ctimestamp() const { if(!exists()) return ""; stat_t s=stat(); struct tm t; _gmtime64_s(&t,&s.st_ctime); return timestamp(&t); }
-	const char* atimestamp() const { if(!exists()) return ""; stat_t s=stat(); struct tm t; _gmtime64_s(&t,&s.st_atime); return timestamp(&t); }
 	const char* mtimestamp() const { if(!exists()) return ""; stat_t s=stat(); struct tm t; _gmtime64_s(&t,&s.st_mtime); return timestamp(&t); }
 
-	FILETIME cfiletime() const { update_cache(); return cache().ftCreationTime; }
-	FILETIME afiletime() const { update_cache(); return cache().ftLastAccessTime; }
 	FILETIME mfiletime() const { update_cache(); return cache().ftLastWriteTime; }
-	SYSTEMTIME csystemtime() const { return FileTimeToSystemTime(cfiletime()); }
-	SYSTEMTIME asystemtime() const { return FileTimeToSystemTime(afiletime()); }
 	SYSTEMTIME msystemtime() const { return FileTimeToSystemTime(mfiletime()); }
 	void set_filetime( const FILETIME* ctime, const FILETIME* atime, const FILETIME* mtime ) const { if(!exists()) return; HANDLE h=CreateFileW(atow(c_str()),FILE_WRITE_ATTRIBUTES,0,nullptr,OPEN_EXISTING,0,nullptr); if(!h)return; auto& c=cache(); if(ctime) c.ftCreationTime=*ctime; if(atime) c.ftLastAccessTime=*atime; if(mtime) c.ftLastWriteTime=*mtime; SetFileTime(h, ctime, atime, mtime ); CloseHandle(h); }
 	void set_filetime( FILETIME f ) const { set_filetime(&f,&f,&f); }
@@ -290,40 +290,35 @@ public:
 	bool write_file( const wchar_t* s ) const;
 	bool is_binary_file() const	{ FILE* f=fopen("rb"); if(!f) return false; char b[4096]; while(1){ size_t n=fread(b, 1, sizeof(b), f); if(!n) break; if(memchr(b, 0, n)){ fclose(f); return true; } } fclose(f); return false; }
 
-	// temporary directories
-	static path temp( bool local=true, path local_dir="" ); // local_dir is used only when local is true
-
-	// utilities
-	static path serial( path dir, const char* prefix, const char* postfix, int numzero=4 );
-
 	// scan(): ext_filter (specific extensions delimited by semicolons), str_filter (path should contain this string)
 	template <bool recursive=true> vector<path> scan( const char* ext_filter=nullptr, const char* pattern=nullptr, bool b_subdirs=false ) const;
 	template <bool recursive=true> vector<path> subdirs( const char* pattern=nullptr ) const;
 
 protected:
+
+	struct __split_t { value_type *drive, *dir, *fname, *ext; };
+	struct __scan_t { vector<path> result; struct { bool recursive, subdirs, dir, glob; } b; struct { sized_ptr_t<wchar_t>* v; size_t l; } ext; struct { const wchar_t* pattern; size_t l; } glob; };
+
 	__forceinline attrib_t& cache() const { return *((attrib_t*)(_data+capacity)); }
-#if defined _M_IX86
-	static size_t file_size( FILE* fp ){ if(!fp) return 0; auto p=ftell(fp); fseek(fp,0,SEEK_END); size_t s=ftell(fp); fseek(fp,p,SEEK_SET); return s; }
-#elif defined(_M_X64)||defined(__LP64__)
-	static size_t file_size( FILE* fp ){ if(!fp) return 0; auto p=_ftelli64(fp); _fseeki64(fp,0,SEEK_END); size_t s=_ftelli64(fp); _fseeki64(fp,p,SEEK_SET); return s; }
-#endif
-	
-	struct scan_t { vector<path> result; struct { bool recursive, subdirs, dir, glob; } b; struct { sized_ptr_t<wchar_t>* v; size_t l; } ext; struct { const wchar_t* pattern; size_t l; } glob; };
-	void scan_recursive( path dir, scan_t& si ) const;
-	void subdirs_recursive( path dir, scan_t& si ) const;
+	__split_t split( bool b_drive=false, bool b_dir=false, bool b_fname=false, bool b_ext=false ) const;
+	void canonicalize(); // remove redundancies in directories (e.g., "../some/..", "./" )
+	void scan_recursive( path dir, __scan_t& si ) const;
+	void subdirs_recursive( path dir, __scan_t& si ) const;
 };
 
 //***********************************************
 // definitions of long inline member functions
 
-__noinline bool path::mkdir() const // make all super directories
+__noinline path::__split_t path::split( bool b_drive, bool b_dir, bool b_fname, bool b_ext ) const
 {
-	if(exists()) return false;
-	auto v=to_backslash().dir().ancestors(); if(v.empty()) return false; auto bl=v.back().size();
-	if(is_unc()){ auto r=dir().unc_root();size_t rl=r.size();if(bl<=rl+1){v.pop_back();bl=v.back().size();}if(bl<=rl+1)v.pop_back(); }
-	else if(bl<=3){ if(v.back()[1]==':')v.pop_back();else if(bl<=1)v.pop_back(); }
-	for( auto it=v.rbegin(); it!=v.rend(); it++ ){ if(!it->exists()&&::mkdir(it->_data)!=0) return false; }
-	return true;
+	wchar_t* drive	= b_drive?__strbuf<wchar_t>(_MAX_DRIVE):nullptr;	size_t rl = b_drive?_MAX_DRIVE:0;
+	wchar_t* dir	= b_dir?__strbuf<wchar_t>(_MAX_DIR):nullptr;		size_t dl = b_dir?_MAX_DIR:0;
+	wchar_t* fname	= b_fname?__strbuf<wchar_t>(_MAX_FNAME):nullptr;	size_t nl = b_fname?_MAX_FNAME:0;
+	wchar_t* ext	= b_ext?__strbuf<wchar_t>(_MAX_EXT):nullptr;		size_t xl = b_ext?_MAX_EXT:0;
+
+	_wsplitpath_s(atow(_data),drive,rl,dir,dl,fname,nl,ext,xl);
+	if(drive&&*drive) *drive=value_type(toupper(*drive));
+	return __split_t{drive?(value_type*)wtoa(drive):nullptr,dir?(value_type*)wtoa(dir):nullptr,fname?(value_type*)wtoa(fname):nullptr,ext?(value_type*)wtoa(ext):nullptr};
 }
 
 __noinline FILE* path::fopen( const char* mode, bool utf8 ) const
@@ -338,7 +333,7 @@ template<> __noinline sized_ptr_t<void> path::read_file<void>() const
 {
 	sized_ptr_t<void> p={nullptr,0};
 	FILE* fp=fopen("rb",false); if(!fp) return {nullptr,0};
-	p.size = file_size(fp); if(!p.size){ fclose(fp); return {nullptr, 0}; }
+	p.size = gx::file_size(fp); if(!p.size){ fclose(fp); return {nullptr, 0}; }
 	p.ptr=malloc(p.size+1); if(p.ptr) fread(p.ptr,1,p.size,fp); ((char*)p.ptr)[p.size]=0;
 	fclose(fp);
 	return p;
@@ -348,7 +343,7 @@ template<> __noinline sized_ptr_t<wchar_t> path::read_file<wchar_t>() const
 {
 	sized_ptr_t<wchar_t> p={nullptr,0};
 	FILE* fp=fopen("r",true); if(!fp) return {nullptr,0};
-	size_t size0 = file_size(fp); if(!size0){ fclose(fp); p.ptr=(wchar_t*)L""; return p; }
+	size_t size0 = gx::file_size(fp); if(!size0){ fclose(fp); p.ptr=(wchar_t*)L""; return p; }
 
 	std::wstring buffer; buffer.reserve(size0*2);
 	wchar_t buff[4096]; while(fgetws(buff,4096,fp)) buffer+=buff; fclose(fp);
@@ -363,7 +358,7 @@ template<> __noinline sized_ptr_t<char> path::read_file<char>() const
 {
 	sized_ptr_t<char> p={nullptr,0};
 	FILE* fp=fopen("r"); if(!fp) return {nullptr,0};
-	size_t size0 = file_size(fp); if(!size0){ fclose(fp); p.ptr=(char*)""; return p; }
+	size_t size0 = gx::file_size(fp); if(!size0){ fclose(fp); p.ptr=(char*)""; return p; }
 
 	string buffer; buffer.reserve(size0*2);
 	char buff[4096]; while(fgets(buff,4096,fp)) buffer+=buff; fclose(fp);
@@ -422,7 +417,7 @@ vector<path> path::scan( const char* ext_filter, const char* pattern, bool b_sub
 	path src=empty()?path(".\\"):(is_relative()?absolute(".\\"):*this).add_backslash(); if(!src.is_dir()) return vector<path>{};
 	vector<std::wstring> exts; if(ext_filter&&ext_filter[0]){ value_type ef[4096]={}, *ctx=nullptr; strcpy(ef,ext_filter); for(value_type* e=strtok_s(ef,";",&ctx);e;e=strtok_s(nullptr,";",&ctx)) if(e[0]) exts.push_back(L"."s+atow(e)); }
 	vector<sized_ptr_t<wchar_t>> eptr; for( auto& e:exts ) eptr.emplace_back(sized_ptr_t<wchar_t>{(wchar_t*)e.c_str(),e.size()});
-	scan_t si;
+	__scan_t si;
 	si.b.recursive=recursive; si.b.subdirs=b_subdirs; si.b.dir=recursive||b_subdirs; si.b.glob=pattern&&strpbrk(pattern,"*?");
 	si.ext.v=eptr.size()>0?&eptr[0]:nullptr; si.ext.l=eptr.size();
 	std::wstring wpattern=pattern?atow(pattern):L""; si.glob.pattern=pattern?wpattern.c_str():nullptr; si.glob.l=pattern?wpattern.size():0;
@@ -430,7 +425,19 @@ vector<path> path::scan( const char* ext_filter, const char* pattern, bool b_sub
 	return si.result;
 }
 
-__noinline void path::scan_recursive( path dir, path::scan_t& si ) const
+template <bool recursive> __noinline
+vector<path> path::subdirs( const char* pattern ) const
+{
+	path src=empty()?path(".\\"):(is_relative()?absolute(".\\"):*this).add_backslash(); if(!src.is_dir()) return vector<path>{};
+	__scan_t si;
+	si.b.recursive=recursive; si.b.subdirs=true; si.b.dir=true; si.b.glob=pattern&&strpbrk(pattern,"*?");
+	si.ext.v=nullptr; si.ext.l=0;
+	std::wstring wpattern=pattern?atow(pattern):L""; si.glob.pattern=pattern?wpattern.c_str():nullptr; si.glob.l=pattern?wpattern.size():0;
+	si.result.reserve(1ull<<12);subdirs_recursive(src,si);si.result.shrink_to_fit();
+	return si.result;
+}
+
+__noinline void path::scan_recursive( path dir, path::__scan_t& si ) const
 {
 	wchar_t wdir[capacity]={}; wcscpy(wdir,atow(dir._data));
 	WIN32_FIND_DATAW fd={}; HANDLE h=FindFirstFileExW(atow((dir+"*.*")._data), FindExInfoBasic/*minimal(faster)*/, &fd, FindExSearchNameMatch, 0, FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
@@ -461,19 +468,7 @@ __noinline void path::scan_recursive( path dir, path::scan_t& si ) const
 	}
 }
 
-template <bool recursive> __noinline
-vector<path> path::subdirs( const char* pattern ) const
-{
-	path src=empty()?path(".\\"):(is_relative()?absolute(".\\"):*this).add_backslash(); if(!src.is_dir()) return vector<path>{};
-	scan_t si;
-	si.b.recursive=recursive; si.b.subdirs=true; si.b.dir=true; si.b.glob=pattern&&strpbrk(pattern,"*?");
-	si.ext.v=nullptr; si.ext.l=0;
-	std::wstring wpattern=pattern?atow(pattern):L""; si.glob.pattern=pattern?wpattern.c_str():nullptr; si.glob.l=pattern?wpattern.size():0;
-	si.result.reserve(1ull<<12);subdirs_recursive(src,si);si.result.shrink_to_fit();
-	return si.result;
-}
-
-__noinline void path::subdirs_recursive( path dir, path::scan_t& si ) const
+__noinline void path::subdirs_recursive( path dir, path::__scan_t& si ) const
 {
 	wchar_t wdir[capacity]={}; wcscpy(wdir,atow(dir._data));
 	WIN32_FIND_DATAW fd={}; HANDLE h=FindFirstFileExW(atow((dir+"*.*")._data), FindExInfoBasic/*minimal(faster)*/, &fd, FindExSearchNameMatch, 0, FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
@@ -492,25 +487,6 @@ __noinline void path::subdirs_recursive( path dir, path::scan_t& si ) const
 	}
 	FindClose(h);
 	if(si.b.recursive){ for(auto& c:sdir) subdirs_recursive(c,si); }
-}
-
-__noinline path path::serial( path dir, const char* prefix, const char* postfix, int numzero )
-{
-	dir=dir.add_backslash(); if(!dir.exists()) dir.mkdir();
-	int nMaxFiles=1; for(int k=0;k<numzero;k++) nMaxFiles*=10;
-	char fmt[capacity]={}; snprintf(fmt,path::capacity,"%s%s%%0%dd%s%s",dir.c_str(),prefix,numzero,postfix&&postfix[0]?".":"",postfix);
-	char buff[capacity]={}; for(int k=0;k<nMaxFiles;k++){snprintf(buff,capacity,fmt,k); if(!path(buff).exists()) break; }
-	return buff;
-}
-
-__noinline path path::temp( bool local, path local_dir )
-{
-	// get local_appdata
-	char* buff=getenv("LOCALAPPDATA");
-	static path r=path(buff?buff:"").add_backslash()+gx::path_key(exe::name())+__backslash;
-	path t=r; if(local){ if(local_dir.empty()) local_dir=exe::dir(); t+=path("local\\")+::add_backslash(gx::path_key(local_dir.c_str()).c_str()); }
-	if(!t.exists()) t.mkdir();
-	return t;
 }
 
 __noinline path path::relative( path from, bool first_dot ) const

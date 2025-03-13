@@ -290,7 +290,7 @@ __noinline void md5::update( const void* data, size_t size )
 __noinline uint path::crc() const
 {
 	FILE* fp=fopen("rb"); if(!fp) return 0;
-	size_t bs=min(file_size(fp),size_t(1<<16)); if(bs==0){ fclose(fp); return 0; }
+	size_t bs=min(gx::file_size(fp),size_t(1<<16)); if(bs==0){ fclose(fp); return 0; }
 	char* buff=(char*)malloc(bs); uint c=0; size_t r=0; if(buff){ while(r=fread(buff,1,bs,fp)) c=::crc32c(c,buff,r); }
 	fclose(fp); if(buff) free(buff);
 	return c;
