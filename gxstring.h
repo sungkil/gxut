@@ -136,7 +136,12 @@ template<> inline const char* ntoa<dvec4>( dvec4 v ){ return dtoa(v); }
 #endif
 
 // bitwise conversion
-template <class T> const char* unpack_bits( const T& v ){ size_t n=sizeof(T)*8; char* buff=__strbuf(n); buff[n]=0; for(size_t k=0,s=0;k<n;k++,s=k%8) buff[k]=(((const char*)&v)[k>>3]&(1<<s))?'1':'0'; return buff; }
+template <class T> const char* unpack_bits( const T& v )
+{
+	char* buff=__strbuf(sizeof(T)*8); buff[sizeof(T)*8]=0;
+	for(int k=0,B=int(sizeof(T))-1;B>=0;B--){ for(int b=7;b>=0;b--) buff[k++]=(((const char*)&v)[B]&(1<<b))?'1':'0'; }
+	return buff;
+}
 
 // conversion int to string with commas
 __noinline const char* itoasep( int n )

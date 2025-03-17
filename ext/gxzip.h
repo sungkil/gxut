@@ -122,7 +122,7 @@ struct zip_t : public izip_t
 	HZIP hzip=nullptr;
 
 	~zip_t(){ release(); }
-	zip_t( const path& _file_path ){ hzip=OpenZip( atow((file_path=_file_path.absolute()).c_str()), nullptr); if(!hzip) file_path.clear(); else _zipmtime64=FileTimeToUint64(_zipmtime=file_path.mfiletime()); }
+	zip_t( const path& _file_path ){ hzip=OpenZip( atow((file_path=_file_path.absolute()).c_str()), nullptr); if(!hzip) file_path.clear(); else _zipmtime=file_path.mfiletime(); }
 	zip_t( void* ptr, size_t size ){ hzip=OpenZip( ptr, uint(size), nullptr ); }
 
 	virtual void release(){ for( auto& e : entries ){ if(e.ptr){ free(e.ptr); e.ptr=nullptr; }} entries.clear(); if(hzip){ CloseZipU(hzip); hzip=nullptr; } }
@@ -133,10 +133,15 @@ struct zip_t : public izip_t
 protected:
 
 	FILETIME	_zipmtime={};	// to fix dostime error
-	uint64_t	_zipmtime64=0;	// 
-	bool		_in_dostime_error( FILETIME t ){ return (_zipmtime64&&abs(int(FileTimeToUint64(t)-_zipmtime64))<=FileTimeOffset(0,0,0,2)); }
-	FILETIME	_fix_dostime( FILETIME t, path f="" ){ if(!_in_dostime_error(t)) return t; if(!f.empty()&&f.exists()) f.set_filetime(nullptr,nullptr,&_zipmtime); return _zipmtime; }
+	FILETIME	_fix_dostime( FILETIME t, path f="" );
 };
+
+inline FILETIME zip_t::_fix_dostime( FILETIME t, path f )
+{
+	time_t t0 = (_zipmtime.dwLowDateTime||_zipmtime.dwHighDateTime)?FileTimeToTime(_zipmtime):0;
+	if(!t0||abs(FileTimeToTime(t)-t0)>2) return t;
+	if(!f.empty()&&f.exists()) f.utime(t0); return _zipmtime;
+}
 
 #ifdef __7ZIP_H__
 struct szip_t : public izip_t
@@ -154,7 +159,7 @@ struct szip_t : public izip_t
 
 	virtual void release(){for(auto& e:entries){if(e.ptr){free(e.ptr);e.ptr=nullptr;}}entries.clear();SzArEx_Free(&db,&alloc_impl);if(look_stream){delete look_stream;look_stream=nullptr;} if(file_stream){File_Close(&file_stream->file);delete file_stream;file_stream=nullptr;} if(mem_stream){delete mem_stream;mem_stream=nullptr;} }
 	virtual bool load(){if(!look_in_stream()) return false; SzArEx_Init(&db);if(SzArEx_Open(&db,look_in_stream(),&alloc_impl,&alloc_temp)!=SZ_OK){printf("unable to SzArEx_Open(%s)\n",file_path.c_str());release();return false;}for( uint k=0, kn=db.NumFiles; k<kn; k++ ){if(SzArEx_IsDir(&db,k)) continue;zipentry_t e;memset(&e,0,sizeof(e));e.index=k;SzArEx_GetFileNameUtf16(&db,k,(ushort*)e.name);e.attr=SzBitWithVals_Check(&db.Attribs,k)?db.Attribs.Vals[k]:0;if(SzBitWithVals_Check(&db.MTime,k)) memcpy(&e.mtime,db.MTime.Vals+k,sizeof(FILETIME));e.size=SzArEx_GetFileSize(&db,k);e.unc_size=long(e.size);entries.emplace_back(e);}return true;}
-	virtual bool extract_to_files( path dir, const char* name=nullptr ){uchar* ob=nullptr;uint bl=-1;for(size_t k=0,kn=entries.size(),of=0,obs=0,os=0;k<kn;k++){auto& e=entries[k];if(e.is_dir()||(name&&_stricmp(name,wtoa(e.name))!=0)) continue; path p=dir+wtoa(e.name); if(!p.dir().exists()) p.dir().mkdir(); if(SZ_OK!=SzArEx_Extract(&db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){printf("unable to SzArEx_Extract(%s)\n",wtoa(e.name));return false;} FILE* fp=p.fopen("wb"); if(!fp){printf("unable to fopen(%s)\n",p.c_str()); return false; } fwrite(ob+of,os,1,fp );fclose(fp); if(e.attr) SetFileAttributesW(atow(p.c_str()), e.attr); p.set_filetime(nullptr, nullptr, &e.mtime); } if(ob) alloc_impl.Free(&alloc_impl, ob); return true; }
+	virtual bool extract_to_files( path dir, const char* name=nullptr ){uchar* ob=nullptr;uint bl=-1;for(size_t k=0,kn=entries.size(),of=0,obs=0,os=0;k<kn;k++){auto& e=entries[k];if(e.is_dir()||(name&&_stricmp(name,wtoa(e.name))!=0)) continue; path p=dir+wtoa(e.name); if(!p.dir().exists()) p.dir().mkdir(); if(SZ_OK!=SzArEx_Extract(&db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){printf("unable to SzArEx_Extract(%s)\n",wtoa(e.name));return false;} FILE* fp=p.fopen("wb"); if(!fp){printf("unable to fopen(%s)\n",p.c_str()); return false; } fwrite(ob+of,os,1,fp );fclose(fp); if(e.attr) SetFileAttributesW(atow(p.c_str()), e.attr); p.utime(FileTimeToTime(e.mtime)); } if(ob) alloc_impl.Free(&alloc_impl, ob); return true; }
 	virtual bool extract_to_memory( const char* name=nullptr ){if(!look_in_stream())return false;uchar* ob=nullptr;uint bl=-1;for(size_t k=0,kn=entries.size(),of=0,obs=0,os=0;k<kn;k++){auto& e=entries[k];if(e.is_dir()||e.ptr||(name&&_stricmp(name,wtoa(e.name))!=0)) continue;if(SZ_OK!=SzArEx_Extract(&db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){printf("unable to SzArEx_Extract(%s)\n",wtoa(e.name));return false;} e.ptr=malloc(os); if(e.ptr) memcpy(e.ptr,ob+of,e.size=os); } if(ob) alloc_impl.Free(&alloc_impl,ob); return true; }
 
 	static void crc_generate_table(){ static bool b=false; if(b) return; CrcGenerateTable(); b=true; }
@@ -310,27 +315,27 @@ struct binary_cache
 	__noinline bool open( bool read=true )
 	{
 		b_read = read;
-		uint64_t sig = uint64_t(std::hash<string>{}(string(__TIMESTAMP__)+signature()));
+		uint sig = crc32c(string(__TIMESTAMP__)+signature());
 		path cpath=cache_path(), zpath=zip_path();
 		if(b_read)
 		{
 			if(zpath.exists()&&!decompress()) return false;
 			if(!cpath.exists()) return false;
 			fp = cpath.fopen("rb");
-			uint64_t s=0; fscanf( fp, "%*s = %llu\n", &s );
+			uint s=0; fscanf( fp, "%*s = %u\n", &s );
 			if(!fp||sig!=s){ if(fp) fclose(fp); if(zpath.exists()) cpath.rmfile(); return false; }
 		}
 		else
 		{
 			if(!cpath.dir().exists()) cpath.dir().mkdir();
 			fp = cpath.fopen("wb"); if(!fp) return false;
-			fprintf( fp, "signature = %llu\n", sig );
+			fprintf( fp, "signature = %u\n", sig );
 		}
 		return true;
 	}
 
-	vector<uchar> pack_bits( vector<bool>& v ){ vector<uchar> b((v.size()+7)>>3,0); for(size_t k=0,kn=v.size();k<kn;k++) if(v[k]) b[k>>3] |= (1<<uchar(k&7)); return b; }
-	vector<bool> unpack_bits( vector<uchar>& b, size_t max_count=0xffffffff ){ vector<bool> v(min(b.size()*8,max_count),0); for(size_t k=0,kn=v.size();k<kn;k++) if(b[k>>3]&(1<<uchar(k&7))) v[k]=true; return v; }
+	vector<uchar> pack_bits( vector<bool>& v ){ vector<uchar> b((v.size()+7)>>3,0); for(size_t k=0,kn=v.size();k<kn;k++) if(v[k]) b[k>>3] |= (1<<uchar(7-(k&7))); return b; }
+	vector<bool> unpack_bits( vector<uchar>& b, size_t max_count=0xffffffff ){ vector<bool> v(min(b.size()*8,max_count),false); for(size_t k=0,kn=v.size();k<kn;k++) if(b[k>>3]&(1<<uchar(7-(k&7)))) v[k]=true; return v; }
 
 	bool compress( bool rm_src=true );
 	bool decompress();

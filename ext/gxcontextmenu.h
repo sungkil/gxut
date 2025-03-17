@@ -72,7 +72,7 @@ inline bool registry_t::add_shell_office( const char* prefix, int end, int begin
 
 inline bool registry_t::install( bool b_dry )
 {
-	path reg_path = gx::localtemp()+exe_path().name()+".reg";
+	path reg_path = localtemp()+exe_path().name()+".reg";
 	FILE* fp = reg_path.fopen("w,ccs=utf-16le"); if(!fp){ printf("unable to open %s\n", reg_path.slash()); return false; }
 	fputws( atow(buffer.c_str()), fp );
 	fclose(fp);

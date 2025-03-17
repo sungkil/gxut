@@ -50,7 +50,7 @@ template <class T, size_t N> struct block_allocator
 		{
 			// otherwise create a new file
 			SYSTEMTIME s={}; GetSystemTime(&s); char file_name[1024]={}; snprintf( file_name, 1024, "fa%p%02d%02d%02d%02d%04d%05d", GetCurrentThreadId(), s.wDay, s.wHour, s.wMinute, s.wSecond, s.wMilliseconds, rand() ); // make unique file name
-			path file_path = gx::localtemp()+"gxallocator\\"+file_name; if(!file_path.dir().exists()) file_path.dir().mkdir();
+			path file_path = localtemp()+"gxallocator\\"+file_name; if(!file_path.dir().exists()) file_path.dir().mkdir();
 
 			file_map fm={};
 			fm.capacity = n>block_allocator_thresh ? n*sizeof(T) : N*n*sizeof(T);	// use block allocation only for small allocation

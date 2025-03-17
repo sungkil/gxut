@@ -244,7 +244,7 @@ struct explorer_t
 			clear();
 		}
 		clear();
-		return folder_path.empty()?folder_path:folder_path.add_backslash();
+		return folder_path.empty()?folder_path:folder_path.append_slash();
 	}
 
 	void goto_folder( HWND hExplorerWnd, const path& folder_path )

@@ -867,7 +867,7 @@ namespace gl {
 		
 		void flatten( const char* file_path ) const
 		{
-			string d=gx::dir(file_path); if(!gx::file_exists(d.c_str())) mkdir(d.c_str());
+			path d=path(file_path).dir(); if(!d.exists()) d.mkdir();
 			FILE* fp=fopen(file_path,"wb"); if(!fp) return;
 			string f=flatten(); fwrite(f.c_str(),1,f.size(),fp); fclose(fp);
 			fclose(fp);
@@ -884,7 +884,7 @@ namespace gl {
 		void export_shader_source( GLuint shader_type, const char* dir, const char* name, bool b_print_log=true )
 		{
 			const char* ext = get_shader_extension_name( shader_type ); if(!ext||!*ext){ printf( "unable to find shader_type %d\n", int(shader_type) ); return; }
-			string file_path = string(add_backslash(dir))+name+"."+ext;
+			string file_path = string(append_slash(dir))+name+"."+ext;
 			if(b_print_log) printf( "%s.%s\n", name, ext );
 			get_shader_source(shader_type).flatten( file_path.c_str() );
 		}
@@ -1228,9 +1228,9 @@ namespace gl {
 		// shader source files
 		void export_shader_sources( const char* dir, const char* fxname="" )
 		{
-			string d=to_backslash(dir), dx=gx::extension(dir);
-			if(!d.empty()&&dx.empty()&&d.back()!='\\') d=gx::dir(d.c_str()); d += "glsl\\";
-			string f=!fxname||!*fxname?_name:gx::stem(fxname);
+			path d=path(dir).to_preferred(), dx=d.extension();
+			if(!d.empty()&&dx.empty()&&d.back()!=preferred_separator) d=d.dir(); d += "glsl\\";
+			string f=!fxname||!*fxname?_name:path(fxname).stem();
 			for( auto* p : programs ) p->source.export_shader_sources( dir, (f+"."+p->name()).c_str() );
 		}
 
@@ -1362,9 +1362,7 @@ inline gl::VertexArray* gxCreatePointVertexArray( GLsizei width, GLsizei height 
 
 inline const char* gxGetProgramBinaryPath( const char* name )
 {
-	string d = getenv("LOCALAPPDATA"); if(d.empty()){ d.reserve(PATH_MAX); GetTempPathA(PATH_MAX,d.data()); } if(d.empty()) return format("%s.bin",name);
-	d = string(add_backslash(d.c_str()))+add_backslash(gx::path_key(exe::name()).c_str())+"local\\"+add_backslash(gx::path_key(exe::dir()).c_str())+"glfx\\binary\\";
-	if(!gx::file_exists(d.c_str())) gx::mkdir(d.c_str());
+	auto d=localtemp()+"glfx\\binary\\"s; if(!d.exists()) d.mkdir();
 	return format("%s%s.bin",d.c_str(),name);
 }
 
@@ -1383,7 +1381,7 @@ inline void gxSaveProgramBinary( const char* name, GLuint ID, uint crc )
 
 inline GLuint gxLoadProgramBinary( const char* name, uint crc )
 {
-	string program_binary_path = gxGetProgramBinaryPath(name); if(!gx::file_exists(program_binary_path.c_str())) return 0;
+	path program_binary_path = gxGetProgramBinaryPath(name); if(!program_binary_path.exists()) return 0;
 	size_t crc_size=sizeof(crc), offset=crc_size+sizeof(GLenum);
 	FILE* fp = fopen(program_binary_path.c_str(),"rb"); if(!fp) return 0;
 	_fseeki64(fp,0,SEEK_END); size_t program_binary_size=_ftelli64(fp); _fseeki64(fp,0,SEEK_SET);

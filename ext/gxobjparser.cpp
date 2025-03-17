@@ -2,7 +2,6 @@
 #include <gxut/gxstring.h>
 #include <shellapi.h>
 #include <gxut/gxfilesystem.h>
-#include <gxut/gxos.h>
 #include <gxut/gxtimer.h>
 #include <gxut/ext/gxzip.h>
 #include <gxut/ext/gxobjparser.h>
@@ -56,8 +55,8 @@ __forceinline char tolower( char c ){ uchar d=static_cast<uchar>(c-'A');return d
 __forceinline path decompress( const path& file_path );
 __forceinline bool is_extension_supported( path file_path )
 {
-	if(file_path.ext()=="obj") return true;
-	const auto& am = get_archive_extensions(); if(am.find(file_path.ext().c_str())!=am.end()) return true;
+	if(file_path.extension()=="obj") return true;
+	const auto& am = get_archive_extensions(); if(am.find(file_path.extension().c_str())!=am.end()) return true;
 	return false;
 }
 
@@ -90,7 +89,7 @@ __forceinline float atof( char*& str )
 // cache implementation
 namespace obj::cache
 {
-	inline uint64_t get_parser_id( path file_path )
+	inline uint get_parser_id( path file_path )
 	{
 		static const string codestamp = 
 			string(__GX_MESH_H_TIMESTAMP__)+
@@ -100,7 +99,7 @@ namespace obj::cache
 		string s = codestamp+file_path.mtimestamp();
 		for( auto& f : file_path.dir().absolute().scan( "obj;mtl;7z;zip;jpg;jpeg;png;hdr" ) )
 			s += f.mtimestamp();
-		return uint64_t(std::hash<string>{}(s));
+		return crc32c(s);
 	}
 
 	void clear( mesh* p_mesh, bool b_log )
@@ -123,7 +122,7 @@ namespace obj::cache
 		FILE* fp = cache_path.fopen("w"); if(!fp){ printf("Unable to write %s\n",cache_path.c_str()); return; }
 
 		// save the parser's id to reflect the revision of the parser and mesh's timestamp
-		fprintf( fp, "parserid = %llu\n", get_parser_id(file_path) );
+		fprintf( fp, "parserid = %u\n", get_parser_id(file_path) );
 
 		// save mtl path
 		path mtl_path = file_path.dir()+p_mesh->mtl_path;
@@ -177,8 +176,8 @@ namespace obj::cache
 		FILE* fp = cache_path.fopen("rb"); if(!fp) return nullptr;
 
 		// get parser id
-		uint64_t parserid;
-		char buff[8192]; fgets(buff,8192,fp); sscanf( buff, "parserid = %llu\n", &parserid );
+		uint parserid;
+		char buff[8192]; fgets(buff,8192,fp); sscanf( buff, "parserid = %u\n", &parserid );
 		if(parserid!=get_parser_id(file_path)){ fclose(fp); return nullptr; }
 
 		// get the mtl name
@@ -252,7 +251,7 @@ path obj::decompress( const path& file_path )
 {
 	path dst_path;
 #if defined(__GXZIP_H__)||defined(_unzip_H)
-	if(file_path.ext()=="zip")
+	if(file_path.extension()=="zip")
 	{
 		zip_t z(file_path);
 		if(!z.load()||z.entries.empty()){ printf("%s(): unabled to load %s",__func__,file_path.c_str()); return dst_path; }
@@ -263,7 +262,7 @@ path obj::decompress( const path& file_path )
 	}
 #endif
 #if defined(__7Z_H) && defined(__7Z_MEMINSTREAM_H)
-	if(file_path.ext()=="7z")
+	if(file_path.extension()=="7z")
 	{
 		szip_t s(file_path);
 		if(!s.load()||s.entries.empty()){ printf("%s(): unabled to load %s",__func__,file_path.c_str()); return dst_path; }
@@ -337,7 +336,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	gx::timer_t t; t.begin();
 	mesh* p_mesh = nullptr;	
 
-	if(!is_extension_supported(file_path)){ printf("obj::%s(): unsupported format: %s\n",__func__, file_path.ext().c_str()); return nullptr; }
+	if(!is_extension_supported(file_path)){ printf("obj::%s(): unsupported format: %s\n",__func__, file_path.extension().c_str()); return nullptr; }
 	if(!file_path.exists()){ printf("obj::%s(): %s not exists",__func__,file_path.c_str()); return nullptr; }
 
 	//*********************************
@@ -352,7 +351,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	// 1.1 decompress zip file and remove it later after saving the cache
 	path dec_path;
 	const auto& archive_extensions = get_archive_extensions();
-	bool b_use_archive = archive_extensions.find(file_path.ext().c_str())!=archive_extensions.end();
+	bool b_use_archive = archive_extensions.find(file_path.extension().c_str())!=archive_extensions.end();
 	if(b_use_archive)
 	{
 		if(flush_messages) flush_messages( format( "Decompressing %s ...", file_path.name() ) );

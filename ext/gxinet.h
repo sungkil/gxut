@@ -32,7 +32,7 @@ struct file_t
 	string		url;		// source url
 	path		tmp, dst;	// temporary and final target path; sequetially download and copy
 	size_t		file_size=0;
-	FILETIME	mfiletime={};
+	time_t		mtime=0;
 
 	virtual ~file_t(){ release(); }
 	void release(){ if(!hfile) return; InternetCloseHandle(hfile); hfile=nullptr; }
@@ -67,9 +67,9 @@ __noinline bool file_t::open( HINTERNET session, const char* url )
 	release(); hfile=InternetOpenUrlW( session, canonical_url, 0, 0, flags, 0); if(!hfile){ release(); return false; }
 	
 	// DWORD status, dw_size=sizeof(status); if(!HttpQueryInfoW(hfile,HTTP_QUERY_STATUS_CODE|HTTP_QUERY_FLAG_NUMBER,&status,&dw_size,NULL)||status!=HTTP_STATUS_OK){ fprintf( stdout, "%s(%s): https status != HTTP_STATUS_OK\n", __func__, wtoa(url) ); release(); return false; }
-	SYSTEMTIME msystemtime={}; DWORD dw_size=sizeof(msystemtime); if(!HttpQueryInfoW(hfile,HTTP_QUERY_LAST_MODIFIED|HTTP_QUERY_FLAG_SYSTEMTIME,&msystemtime,&dw_size,NULL)){ release(); return false; }
-	msystemtime.wMilliseconds=0; // discard ms; HTTP_QUERY_LAST_MODIFIED returns varying seconds
-	SystemTimeToFileTime(&msystemtime,&mfiletime);
+	SYSTEMTIME msystime={}; DWORD dw_size=sizeof(SYSTEMTIME); if(!HttpQueryInfoW(hfile,HTTP_QUERY_LAST_MODIFIED|HTTP_QUERY_FLAG_SYSTEMTIME,&msystime,&dw_size,NULL)){ release(); return false; }
+	msystime.wMilliseconds=0; // discard ms; HTTP_QUERY_LAST_MODIFIED returns varying seconds
+	mtime = SystemTimeToTime(msystime);
 	this->url = url;
 
 	return this->hfile!=nullptr;
@@ -89,7 +89,7 @@ __noinline bool session_t::download_thread_func( vector<string> urls, path dst )
 
 	// fetch timestamp of the existing file
 	bool b_dst_exists = dst.exists();
-	FILETIME f0={}; if(b_dst_exists) f0=dst.mfiletime();
+	time_t f0=0; if(b_dst_exists) f0=dst.mtime();
 	
 	for( const auto& url : urls )
 	{
@@ -97,7 +97,7 @@ __noinline bool session_t::download_thread_func( vector<string> urls, path dst )
 		// auto s = FileTimeToSystemTime(f.mfiletime); fprintf( stdout, "%d-%d-%d-%d-%d-%d-%d", s.wYear, s.wMonth, s.wDay, s.wHour, s.wMinute, s.wSecond, s.wMilliseconds );
 
 		// server-local time difference can be up to several seconds
-		if(b_dst_exists&&!FileTimeGreater(f.mfiletime,f0)) return false; // older url file exists
+		if(b_dst_exists&&!time_greater(f.mtime,f0)) return false; // older url file exists
 		
 		if(!f.get_file_size(handle)){ fprintf(stdout,"error: unable to get file size %s\n", dst.name() );return false;} // now try to get the file size
 		vector<char> buffer(f.file_size);
@@ -114,8 +114,7 @@ __noinline bool session_t::download_thread_func( vector<string> urls, path dst )
 		fclose(fp);
 
 		// modify the time stamp
-		FILETIME fnow=now();
-		dst.set_filetime(&fnow,&fnow,&f.mfiletime);
+		dst.utime(f.mtime);
 		// fprintf( stdout, "%s\n", dst.name() );
 
 		return true;

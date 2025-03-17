@@ -22,8 +22,6 @@
 	#include <gxut/gxut.h>
 #endif
 
-#include <time.h>
-
 // compiler utility
 namespace gx {
 struct timer_t

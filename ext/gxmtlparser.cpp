@@ -1,7 +1,6 @@
 #include <gxut/gxmath.h>
 #include <gxut/gxstring.h>
 #include <shlwapi.h>
-#include <gxut/gxos.h>
 #include <gxut/gxfilesystem.h>
 #include <gxut/gxmemory.h>
 #include <gxut/gxtimer.h>
@@ -131,8 +130,8 @@ static bool is_normal_map( path file_path )
 static bool generate_normal_map( path normal_path, path bump_path, path mtl_path="" )
 {
 	if(!bump_path.exists()){ printf("%s(): %s not exists\n", __func__, bump_path.name() ); return false; }
-	FILETIME bump_mtime = bump_path.mfiletime();
-	if(normal_path.exists()&&normal_path.mfiletime()>=bump_mtime) return true;
+	time_t bump_mtime = bump_path.mtime();
+	if(normal_path.exists()&&normal_path.mtime()>=bump_mtime) return true;
 
 	gx::timer_t t;
 
@@ -184,7 +183,7 @@ static bool generate_normal_map( path normal_path, path bump_path, path mtl_path
 
 	// first write to the temporary image
 	gx::save_image( normal_path.c_str(), normal );
-	if(normal_path.exists()) normal_path.set_filetime(nullptr,nullptr,&bump_mtime);
+	if(normal_path.exists()) normal_path.utime(bump_mtime);
 
 	gx::release_image(&bump0);
 	gx::release_image(&bump);
@@ -200,7 +199,7 @@ static path get_normal_path( const path& bump_path, nocase::map<path,path>& bton
 	if(it!=bton.end()&&is_normal_map(it->second)) return it->second;
 
 	path base = bump_path.remove_extension();
-	path ext = bump_path.ext();
+	path ext = bump_path.extension();
 	
 	// remove postfix for bump
 	if(base.size()>4&&_stristr(substr(base.c_str(),-4),"bump")) base=path(substr(base.c_str(),0,-4))+"norm";
@@ -295,7 +294,7 @@ static float optimize_textures( path file_path, vector<mtl_section_t>& sections 
 		if(used_images.find(f)!=used_images.end()) continue;
 		if(dups.find(f)==dups.end()) // do not delete other non-duplicate non-used images
 		{
-			if(_stricmp(f.name(false),"index")!=0) printf( "[%s] potential redundancy: %s\n", file_path.name(), f.name() );
+			if(f.stem()!="index") printf( "[%s] potential redundancy: %s\n", file_path.name(), f.name() );
 			continue;
 		}
 		if(!f.delete_file(true)) continue;
@@ -307,7 +306,7 @@ static float optimize_textures( path file_path, vector<mtl_section_t>& sections 
 
 static bool save_mtl( path file_path, const vector<mtl_section_t>& sections, float opt_time )
 {
-	auto mfiletime0 = file_path.mfiletime();
+	auto mtime0 = file_path.mtime();
 	FILE* fp = file_path.fopen("w"); if(!fp){ printf("%s(): failed to open %s\n", __func__, file_path.slash() ); return false; }
 	printf( "[%s] optimization ... ", file_path.name() );
 
@@ -323,7 +322,7 @@ static bool save_mtl( path file_path, const vector<mtl_section_t>& sections, flo
 		if(k==0||(!section.name.empty()&&k<kn-1)) fprintf(fp,"\n");
 	}
 	fclose(fp);
-	file_path.set_filetime( nullptr, nullptr, &mfiletime0 ); // keep time stamp
+	file_path.utime(mtime0); // keep time stamp
 	printf( "completed in %.2f ms\n", opt_time );
 
 	return true;

@@ -135,13 +135,13 @@ struct _poisson_disk_cache_t
 
 __noinline ::path _poisson_disk_cache_t::path( uint count, bool circular, uint seed )
 {
-	static ::path cache_dir = gx::apptemp()+"sampler\\poisson\\";
+	static auto cache_dir = apptemp()+"sampler\\poisson\\"s;
 	static uint crc0 = crc32(0,__TIMESTAMP__,strlen(__TIMESTAMP__)*sizeof(char));
 	uint crc = crc32(crc0, &count, sizeof(count) );
 	crc = crc32(crc, &circular, sizeof(circular) );
 	crc = crc32(crc, &seed, sizeof(seed) );
 	char b[64]; snprintf(b,64,"%08x",crc);
-	return cache_dir+b;
+	return (cache_dir+b).c_str();
 }
 
 __noinline bool _poisson_disk_cache_t::load( vector<vec2>& v, uint count, bool circular, uint seed )
