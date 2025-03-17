@@ -867,7 +867,7 @@ namespace gl {
 		
 		void flatten( const char* file_path ) const
 		{
-			path d=path(file_path).dir(); if(!d.exists()) d.mkdir();
+			path_t d=path_t(file_path).dir(); if(!d.exists()) d.mkdir();
 			FILE* fp=fopen(file_path,"wb"); if(!fp) return;
 			string f=flatten(); fwrite(f.c_str(),1,f.size(),fp); fclose(fp);
 			fclose(fp);
@@ -1228,9 +1228,9 @@ namespace gl {
 		// shader source files
 		void export_shader_sources( const char* dir, const char* fxname="" )
 		{
-			path d=path(dir).to_preferred(), dx=d.extension();
+			path_t d=path_t(dir).to_preferred(), dx=d.extension();
 			if(!d.empty()&&dx.empty()&&d.back()!=preferred_separator) d=d.dir(); d += "glsl\\";
-			string f=!fxname||!*fxname?_name:path(fxname).stem();
+			string f=!fxname||!*fxname?_name:path_t(fxname).stem();
 			for( auto* p : programs ) p->source.export_shader_sources( dir, (f+"."+p->name()).c_str() );
 		}
 
@@ -1381,7 +1381,7 @@ inline void gxSaveProgramBinary( const char* name, GLuint ID, uint crc )
 
 inline GLuint gxLoadProgramBinary( const char* name, uint crc )
 {
-	path program_binary_path = gxGetProgramBinaryPath(name); if(!program_binary_path.exists()) return 0;
+	path_t program_binary_path = gxGetProgramBinaryPath(name); if(!program_binary_path.exists()) return 0;
 	size_t crc_size=sizeof(crc), offset=crc_size+sizeof(GLenum);
 	FILE* fp = fopen(program_binary_path.c_str(),"rb"); if(!fp) return 0;
 	_fseeki64(fp,0,SEEK_END); size_t program_binary_size=_ftelli64(fp); _fseeki64(fp,0,SEEK_SET);
