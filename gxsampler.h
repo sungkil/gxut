@@ -128,12 +128,12 @@ struct bridson_t
 
 struct _poisson_disk_cache_t
 {
-	static ::path path( uint count, bool circular, uint seed );
+	static ::path_t path( uint count, bool circular, uint seed );
 	static bool load( vector<vec2>& v, uint count, bool circular, uint seed );
 	static void save( const vector<vec2>& v, bool circular, uint seed );
 };
 
-__noinline ::path _poisson_disk_cache_t::path( uint count, bool circular, uint seed )
+__noinline ::path_t _poisson_disk_cache_t::path( uint count, bool circular, uint seed )
 {
 	static auto cache_dir = apptemp()+"sampler\\poisson\\"s;
 	static uint crc0 = crc32(0,__TIMESTAMP__,strlen(__TIMESTAMP__)*sizeof(char));
@@ -148,7 +148,7 @@ __noinline bool _poisson_disk_cache_t::load( vector<vec2>& v, uint count, bool c
 {
 	auto cache_path = path(count,circular,seed); if(!cache_path.exists()) return false;
 	if(cache_path.file_size()!=sizeof(vec4)*count) return false;
-	FILE* fp = cache_path.fopen("rb"); if(!fp) return false;
+	FILE* fp = fopen(cache_path.c_str(),"rb"); if(!fp) return false;
 	size_t read_count = fread( v.data(), sizeof(vec2), count, fp);
 	fclose(fp);
 	return read_count==count;
@@ -159,7 +159,7 @@ __noinline void _poisson_disk_cache_t::save( const vector<vec2>& v, bool circula
 	if(v.empty()) return;
 	auto cache_path = path(uint(v.size()), circular, seed);
 	if(!cache_path.dir().exists()) cache_path.dir().mkdir();
-	FILE* fp = cache_path.fopen("wb"); if(!fp){ printf("unable to open %s\n",cache_path.c_str()); return; }
+	FILE* fp = fopen(cache_path.c_str(),"wb"); if(!fp){ printf("unable to open %s\n", cache_path.c_str()); return; }
 	fwrite( v.data(), sizeof(vec2), v.size(), fp);
 	fclose(fp);
 }

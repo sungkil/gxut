@@ -38,7 +38,7 @@ struct parser_t
 {
 protected:
 
-	path				file_path;	// current file path
+	path_t				file_path;	// current file path
 	bool				b_batch = false;
 	file_time_t			mtime = {};
 	CRITICAL_SECTION	cs;			// for load/save
@@ -53,11 +53,11 @@ protected:
 public:
 	virtual ~parser_t(){ for(auto& it:dic)if(it.second!=nullptr){delete it.second;} dic.clear(); DeleteCriticalSection(&cs); }
 	parser_t(){ InitializeCriticalSectionAndSpinCount(&cs,2000); }
-	parser_t( path file_path ):parser_t(){ set_path(file_path); }
+	parser_t( path_t file_path ):parser_t(){ set_path(file_path); }
 
 	// query and retrieval
-	void set_path( const path& file_path ){ this->file_path = file_path.absolute(); }
-	const path& get_path() const { return file_path; }
+	void set_path( const path_t& file_path ){ this->file_path = file_path.absolute(); }
+	const path_t& get_path() const { return file_path; }
 	bool key_exists( const char* key ) const { if(key==nullptr||key[0]=='\0') return false; return dic.find(key)!=dic.end(); }
 	bool key_exists( const char* sec, const char* key ) const { if(!key||!*key) return false; if(!sec||!*sec) return key_exists(key); char sk[4096]; snprintf(sk,4096,"%s:%s",sec,key); return dic.find(sk)!=dic.end(); }
 	bool section_exists( const char* sec ) const { if(sec==nullptr||sec[0]=='\0') return false; for(auto& it:dic) if(_stricmp(it.second->section.c_str(),sec)==0) return true; return false; }
@@ -77,7 +77,7 @@ public:
 	bool load( const wchar_t* source );
 	bool load( const char* source ){ return load(atow(source)); }
 	bool save(){ return save_as(file_path); }
-	bool save_as( const path& file_path );
+	bool save_as( const path_t& file_path );
 
 	// get
 	__forceinline const char* operator()( const char* key ){	return get(key); }
@@ -126,7 +126,7 @@ __noinline bool parser_t::load()
 	if(memcmp(&mtime,&mt,sizeof(file_time_t))==0) return true; mtime = mt;
 
 	// open now
-	FILE* fp=file_path.fopen("r",true);if(fp==nullptr){ printf("Unable to open %s",file_path.c_str()); return false; }
+	FILE* fp=fopen(file_path.c_str(),"r,ccs=UTF-8");if(!fp){ printf("Unable to open %s",file_path.c_str()); return false; }
 	auto_lock_t lock(cs);
 
 	// clear dictionary and buffer
@@ -140,7 +140,7 @@ __noinline bool parser_t::load()
 	return true;
 }
 
-__noinline bool parser_t::save_as( const path& file_path )
+__noinline bool parser_t::save_as( const path_t& file_path )
 {
 	if(b_batch) return false;
 	if(file_path.empty()){ printf( "%s(): file_path is empty\n", __func__ ); return false; }
@@ -148,7 +148,7 @@ __noinline bool parser_t::save_as( const path& file_path )
 	auto_lock_t lock(cs);
 
 	bool b_hidden_file=false;if(access(file_path.c_str(),0)==0&&(GetFileAttributesW(::atow(file_path.c_str()))&FILE_ATTRIBUTE_HIDDEN)){b_hidden_file=true;SetFileAttributesW(atow(file_path.c_str()),GetFileAttributesW(atow(file_path.c_str()))&(~FILE_ATTRIBUTE_HIDDEN) );} // save and remove hidden attribute
-	FILE* fp=nullptr; for(uint k=0;fp==nullptr&&k<20;k++){ fp=file_path.fopen("w",true); Sleep(5); } // wait 100ms for busy writing
+	FILE* fp=nullptr; for(uint k=0;fp==nullptr&&k<20;k++){ fp=fopen(file_path.c_str(), "w,ccs=UTF-8"); Sleep(5); } // wait 100ms for busy writing
 	if(fp==nullptr){ printf( "%s(): Unable to open %s to write", __func__, file_path.c_str() ); return false; }
 	_fseeki64( fp, 0, SEEK_SET ); // remove BOM
 	
@@ -172,25 +172,29 @@ __noinline bool parser_t::save_as( const path& file_path )
 }
 
 // template specializations for get()
-template<> __noinline string parser_t::get<string>(const char* key){			auto* v=get(key); return *v==0?"":string(v); }
-template<> __noinline path parser_t::get<path>( const char* key ){				auto* v=get(key); return *v==0?path():path(v); }
-template<> __noinline bool parser_t::get<bool>( const char* key ){				auto* v=get(key); return *v==0?false:atob(v); }
-template<> __noinline int parser_t::get<int>( const char* key ){				auto* v=get(key); return *v==0?0:atoi(v); }
-template<> __noinline uint parser_t::get<uint>( const char* key ){				return uint(get<int>(key)); }
-template<> __noinline int64_t parser_t::get<int64_t>( const char* key ){		auto* v=get(key); return *v==0?0:_atoi64(v); }
-template<> __noinline uint64_t parser_t::get<uint64_t>( const char* key ){		return uint64_t(get<int64_t>(key)); }
-template<> __noinline float parser_t::get<float>( const char* key ){			auto* v=get(key); return *v==0?0:float(atof(v)); }
-template<> __noinline int2 parser_t::get<int2>( const char* key ){				auto* v=get(key); return *v==0?int2{}:atoi2(v); }
-template<> __noinline int3 parser_t::get<int3>( const char* key ){				auto* v=get(key); return *v==0?int3{}:atoi3(v); }
-template<> __noinline int4 parser_t::get<int4>( const char* key ){				auto* v=get(key); return *v==0?int4{}:atoi4(v); }
-template<> __noinline float2 parser_t::get<float2>( const char* key ){			auto* v=get(key); return *v==0?float2{}:atof2(v); }
-template<> __noinline float3 parser_t::get<float3>( const char* key ){			auto* v=get(key); return *v==0?float3{}:atof3(v); }
-template<> __noinline float4 parser_t::get<float4>( const char* key ){			auto* v=get(key); return *v==0?float4{}:atof4(v); }
+template<> __noinline string parser_t::get<string>(const char* key){		auto* v=get(key); return *v==0?"":string(v); }
+#ifdef __GX_FILESYSTEM_H__
+template<> __noinline path parser_t::get<path>( const char* key ){			auto* v=get(key); return *v==0?path():path(v); }
+#endif
+template<> __noinline bool parser_t::get<bool>( const char* key ){			auto* v=get(key); return *v==0?false:atob(v); }
+template<> __noinline int parser_t::get<int>( const char* key ){			auto* v=get(key); return *v==0?0:atoi(v); }
+template<> __noinline uint parser_t::get<uint>( const char* key ){			return uint(get<int>(key)); }
+template<> __noinline int64_t parser_t::get<int64_t>( const char* key ){	auto* v=get(key); return *v==0?0:_atoi64(v); }
+template<> __noinline uint64_t parser_t::get<uint64_t>( const char* key ){	return uint64_t(get<int64_t>(key)); }
+template<> __noinline float parser_t::get<float>( const char* key ){		auto* v=get(key); return *v==0?0:float(atof(v)); }
+template<> __noinline int2 parser_t::get<int2>( const char* key ){			auto* v=get(key); return *v==0?int2{}:atoi2(v); }
+template<> __noinline int3 parser_t::get<int3>( const char* key ){			auto* v=get(key); return *v==0?int3{}:atoi3(v); }
+template<> __noinline int4 parser_t::get<int4>( const char* key ){			auto* v=get(key); return *v==0?int4{}:atoi4(v); }
+template<> __noinline float2 parser_t::get<float2>( const char* key ){		auto* v=get(key); return *v==0?float2{}:atof2(v); }
+template<> __noinline float3 parser_t::get<float3>( const char* key ){		auto* v=get(key); return *v==0?float3{}:atof3(v); }
+template<> __noinline float4 parser_t::get<float4>( const char* key ){		auto* v=get(key); return *v==0?float4{}:atof4(v); }
 
 // template specializations for set()
 template<> __noinline void parser_t::set<const char*>( const char* key, const char* value ){ bool b=key_exists(key); entry_t* e=get_or_create_entry(key); if(b&&e->value==value) return; e->value=value; save(); }
 template<> __noinline void parser_t::set<char*>( const char* key, char* value ){		set<const char*>(key,value); }
+#ifdef __GX_FILESYSTEM_H__
 template<> __noinline void parser_t::set<path>( const char* key, path value ){			set<const char*>(key,value.c_str()); }
+#endif
 template<> __noinline void parser_t::set<bool>( const char* key, bool value ){			set(key,value?"1":"0"); }
 template<> __noinline void parser_t::set<int>( const char* key, int value ){			snprintf(buffer,buffer_capacity,"%d",value); set(key,buffer); }
 template<> __noinline void parser_t::set<uint>( const char* key, uint value ){			snprintf(buffer,buffer_capacity,"%u",value); set(key,buffer); }

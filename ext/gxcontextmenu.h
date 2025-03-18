@@ -6,6 +6,8 @@
 	#include "../gxos.h"
 #endif
 
+#include <shellapi.h>
+
 //*************************************
 namespace ctx {
 //*************************************
@@ -16,7 +18,7 @@ struct registry_t
 	string	cmd;
 	string	icon;
 	
-	static path exe_path(){ return path(exe::path()).replace_extension("exe"); }
+	static path_t exe_path(){ return path_t(exe::path()).replace_extension("exe"); }
 
 	template <HKEY root=HKEY_CLASSES_ROOT> bool add( string subkey, string name, string value );
 	template <HKEY root=HKEY_CLASSES_ROOT> bool add_shell( string subkey ){ return add_shell<root>(vector<string>{subkey}); }
@@ -72,13 +74,17 @@ inline bool registry_t::add_shell_office( const char* prefix, int end, int begin
 
 inline bool registry_t::install( bool b_dry )
 {
-	path reg_path = localtemp()+exe_path().name()+".reg";
-	FILE* fp = reg_path.fopen("w,ccs=utf-16le"); if(!fp){ printf("unable to open %s\n", reg_path.slash()); return false; }
+	path_t reg_path = localtemp()+exe_path().filename()+".reg";
+	FILE* fp = fopen(reg_path.c_str(),"w,ccs=utf-16le"); if(!fp){ printf("unable to open %s\n", reg_path.to_slash().c_str()); return false; }
 	fputws( atow(buffer.c_str()), fp );
 	fclose(fp);
 
 	if(b_dry)	printf( "%s\n", trim(buffer.c_str()) ) ;
-	else {		printf( "%s\n", reg_path.slash() ); reg_path.open(); }
+	else
+	{
+		printf( "%s\n", reg_path.to_slash().c_str() );
+		ShellExecuteW(GetDesktopWindow(),L"Open",atow(auto_quote(reg_path.c_str())),0,0,SW_SHOW);
+	}
 
 	return true;
 }

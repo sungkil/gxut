@@ -225,10 +225,10 @@ struct explorer_t
 		clear();
 	}
 
-	path get_folder_path( HWND hExplorerWnd )
+	path_t get_folder_path( HWND hExplorerWnd )
 	{
 		clear();
-		path folder_path; bool bFound=false; VARIANT v={}; V_VT(&v)=VT_I4;
+		path_t folder_path; bool bFound=false; VARIANT v={}; V_VT(&v)=VT_I4;
 		if(!SUCCEEDED(CoCreateInstance(CLSID_ShellWindows,nullptr,CLSCTX_ALL,IID_IShellWindows,(void**)&psw))){ clear(); return ""; }
 		for( V_I4(&v)=0; !bFound && psw->Item(v,&pd)==S_OK; V_I4(&v)++ )
 		{
@@ -240,14 +240,14 @@ struct explorer_t
 			psv=nullptr; if(!SUCCEEDED(psb->QueryActiveShellView(&psv))){ clear(); continue; }
 			pfv=nullptr; if(!SUCCEEDED(psv->QueryInterface(IID_IFolderView,(void**)&pfv))){ clear(); continue; }
 			ppf2=nullptr; if(!SUCCEEDED(pfv->GetFolder(IID_IPersistFolder2,(void**)&ppf2))){ clear(); continue; }
-			pidlFolder=nullptr; if(SUCCEEDED(ppf2->GetCurFolder(&pidlFolder))){ wchar_t b[path::capacity]; if(SHGetPathFromIDListW(pidlFolder,b)) folder_path=wtoa(b); else folder_path.clear(); } CoTaskMemFree(pidlFolder);
+			pidlFolder=nullptr; if(SUCCEEDED(ppf2->GetCurFolder(&pidlFolder))){ wchar_t b[path_t::capacity]; if(SHGetPathFromIDListW(pidlFolder,b)) folder_path=wtoa(b); else folder_path.clear(); } CoTaskMemFree(pidlFolder);
 			clear();
 		}
 		clear();
 		return folder_path.empty()?folder_path:folder_path.append_slash();
 	}
 
-	void goto_folder( HWND hExplorerWnd, const path& folder_path )
+	void goto_folder( HWND hExplorerWnd, const path_t& folder_path )
 	{
 		clear();
 		bool bFound=false; VARIANT v={}; V_VT(&v)=VT_I4;
@@ -271,13 +271,13 @@ struct explorer_t
 
 	static void open_folder( const char* dir )
 	{
-		if(!path(dir).exists()) return;
+		if(!path_t(dir).exists()) return;
 		HWND foreground_window = GetForegroundWindow(); // retrieve current foreground window
 		explorer_t e;
 		for( HWND hChild=::GetWindow(::GetWindow(::GetDesktopWindow(), GW_CHILD),GW_HWNDFIRST); hChild!=nullptr; hChild=::GetWindow(hChild, GW_HWNDNEXT) )
 		{
 			wchar_t buff[1024]; GetClassNameW(hChild, buff, MAX_PATH); if(_wcsicmp(buff, L"CabinetWClass")!=0&&_wcsicmp(buff,L"ExplorWClass")!=0) continue;
-			path fold_path = e.get_folder_path(hChild);
+			path_t fold_path = e.get_folder_path(hChild);
 			if(fold_path!=dir) continue;
 
 			if(!::IsIconic(hChild)) return;
@@ -286,7 +286,9 @@ struct explorer_t
 			return;
 		}
 
-		path(dir).open();
+#ifdef _INC_SHELLAPI
+		if(!path_t(dir).empty()&&path_t(dir).exists()){ ShellExecuteW(GetDesktopWindow(),L"Open",atow(auto_quote(dir)),0,0,SW_SHOW); }
+#endif
 		if(foreground_window) ::SetForegroundWindow( foreground_window ); // restore the old foreground window
 	}
 };

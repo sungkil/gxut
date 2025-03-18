@@ -87,13 +87,13 @@ struct zipentry_t : public ZIPENTRY
 
 struct izip_t	// common interface to zip, 7zip, ...
 {
-	path file_path;
+	path_t file_path;
 	vector<zipentry_t> entries;
 
 	virtual ~izip_t(){}
 	virtual void release()=0;
 	virtual bool load()=0;
-	virtual bool extract_to_files( path dir, const char* name=nullptr )=0;	// if name==nullptr, extract all files. otherwise, extract a single file with the name
+	virtual bool extract_to_files( path_t dir, const char* name=nullptr )=0;	// if name==nullptr, extract all files. otherwise, extract a single file with the name
 	virtual bool extract_to_memory( const char* name=nullptr )=0;			// if name==nullptr, extract all files. otherwise, extract a single file with the name
 	virtual zipentry_t* find( const char* name ){ std::wstring w=atow(name); for(auto& e:entries){ if(_wcsicmp(e.name,w.c_str())==0) return &e; } return nullptr; }
 };
@@ -120,17 +120,17 @@ inline bool is_zip_signature( void* ptr, size_t size=0 )
 	return false;
 }
 
-inline bool is_7zip_file( const path& file_path )
+inline bool is_7zip_file( const path_t& file_path )
 {
-	FILE* fp = file_path.fopen("rb"); if(!fp) return false;
+	FILE* fp = fopen(file_path.c_str(),"rb"); if(!fp) return false;
 	_fseeki64(fp,0,SEEK_END); size_t size=size_t(_ftelli64(fp)); _fseeki64(fp,0,SEEK_SET);
 	unsigned char t[6]={}; if(size>=sizeof(t)) fread(t,1,sizeof(t),fp); fclose(fp);
 	return is_7zip_signature(t,size);
 }
 
-inline bool is_zip_file( const path& file_path )
+inline bool is_zip_file( const path_t& file_path )
 {
-	FILE* fp = file_path.fopen("rb"); if(!fp) return false;
+	FILE* fp = fopen(file_path.c_str(),"rb"); if(!fp) return false;
 	_fseeki64(fp,0,SEEK_END); size_t size=size_t(_ftelli64(fp)); _fseeki64(fp,0,SEEK_SET);
 	unsigned char t[6]={}; if(size>=sizeof(t)) fread(t,1,sizeof(t),fp); fclose(fp);
 	return is_zip_signature(t,size);
@@ -293,12 +293,6 @@ __noinline uint path::crc() const
 	char* buff=(char*)malloc(bs); uint c=0; size_t r=0; if(buff){ while(r=fread(buff,1,bs,fp)) c=::crc32c(c,buff,r); }
 	fclose(fp); if(buff) free(buff);
 	return c;
-}
-
-__noinline uint4 path::md5() const
-{
-	auto p=read_file<void>(); if(!p.ptr) return ::md5(nullptr,0);
-	::md5 c(p); if(p.ptr) free(p.ptr); return c.digest;
 }
 #endif // __GX_FILESYSTEM_H__
 

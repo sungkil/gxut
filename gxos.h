@@ -57,8 +57,8 @@ __noinline string __build_process_cmd( const char* const app, const char* args )
 	{
 		strcpy(buf,args); char *ctx=nullptr, *token=strtok_s(buf," \t\n",&ctx);
 		const char* t=to_backslash(token);
-		path e=env::where(t), x=path(t).extension();
-		if(!path(t).exists()&&x.empty()&&!e.empty()&&x=="com") args=strcpy(buf, strcat(strcat(strcpy(cmd, token), ".com "), buf+strlen(token)+1)); // use cmd as temp
+		path_t e=env::where(t), x=path_t(t).extension();
+		if(!path_t(t).exists()&&x.empty()&&!e.empty()&&x=="com") args=strcpy(buf, strcat(strcat(strcpy(cmd, token), ".com "), buf+strlen(token)+1)); // use cmd as temp
 	}
 
 	// build cmdline, which should also embed app path
@@ -424,7 +424,7 @@ __noinline bool redirect_process( const char* app, const char* args=nullptr,
 __noinline bool runas( const char* app, const char* args=nullptr, bool wait=true, bool windowed=false )
 {
 	if(!app){ printf("%s(): app must be provided\n",__func__); return false; }
-	path app_path = path(app); if(app_path.extension()!="exe"){ printf("%s(): *.exe is only supported\n",__func__); return false; }
+	path_t app_path = path_t(app); if(app_path.extension()!="exe"){ printf("%s(): *.exe is only supported\n",__func__); return false; }
 	if(app_path.is_relative()) app_path = app_path.absolute();
 
 	// build execute info
@@ -486,7 +486,9 @@ struct key_t
 		if(t==REG_DWORD){ char b[256]; snprintf(b,256,"%u",*((DWORD*)v.data())); return b; }
 		return "";
 	}
-	template <> inline path get<path>( const char* name ){ return path(get<string>(name).c_str()); }
+#ifdef __GX_FILESYSTEM_H__
+	template <> inline path get<path>( const char* name ){ return path(get<string>(name)); }
+#endif
 	template <> inline DWORD get<DWORD>( const char* name )
 	{
 		vector<BYTE> v; DWORD t; if(!_query( name, &v, &t )) return 0;

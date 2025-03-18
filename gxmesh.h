@@ -289,7 +289,7 @@ struct material_impl : public material
 	const uint	ID;
 	char		name[_MAX_PATH]={};
 	material_textures_t	texture={};
-	std::map<string,path> path;	// <key,path>: albedo, alpha, normal, ambient, rough, metal, emissive, ...
+	std::map<string,path_t> path;	// <key,path>: albedo, alpha, normal, ambient, rough, metal, emissive, ...
 
 	material_impl( uint id ):ID(id){}
 	material_impl& operator=(const material_impl& other){ memcpy(this,&other,sizeof(material)); const_cast<uint&>(ID)=other.ID; strcpy(name,other.name); texture=other.texture; path=other.path; return *this; }
@@ -656,11 +656,11 @@ __noinline void mesh::update_proxy()
 inline void mesh::dump_binary( const char* _dir )
 {
 	if(vertices.empty() || indices.empty()) return;
-	path dir = path(_dir).append_slash(); if(!dir.exists()) dir.mkdir();
-	path vertex_bin_path = dir + path(file_path).stem().stem() + ".vertex.bin";
-	path index_bin_path = dir + path(file_path).stem().stem() + ".index.bin";
-	FILE* fp = vertex_bin_path.fopen("wb"); fwrite(&vertices[0], sizeof(vertex), vertices.size(), fp); fclose(fp);
-	fp = index_bin_path.fopen("wb");  fwrite(&indices[0], sizeof(uint), indices.size(), fp); fclose(fp);
+	path_t dir = path_t(_dir).append_slash(); if(!dir.exists()) dir.mkdir();
+	path_t vertex_bin_path = dir + path_t(file_path).stem().stem() + ".vertex.bin";
+	path_t index_bin_path = dir + path_t(file_path).stem().stem() + ".index.bin";
+	FILE* fp = fopen(vertex_bin_path.c_str(),"wb"); fwrite(&vertices[0], sizeof(vertex), vertices.size(), fp); fclose(fp);
+	fp = fopen(index_bin_path.c_str(),"wb");  fwrite(&indices[0], sizeof(uint), indices.size(), fp); fclose(fp);
 }
 #endif
 

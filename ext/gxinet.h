@@ -30,7 +30,7 @@ struct file_t
 {
 	HINTERNET	hfile=nullptr;
 	string		url;		// source url
-	path		tmp, dst;	// temporary and final target path; sequetially download and copy
+	path_t		tmp, dst;	// temporary and final target path; sequetially download and copy
 	size_t		file_size=0;
 	time_t		mtime=0;
 
@@ -45,15 +45,15 @@ struct session_t
 	HINTERNET handle = nullptr;
 
 	virtual ~session_t(){ release(); }
-	session_t(){ if(!is_online()) return; handle=InternetOpenW( atow(path(exe::path()).name()),INTERNET_OPEN_TYPE_PRECONFIG,0,0,0); }
+	session_t(){ if(!is_online()) return; handle=InternetOpenW( atow(path_t(exe::path()).filename().c_str()), INTERNET_OPEN_TYPE_PRECONFIG,0,0,0); }
 	void release(){ if(!handle) return; InternetCloseHandle(handle); handle=nullptr; }
 	operator bool() const { return handle!=nullptr; }
 
-	inline bool download( string url, path dst ){ return download(vector<string>{url},dst); }
-	bool download( vector<string> urls, path dst );
+	inline bool download( string url, path_t dst ){ return download(vector<string>{url},dst); }
+	bool download( vector<string> urls, path_t dst );
 
 protected:
-	bool download_thread_func( vector<string> urls, path dst );
+	bool download_thread_func( vector<string> urls, path_t dst );
 };
 
 __noinline bool file_t::open( HINTERNET session, const char* url )
@@ -83,7 +83,7 @@ __noinline bool file_t::get_file_size( HINTERNET session )
 	return true;
 }
 
-__noinline bool session_t::download_thread_func( vector<string> urls, path dst )
+__noinline bool session_t::download_thread_func( vector<string> urls, path_t dst )
 {
 	if(!handle) return false;
 
@@ -99,11 +99,11 @@ __noinline bool session_t::download_thread_func( vector<string> urls, path dst )
 		// server-local time difference can be up to several seconds
 		if(b_dst_exists&&!time_greater(f.mtime,f0)) return false; // older url file exists
 		
-		if(!f.get_file_size(handle)){ fprintf(stdout,"error: unable to get file size %s\n", dst.name() );return false;} // now try to get the file size
+		if(!f.get_file_size(handle)){ fprintf(stdout,"error: unable to get file size %s\n", dst.filename().c_str() );return false;} // now try to get the file size
 		vector<char> buffer(f.file_size);
 		
 		if(!dst.dir().exists()) dst.dir().mkdir();
-		FILE* fp = dst.fopen("wb"); if(!fp){ fprintf(stdout,"error: unable to open %s\n", dst.name());return false;}
+		FILE* fp = fopen(dst.c_str(),"wb"); if(!fp){ fprintf(stdout, "error: unable to open %s\n", dst.filename().c_str()); return false; }
 		DWORD dw_size, dw_read; do
 		{
 			InternetQueryDataAvailable(f.hfile, &dw_size, 0, 0);
@@ -123,7 +123,7 @@ __noinline bool session_t::download_thread_func( vector<string> urls, path dst )
 	return false;
 }
 
-__noinline bool session_t::download( vector<string> urls, path dst )
+__noinline bool session_t::download( vector<string> urls, path_t dst )
 {
 	if(is_offline()||!handle||urls.empty()||dst.empty()) return false;
 	auto t=std::async(std::launch::async,&session_t::download_thread_func,this,urls,dst);

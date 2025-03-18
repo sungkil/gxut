@@ -160,7 +160,6 @@ struct path : public path_t
 	bool copy_dir( path dst, bool overwrite=true ) const { if(!is_dir()) return false;value_type* from=__strbuf(capacity);snprintf(from,capacity,"%s\\*\0",_data);dst[dst.size()+1]=0; SHFILEOPSTRUCTW fop={};fop.wFunc=FO_COPY;fop.fFlags=FOF_ALLOWUNDO|FOF_SILENT|FOF_NOCONFIRMATION; fop.pFrom=atow(path(from).c_str());fop.pTo=atow(dst.c_str()); return SHFileOperationW(&fop)==0; }
 	bool move_dir( path dst ) const { return !exists()||!is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(atow(_data),atow(dst._data))!=0 : !copy_dir(dst,true) ? false: rmdir(); }
 	void open( const char* args=nullptr, bool b_show_window=true ) const { if(!*_data) return; ShellExecuteW(GetDesktopWindow(),L"Open",atow(auto_quote()), args?atow(args):nullptr, nullptr, b_show_window?SW_SHOW:SW_HIDE); }
-	void open_dir() const { auto d=dir(); reinterpret_cast<path&>(d).open(nullptr,true); }
 #endif
 
 	// additional time functions
@@ -183,7 +182,6 @@ struct path : public path_t
 
 	// crc32c/md5 checksums of the file content implement in gxmemory.h
 	inline uint crc() const;
-	inline uint4 md5() const;
 
 protected:
 
