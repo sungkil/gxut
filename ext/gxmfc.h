@@ -276,7 +276,7 @@ struct explorer_t
 		explorer_t e;
 		for( HWND hChild=::GetWindow(::GetWindow(::GetDesktopWindow(), GW_CHILD),GW_HWNDFIRST); hChild!=nullptr; hChild=::GetWindow(hChild, GW_HWNDNEXT) )
 		{
-			wchar_t buff[1024]; GetClassNameW(hChild, buff, MAX_PATH); if(_wcsicmp(buff, L"CabinetWClass")!=0&&_wcsicmp(buff,L"ExplorWClass")!=0) continue;
+			wchar_t buff[1024]; GetClassNameW(hChild, buff, MAX_PATH); if(wcsicmp(buff, L"CabinetWClass")!=0&&wcsicmp(buff,L"ExplorWClass")!=0) continue;
 			path_t fold_path = e.get_folder_path(hChild);
 			if(fold_path!=dir) continue;
 

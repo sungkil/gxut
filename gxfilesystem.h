@@ -68,22 +68,22 @@ struct path : public path_t
 	path& operator+=( const path& p ){ return reinterpret_cast<path&>(operator+=(reinterpret_cast<const path_t&>(p))); }
 	path& operator/=( const path& p ){ return reinterpret_cast<path&>(operator/=(reinterpret_cast<const path_t&>(p))); }
 
-	bool operator<( const path& p ) const { return ::_strcmplogical(_data,p._data)<0; }
-	bool operator<( const value_type* s ) const { return _strcmplogical(_data,s)<0; }
-	bool operator<( const string_type& s ) const { return _strcmplogical(_data,s.c_str())<0; }
-	bool operator<( string_view_type s ) const { return _strcmplogical(_data,s.data())<0; }
-	bool operator>( const path& p ) const { return ::_strcmplogical(_data,p._data)>0; }
-	bool operator>( const value_type* s ) const { return _strcmplogical(_data,s)>0; }
-	bool operator>( const string_type& s ) const { return _strcmplogical(_data,s.c_str())>0; }
-	bool operator>( string_view_type s ) const { return _strcmplogical(_data,s.data())>0; }
-	bool operator<=( const path& p ) const { return ::_strcmplogical(_data,p._data)<=0; }
-	bool operator<=( const value_type* s ) const { return _strcmplogical(_data,s)<=0; }
-	bool operator<=( const string_type& s ) const { return _strcmplogical(_data,s.c_str())<=0; }
-	bool operator<=( string_view_type s ) const { return _strcmplogical(_data,s.data())<=0; }
-	bool operator>=( const path& p ) const { return ::_strcmplogical(_data,p._data)>=0; }
-	bool operator>=( const value_type* s ) const { return _strcmplogical(_data,s)>=0; }
-	bool operator>=( const string_type& s ) const { return _strcmplogical(_data,s.c_str())>=0; }
-	bool operator>=( string_view_type s ) const { return _strcmplogical(_data,s.data())>=0; }
+	bool operator<( const path& p ) const { return strcmplogical(_data,p._data)<0; }
+	bool operator<( const value_type* s ) const { return strcmplogical(_data,s)<0; }
+	bool operator<( const string_type& s ) const { return strcmplogical(_data,s.c_str())<0; }
+	bool operator<( string_view_type s ) const { return strcmplogical(_data,s.data())<0; }
+	bool operator>( const path& p ) const { return strcmplogical(_data,p._data)>0; }
+	bool operator>( const value_type* s ) const { return strcmplogical(_data,s)>0; }
+	bool operator>( const string_type& s ) const { return strcmplogical(_data,s.c_str())>0; }
+	bool operator>( string_view_type s ) const { return strcmplogical(_data,s.data())>0; }
+	bool operator<=( const path& p ) const { return strcmplogical(_data,p._data)<=0; }
+	bool operator<=( const value_type* s ) const { return strcmplogical(_data,s)<=0; }
+	bool operator<=( const string_type& s ) const { return strcmplogical(_data,s.c_str())<=0; }
+	bool operator<=( string_view_type s ) const { return strcmplogical(_data,s.data())<=0; }
+	bool operator>=( const path& p ) const { return strcmplogical(_data,p._data)>=0; }
+	bool operator>=( const value_type* s ) const { return strcmplogical(_data,s)>=0; }
+	bool operator>=( const string_type& s ) const { return strcmplogical(_data,s.c_str())>=0; }
+	bool operator>=( string_view_type s ) const { return strcmplogical(_data,s.data())>=0; }
 
 	// separator opertions
 	path to_slash()			const { return __super::to_slash(); }
@@ -99,7 +99,7 @@ struct path : public path_t
 	path cygwin()	const { path p(*this); p.__canonicalize(); p=p.to_slash(); if(p.size()<2||p.is_relative()||p.is_unc()||p.is_remote()) return p; path p2; snprintf( p2._data, capacity, "/cygdrive/%c%s", tolower(p[0]), p._data+2 ); return p2; }
 
 	// helpers for C-string functions
-	bool find( const char* s, bool case_insensitive=true ){ return (case_insensitive?_stristr(_data,s):strstr(_data,s))!=nullptr; }
+	bool find( const char* s, bool case_insensitive=true ){ return (case_insensitive?stristr(_data,s):strstr(_data,s))!=nullptr; }
 
 	// get/set windows-only attributes
 	uint wattrib() const {				if(!*_data) return INVALID_FILE_ATTRIBUTES; WIN32_FILE_ATTRIBUTE_DATA a; if(!GetFileAttributesExA(_data,GetFileExInfoStandard,&a)||a.dwFileAttributes==INVALID_FILE_ATTRIBUTES) return INVALID_FILE_ATTRIBUTES; return a.dwFileAttributes; }
@@ -114,7 +114,7 @@ struct path : public path_t
 	// path structure query
 	bool is_drive()		const {	if(!*_data) return false; size_t l=size(); return l<4&&l>1&&_data[1]==':'; } // backslash-less drive fails with st_mode
 	bool is_synology() const {	return is_ssh()&&strstr(_data,":\\volume")!=nullptr||strstr(_data,":/volume")!=nullptr; }
-	bool is_subdir( const path& ancestor ) const { return _strnicmp(_data,ancestor._data,ancestor.size())==0; } // do not check existence
+	bool is_subdir( const path& ancestor ) const { return strnicmp(_data,ancestor._data,ancestor.size())==0; } // do not check existence
 	path canonical() const { if(is_pipe()) return *this; if(is_remote()) return to_slash(); path p(*this); p.__canonicalize(); return p; } // not necessarily absolute: return relative path as well
 
 	// decomposition
@@ -302,8 +302,8 @@ __noinline void path::__scan_recursive( path dir, path::__scan_t& si ) const
 		size_t fl=wcslen(f);
 		if((fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)==0) // files
 		{
-			if(e){size_t j=0;for(;j<si.ext.l;j++){if(e[j].size<fl&&_wcsicmp(e[j],f+fl-e[j].size)==0)break;}if(j==si.ext.l)continue;}
-			if(si.glob.l){if(si.b.glob?!iglob(f,fl,si.glob.pattern,si.glob.l):_wcsistr(f,fl,si.glob.pattern,si.glob.l)==nullptr)continue;}
+			if(e){size_t j=0;for(;j<si.ext.l;j++){if(e[j].size<fl&&wcsicmp(e[j],f+fl-e[j].size)==0)break;}if(j==si.ext.l)continue;}
+			if(si.glob.l){if(si.b.glob?!iglob(f,fl,si.glob.pattern,si.glob.l):wcsistr(f,fl,si.glob.pattern,si.glob.l)==nullptr)continue;}
 			memcpy(p,f,sizeof(wchar_t)*fl); p[fl]=0; si.result.emplace_back(wdir);
 		}
 		else if((fd.dwFileAttributes&FILE_ATTRIBUTE_HIDDEN)==0&&si.b.dir)
@@ -335,7 +335,7 @@ __noinline void path::__subdirs_recursive( path dir, path::__scan_t& si ) const
 		if(si.b.recursive) sdir.emplace_back(wdir);
 		if(si.glob.l==0) si.result.emplace_back(wdir);
 		else if(!si.b.glob){ if(iglob(f,fl,si.glob.pattern,si.glob.l)) si.result.emplace_back(wdir); }
-		else { if(_wcsistr(f, fl, si.glob.pattern, si.glob.l)) si.result.emplace_back(wdir); }
+		else { if(wcsistr(f, fl, si.glob.pattern, si.glob.l)) si.result.emplace_back(wdir); }
 	} while(FindNextFileW(h,&fd));
 	FindClose(h);
 	if(si.b.recursive){ for(auto& c:sdir) __subdirs_recursive(c,si); }
@@ -384,14 +384,14 @@ inline FILETIME		path::mfiletime() const { return TimeToFileTime(mtime()); }
 // nocase/std map/unordered_map extension for path
 namespace std
 {
-	template <> struct hash<path>{ size_t operator()(const path& p)const{ return std::hash<string>()(_strlwr(__strdup(p.c_str()))); }};
+	template <> struct hash<path>{ size_t operator()(const path& p)const{ return std::hash<string>()(strlwr(__strdup(p.c_str()))); }};
 }
 
 namespace nocase
 {
 	template <> struct less<path>{ bool operator()(const path& a,const path& b)const{return a<b;}};
-	template <> struct equal_to<path>{ bool operator()(const path& a,const path& b)const{return _stricmp(a.c_str(),b.c_str())==0; } };
-	template <> struct hash<path>{ size_t operator()(const path& p)const{ return std::hash<string>()(_strlwr(__strdup(p.c_str()))); } };
+	template <> struct equal_to<path>{ bool operator()(const path& a,const path& b)const{return stricmp(a.c_str(),b.c_str())==0; } };
+	template <> struct hash<path>{ size_t operator()(const path& p)const{ return std::hash<string>()(strlwr(__strdup(p.c_str()))); } };
 }
 
 // disk volume type for windows
@@ -426,9 +426,9 @@ struct volume_t
 	uint64_t size() const { return exists()?_disk_size:0; }
 	uint64_t free_space() const { return exists()?_free_space:0; }
 	bool has_free_space( uint64_t inverse_thresh=10 ) const { return exists()&&free_space()>(size()/inverse_thresh); }
-	bool is_exfat() const { return _wcsicmp(filesystem.name,L"exFAT")==0; }
-	bool is_ntfs() const { return _wcsicmp(filesystem.name,L"NTFS")==0; }
-	bool is_fat32() const { return _wcsicmp(filesystem.name,L"FAT32")==0; }
+	bool is_exfat() const { return wcsicmp(filesystem.name,L"exFAT")==0; }
+	bool is_ntfs() const { return wcsicmp(filesystem.name,L"NTFS")==0; }
+	bool is_fat32() const { return wcsicmp(filesystem.name,L"FAT32")==0; }
 };
 #endif
 

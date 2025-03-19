@@ -620,7 +620,7 @@ bool update_object_lights( mesh* p_mesh )
 	for( auto& g : p_mesh->geometries )
 	{
 		auto& m = p_mesh->materials[g.material_index];
-		if(_stricmp(g.name(),"light")==0) m.bsdf = BSDF_EMISSIVE; // force to "light" source material
+		if(stricmp(g.name(),"light")==0) m.bsdf = BSDF_EMISSIVE; // force to "light" source material
 		if(m.bsdf!=BSDF_EMISSIVE) continue;
 
 		// directly create a sunlight

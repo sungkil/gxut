@@ -33,20 +33,20 @@ static const unsigned char BOM_UTF32[4]	= {0xFF,0xFE,0x00,0x00}; // little endia
 
 namespace logical
 {
-	template <> struct less<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b) const { return _strcmplogical(a.c_str(),b.c_str())<0;} };
-	template <> struct less<string>{ bool operator()(const string& a,const string& b) const { return _strcmplogical(a.c_str(),b.c_str())<0;} };
+	template <> struct less<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b) const { return strcmplogical(a.c_str(),b.c_str())<0;} };
+	template <> struct less<string>{ bool operator()(const string& a,const string& b) const { return strcmplogical(a.c_str(),b.c_str())<0;} };
 	template <class T> using			set = std::set<T,less<T>>;
 	template <class T, class V> using	map = std::map<T,V,less<T>>;
 }
 
 namespace nocase
 {
-	template <> struct less<string>{ bool operator()(const string& a,const string& b)const{return _stricmp(a.c_str(),b.c_str())<0;}};
-	template <> struct less<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())<0;}};
-	template <> struct equal_to<string>{ bool operator()(const string& a,const string& b)const{return _stricmp(a.c_str(),b.c_str())==0;}};
-	template <> struct equal_to<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return _wcsicmp(a.c_str(),b.c_str())==0;}};
-	template <> struct hash<string> { size_t operator()( const string& p ) const { return std::hash<string>()(_strlwr(__strdup(p.c_str()))); }};
-	template <> struct hash<std::wstring> { size_t operator()( const std::wstring& p ) const { return std::hash<std::wstring>()(_strlwr(__strdup(p.c_str()))); }};
+	template <> struct less<string>{ bool operator()(const string& a,const string& b)const{return stricmp(a.c_str(),b.c_str())<0;}};
+	template <> struct less<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return wcsicmp(a.c_str(),b.c_str())<0;}};
+	template <> struct equal_to<string>{ bool operator()(const string& a,const string& b)const{return stricmp(a.c_str(),b.c_str())==0;}};
+	template <> struct equal_to<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return wcsicmp(a.c_str(),b.c_str())==0;}};
+	template <> struct hash<string> { size_t operator()( const string& p ) const { return std::hash<string>()(strlwr(__strdup(p.c_str()))); }};
+	template <> struct hash<std::wstring> { size_t operator()( const std::wstring& p ) const { return std::hash<std::wstring>()(strlwr(__strdup(p.c_str()))); }};
 
 	template <class T> using			set = std::set<T,less<T>>;
 	template <class T, class V> using	map = std::map<T,V,less<T>>;
@@ -188,7 +188,7 @@ namespace fast
 }
 
 // conversion from string to user types
-inline bool atob( const char* a ){		return a&&*a&&(_stricmp(a,"true")==0||fast::atoi(a)!=0); }
+inline bool atob( const char* a ){		return a&&*a&&(stricmp(a,"true")==0||fast::atoi(a)!=0); }
 inline uint atou( const char* a ){		char* e=nullptr;uint v=(uint)strtoul(a,&e,10); return v; }
 inline uint atou( const wchar_t* w ){	wchar_t* e=nullptr;uint v=(uint)wcstoul(w,&e,10); return v; }
 inline int64_t atoill( const char* a ){	char* e=nullptr;int64_t v=strtoll(a,&e,10); return v; }
@@ -237,7 +237,7 @@ template <class T> const T* ltrim( const T* src, T delim )
 template <class T> const T* rtrim( const T* src, const T* delims=__whitespaces<T>() )
 {
 	if(!src||!src[0]) return (const T*)L"";
-	return __strdup(src,strlen(src)-_strrspn(src,delims));
+	return __strdup(src,strlen(src)-strrspn(src,delims));
 }
 
 template <class T> const T* rtrim( const T* src, T delim )
@@ -266,7 +266,7 @@ template <class T> T* itrim( T* src, const T* delims=__whitespaces<T>() )
 {
 	if(!src||!src[0]) return src; // return as-is
 	src += strspn(src,delims);
-	src[strlen(src)-_strrspn(src,delims)]=0;
+	src[strlen(src)-strrspn(src,delims)]=0;
 	return src;
 }
 
@@ -287,7 +287,7 @@ template <class T> const T* trim_comment( const T* src, const char* marker="#" )
 		}
 		if(j<clen){buff[slen=k]=0;break;}
 	}
-	buff[slen-_strrspn(buff,__whitespaces<T>())]=0; // rtrim
+	buff[slen-strrspn(buff,__whitespaces<T>())]=0; // rtrim
 	return buff;
 }
 
@@ -349,7 +349,7 @@ template <class T> __noinline const T* str_ireplace( const T* _Src, const T* _Fi
 	if(!_Find||!*_Find) return __strdup(_Src);	// no change
 	int sl=int(strlen(_Src)), fl=int(strlen(_Find)); if(sl<fl) return __strdup(_Src); int rl=int(strlen(_Replace));
 	T *s=(T*)_Src, *p=nullptr;
-	vector<T> buff; buff.reserve(sl*2llu); while( nullptr!=(p=(T*)_stristr(s,_Find)) ){ buff.insert(buff.end(),s,p); if(rl>0) buff.insert(buff.end(),_Replace,_Replace+rl); s=p+fl; }
+	vector<T> buff; buff.reserve(sl*2llu); while( nullptr!=(p=(T*)stristr(s,_Find)) ){ buff.insert(buff.end(),s,p); if(rl>0) buff.insert(buff.end(),_Replace,_Replace+rl); s=p+fl; }
 	buff.insert(buff.end(),s,(T*)(_Src+sl));buff.emplace_back(0);
 	return __strdup(&buff[0],buff.size());
 }

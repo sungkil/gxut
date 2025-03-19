@@ -52,8 +52,8 @@ struct mtl_section_t
 	auto end(){ return items.end(); }
 	auto maps(){ vector<mtl_item_t*> v;for(auto& t:items){if(t.is_map_type())v.emplace_back(&t);} return v; }
 
-	mtl_item_t* find( const char* key ) const { for(auto& t:items){ if(!items.empty()&&_stricmp(t.key.c_str(),key)==0) return (mtl_item_t*)&t; } return nullptr; }
-	int find_index( const char* key ) const	{ for( int k=0, kn=int(items.size()); k<kn; k++ ){ if(items[k].empty()) continue; if(_stricmp(items[k].key.c_str(),key)==0) return k; } return -1; }
+	mtl_item_t* find( const char* key ) const { for(auto& t:items){ if(!items.empty()&&stricmp(t.key.c_str(),key)==0) return (mtl_item_t*)&t; } return nullptr; }
+	int find_index( const char* key ) const	{ for( int k=0, kn=int(items.size()); k<kn; k++ ){ if(items[k].empty()) continue; if(stricmp(items[k].key.c_str(),key)==0) return k; } return -1; }
 	mtl_item_t* add_norm( string token )
 	{
 		if(find("norm")) printf( "%s(%s): norm already exists\n", __func__, token.c_str() );
@@ -68,7 +68,7 @@ mtl_item_t::mtl_item_t( const string& _key, const char* first_token ):key(_key)
 {
 	if(first_token&&*first_token) tokens.emplace_back(first_token);
 	static nocase::set<string> map_keys = {"bump","refl","norm","pc","pcr","aniso","anisor"};
-	b_map_type = (key.size()>4&&_strnicmp(key.c_str(),"map_",4)==0)||map_keys.find(key)!=map_keys.end();
+	b_map_type = (key.size()>4&&strnicmp(key.c_str(),"map_",4)==0)||map_keys.find(key)!=map_keys.end();
 }
 
 path mtl_item_t::map_path()
@@ -85,7 +85,7 @@ bool mtl_item_t::make_canonical_relative_path()
 	for( int k=0;k<8&&strstr(b.c_str(),"//");k++) b=str_replace(b.c_str(),"//","/");		// remove double slash
 	::path p(b=path(b).to_backslash().canonical().c_str());
 	if(!p.is_relative()) b=p.is_subdir(mtl_dir)?p.relative(mtl_dir).c_str():p.name();
-	return _stricmp(b0.c_str(),b.c_str())!=0; // return change exists
+	return stricmp(b0.c_str(),b.c_str())!=0; // return change exists
 }
 
 static const vector<vec2> halton_samples =
@@ -202,7 +202,7 @@ static path get_normal_path( const path& bump_path, nocase::map<path,path>& bton
 	path ext = bump_path.extension();
 	
 	// remove postfix for bump
-	if(base.size()>4&&_stristr(substr(base.c_str(),-4),"bump")) base=path(substr(base.c_str(),0,-4))+"norm";
+	if(base.size()>4&&stristr(substr(base.c_str(),-4),"bump")) base=path(substr(base.c_str(),0,-4))+"norm";
 	else if(base.back()==L'b') base.back()=L'n';
 	else base+="n";
 	
@@ -245,7 +245,7 @@ static float optimize_textures( path file_path, vector<mtl_section_t>& sections 
 			if(!t->map_path().exists()) continue;
 
 			auto &src=t->back();
-			auto &dst=crc_lut[t->crc]; if(_stricmp(src.c_str(),dst.c_str())==0) continue;
+			auto &dst=crc_lut[t->crc]; if(stricmp(src.c_str(),dst.c_str())==0) continue;
 			printf( "[%s] replace: %s << %s\n", file_path.name(), src.c_str(), dst.c_str() );
 			dups.emplace(t->map_path());
 			src = dst;
@@ -357,7 +357,7 @@ vector<mtl_section_t> parse_mtl( path file_path )
 		if(vs.size()<2){ b_dirty=true; continue; } // cull no-value lines
 		const string& key = vs[0];
 		
-		if(_stricmp(key.c_str(),"newmtl")==0)
+		if(stricmp(key.c_str(),"newmtl")==0)
 		{
 			v.emplace_back(mtl_section_t(vs[1]));
 		}
@@ -387,7 +387,7 @@ namespace mtl {
 uint find_material( vector<material_impl>& materials, const char* name )
 {
 	for(uint k=0,kn=uint(materials.size());k<kn;k++)
-		if(_stricmp(name,materials[k].name)==0) return k;
+		if(stricmp(name,materials[k].name)==0) return k;
 	return -1;
 }
 
@@ -449,7 +449,7 @@ bool load_mtl( path file_path, vector<material_impl>& materials, bool with_cache
 		materials.emplace_back(material_impl(uint(materials.size())));
 		auto& m = materials.back();
 		strcpy( m.name, section.name.c_str() );
-		if(_strnicmp(m.name,"light",5)==0) m.bsdf = BSDF_EMISSIVE;
+		if(strnicmp(m.name,"light",5)==0) m.bsdf = BSDF_EMISSIVE;
 
 		// preprocess illum
 		for(auto& t: section.items)
@@ -503,7 +503,7 @@ bool load_mtl( path file_path, vector<material_impl>& materials, bool with_cache
 			}
 			else if(key=="refl")	// reflection map
 			{
-				if(_stristr(t.token(), "metal")) m.path["metal"] = t.token(); // some mtl uses refl for map_pm for legacy compatibility
+				if(stristr(t.token(), "metal")) m.path["metal"] = t.token(); // some mtl uses refl for map_pm for legacy compatibility
 				else if(!t.empty())	m.rough = 0.0f; 	// ignore the reflection map and use the global env map
 				m.bsdf = BSDF_MIRROR;
 			}

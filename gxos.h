@@ -93,9 +93,9 @@ __noinline vector<DWORD> find_process( const char* name_or_path )
 		HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ,FALSE,pid); if(!hProcess) continue;
 		if(!EnumProcessModules(hProcess,&hMod,sizeof(hMod),&cbNeeded)) continue;
 		GetModuleBaseNameW(hProcess,hMod,buff,sizeof(buff)/sizeof(buff[0]) );
-		if(_wcsicmp(buff,atow(name_or_path))==0&&pid!=curr_pid) v.push_back(pid);
+		if(wcsicmp(buff,atow(name_or_path))==0&&pid!=curr_pid) v.push_back(pid);
 		GetModuleFileNameExW(hProcess,hMod,buff,sizeof(buff)/sizeof(buff[0]) );
-		if(_wcsicmp(buff,atow(name_or_path))==0&&pid!=curr_pid) v.push_back(pid);
+		if(wcsicmp(buff,atow(name_or_path))==0&&pid!=curr_pid) v.push_back(pid);
 		CloseHandle(hProcess);
 	}
 	return v;
@@ -121,7 +121,7 @@ inline bool process_exists( const char* file_path )
 #ifdef _INC_TOOLHELP32
 	MODULEENTRY32W entry={}; entry.dwSize =sizeof(decltype(entry));
 	HANDLE hSnapShot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0); if(hSnapShot==INVALID_HANDLE_VALUE) return false;
-	BOOL hRes=Module32FirstW( hSnapShot,&entry ); for(; hRes; hRes=Module32NextW(hSnapShot,&entry) ) if(_stricmp(file_path,wtoa(entry.szExePath))==0) break;
+	BOOL hRes=Module32FirstW( hSnapShot,&entry ); for(; hRes; hRes=Module32NextW(hSnapShot,&entry) ) if(stricmp(file_path,wtoa(entry.szExePath))==0) break;
 	CloseHandle(hSnapShot);
 	return hRes==TRUE;
 #else

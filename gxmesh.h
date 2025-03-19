@@ -26,7 +26,7 @@
 #endif
 
 // timestamp to indicate struct changes in other files
-static const char* __GX_MESH_H_TIMESTAMP__ = _strdup(__TIMESTAMP__);
+static const char* __GX_MESH_H_TIMESTAMP__ = strdup(__TIMESTAMP__);
 
 //*************************************
 // OpenGL forward declarations
@@ -460,8 +460,8 @@ struct mesh
 	uint face_count() const { uint f=0; for(const auto& g:geometries) f+=g.count; return f/3; }
 	uint vertex_count() const { return uint(vertices.size())*instance_count; }
 	object* create_object( const char* name ){ objects.emplace_back(object(this, uint(objects.size()), name)); return &objects.back(); }
-	object*	find_object( const char* name ){ for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) return &objects[k]; return nullptr; }
-	vector<object*> find_objects( const char* name ){ vector<object*> v; for(uint k=0; k<objects.size(); k++)if(_stricmp(objects[k].name,name)==0) v.push_back(&objects[k]); return v; }
+	object*	find_object( const char* name ){ for(uint k=0; k<objects.size(); k++)if(stricmp(objects[k].name,name)==0) return &objects[k]; return nullptr; }
+	vector<object*> find_objects( const char* name ){ vector<object*> v; for(uint k=0; k<objects.size(); k++)if(stricmp(objects[k].name,name)==0) v.push_back(&objects[k]); return v; }
 	mesh* create_proxy( bool double_sided=false, bool use_quads=false );	// proxy mesh helpers: e.g., bounding box
 	void update_proxy();													// update existing proxy with newer matrices
 	vector<material> pack_materials() const { vector<material> p; auto& m=materials; p.resize(m.size()); for(size_t k=0,kn=p.size();k<kn;k++) p[k]=m[k]; return p; }

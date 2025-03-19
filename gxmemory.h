@@ -95,7 +95,7 @@ struct izip_t	// common interface to zip, 7zip, ...
 	virtual bool load()=0;
 	virtual bool extract_to_files( path_t dir, const char* name=nullptr )=0;	// if name==nullptr, extract all files. otherwise, extract a single file with the name
 	virtual zipentry_t* extract_to_memory( const char* name=nullptr )=0;		// if name==nullptr, extract all files and return the first pointer. otherwise, extract a single file with the name and returns the pointer
-	virtual zipentry_t* find( const char* name ){ std::wstring w=atow(name); for(auto& e:entries){ if(_wcsicmp(e.name,w.c_str())==0) return &e; } return nullptr; }
+	virtual zipentry_t* find( const char* name ){ std::wstring w=atow(name); for(auto& e:entries){ if(wcsicmp(e.name,w.c_str())==0) return &e; } return nullptr; }
 };
 
 // signature detection

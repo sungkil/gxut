@@ -26,7 +26,7 @@
 #endif
 
 // timestamp to indicate struct changes in other files
-static const char* __GX_RT_H_TIMESTAMP__ = _strdup(__TIMESTAMP__);
+static const char* __GX_RT_H_TIMESTAMP__ = strdup(__TIMESTAMP__);
 
 //*************************************
 // 16-byte aligned light for direct lights
@@ -337,7 +337,7 @@ __noinline int find_up_vector( mesh* p_mesh )
 	for(auto& o:p_mesh->objects)
 	{
 		char buff[4096]; strcpy(buff,o.name);
-		if(!strstr(_strlwr(buff),f)||o.box.max_extent()<(o.box.min_extent()*4.0f)) continue;
+		if(!strstr(strlwr(buff),f)||o.box.max_extent()<(o.box.min_extent()*4.0f)) continue;
 		d[o.box.min_axis()] += 1.0; break;
 	}
 	

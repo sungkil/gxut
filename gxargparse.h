@@ -63,11 +63,11 @@ protected:
 	const char* name() const { for( auto& n : names ) if(n.size()==1) return n.c_str(); for( auto& n : names ) if(n.size()>1) return n.c_str(); return ""; }
 	const char* short_name() const { for( auto& n : names ) if(n.size()==1) return n.c_str(); return ""; }
 	vector<const char*> long_names() const { vector<const char*> v; for( auto& n : names ) if(n.size()>1) v.push_back(n.c_str()); return v; }
-	bool is_value_acceptable( const char* v ){ if(constraints.empty()) return true; for( const auto& c:constraints ) if(_stricmp(c.c_str(),v)==0) return true; return false; }
+	bool is_value_acceptable( const char* v ){ if(constraints.empty()) return true; for( const auto& c:constraints ) if(stricmp(c.c_str(),v)==0) return true; return false; }
 	string contraints_to_str(){ if(constraints.empty()) return ""; string s=constraints.front(); for(size_t k=1,kn=constraints.size();k<kn;k++) s+=string(",")+constraints[k]; return s; }
 	bool push_back( const char* v ){ if(!is_value_acceptable(v)){ printf( "option '%s' not accepts '%s'; use one in {%s}\n", name(), v, contraints_to_str().c_str() ); return false; } if(parsed.instance==0||parsed.value.empty()) parsed.value=v; else parsed.others.push_back(v); return true; }
 
-	struct lless { bool operator()(const string& a,const string& b)const{return a.size()!=b.size()?a.size()<b.size():_stricmp(a.c_str(),b.c_str())<0;}};
+	struct lless { bool operator()(const string& a,const string& b)const{return a.size()!=b.size()?a.size()<b.size():stricmp(a.c_str(),b.c_str())<0;}};
 	std::set<string,lless>	names;				// multiple names allowed for a single option
 	string					shelp;				// help string
 	bool					hidden=false;		// hide in usage()
@@ -238,7 +238,7 @@ inline void parser_t::select_parser_impl( parser_t*& p, int argc, wchar_t** argv
 	p->b_command_found = true;
 	int next=p->attrib.depth+1; if(argc<=next) return;
 	
-	const wchar_t* a=trim(argv[next]); if(!a||!*a||_wcsicmp(a,L"help")==0) return;
+	const wchar_t* a=trim(argv[next]); if(!a||!*a||wcsicmp(a,L"help")==0) return;
 	string arg=wtoa(a); if(arg[0]==L'-') return; // option should not precede the command
 	for(auto* c:p->commands)
 	{
@@ -286,7 +286,7 @@ inline bool parser_t::parse( int argc, wchar_t* argv[], bool b_validate )
 			if(!option_needs_subarg->push_back(wtoa(a))) return false;
 			option_needs_subarg = nullptr; // clear subgarg requirement
 		}
-		else if(_wcsicmp(a,L"help")==0||_wcsicmp(a,L"-h")==0||_wcsicmp(a,L"--help")==0) // test whether help exists
+		else if(wcsicmp(a,L"help")==0||wcsicmp(a,L"-h")==0||wcsicmp(a,L"--help")==0) // test whether help exists
 		{
 			parsed.b.help_exists=true;
 		}

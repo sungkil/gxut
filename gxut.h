@@ -328,51 +328,6 @@ __noinline unsigned int crc32( unsigned int crc0, const void* ptr, size_t size )
 	return ~c;
 }
 
-// define overloaded functions for wchar_t
-inline size_t strlen( const wchar_t* _Str ){ return wcslen(_Str); }
-inline wchar_t* strcpy( wchar_t* _Dest, const wchar_t* _Src ){ return wcscpy(_Dest,_Src); }
-inline wchar_t* strncpy( wchar_t* _Dest, const wchar_t* _Src, size_t _Count ){ return wcsncpy(_Dest,_Src,_Count); }
-inline wchar_t* strcat( wchar_t* _Dest, const wchar_t* _Src ){ return wcscat(_Dest,_Src);  }
-inline wchar_t* strncat( wchar_t* _Dest, const wchar_t* _Src, size_t _Count ){ return wcsncat(_Dest,_Src,_Count); }
-inline int strcmp( const wchar_t* _Str1, const wchar_t* _Str2 ){ return wcscmp(_Str1,_Str2); }
-inline int strncmp( const wchar_t* _Str1, const wchar_t* _Str2, size_t _MaxCount ){ return wcsncmp(_Str1,_Str2,_MaxCount); }
-inline const wchar_t* strchr( const wchar_t* _Str, int _Val ){ return wcschr(_Str,wchar_t(_Val)); }
-inline wchar_t* strchr( wchar_t* _Str, int _Val ){ return wcschr(_Str,wchar_t(_Val)); }
-inline const wchar_t* strstr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return wcsstr(_Str1,_Str2); }
-inline wchar_t* strstr( wchar_t* _Str1, const wchar_t* _Str2 ){ return wcsstr(_Str1,_Str2); }
-inline size_t strspn( const wchar_t* _Str, const wchar_t* _Control ){ return wcsspn(_Str,_Control); }
-inline size_t strcspn( const wchar_t* _Str, const wchar_t* _Control ){ return wcscspn(_Str,_Control); }
-inline const wchar_t * strpbrk( const wchar_t* _Str, const wchar_t* _Control ){ return wcspbrk(_Str,_Control); }
-inline wchar_t * strpbrk( wchar_t* _Str, const wchar_t* _Control ){ return wcspbrk(_Str,_Control); }
-
-// vcpp extensions
-inline wchar_t* _strlwr( wchar_t* _Str ){ return _wcslwr(_Str); }
-inline wchar_t* _strupr( wchar_t* _Str ){ return _wcsupr(_Str); }
-inline int _stricmp( const wchar_t* _Str1, const wchar_t* _Str2 ){ return _wcsicmp(_Str1,_Str2); }
-#ifdef __msvc__
-inline wchar_t* strtok_s( wchar_t* _Str, const wchar_t* _Delim, wchar_t** context ){ return wcstok_s(_Str,_Delim,context); }
-#endif
-
-// slee extensions
-template <class T> size_t _strrspn( const T* _Str, const T* _Control ){ size_t L=strlen(_Str),C=strlen(_Control),k=0,j=0;for(k=0;k<L;k++){for(j=0;j<C;j++)if(_Str[L-1-k]==_Control[j])break;if(j==C)break;}return k; }
-inline const char*    _stristr( const char* _Str1, size_t l1, const char* _Str2, size_t l2 ){ char* s1=__strdup(_Str1,l1); _strlwr(s1); char* s2=__strdup(_Str2,l2); _strlwr(s2); const char* r=strstr(s1,s2); return r?(_Str1+(r-s1)):nullptr; }
-inline const wchar_t* _wcsistr( const wchar_t* _Str1, size_t l1, const wchar_t* _Str2, size_t l2 ){ wchar_t* s1=__strdup(_Str1,l1); _wcslwr(s1); wchar_t* s2=__strdup(_Str2,l2); _wcslwr(s2); const wchar_t* r=wcsstr(s1,s2); return r?(_Str1+(r-s1)):nullptr; }
-inline const char*    _stristr( const char* _Str1, const char* _Str2 ){ return _stristr(_Str1, strlen(_Str1), _Str2, strlen(_Str2)); }
-inline const wchar_t* _wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return _wcsistr(_Str1, wcslen(_Str1), _Str2, wcslen(_Str2)); }
-inline const wchar_t* _stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return _wcsistr(_Str1, wcslen(_Str1), _Str2, wcslen(_Str2)); }
-
-// GCC extensions
-#ifdef __gcc__
-#define _stricmp	strcasecmp
-#define _wcsicmp	wcscasecmp
-inline char* _strlwr( char* _String ){ for( char* p=_String; *p; p++ ){ *p=tolower(*p); } return _String; }
-inline char* _strupr( char* _String ){ for( char* p=_String; *p; p++ ){ *p=toupper(*p); } return _String; }
-inline wchar_t* _wcslwr( wchar_t* _String ){ for( wchar_t* p=_String; *p; p++ ){ *p=tolower(*p); } return _String; }
-inline wchar_t* _wcsupr( wchar_t* _String ){ for( wchar_t* p=_String; *p; p++ ){ *p=toupper(*p); } return _String; }
-inline int _wtoi( const wchar_t* _String ){ return int(wcstol(_String,0,10)); }
-inline int strnicmp( const char* s1, const char* s2, size_t n ){ char *l1=_strlwr(__strdup(s1)), *l2=_strlwr(__strdup(s2)); return strncmp(l1,l2,n); }
-#endif
-
 #ifdef __msvc__
 inline bool is_utf8( const char * s ) // https://stackoverflow.com/questions/28270310/how-to-easily-detect-utf8-encoding-in-the-string
 {
@@ -405,6 +360,51 @@ template<> __forceinline char*		__strdup<char,wchar_t>( const wchar_t* s ){ retu
 template<> __forceinline wchar_t*	__strdup<wchar_t,char>( const char* s ){ return (wchar_t*)atow(s); }
 template<> __forceinline wchar_t*	__strdup<wchar_t,wchar_t>( const wchar_t* s ){ return __strdup(s); }
 
+// define overloaded functions for wchar_t
+inline size_t strlen( const wchar_t* _Str ){ return wcslen(_Str); }
+inline wchar_t* strcpy( wchar_t* _Dest, const wchar_t* _Src ){ return wcscpy(_Dest,_Src); }
+inline wchar_t* strncpy( wchar_t* _Dest, const wchar_t* _Src, size_t _Count ){ return wcsncpy(_Dest,_Src,_Count); }
+inline wchar_t* strcat( wchar_t* _Dest, const wchar_t* _Src ){ return wcscat(_Dest,_Src);  }
+inline wchar_t* strncat( wchar_t* _Dest, const wchar_t* _Src, size_t _Count ){ return wcsncat(_Dest,_Src,_Count); }
+inline int strcmp( const wchar_t* _Str1, const wchar_t* _Str2 ){ return wcscmp(_Str1,_Str2); }
+inline int strncmp( const wchar_t* _Str1, const wchar_t* _Str2, size_t _MaxCount ){ return wcsncmp(_Str1,_Str2,_MaxCount); }
+inline const wchar_t* strchr( const wchar_t* _Str, int _Val ){ return wcschr(_Str,wchar_t(_Val)); }
+inline wchar_t* strchr( wchar_t* _Str, int _Val ){ return wcschr(_Str,wchar_t(_Val)); }
+inline const wchar_t* strstr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return wcsstr(_Str1,_Str2); }
+inline wchar_t* strstr( wchar_t* _Str1, const wchar_t* _Str2 ){ return wcsstr(_Str1,_Str2); }
+inline size_t strspn( const wchar_t* _Str, const wchar_t* _Control ){ return wcsspn(_Str,_Control); }
+inline size_t strcspn( const wchar_t* _Str, const wchar_t* _Control ){ return wcscspn(_Str,_Control); }
+inline const wchar_t * strpbrk( const wchar_t* _Str, const wchar_t* _Control ){ return wcspbrk(_Str,_Control); }
+inline wchar_t * strpbrk( wchar_t* _Str, const wchar_t* _Control ){ return wcspbrk(_Str,_Control); }
+
+// GCC extensions
+#ifdef __gcc__
+#define stricmp	strcasecmp
+#define wcsicmp	wcscasecmp
+inline char* strlwr( char* _String ){ for( char* p=_String; *p; p++ ){ *p=tolower(*p); } return _String; }
+inline char* strupr( char* _String ){ for( char* p=_String; *p; p++ ){ *p=toupper(*p); } return _String; }
+inline wchar_t* wcslwr( wchar_t* _String ){ for( wchar_t* p=_String; *p; p++ ){ *p=tolower(*p); } return _String; }
+inline wchar_t* wcsupr( wchar_t* _String ){ for( wchar_t* p=_String; *p; p++ ){ *p=toupper(*p); } return _String; }
+inline int wtoi( const wchar_t* _String ){ return int(wcstol(_String,0,10)); }
+inline int strnicmp( const char* s1, const char* s2, size_t n ){ char *l1=strlwr(__strdup(s1)), *l2=strlwr(__strdup(s2)); return strncmp(l1,l2,n); }
+#endif
+
+// vcpp extensions
+inline wchar_t* strlwr( wchar_t* _Str ){ return wcslwr(_Str); }
+inline wchar_t* strupr( wchar_t* _Str ){ return wcsupr(_Str); }
+inline int stricmp( const wchar_t* _Str1, const wchar_t* _Str2 ){ return wcsicmp(_Str1,_Str2); }
+#ifdef __msvc__
+inline wchar_t* strtok_s( wchar_t* _Str, const wchar_t* _Delim, wchar_t** context ){ return wcstok_s(_Str,_Delim,context); }
+#endif
+
+// slee extensions
+template <class T> size_t strrspn( const T* _Str, const T* _Control ){ size_t L=strlen(_Str),C=strlen(_Control),k=0,j=0;for(k=0;k<L;k++){for(j=0;j<C;j++)if(_Str[L-1-k]==_Control[j])break;if(j==C)break;}return k; }
+inline const char*    stristr( const char* _Str1, size_t l1, const char* _Str2, size_t l2 ){ char* s1=__strdup(_Str1,l1); strlwr(s1); char* s2=__strdup(_Str2,l2); strlwr(s2); const char* r=strstr(s1,s2); return r?(_Str1+(r-s1)):nullptr; }
+inline const wchar_t* wcsistr( const wchar_t* _Str1, size_t l1, const wchar_t* _Str2, size_t l2 ){ wchar_t* s1=__strdup(_Str1,l1); wcslwr(s1); wchar_t* s2=__strdup(_Str2,l2); wcslwr(s2); const wchar_t* r=wcsstr(s1,s2); return r?(_Str1+(r-s1)):nullptr; }
+inline const char*    stristr( const char* _Str1, const char* _Str2 ){ return stristr(_Str1, strlen(_Str1), _Str2, strlen(_Str2)); }
+inline const wchar_t* wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return wcsistr(_Str1, wcslen(_Str1), _Str2, wcslen(_Str2)); }
+inline const wchar_t* stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return wcsistr(_Str1, wcslen(_Str1), _Str2, wcslen(_Str2)); }
+
 // format and printf replacement
 inline const char*		vformat( __printf_format_string__ const char* fmt, va_list a ){ size_t len=size_t(vsnprintf(0,0,fmt,a)); char* buffer=__strbuf(len); vsnprintf(buffer,len+1,fmt,a); return buffer; }
 inline const wchar_t*	vformat( __printf_format_string__ const wchar_t* const fmt, va_list a ){ size_t len=size_t(vswprintf(0,0,fmt,a)); wchar_t* bufferW=__strbuf<wchar_t>(len); vswprintf(bufferW,len+1,fmt,a); return bufferW; }
@@ -412,8 +412,8 @@ inline const char*		__attribute__((format(printf,1,2))) format( __printf_format_
 inline const wchar_t*	format( __printf_format_string__ const wchar_t* fmt, ... ){ va_list a; va_start(a,fmt); size_t len=size_t(vswprintf(0,0,fmt,a)); wchar_t* bufferW=__strbuf<wchar_t>(len); vswprintf(bufferW,len+1,fmt,a); va_end(a); return bufferW; }
 
 // case conversion
-template <class T> const T* tolower( const T* src ){ return _strlwr(__strdup(src)); }
-template <class T> const T* toupper( const T* src ){ return _strupr(__strdup(src)); }
+template <class T> const T* tolower( const T* src ){ return strlwr(__strdup(src)); }
+template <class T> const T* toupper( const T* src ){ return strupr(__strdup(src)); }
 inline const char* tovarname( const char* src, bool to_upper=false ){ if(!src||!*src) return ""; char *s=(char*)src,*dst=__strbuf(strlen(src)+2),*d=dst; if(!isalpha(*s)&&(*s)!='_') *(d++)='_'; for(;*s;s++,d++) *d=isalnum(*s)?(to_upper?char(toupper(*s)):(*s)):'_'; *d='\0'; return dst; }
 inline const char* tovarname( const wchar_t* src, bool to_upper=false ){ return tovarname(wtoa(src),to_upper); }
 
@@ -430,12 +430,12 @@ inline const char* to_preferred( string_view src ){ __to_separator(src,preferred
 // natural-order and case-insensitive comparison for std::sort, std::map/set, std::unordered_map/set
 #if defined __msvc__
 	#ifdef _INC_SHLWAPI
-		inline int _strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ return (!_Str1||!_Str2)?0:StrCmpLogicalW(_Str1,_Str2); }
+		inline int strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ return (!_Str1||!_Str2)?0:StrCmpLogicalW(_Str1,_Str2); }
 	#else
-		inline int _strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ static dll_function_t<int(*)(const wchar_t*,const wchar_t*)> f("shlwapi.dll","StrCmpLogicalW"); return !f?_wcsicmp(_Str1,_Str2):(!_Str1||!_Str2)?0:f(_Str1,_Str2); } // load StrCmpLogicalW(): when unavailable, fallback to wcsicmp
+		inline int strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ static dll_function_t<int(*)(const wchar_t*,const wchar_t*)> f("shlwapi.dll","StrCmpLogicalW"); return !f?wcsicmp(_Str1,_Str2):(!_Str1||!_Str2)?0:f(_Str1,_Str2); } // load StrCmpLogicalW(): when unavailable, fallback to wcsicmp
 	#endif
 #else
-	inline int _strcmplogical( const wchar_t* s1, const wchar_t* s2 )
+	inline int strcmplogical( const wchar_t* s1, const wchar_t* s2 )
 	{
 		if(!s1||!s2) return 0; while(*s1)
 		{
@@ -447,7 +447,7 @@ inline const char* to_preferred( string_view src ){ __to_separator(src,preferred
 		return (*s2)?-1:0;
 	}
 #endif
-inline int _strcmplogical( const char* _Str1, const char* _Str2 ){ return _strcmplogical(atow(_Str1),atow(_Str2)); }
+inline int strcmplogical( const char* _Str1, const char* _Str2 ){ return strcmplogical(atow(_Str1),atow(_Str2)); }
 
 // pattern matching: simple ?/* is supported; posix-style **/* (subdirectory matching) is not implemented yet
 template <class T=wchar_t>
@@ -598,14 +598,14 @@ struct path_t
 	inline const value_type& operator[]( ptrdiff_t i ) const { return _data[i]; }
 
 	// operator overloading: comparisons
-	__forceinline bool operator==( const path_t& p ) const { return _stricmp(_data,p._data)==0; }
-	__forceinline bool operator==( const value_type* s ) const { return _stricmp(_data,s)==0; }
-	__forceinline bool operator==( const string_type& p ) const { return _stricmp(_data,p.c_str())==0; }
-	__forceinline bool operator==( string_view_type p ) const { return _stricmp(_data,p.data())==0; }
-	__forceinline bool operator!=( const path_t& p ) const { return _stricmp(_data,p._data)!=0; }
-	__forceinline bool operator!=( const value_type* s ) const { return _stricmp(_data,s)!=0; }
-	__forceinline bool operator!=( const string_type& p ) const { return _stricmp(_data,p.c_str())!=0; }
-	__forceinline bool operator!=( string_view_type p ) const { return _stricmp(_data,p.data())!=0; }
+	__forceinline bool operator==( const path_t& p ) const { return stricmp(_data,p._data)==0; }
+	__forceinline bool operator==( const value_type* s ) const { return stricmp(_data,s)==0; }
+	__forceinline bool operator==( const string_type& p ) const { return stricmp(_data,p.c_str())==0; }
+	__forceinline bool operator==( string_view_type p ) const { return stricmp(_data,p.data())==0; }
+	__forceinline bool operator!=( const path_t& p ) const { return stricmp(_data,p._data)!=0; }
+	__forceinline bool operator!=( const value_type* s ) const { return stricmp(_data,s)!=0; }
+	__forceinline bool operator!=( const string_type& p ) const { return stricmp(_data,p.c_str())!=0; }
+	__forceinline bool operator!=( string_view_type p ) const { return stricmp(_data,p.data())!=0; }
 
 	// iterators
 	iterator begin(){ return _data; }

@@ -1093,8 +1093,8 @@ namespace gl {
 
 		// override and extend members
 		void clear() noexcept { __super::clear(); macro.clear(); }
-		iterator find( string name ){ for( auto it=begin(); it!=end(); it++ ) if(_stricmp(it->name.c_str(),name.c_str())==0) return it; return end(); }
-		void append( string name, string source ){ if(!name.empty()){for(auto& s:*this) if(_stricmp(s.name.c_str(),name.c_str())==0){ s.value=source; return; }} emplace_back( value_type{name,source} ); }
+		iterator find( string name ){ for( auto it=begin(); it!=end(); it++ ) if(stricmp(it->name.c_str(),name.c_str())==0) return it; return end(); }
+		void append( string name, string source ){ if(!name.empty()){for(auto& s:*this) if(stricmp(s.name.c_str(),name.c_str())==0){ s.value=source; return; }} emplace_back( value_type{name,source} ); }
 		bool replace( string _Where, string name, string source ){ auto it=find(_Where); if(it==end()) return false; it->name = name; it->value = source; return true; }
 		bool replace( iterator _Where, string name, string source ){ if(_Where==end()) return false; _Where->name = name; _Where->value = source; return true; }
 		
@@ -1173,7 +1173,7 @@ namespace gl {
 
 		bool empty() const { return programs.empty(); }
 		size_t size() const { return programs.size(); }
-		Program* get_program( const char* name ) const { for(auto* p:programs)if(_stricmp(p->name(),name)==0) return p; printf("Unable to find program \"%s\" in effect \"%s\"\n", name, this->_name ); return nullptr; }
+		Program* get_program( const char* name ) const { for(auto* p:programs)if(stricmp(p->name(),name)==0) return p; printf("Unable to find program \"%s\" in effect \"%s\"\n", name, this->_name ); return nullptr; }
 		Program* get_program_by_index( uint index ) const { if(index<programs.size()) return programs[index]; else { printf("[%s] Out-of-bound program index\n", _name ); return nullptr; } }
 		Program* get_program_by_id( uint program_ID ) const { for(auto* p:programs)if(p->ID==program_ID) return p; printf("Unable to find program \"%u\" in effect \"%s\"\n", program_ID, this->_name ); return nullptr; }
 		Program* create_program( const char* name, const program_source_t& source );
@@ -1594,9 +1594,9 @@ inline gl::Program* gxCreateProgram( string prefix, string name, const gl::progr
 			GLint loc = glGetAttribLocation(program->ID,aname);
 
 			// bind attributes explicitely again
-			if(loc!=0&&(_stristr(aname,"pos")||_stristr(aname,"position")))						glBindAttribLocation( program->ID, 0, aname );
-			if(loc!=1&&(_stristr(aname,"norm")||_stristr(aname,"nrm")))							glBindAttribLocation( program->ID, 1, aname );
-			if(loc!=2&&(_stristr(aname,"tex")||_stristr(aname,"coord")||_stristr(aname,"tc")))	glBindAttribLocation( program->ID, 2, aname );
+			if(loc!=0&&(stristr(aname,"pos")||stristr(aname,"position")))						glBindAttribLocation( program->ID, 0, aname );
+			if(loc!=1&&(stristr(aname,"norm")||stristr(aname,"nrm")))							glBindAttribLocation( program->ID, 1, aname );
+			if(loc!=2&&(stristr(aname,"tex")||stristr(aname,"coord")||stristr(aname,"tc")))	glBindAttribLocation( program->ID, 2, aname );
 		}
 
 		// link agin to reflect the changes in binding locations
