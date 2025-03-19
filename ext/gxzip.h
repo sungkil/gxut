@@ -302,10 +302,10 @@ struct binary_cache
 	virtual path_t zip_path(){ return cache_path()+".zip"; }
 	virtual string signature() = 0;
 
-	void writef( __printf_format_string__ const char* fmt, ... ){ if(!fp) return; va_list a; va_start(a,fmt); vfprintf(fp,fmt,a); va_end(a); }
-	void readf( const char* fmt, ... ){ if(!fp) return; va_list a; va_start(a,fmt); vfscanf(fp,fmt,a); va_end(a); }
-	void write( void* ptr, size_t size ){ if(fp) fwrite( ptr, size, 1, fp ); }
-	void read( void* ptr, size_t size ){ if(fp) fread(ptr,size,1,fp); }
+	int writef( __printf_format_string__ const char* fmt, ... ){ if(!fp) return EOF; va_list a; va_start(a,fmt); int r=vfprintf(fp,fmt,a); va_end(a); return r; }
+	int readf( const char* fmt, ... ){ if(!fp) return EOF; va_list a; va_start(a,fmt); int r=vfscanf(fp,fmt,a); va_end(a); return r; }
+	size_t write( void* ptr, size_t size ){ if(!fp) return 0; return fwrite( ptr, size, 1, fp ); }
+	size_t read( void* ptr, size_t size ){ if(!fp) return 0; return fread(ptr,size,1,fp); }
 	void close()
 	{
 		if(fp){ fclose(fp); fp=nullptr; }

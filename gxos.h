@@ -45,39 +45,6 @@
 namespace os {
 //*************************************
 
-// process-related
-__noinline string __build_process_cmd( const char* const app, const char* args )
-{
-	// buffers
-	vector<char> vcmd(4096,0);	auto* cmd=vcmd.data();
-	vector<char> vbuf(4096,0);	auto* buf=vbuf.data();
-	
-	// prioritize com against exe for no-extension apps
-	if(!app&&args&&*args!='\"')
-	{
-		strcpy(buf,args); char *ctx=nullptr, *token=strtok_s(buf," \t\n",&ctx);
-		const char* t=to_backslash(token);
-		path_t e=env::where(t), x=path_t(t).extension();
-		if(!path_t(t).exists()&&x.empty()&&!e.empty()&&x=="com") args=strcpy(buf, strcat(strcat(strcpy(cmd, token), ".com "), buf+strlen(token)+1)); // use cmd as temp
-	}
-
-	// build cmdline, which should also embed app path
-	*cmd=0; bool p=app&&*app,g=args&&*args;
-	if(p) strcpy(cmd,auto_quote(app)); if(p&&g) strcat(cmd," "); if(g) strcat(cmd,args);
-
-	return cmd;
-}
-
-__noinline bool create_process( const char* app, const char* args=nullptr,
-	bool wait=true, bool windowed=false, DWORD priority=NORMAL_PRIORITY_CLASS )
-{
-	STARTUPINFOW si={sizeof(si)}; si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=windowed?SW_SHOW:SW_HIDE;
-	PROCESS_INFORMATION pi={};
-	if(!CreateProcessW( app?atow(app):nullptr, (LPWSTR)atow(__build_process_cmd(app,args).c_str()), nullptr, nullptr, FALSE, priority, nullptr, nullptr, &si, &pi)||!pi.hProcess) return false;
-	if(wait){ WaitForSingleObject(pi.hProcess,INFINITE); safe_close_handle( pi.hThread ); safe_close_handle( pi.hProcess ); }
-	return true;
-}
-
 inline DWORD current_process()
 {
 	static DWORD curr_pid = GetCurrentProcessId();
@@ -163,12 +130,21 @@ inline bool process_exists( const char* file_path )
 #endif
 }
 
-__noinline string read_process( string cmd, const char* trims=" \t\r\n" )
+__noinline vector<std::pair<uint,string>> list_process( const char* app_name=nullptr )
 {
-	FILE* pp = _popen(cmd.c_str(),"rb"); if(!pp) return "";
-	vector<char> v; v.reserve(1024); char buff[64]={}; size_t n=0; while( n=fread(buff,1,sizeof(buff),pp) ) v.insert(v.end(),buff,buff+n); v.emplace_back(0);
-	bool b_eof= feof(pp); _pclose(pp); if(!b_eof) printf("%s(%s): broken pipe\n", __func__, cmd.c_str() );
-	char* s=v.data(); return trim(is_utf8(s)?atoa(s,CP_UTF8,0):s, trims);  // auto convert CP_UTF8 to current code page
+	string cmd= "tasklist /FO:csv";
+	if(app_name&&*app_name) cmd += format(" /FI \"ImageName eq %s\"",app_name );
+	string r = read_process(cmd.c_str());
+	vector<std::pair<uint,string>> v; v.reserve(32);
+	char *ctx=0,*token=strtok_s(__strdup(r.c_str()),"\r\n",&ctx); // skip the first line
+	for(token=strtok_s(0,"\r\n",&ctx);token;token=strtok_s(0,"\r\n",&ctx))
+	{
+		char *c=0,*t=strtok_s(__strdup(token),",",&c);
+		string name = t?string(t).substr(1,int(strlen(t))-2):""; if(name.empty()) continue;
+		t=strtok_s(0,",",&c); uint pid = t?uint(atoi(string(t).substr(1,strlen(t)-2).c_str())):-1; if(pid==0||pid==-1) continue;
+		v.emplace_back( pid, name );
+	}
+	return v;
 }
 
 //*************************************
@@ -258,7 +234,7 @@ inline path usertemp()
 {
 	static path t; if(!t.empty()) return t;
 	wchar_t b[path::capacity]; GetTempPathW(path::capacity,b); t=wtoa(b); t=t.absolute().append_slash();
-	path tmp=t.drive()+"\\temp\\"; if(t==tmp.junction()) t=tmp; t[0]=::toupper(t[0]);
+	path tmp=t.drive().append_slash()+"temp\\"; if(t==tmp.junction()) t=tmp; t[0]=::toupper(t[0]);
 	if(volume_t(t).has_free_space()) return t;
 	printf("temp(): not enough space in %s\n", t.c_str() );
 	t=path(exe::dir())+"temp\\"; if(!t.exists()) t.mkdir(); printf("temp(): %s is used instead", t.c_str() );
@@ -367,21 +343,13 @@ inline HWND find_window( const char* filter )
 __noinline bool redirect_process( const char* app, const char* args=nullptr,
 	uint* count=nullptr, DWORD priority=NORMAL_PRIORITY_CLASS )
 {
-	// startup attributes
-	STARTUPINFOW si={sizeof(si)};
-	si.dwFlags=STARTF_USESHOWWINDOW;
-	si.wShowWindow=SW_HIDE;
-
-	// prepare redirection
-	HANDLE stdout_read=INVALID_HANDLE_VALUE;	// parent process's stdout read handle
-	HANDLE stdout_write=INVALID_HANDLE_VALUE;	// child process' stdout write handle
-	static const int REDIR_BUFFER_SIZE = 1<<24;	// 16 MB should be enough for buffering; otherwise, stdout will not be written no more, which printf hangs
-
 	#pragma warning( disable: 6248 ) // Setting a SECURITY_DESCRIPTOR's DACL to NULL will result in an unprotected object.
 	SECURITY_DESCRIPTOR sd; InitializeSecurityDescriptor(&sd,SECURITY_DESCRIPTOR_REVISION); SetSecurityDescriptorDacl(&sd,true,NULL,false);
+	SECURITY_ATTRIBUTES sa={sizeof(SECURITY_ATTRIBUTES),&sd,TRUE/*inheritance*/};
 	#pragma warning( default: 6248 )
 
-	SECURITY_ATTRIBUTES sa={sizeof(SECURITY_ATTRIBUTES),&sd,TRUE/*inheritance*/};
+	constexpr int REDIR_BUFFER_SIZE = 1<<24; // 16 MB should be enough for buffering; otherwise, stdout will not be written no more, which printf hangs
+	HANDLE stdout_read=INVALID_HANDLE_VALUE, stdout_write=INVALID_HANDLE_VALUE;	// parent process's stdout read handle, child process' stdout write handle
 	if(!CreatePipe( &stdout_read, &stdout_write, &sa, REDIR_BUFFER_SIZE )){ printf( "[redir] CreatePipe(stdout) failed: %s\n", os::get_last_error() ); return false; }
 	if(stdout_read==INVALID_HANDLE_VALUE||stdout_write==INVALID_HANDLE_VALUE){ printf( "[redir] CreatePipe(stdout) failed: %s\n", os::get_last_error() ); return false; }
 	if(!SetHandleInformation(stdout_read,HANDLE_FLAG_INHERIT,0)){ printf( "[redir] SetHandleInformation() failed: %s\n", os::get_last_error() ); return false; }
@@ -392,14 +360,16 @@ __noinline bool redirect_process( const char* app, const char* args=nullptr,
 	std::ios::sync_with_stdio();
 
 	// override startup attributes
+	STARTUPINFOW si={sizeof(si)};
+	si.dwFlags		= STARTF_USESHOWWINDOW;
+	si.wShowWindow	= SW_HIDE;
 	si.hStdError	= stdout_write;
 	si.hStdOutput	= stdout_write;
 	si.hStdInput	= INVALID_HANDLE_VALUE;
 	si.dwFlags		= si.dwFlags|STARTF_USESTDHANDLES;
 
 	// create process and wait if necessary
-	PROCESS_INFORMATION pi={};
-	if(!CreateProcessW( app?atow(app):nullptr, (LPWSTR)atow(__build_process_cmd(app,args).c_str()), nullptr, nullptr, TRUE, priority, nullptr, nullptr, &si, &pi )||!pi.hProcess){ printf(get_last_error()); return false; }
+	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,build_cmdline(app,args),0,0,TRUE,priority,0,0,&si,&pi )||!pi.hProcess||!pi.hThread){ printf("%s\n",get_last_error()); return false; }
 
 	static char* buff=nullptr; static size_t blen=0;
 	DWORD n_avail=0, n_read=0, read_count=0;
@@ -408,17 +378,18 @@ __noinline bool redirect_process( const char* app, const char* args=nullptr,
 		DWORD exit; GetExitCodeProcess(pi.hProcess,&exit); if(exit!=STILL_ACTIVE) break;
 		if(n_avail==0){ Sleep(1); continue; }
 		if(blen<n_avail){ char* buff1=(char*)realloc(buff,((blen=n_avail)+1)*sizeof(char)); if(buff1) buff=buff1; }
-		if(buff&&!ReadFile(stdout_read, buff, n_avail, &n_read, nullptr)) return false; if(n_read==0) continue;
+		if(!buff){ printf("%s(): null buff\n",__func__); break; }
+		if(!ReadFile(stdout_read, buff, n_avail, &n_read, nullptr)) return false; if(n_read==0) continue;
+		buff[n_read]=0; printf(read_count==0?ltrim(buff):buff);
 		read_count += n_read;
-		if(buff){ buff[n_read]=0; printf(buff); }
 	}
-	if(count) *count = read_count;
-
+	
 	safe_close_handle( pi.hThread );
 	safe_close_handle( pi.hProcess );
 	safe_close_handle( stdout_read );
 	safe_close_handle( stdout_write );
 
+	if(count) *count = read_count;
 	return true;
 }
 
