@@ -43,10 +43,27 @@ extern "C" {
 #define GL_VERSION_1_0 1
 typedef void GLvoid;
 typedef unsigned int GLenum;
+
+/* #include <KHR/khrplatform.h> */
+#if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) || defined(__GNUC__) || defined(__SCO__) || defined(__USLC__)
+#include <stdint.h>
+typedef int32_t                 khronos_int32_t;
+typedef uint32_t                khronos_uint32_t;
+typedef int64_t                 khronos_int64_t;
+typedef uint64_t                khronos_uint64_t;
+#define KHRONOS_SUPPORT_INT64   1
+#define KHRONOS_SUPPORT_FLOAT   1
+#if defined(__SIZEOF_LONG__) && defined(__SIZEOF_POINTER__)
+#if __SIZEOF_POINTER__ > __SIZEOF_LONG__
+#define KHRONOS_USE_INTPTR_T
+#endif
+#endif
+#elif defined(_WIN32) && !defined(__SCITECH_SNAP__)
 typedef __int32					khronos_int32_t;
 typedef unsigned __int32		khronos_uint32_t;
 typedef __int64					khronos_int64_t;
 typedef unsigned __int64		khronos_uint64_t;
+#endif
 typedef signed   char			khronos_int8_t;
 typedef unsigned char			khronos_uint8_t;
 typedef signed   short int		khronos_int16_t;
@@ -73,6 +90,8 @@ typedef enum {
 	KHRONOS_TRUE  = 1,
 	KHRONOS_BOOLEAN_ENUM_FORCE_SIZE = KHRONOS_MAX_ENUM
 } khronos_boolean_enum_t;
+/* end #include <KHR/khrplatform.h> */
+
 typedef khronos_float_t GLfloat;
 typedef int GLint;
 typedef int GLsizei;
@@ -4019,6 +4038,19 @@ f(CONSERVATIVERASTERPARAMETERFNV,ConservativeRasterParameterfNV)
 f(CONSERVATIVERASTERPARAMETERINV,ConservativeRasterParameteriNV)
 #undef f
 
+#if !defined __msvc__ && defined _WIN32 && defined _MSC_VER && !defined __clang__
+	#define __msvc__
+#elif !defined __gcc__ && defined __GNUC__
+	#define __gcc__
+#endif
+
+#ifdef __msvc__
+	#define __noinline __declspec(noinline) inline
+#elif defined __gcc__
+	#define __noinline __attribute__((noinline)) inline
+	#include <dlfcn.h>
+#endif
+
 #include <string>
 #include <vector>
 #include <unordered_set>
@@ -4026,29 +4058,38 @@ f(CONSERVATIVERASTERPARAMETERINV,ConservativeRasterParameteriNV)
 using std::string;
 using std::vector;
 
-inline PROC (WINAPI* __wglGetProcAddress)(LPCSTR) = nullptr;
-inline void* (*__xglGetProcAddress)(LPCSTR) = nullptr;
-inline const char** (*__xglGetExtensions)(int*) = nullptr;
-inline HMODULE __hOpenGL32 = nullptr;
+inline void* __hOpenGL32 = nullptr;
 inline std::vector<std::string> gxcorearb_unsupported_functions;
 inline std::vector<std::string> gxcorearb_unsupported_extensions;
+#ifdef __msvc__
+inline PROC (* __wglGetProcAddress)(const char*) = nullptr;
+inline void* (*__xglGetProcAddress)(const char*) = nullptr;
+inline const char** (*__xglGetExtensions)(int*) = nullptr;
+#endif
 
-__declspec(noinline) inline void* get_gxcorearb_proc( const char* fname )
+__noinline void* get_gxcorearb_proc( const char* fname )
 {
-	void* p = __xglGetProcAddress?__xglGetProcAddress(fname):nullptr;	if(p) return p;
-	p = (void*) __wglGetProcAddress(fname);								if(p) return p;
-	p = (void*) GetProcAddress(__hOpenGL32,fname);						if(p) return p;
-	gxcorearb_unsupported_functions.emplace_back(fname);							return p;
+	void* p = nullptr;;
+#ifdef __msvc__
+	p = __xglGetProcAddress?__xglGetProcAddress(fname):nullptr;	if(p) return p;
+	p = (void*) __wglGetProcAddress(fname);						if(p) return p;
+	p = (void*) GetProcAddress((HMODULE)__hOpenGL32,fname);		if(p) return p;
+#elif defined __gcc__
+	p = (void*) dlsym(__hOpenGL32,fname);						if(p) return p;
+#endif
+	gxcorearb_unsupported_functions.emplace_back(fname);		return p;
 }
 
-__declspec(noinline) inline std::unordered_set<std::string>& get_gxcorearb_extensions()
+__noinline std::unordered_set<std::string>& get_gxcorearb_extensions()
 {
 	static std::unordered_set<std::string> extension_set; if(!extension_set.empty()) return extension_set;
+#ifdef __msvc__
 	if(__xglGetExtensions)
 	{
 		int kn; const char** p_extensions = __xglGetExtensions(&kn);
 		if(kn){ for(int k=0;k<kn;k++) extension_set.emplace(p_extensions[k]); return extension_set; }
 	}
+#endif
 #ifdef GL_ES_VERSION_2_0
 	char* e=(char*)glGetString(GL_EXTENSIONS); std::vector<char> ext(e,e+strlen(e)+2);
 	for(char* t=strtok(&ext[0]," \t\n" );t;t=strtok(nullptr," \t\n")) extension_set.emplace(t);
@@ -4059,20 +4100,23 @@ __declspec(noinline) inline std::unordered_set<std::string>& get_gxcorearb_exten
 	return extension_set;
 }
 
-__declspec(noinline) inline bool gxcorearb_extension_exists( const char* extension )
+__noinline bool gxcorearb_extension_exists( const char* extension )
 {
 	static const std::unordered_set<std::string>& extension_set = get_gxcorearb_extensions();
 	if(extension_set.find(extension)!=extension_set.end()) return true;
 	gxcorearb_unsupported_extensions.emplace_back(extension); return false;
 }
 
-__declspec(noinline) inline void gxcorearb( HMODULE hOpenGL32 )
+__noinline void gxcorearb( void* hOpenGL32 )
 {
-	__hOpenGL32 = hOpenGL32; if(__hOpenGL32==nullptr) __hOpenGL32=LoadLibraryW(L"OpenGL32.dll"); if(__hOpenGL32==nullptr){ printf( "gxcorearb(): unable to load OpenGL32.dll" ); return; }
-	__wglGetProcAddress = (decltype(__wglGetProcAddress)) GetProcAddress(__hOpenGL32,"wglGetProcAddress"); if(__wglGetProcAddress==nullptr){ printf( "gxcorearb(): __wglGetProcAddress==nullptr" ); return; }
+#ifdef __msvc__
+	__hOpenGL32 = hOpenGL32; if(__hOpenGL32==nullptr) __hOpenGL32=LoadLibraryA("OpenGL32.dll"); if(__hOpenGL32==nullptr){ printf( "gxcorearb(): unable to load OpenGL32.dll" ); return; }
+	__wglGetProcAddress = (decltype(__wglGetProcAddress)) GetProcAddress((HMODULE)__hOpenGL32,"wglGetProcAddress"); if(__wglGetProcAddress==nullptr){ printf( "gxcorearb(): __wglGetProcAddress==nullptr" ); return; }
 	__xglGetProcAddress = (decltype(__xglGetProcAddress)) GetProcAddress(GetModuleHandleW(nullptr),"xglGetProcAddress");
 	__xglGetExtensions = (decltype(__xglGetExtensions)) GetProcAddress(GetModuleHandleW(nullptr),"xglGetExtensions");
-
+#elif defined __gcc__
+	__hOpenGL32 = hOpenGL32; if(__hOpenGL32==nullptr) __hOpenGL32=dlopen("libGL.so",RTLD_LAZY); if(__hOpenGL32==nullptr){ printf( "gxcorearb(): unable to load libGL.so" ); return; }
+#endif
 // query if functions exist
 #define g(proc,func) gl##func = (PFNGL##proc##PROC) get_gxcorearb_proc( "gl" #func );
 g(CULLFACE,CullFace)
@@ -4990,7 +5034,11 @@ e(NV_conservative_raster_underestimation)
 #undef e
 
 	// release dll
-	if(__hOpenGL32&&!hOpenGL32) FreeLibrary(__hOpenGL32);
+#ifdef __msvc__
+	if(__hOpenGL32&&!hOpenGL32) FreeLibrary((HMODULE)__hOpenGL32);
+#elif defined __gcc__
+	if(__hOpenGL32&&!hOpenGL32) dlclose(__hOpenGL32);
+#endif
 
 	// return if unsupported exists or logging is disabled
 	if(gxcorearb_unsupported_functions.empty()&&gxcorearb_unsupported_extensions.empty()) return;

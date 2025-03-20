@@ -14,8 +14,10 @@
 
 #if __has_include("stb_image.h")
 	#include "stb_image.h"
-#elif __has_include(<stb_image.h>)
-	#include <stb_image.h>
+#elif __has_include("../stb/stb_image.h")
+	#include "../stb/stb_image.h"
+#elif __has_include("../../stb/stb_image.h")
+	#include "../../stb/stb_image.h"
 #elif __has_include(<stb/stb_image.h>)
 	#include <stb/stb_image.h>
 #endif

@@ -21,10 +21,7 @@
 #include "gxmath.h"
 #include "gxstring.h"
 #include <malloc.h> // _get_heap_handle()
-
-#if __has_include("gxtimer.h")
-	#include "gxtimer.h"
-#endif
+#include <chrono> // for timer
 
 #if defined(GX_OPENGL_GLEW)
 	#ifdef GX_OPENGL_GLAD
@@ -75,6 +72,11 @@
 	#pragma warning( disable: 4819 )	// disable waring on the foreign codepage
 	#include <cuda_gl_interop.h>		// this should be located after glew/glad/gxcorearb.h
 	#pragma warning( default: 4819 )
+#endif
+
+// GCC compatibility
+#ifdef __gcc__
+	uint64_t _get_heap_handle(){ return 0; }
 #endif
 
 //***********************************************
@@ -234,38 +236,28 @@ namespace gl {
 	};
 
 	//***********************************************
-#ifdef __GX_TIMER_H__
 	struct timer_t : public Object
 	{
 		union { double2 result; struct { double x, y; }; };	// Async OpenGL Timestamp: (begin,end)
-		
-		static double&	offset(){ static double f=0; return f; }
-		static void		sync_with_qpc(){ static int64_t e=epoch(); glFinish(); double i=0,j=0;uint k;for(k=0;k<16;k++){j+=(gxGetInteger64v(GL_TIMESTAMP)-e)/1000000.0;i+=gx::timer_t::now();} offset()=(i-j)/double(k); glFinish(); }
-		static int64_t	epoch(){ static int64_t e=0; if(e) return e; auto* ef=(int64_t(*)()) GetProcAddress(GetModuleHandleW(nullptr),"get_timer_epoch_GL"); if(ef) return e=ef(); else if(glGetInteger64v){ printf( "gl::Timer::epoch(): unable to get rex_timer_epoch_GL()\n" ); glGetInteger64v(GL_TIMESTAMP,&e); return e; } printf( "gl::epoch(): unable to get the epoch of OpenGL\n" ); return e=-1; }
 
 		// constructor: initialized with the internal qpc or an external qpc
-		timer_t():timer_t(_cc0){}
-		timer_t( gx::timer_t& t ):Object(gxCreateQuery(GL_TIMESTAMP),"",GL_TIMESTAMP),_ID1(gxCreateQuery(target)),_cc(t){ result=_cc.result={0,0}; }
+		timer_t():Object(gxCreateQuery(GL_TIMESTAMP),"",GL_TIMESTAMP),_ID1(gxCreateQuery(target)){ result={}; }
 		~timer_t() override { GLuint idx[2]={ID,_ID1}; glDeleteQueries(2,idx); }
 
 		// gl::Timer specific implementations
 		inline bool		is_available(){ GLint available; glGetQueryObjectiv(_ID1,GL_QUERY_RESULT_AVAILABLE, &available); return _complete=(available!=GL_FALSE); }
-		inline void		finish(){ if(_complete) return; static int64_t e=epoch(); static const GLenum q=GL_QUERY_RESULT; GLuint64 v; glGetQueryObjectui64v(ID,q,&v); x = double(v-e)/1000000.0+offset(); glGetQueryObjectui64v(_ID1,q,&v); y=double(v-e)/1000000.0+offset(); _complete=true; }
-		inline double	latency(){ if(!_complete) finish(); return x-_cc.x; }	// difference between CPU time and the time for flushing preceding commands = result.x - qpc.x
+		inline void		finish(){ if(_complete) return; static const GLenum q=GL_QUERY_RESULT; GLuint64 v; glGetQueryObjectui64v(ID,q,&v); x = double(v)/1000000.0; glGetQueryObjectui64v(_ID1,q,&v); y=double(v)/1000000.0; _complete=true; }
 
-		inline void		begin(){ _cc.begin(); glQueryCounter(ID,target); _complete=false; }
-		inline void		end(){ glQueryCounter(_ID1,target); _cc.end(); _complete=false; }
+		inline void		begin(){ glQueryCounter(ID,target); _complete=false; }
+		inline void		end(){ glQueryCounter(_ID1,target); _complete=false; }
 		inline double	delta(){ if(!_complete) finish(); return y-x; }
-		inline double	now(){ return (gxGetInteger64v(GL_TIMESTAMP)-epoch())/1000000.0+offset(); }
-		inline void		clear(){ _cc.begin();_cc.end();result=_cc.result; _complete=true; }
+		inline double	now(){ return (gxGetInteger64v(GL_TIMESTAMP))/1000000.0; }
+		inline void		clear(){ _complete=true; }
 	
 	protected:
 		const GLuint	_ID1=0;
-		gx::timer_t&	_cc;	// synchronous CPU counter: reference to external or internal counter
-		gx::timer_t		_cc0;	// synchronous CPU counter: internal counter instance
 		bool			_complete=false;
 	};
-#endif // __GX_TIMER_H__
 
 	//***********************************************
 	struct Buffer : public Object
@@ -337,7 +329,11 @@ namespace gl {
 		~Texture() override { delete_views(_next); make_resident(false); glDeleteTextures(1,(GLuint*)&ID); invalidated()=true; }
 
 		// delete texture views and query to check whether dirty/deleted textures exist
-		static void delete_views( Texture*& v ){ if(!v) return; delete_views(v->_next); v->make_resident(false); glDeleteTextures(1,(GLuint*)&v->ID); HeapFree((void*)v->_crtheap,0,(Texture*)v); v=nullptr; invalidated()=true; } // use HeapFree() for views
+		static void delete_views( Texture*& v ){ if(!v) return; delete_views(v->_next); v->make_resident(false); glDeleteTextures(1,(GLuint*)&v->ID);
+#ifdef __msvc__
+		HeapFree((void*)v->_crtheap,0,(Texture*)v);
+#endif
+		v=nullptr; invalidated()=true; } // use HeapFree() for views
 		static bool& invalidated(){ static bool b=true; return b; }
 
 		GLuint bind( bool b_bind=true ){ GLuint b0=gxGetIntegerv(_target_binding); if(!b_bind||ID!=b0) glBindTexture( target, b_bind?ID:0 ); return b0; }
@@ -429,7 +425,7 @@ namespace gl {
 		friend Texture* ::gxCreateTexture2D(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,GLvoid*,bool,bool,GLsizei);
 		friend Texture* ::gxCreateTexture3D(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,GLvoid*);
 		friend Texture* ::gxCreateTextureCube(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,GLvoid* data[6],bool);
-		friend Texture* ::gxCreateTextureBuffer(const char*,Buffer*,GLint);
+		friend Texture* ::gxCreateTextureBuffer(const char*,gl::Buffer*,GLint);
 		friend Texture* ::gxCreateTextureRectangle(const char*,GLsizei,GLsizei,GLint,GLvoid*);
 		friend Texture* ::gxCreateTextureView(Texture* src,GLuint,GLuint,GLuint,GLuint,GLenum,bool);
 
@@ -767,9 +763,11 @@ namespace gl {
 			case GL_FLOAT_MAT4:			glProgramUniformMatrix4fv( prog, ID, count, GL_TRUE, (const GLfloat*)v );	break;
 			}
 		}
-		
+
+#ifdef __msvc__		
 		// template specialization on bool array
-		template<> inline void set<bool>( GLuint program_ID, bool* v, GLsizei count ){ if(ID==-1) return; vector<int> i(count);for(int k=0;k<count;k++)i[k]=int(v[k]); glProgramUniform1iv( program_ID, ID, count, &i[0] ); }
+		template<> inline void set<bool>( GLuint prog, bool* v, GLsizei count ){ if(ID==-1) return; vector<int> i(count);for(int k=0;k<count;k++)i[k]=int(v[k]); glProgramUniform1iv( prog, ID, count, &i[0] ); }
+#endif
 
 		const char* type_name()
 		{
@@ -1037,7 +1035,7 @@ namespace gl {
 
 	inline void gl::Program::update_uniform_cache()
 	{
-		GLint program0=-1; if(glProgramUniform1i) glGetIntegerv(GL_CURRENT_PROGRAM,&program0); if(program0!=ID) glUseProgram(ID);
+		GLuint program0=-1; if(glProgramUniform1i) glGetIntegerv(GL_CURRENT_PROGRAM,(GLint*)&program0); if(program0!=ID) glUseProgram(ID);
 
 		// update uniform variables
 		int texture_id=0; for( auto& u : get_active_uniforms(false) )
@@ -1054,10 +1052,10 @@ namespace gl {
 		for(int k=0,kn=gxGetProgramiv(ID,GL_ACTIVE_UNIFORM_BLOCKS);k<kn;k++)
 		{
 			UniformBlock ub; ub.ID=k; ub.program=this; ub.size=gxGetActiveUniformBlockiv(ID,k,GL_UNIFORM_BLOCK_DATA_SIZE);
-			GLsizei l=gxGetActiveUniformBlockiv(ID,k,GL_UNIFORM_BLOCK_NAME_LENGTH); /* length includes NULL */ if(l>std::extent<decltype(UniformBlock::name)>::value) printf("[%s] uniform block name is too long\n",_name);
+			GLsizei l=gxGetActiveUniformBlockiv(ID,k,GL_UNIFORM_BLOCK_NAME_LENGTH); /* length includes NULL */ if(l>GLsizei(std::extent<decltype(UniformBlock::name)>::value)) printf("[%s] uniform block name is too long\n",_name);
 			glGetActiveUniformBlockName(ID,k,l,&l,ub.name);
 			_uniform_block_map[ub.name] = ub;
-			for(auto& it:_uniform_cache){ auto&n=it.first;auto&u=it.second; if(u.block_index==ub.ID) strcpy(u.block_name,ub.name); } // update uniform block in uniform cache
+			for(auto& it:_uniform_cache){ auto&n=it.first;auto&u=it.second; if(u.block_index==GLint(ub.ID)) strcpy(u.block_name,ub.name); } // update uniform block in uniform cache
 		}
 
 		if(program0!=ID&&program0>=0) glUseProgram(program0); // restore the original program
@@ -1092,7 +1090,7 @@ namespace gl {
 		effect_source_t( const std::initializer_list<value_type>& v ){ reinterpret_cast<vector<value_type>&>(*this)=v; }
 
 		// override and extend members
-		void clear() noexcept { __super::clear(); macro.clear(); }
+		void clear() noexcept { vector<named_string_t>::clear(); macro.clear(); }
 		iterator find( string name ){ for( auto it=begin(); it!=end(); it++ ) if(stricmp(it->name.c_str(),name.c_str())==0) return it; return end(); }
 		void append( string name, string source ){ if(!name.empty()){for(auto& s:*this) if(stricmp(s.name.c_str(),name.c_str())==0){ s.value=source; return; }} emplace_back( value_type{name,source} ); }
 		bool replace( string _Where, string name, string source ){ auto it=find(_Where); if(it==end()) return false; it->name = name; it->value = source; return true; }
@@ -1150,7 +1148,7 @@ inline vector<string> gl::effect_source_t::explode_parsed( const char* parsed ) 
 	int page_index=0; for( auto& l : gxExplodeShaderSource(parsed) )
 	{
 		if(l.index>=n[page_index]) page_index++;
-		if(page_index>=v.size()){ printf("%s(): page_index(%d)>=v.size(%d)\n",__func__,page_index,int(v.size())); break; }
+		if(page_index>=int(v.size())){ printf("%s(): page_index(%d)>=v.size(%d)\n",__func__,page_index,int(v.size())); break; }
 		v[page_index] += l + '\n';
 	}
 
@@ -1208,7 +1206,7 @@ namespace gl {
 		gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name); if(b&&b->size()!=size){ static std::set<string> warns; auto it=warns.find(name); if(it==warns.end()){ warns.insert(name); printf("[%s] %s(): uniform_buffer(%s).size(=%d)!=%d\n",this->_name,__func__,name,int(b->size()),int(size));} } if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr,GL_MAP_WRITE_BIT|GL_DYNAMIC_STORAGE_BIT,false); if(!b){ printf("[%s] unable to create uniform buffer [%s]\n", this->_name, name); return nullptr; } return uniform_buffer_map[name]=b; }
 		gl::Buffer* get_uniform_buffer( const char* name ){ auto it=uniform_buffer_map.find(name); return it==uniform_buffer_map.end()?nullptr:it->second; }
 		GLint get_uniform_block_binding( const char* name ){ GLint binding=active_program?active_program->get_uniform_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_uniform_block_binding(name); if(b!=-1) return b; } return -1; }
-		gl::Buffer* bind_uniform_buffer( const char* name, gl::Buffer* ub=nullptr /* if nullptr, use default buffer */ ){ gl::Buffer* b=ub?ub:get_uniform_buffer(name); GLuint binding=get_uniform_block_binding(name); if(b&&binding!=-1){ if(b->target==GL_UNIFORM_BUFFER) b->bind_base(binding); else b->bind_base_as(GL_UNIFORM_BUFFER,binding); return b; }
+		gl::Buffer* bind_uniform_buffer( const char* name, gl::Buffer* ub=nullptr /* if nullptr, use default buffer */ ){ gl::Buffer* b=ub?ub:get_uniform_buffer(name); GLuint binding=get_uniform_block_binding(name); if(b&&binding!=GLuint(-1)){ if(b->target==GL_UNIFORM_BUFFER) b->bind_base(binding); else b->bind_base_as(GL_UNIFORM_BUFFER, binding); return b; }
 		else{ if(!b) printf( "[%s] %s(): unable to find uniform buffer %s\n", this->_name, __func__, name ); else printf( "[%s] %s(): unable to find uniform buffer binding %s\n", this->_name, __func__, name ); return nullptr; } }
 
 		// blocks: uniform, shader storage, and atomic counter
@@ -1352,7 +1350,7 @@ inline gl::VertexArray* gxCreatePointVertexArray( GLsizei width, GLsizei height 
 	else
 	{
 		vector<vertex> pts(size_t(width)*size_t(height));
-		for(size_t y=0,k=0;y<height;y++)
+		for(int y=0,k=0;y<height;y++)
 			for(int x=0;x<width;x++,k++)
 				pts[k] = {{float(x),float(y),0},{0,0,1.0f},{x/float(width-1),y/float(height-1)}};
 		va = gxCreateVertexArray( "PTS", &pts[0], pts.size() );
@@ -1559,8 +1557,7 @@ inline gl::Program* gxCreateProgram( string prefix, string name, const gl::progr
 	program->source = source;
 
 	// 6. compile and attach shaders
-	__int64 freq=0;		QueryPerformanceFrequency((LARGE_INTEGER*)&freq);
-	__int64 tbegin=0;	QueryPerformanceCounter((LARGE_INTEGER*)&tbegin);
+	std::chrono::high_resolution_clock::time_point tbegin=std::chrono::high_resolution_clock::now();
 	printf( "compiling %s ... ", pname );
 
 	vector<GLuint> attached_shaders;
@@ -1619,8 +1616,10 @@ inline gl::Program* gxCreateProgram( string prefix, string name, const gl::progr
 	for(GLsizei k=0;k<shader_count;k++){ glDetachShader(program->ID,shaders[k]); glDeleteShader(shaders[k]); }
 
 	// 13. logging
-	__int64 tend=0; QueryPerformanceCounter((LARGE_INTEGER*)&tend);
-	printf( "completed in %.1f ms\n", (float)(double(tend-tbegin)/double(freq)*1000.0) );
+	std::chrono::high_resolution_clock::time_point tend=std::chrono::high_resolution_clock::now();
+	double tdelta = std::chrono::duration_cast<std::chrono::duration<double,std::milli>>(tend-tbegin).count();
+
+	printf( "completed in %.1f ms\n", float(tdelta) );
 
 	return program;
 }
@@ -1656,13 +1655,21 @@ struct IParser
 
 inline glfx::IParser* glfxCreateParser()
 {
+#ifdef __msvc__
 	static glfx::IParser*(*f)()=(glfx::IParser*(*)())GetProcAddress(GetModuleHandleW(nullptr),"__glfxCreateParser");
 	if(!f){ printf( "unable to link to %s()\n", __func__ ); return nullptr; } return f();
+#else
+	printf( "unable to link to %s(). include <glfx.h>\n", __func__ ); return nullptr;
+#endif
 }
 inline void glfxDeleteParser( glfx::IParser** pp_parser )
 {
+#ifdef __msvc__
 	static void(*f)(glfx::IParser**)=(void(*)(glfx::IParser**))GetProcAddress(GetModuleHandleW(nullptr),"__glfxDeleteParser");
 	if(!f){ printf( "unable to link to %s()\n", __func__ ); return; } f(pp_parser);
+#else
+	printf( "unable to link to %s(). include <glfx.h>\n", __func__ );
+#endif
 }
 
 #endif // GLFXAPI
@@ -2012,7 +2019,11 @@ inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLu
 	GLint mag_filter		= src->get_texture_parameteriv( GL_TEXTURE_MAG_FILTER );
 
 	// allocate a new texture using the heap of the parent
+#ifdef __msvc__
 	gl::Texture* t1=new(HeapAlloc((void*)src->_crtheap,0,sizeof(gl::Texture))) gl::Texture(ID1,name1,target,internal_format,src->format(),src->type(),src->_crtheap);
+#else
+	gl::Texture* t1=new gl::Texture(ID1,name1,target,internal_format,src->format(),src->type(),src->_crtheap);
+#endif
 	t1->_key = key;
 
 	// correct min_filter, mag_filter

@@ -198,12 +198,12 @@ using std::vector;
 	#include <intrin.h>	// cpu info
 	#include <io.h>		// low-level io functions
 	#include <sys/utime.h>
+	#define PATH_MAX _MAX_PATH // _MAX_PATH = 260 in Windows
+	constexpr char preferred_separator = '\\';
 	typedef struct _stat64 stat_t;
-	template <typename T> struct dll_function_t { HMODULE hdll=nullptr;T ptr=nullptr; dll_function_t(const char* dll,const char* func){if((hdll=LoadLibraryA(dll)))ptr=T(GetProcAddress(hdll,func));} ~dll_function_t(){if(hdll){FreeLibrary(hdll);hdll=nullptr;}} operator T(){return ptr;} }; // dll function wrapper: load from dll and operates as a function without auto dll release
 	template <class T> T*& safe_release( T*& p ){if(p) p->Release(); return p=nullptr; }
 	inline HANDLE& safe_close_handle( HANDLE& h ){ if(h!=INVALID_HANDLE_VALUE) CloseHandle(h); return h=INVALID_HANDLE_VALUE; }
-	constexpr char preferred_separator = '\\';
-	#define PATH_MAX _MAX_PATH // _MAX_PATH = 260 in Windows
+	template <typename T> struct dll_function_t { HMODULE hdll=nullptr;T ptr=nullptr; dll_function_t(const char* dll,const char* func){if((hdll=LoadLibraryA(dll)))ptr=T(GetProcAddress(hdll,func));} ~dll_function_t(){if(hdll){FreeLibrary(hdll);hdll=nullptr;}} operator T(){return ptr;} }; // dll function wrapper: load from dll and operates as a function with auto dll release
 #elif defined(__gcc__)
 	#include <unistd.h>
 	#include <linux/limits.h>
@@ -211,9 +211,11 @@ using std::vector;
 	#include <libgen.h> // basename, dirname
 	#include <utime.h>
 	#include <sys/wait.h>
-	typedef struct stat64 stat_t;
-	constexpr char preferred_separator = '/';
+	#include <dlfcn.h>
 	#define _MAX_PATH PATH_MAX // PATH_MAX = 4096 in linux
+	constexpr char preferred_separator = '/';
+	typedef struct stat64 stat_t;
+	template <typename T> struct dll_function_t { void* hdll=nullptr;T ptr=nullptr; dll_function_t(const char* dll,const char* func){if((hdll=dlopen(dll,RTLD_LAZY)))ptr=T(dlsym(hdll,func));} ~dll_function_t(){if(hdll){dlclose(hdll);hdll=nullptr;}} operator T(){return ptr;} }; // dll function wrapper: load from dll and operates as a function with auto dll release	
 #elif defined(__clang__)
 #endif
 
@@ -440,7 +442,7 @@ inline const char* to_preferred( string_view src ){ __to_separator(src,preferred
 		if(!s1||!s2) return 0; while(*s1)
 		{
 			if(!*s2) return 1;
-			else if(iswdigit(*s1)){ if(!iswdigit(*s2)) return -1; int i1=_wtoi(s1), i2=_wtoi(s2); if(i1<i2) return -1; else if(i1>i2)	return 1; while(iswdigit(*s1)){ s1++; } while(iswdigit(*s2)){ s2++; } }
+			else if(iswdigit(*s1)){ if(!iswdigit(*s2)) return -1; int i1=wtoi(s1), i2=wtoi(s2); if(i1<i2) return -1; else if(i1>i2)	return 1; while(iswdigit(*s1)){ s1++; } while(iswdigit(*s2)){ s2++; } }
 			else if(!iswdigit(*s2)){ int d=wcsncasecmp(s1,s2,1); if(d>0) return 1; else if(d<0) return -1; s1++; s2++; /*int d=CompareStringW(GetThreadLocale(),NORM_IGNORECASE,s1,1,s2,1)-CSTR_EQUAL*/ }
 			else return 1;
 		}
