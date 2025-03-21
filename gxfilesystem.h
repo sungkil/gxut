@@ -30,7 +30,25 @@
 	#include <shellapi.h>
 #endif
 
+// early definitions
 inline int chdir( const path_t& dir ){ return ::chdir(dir.c_str()); }
+
+// pattern matching: simple ?/* is supported; posix-style **/* (subdirectory matching) is not implemented yet
+template <class T=wchar_t>
+__noinline bool iglob( const T* str, size_t slen, const T* pattern, size_t plen ) // case-insensitive
+{
+	static const T q=T('?'), a=T('*');
+	int n=int(slen?slen:strlen(str)), m=int(plen?plen:strlen(pattern)); if(m==0) return n==0;
+	int i,j,t,p; for(i=0,j=0,t=-1,p=-1;i<n;)
+	{
+		if(tolower(str[i])==tolower(pattern[j])||(j<m&&pattern[j]==q)){i++;j++;}
+		else if(j<m&&pattern[j]==a){t=i;p=j;j++;}
+		else if(p!=-1){j=p+1;i=t+1;t++;}
+		else return false;
+	}
+	while(j<m&&pattern[j]==a)j++;
+	return j==m;
+}
 
 // extension/overriding of minimal path type path_t
 struct path : public path_t

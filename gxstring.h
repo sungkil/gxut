@@ -31,14 +31,6 @@ static const unsigned char BOM_UTF8[3]	= {0xEF,0xBB,0xBF};
 static const unsigned char BOM_UTF16[2]	= {0xFF,0xFE}; // little endian
 static const unsigned char BOM_UTF32[4]	= {0xFF,0xFE,0x00,0x00}; // little endian
 
-namespace logical
-{
-	template <> struct less<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b) const { return strcmplogical(a.c_str(),b.c_str())<0;} };
-	template <> struct less<string>{ bool operator()(const string& a,const string& b) const { return strcmplogical(a.c_str(),b.c_str())<0;} };
-	template <class T> using			set = std::set<T,less<T>>;
-	template <class T, class V> using	map = std::map<T,V,less<T>>;
-}
-
 namespace nocase
 {
 	template <> struct less<string>{ bool operator()(const string& a,const string& b)const{return stricmp(a.c_str(),b.c_str())<0;}};
@@ -53,6 +45,16 @@ namespace nocase
 	template <class T> using			unordered_set = std::unordered_set<T,hash<T>,equal_to<T>>;
 	template <class T, class V> using	unordered_map = std::unordered_map<T,V,hash<T>,equal_to<T>>;
 }
+
+#ifdef __msvc__
+namespace logical
+{
+	template <> struct less<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b) const { return strcmplogical(a.c_str(),b.c_str())<0;} };
+	template <> struct less<string>{ bool operator()(const string& a,const string& b) const { return strcmplogical(a.c_str(),b.c_str())<0;} };
+	template <class T> using			set = std::set<T,less<T>>;
+	template <class T, class V> using	map = std::map<T,V,less<T>>;
+}
+#endif
 
 // conversion to string types
 inline const char* btoa( bool b ){ return b?"true":"false"; }

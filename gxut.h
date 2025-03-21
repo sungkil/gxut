@@ -203,7 +203,7 @@ using std::vector;
 	typedef struct _stat64 stat_t;
 	template <class T> T*& safe_release( T*& p ){if(p) p->Release(); return p=nullptr; }
 	inline HANDLE& safe_close_handle( HANDLE& h ){ if(h!=INVALID_HANDLE_VALUE) CloseHandle(h); return h=INVALID_HANDLE_VALUE; }
-	template <typename T> struct dll_function_t { HMODULE hdll=nullptr;T ptr=nullptr; dll_function_t(const char* dll,const char* func){if((hdll=LoadLibraryA(dll)))ptr=T(GetProcAddress(hdll,func));} ~dll_function_t(){if(hdll){FreeLibrary(hdll);hdll=nullptr;}} operator T(){return ptr;} }; // dll function wrapper: load from dll and operates as a function with auto dll release
+	template <typename T> struct dll_function_t { HMODULE hdll=nullptr;T* ptr=nullptr; dll_function_t(const char* dll,const char* func){if((hdll=LoadLibraryA(dll)))ptr=(T*)(GetProcAddress(hdll,func));} ~dll_function_t(){if(hdll){FreeLibrary(hdll);hdll=nullptr;}} operator T* (){return ptr;} }; // dll function wrapper: load from dll and operates as a function with auto dll release
 #elif defined(__gcc__)
 	#include <unistd.h>
 	#include <linux/limits.h>
@@ -215,7 +215,7 @@ using std::vector;
 	#define _MAX_PATH PATH_MAX // PATH_MAX = 4096 in linux
 	constexpr char preferred_separator = '/';
 	typedef struct stat64 stat_t;
-	template <typename T> struct dll_function_t { void* hdll=nullptr;T ptr=nullptr; dll_function_t(const char* dll,const char* func){if((hdll=dlopen(dll,RTLD_LAZY)))ptr=T(dlsym(hdll,func));} ~dll_function_t(){if(hdll){dlclose(hdll);hdll=nullptr;}} operator T(){return ptr;} }; // dll function wrapper: load from dll and operates as a function with auto dll release	
+	template <typename T> struct dll_function_t { void* hdll=nullptr;T* ptr=nullptr; dll_function_t(const char* dll,const char* func){if((hdll=dlopen(dll,RTLD_LAZY)))ptr=(T*)(dlsym(hdll,func));} ~dll_function_t(){if(hdll){dlclose(hdll);hdll=nullptr;}} operator T* (){return ptr;} }; // dll function wrapper: load from dll and operates as a function with auto dll release	
 #elif defined(__clang__)
 #endif
 
@@ -349,11 +349,11 @@ inline bool is_utf8( const char * s ) // https://stackoverflow.com/questions/282
 inline const wchar_t* atow( const char* a ){ if(!a) return nullptr; if(!*a) return L""; uint cp=is_utf8(a)?CP_UTF8:0; int l=MultiByteToWideChar(cp,0,a,-1,0,0); wchar_t* w=__strbuf<wchar_t>(l); MultiByteToWideChar(cp,0,a,-1,w,l); return w; }
 inline const char* wtoa( const wchar_t* w ){ if(!w) return nullptr; if(!*w) return ""; int l=WideCharToMultiByte(0,0,w,-1,0,0,0,0); char* a=__strbuf(l); WideCharToMultiByte(0,0,w,-1,a,l,0,0); return a; }
 inline const char* atoa( const char* src, uint src_cp, uint dst_cp ){ if(!src) return nullptr; if(!*src) return ""; if(src_cp==dst_cp) return __strdup(src); int l=MultiByteToWideChar(src_cp,0,src,-1,0,0); wchar_t* w=__strbuf<wchar_t>(l); MultiByteToWideChar(src_cp,0,src,-1,w,l); l=WideCharToMultiByte(dst_cp,0,w,-1,0,0,0,0); char* a=__strbuf(l); WideCharToMultiByte(dst_cp,0,w,-1,a,l,0,0); return a; }
+inline bool ismbs( const char* s ){ if(!s||!*s) return false; for(int k=0,kn=int(strlen(s));k<kn;k++,s++) if(*s<0)return true; return false; }
 #else
 inline const wchar_t* atow( const char* a ){ if(!a) return nullptr; if(!*a) return L""; const char* p=a; size_t l=mbsrtowcs(0,&p,0,0); wchar_t* b=__strbuf<wchar_t>(l); mbstate_t s={}; mbsrtowcs(b,&p,l+1,&s); return b; }
 inline const char* wtoa( const wchar_t* w ){ if(!w) return nullptr; if(!*w) return ""; const wchar_t* p=w; size_t l=wcsrtombs(0,&p,0,0); char* b=__strbuf(l); mbstate_t s={}; wcsrtombs(b,&p,l+1,&s); return b; }
 #endif
-inline bool ismbs( const char* s ){ if(!s||!*s) return false; for(int k=0,kn=int(strlen(s));k<kn;k++,s++) if(*s<0)return true; return false; }
 
 // auto conversion between const wchar_t* and const char*
 template<class T, class U> __forceinline T*	__strdup( const U* s );
@@ -406,6 +406,15 @@ inline const wchar_t* wcsistr( const wchar_t* _Str1, size_t l1, const wchar_t* _
 inline const char*    stristr( const char* _Str1, const char* _Str2 ){ return stristr(_Str1, strlen(_Str1), _Str2, strlen(_Str2)); }
 inline const wchar_t* wcsistr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return wcsistr(_Str1, wcslen(_Str1), _Str2, wcslen(_Str2)); }
 inline const wchar_t* stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ return wcsistr(_Str1, wcslen(_Str1), _Str2, wcslen(_Str2)); }
+// natural-order and case-insensitive comparison for std::sort, std::map/set, std::unordered_map/set
+#if defined __msvc__
+	#ifdef _INC_SHLWAPI
+		inline int strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ return (!_Str1||!_Str2)?0:StrCmpLogicalW(_Str1,_Str2); }
+	#else
+		inline int strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ static dll_function_t<int(const wchar_t*,const wchar_t*)> f("shlwapi.dll","StrCmpLogicalW"); return !f?wcsicmp(_Str1,_Str2):(!_Str1||!_Str2)?0:f(_Str1,_Str2); } // load StrCmpLogicalW(): when unavailable, fallback to wcsicmp
+	#endif
+	inline int strcmplogical( const char* _Str1, const char* _Str2 ){ return strcmplogical(atow(_Str1),atow(_Str2)); }
+#endif
 
 // format and printf replacement
 inline const char*		vformat( __printf_format_string__ const char* fmt, va_list a ){ size_t len=size_t(vsnprintf(0,0,fmt,a)); char* buffer=__strbuf(len); vsnprintf(buffer,len+1,fmt,a); return buffer; }
@@ -428,45 +437,6 @@ inline const char* to_slash( string_view src ){ __to_separator(src,'/'); }
 inline const char* to_preferred( string_view src ){ __to_separator(src,preferred_separator); }
 #undef __add_separator
 #undef __to_separator
-
-// natural-order and case-insensitive comparison for std::sort, std::map/set, std::unordered_map/set
-#if defined __msvc__
-	#ifdef _INC_SHLWAPI
-		inline int strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ return (!_Str1||!_Str2)?0:StrCmpLogicalW(_Str1,_Str2); }
-	#else
-		inline int strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ static dll_function_t<int(*)(const wchar_t*,const wchar_t*)> f("shlwapi.dll","StrCmpLogicalW"); return !f?wcsicmp(_Str1,_Str2):(!_Str1||!_Str2)?0:f(_Str1,_Str2); } // load StrCmpLogicalW(): when unavailable, fallback to wcsicmp
-	#endif
-#else
-	inline int strcmplogical( const wchar_t* s1, const wchar_t* s2 )
-	{
-		if(!s1||!s2) return 0; while(*s1)
-		{
-			if(!*s2) return 1;
-			else if(iswdigit(*s1)){ if(!iswdigit(*s2)) return -1; int i1=wtoi(s1), i2=wtoi(s2); if(i1<i2) return -1; else if(i1>i2)	return 1; while(iswdigit(*s1)){ s1++; } while(iswdigit(*s2)){ s2++; } }
-			else if(!iswdigit(*s2)){ int d=wcsncasecmp(s1,s2,1); if(d>0) return 1; else if(d<0) return -1; s1++; s2++; /*int d=CompareStringW(GetThreadLocale(),NORM_IGNORECASE,s1,1,s2,1)-CSTR_EQUAL*/ }
-			else return 1;
-		}
-		return (*s2)?-1:0;
-	}
-#endif
-inline int strcmplogical( const char* _Str1, const char* _Str2 ){ return strcmplogical(atow(_Str1),atow(_Str2)); }
-
-// pattern matching: simple ?/* is supported; posix-style **/* (subdirectory matching) is not implemented yet
-template <class T=wchar_t>
-__noinline bool iglob( const T* str, size_t slen, const T* pattern, size_t plen ) // case-insensitive
-{
-	static const T q=T('?'), a=T('*');
-	int n=int(slen?slen:strlen(str)), m=int(plen?plen:strlen(pattern)); if(m==0) return n==0;
-	int i,j,t,p; for(i=0,j=0,t=-1,p=-1;i<n;)
-	{
-		if(tolower(str[i])==tolower(pattern[j])||(j<m&&pattern[j]==q)){i++;j++;}
-		else if(j<m&&pattern[j]==a){t=i;p=j;j++;}
-		else if(p!=-1){j=p+1;i=t+1;t++;}
-		else return false;
-	}
-	while(j<m&&pattern[j]==a)j++;
-	return j==m;
-}
 
 // global path definitions/functions
 __noinline const char* cwd(){ static char c[_MAX_PATH]={}; getcwd(c, _MAX_PATH); size_t l=strlen(c); if(*c&&c[l-1]!=preferred_separator){ c[l]=preferred_separator; c[l+1]=0; } return c; } // current working directory
