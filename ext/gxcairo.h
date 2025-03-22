@@ -46,6 +46,7 @@
 
 //***********************************************
 // cairo-pdf.h
+#ifdef CAIRO_H
 #ifndef CAIRO_PDF_H
 #define CAIRO_PDF_H
 extern "C" {
@@ -58,6 +59,7 @@ cairo_public const char* cairo_pdf_version_to_string(cairo_pdf_version_t version
 cairo_public void cairo_pdf_surface_set_size(cairo_surface_t *surface, double width_in_points, double height_in_points);
 }
 #endif /* CAIRO_PDF_H */
+#endif // CAIRO_H
 
 //***********************************************
 #endif // __GX_CAIRO_H__
