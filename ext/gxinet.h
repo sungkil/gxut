@@ -105,8 +105,8 @@ __noinline bool session_t::download_thread_func( vector<string> urls, path_t dst
 		if(!f.get_file_size(handle)){ fprintf(stdout,"error: unable to get file size %s\n", dst.filename().c_str() );return false;} // now try to get the file size
 		vector<char> buffer(f.file_size);
 		
-		if(!dst.dir().exists()) dst.dir().mkdir();
-		FILE* fp = fopen(dst.c_str(),"wb"); if(!fp){ fprintf(stdout, "error: unable to open %s\n", dst.filename().c_str()); return false; }
+		if(!dst.dir().exists()&&!dst.dir().mkdir()){ fprintf(stdout, "error: unable to create %s\n", dst.dir().c_str() ); return false; }
+		FILE* fp = fopen(dst.c_str(),"wb"); if(!fp){ fprintf(stdout, "error: unable to write to %s\n", dst.filename().c_str()); return false; }
 		DWORD dw_size, dw_read; do
 		{
 			InternetQueryDataAvailable(f.hfile, &dw_size, 0, 0);
