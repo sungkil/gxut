@@ -682,7 +682,7 @@ __noinline vector<path_t> path_t::ancestors( path_t root ) const
 
 __noinline bool path_t::mkdir() const
 {
-	if(empty()||!exists()) return false;
+	if(empty()||exists()) return false;
 	auto v = to_preferred().dir().ancestors(); if(v.empty()) return false;
 	auto bl=v.back().size();
 	if(is_unc()){ auto r=unc_root(); size_t rl=r.size();if(bl<=rl+1){v.pop_back();bl=v.back().size();}if(bl<=rl+1)v.pop_back(); }
