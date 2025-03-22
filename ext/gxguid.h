@@ -35,7 +35,7 @@ struct guid_t : public GUID
 
 	guid_t& operator=( const GUID& other ) noexcept { memcpy(this,&other,sizeof(GUID)); return *this; }
 	guid_t& operator=( GUID&& other ) noexcept { auto t=*this; memcpy(this,&other,sizeof(GUID)); memcpy(&other,&t,sizeof(GUID)); return *this; }
-	guid_t& operator=( const char* other ) noexcept { auto* d=Data4; sscanf_s( other, "{%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}", &Data1,&Data2,&Data3,d,d+1,d+2,d+3,d+4,d+5,d+6,d+7 ); return *this; }
+	guid_t& operator=( const char* other ) noexcept { if(!other){ printf( "guid_t::operator=(nullptr)\n" ); return *this; } if(strlen(other)!=38){ printf( "guid_t::operator=(%s): not a guid string\n", other ); return *this; } auto* d=Data4; sscanf_s( other, "{%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}", &Data1,&Data2,&Data3,d,d+1,d+2,d+3,d+4,d+5,d+6,d+7 ); return *this; }
 	guid_t& operator=( const string& other ) noexcept { return operator=(other.c_str()); }
 	bool operator==( const GUID& other ) const noexcept { return memcmp(this,&other,sizeof(GUID))==0; }
 	bool operator!=( const GUID& other ) const noexcept { return memcmp(this,&other,sizeof(GUID))!=0; }
