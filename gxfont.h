@@ -39,10 +39,10 @@ struct font_engine
 	void	begin_raster( HBITMAP* phBitmap0, HFONT* phFont0 );
 	void	end_raster( HBITMAP hBitmap0, HFONT hFont0 );
 	bool	raster( wchar_t c );			// return wide or single
-	ivec4	char_pos( wchar_t c );			// (first_x,first_y,second_x,second_y): second is only for wide characters
+	ivec4	char_pos( wchar_t c ) const;	// (first_x,first_y,second_x,second_y): second is only for wide characters
 	int		line_height(){ const int DY=((TY*96/dpi)>8?-4:2)*dpi/96; return TY+DY; }
 	bool	is_wide( wchar_t c ){ auto it=char_map.find(c); return it==char_map.end()?false:(it->second.wide>0); }
-	vector<ivec4>& get_locations( const wchar_t* text );
+	const vector<ivec4>& get_locations( const wchar_t* text ) const;
 };
 
 inline BITMAPINFO* create_font_bitmap_info( int width, int height, int channels )
@@ -83,7 +83,7 @@ inline font_engine::font_engine( const char* face, int point_size, uchar3 color,
 	const_cast<int&>(TX)=TY/2;
 
 	if(hDC) bitmap = CreateCompatibleBitmap(hDC,TY,TY); // compatible (monochrome) bitmap
-	LOGFONTW lf={}; lf.lfHeight=-TY; lf.lfCharSet=DEFAULT_CHARSET;wcscpy(lf.lfFaceName,atow(face));hFont=CreateFontIndirectW(&lf);
+	LOGFONTA lf={}; lf.lfHeight=-TY; lf.lfCharSet=DEFAULT_CHARSET;strcpy(lf.lfFaceName,face);hFont=CreateFontIndirectA(&lf);
 	buffer		= rex::create_image(TY,TY,8,4);
 	bitmap_info	= create_font_bitmap_info(TY,TY,1);
 
@@ -91,7 +91,7 @@ inline font_engine::font_engine( const char* face, int point_size, uchar3 color,
 	shadow_color = uchar4{shadow.x,shadow.y,shadow.z,255};
 
 	// create an initial LUT table image for ANSI chars. In the beginning, 2 rows are created
-	wchar_t ascii[129-N0]={}; for(wchar_t k=0,kn=_countof(ascii)-1;k<kn; k++) ascii[k]=k+N0; update( ascii );
+	wchar_t ascii[129-N0]={}; for(wchar_t k=0,kn=std::extent<decltype(ascii)>::value-1;k<kn; k++) ascii[k]=k+N0; update(ascii);
 }
 
 inline font_engine::font_engine( image* table0, int ty, int row, bool vflip ):vflip_table(vflip)
@@ -191,7 +191,7 @@ inline bool font_engine::raster( wchar_t c )
 
 inline bool font_engine::update( const wchar_t* str )
 {
-	if(!hDC||!buffer) return false; // using existing table
+	if(!hDC||!buffer||!str||!*str) return false; // using existing table
 
 	// find dirty characters and trivial return
 	static vector<wchar_t> dirty_chars; dirty_chars.clear();
@@ -214,22 +214,26 @@ inline bool font_engine::update( const wchar_t* str )
 	return true;
 }
 
-inline ivec4 font_engine::char_pos( wchar_t c )
+inline ivec4 font_engine::char_pos( wchar_t c ) const
 {
-	auto it=char_map.find(c); if(it==char_map.end()) return ivec4(-1,-1,-1,-1);
-	int t=it->second.index;
-	ivec4 p={}; p.xy=ivec2(t%NX,t/NX)*TY; p.zw=(it->second.wide)?ivec2(p.x+TX,p.y):ivec2(-1,-1);
+	ivec4 p(-1,-1,-1,-1);
+	if(auto it=char_map.find(c); it!=char_map.end())
+	{
+		int t = it->second.index;
+		p.xy = ivec2{(t%NX)*TY,(t/NX)*TY};
+		if(it->second.wide) p.zw=ivec2(p.x+TX,p.y);
+	}
 	return p;
 }
 
-inline vector<ivec4>& font_engine::get_locations( const wchar_t* text )
+inline const vector<ivec4>& font_engine::get_locations( const wchar_t* text ) const
 {
 	static vector<ivec4> buffer; buffer.clear();
-	for( uint k=0, kn=uint(wcslen(text)); k<kn; k++ )
+	for( size_t k=0, kn=wcslen(text); k<kn; k++ )
 	{
 		ivec4 cpos = char_pos(text[k]);
-		buffer.emplace_back(ivec4(cpos.xy,0,0));
-		if(cpos.z>-1) buffer.emplace_back(ivec4(cpos.zw,0,0));
+		buffer.emplace_back(ivec4(cpos.xy,0,0)); if(cpos.z<=0) continue;
+		buffer.emplace_back(ivec4(cpos.zw,0,0));
 	}
 	return buffer;
 }
