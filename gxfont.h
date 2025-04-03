@@ -40,7 +40,7 @@ struct font_engine
 	void	end_raster( HBITMAP hBitmap0, HFONT hFont0 );
 	bool	raster( wchar_t c );			// return wide or single
 	ivec4	char_pos( wchar_t c ) const;	// (first_x,first_y,second_x,second_y): second is only for wide characters
-	int		line_height(){ const int DY=((TY*96/dpi)>8?-4:2)*dpi/96; return TY+DY; }
+	int		line_height(){ const int DY=((TY*96/dpi)>8?0:2)*dpi/96; return TY+DY; }
 	bool	is_wide( wchar_t c ){ auto it=char_map.find(c); return it==char_map.end()?false:(it->second.wide>0); }
 	const vector<ivec4>& get_locations( const wchar_t* text ) const;
 };
@@ -157,7 +157,7 @@ inline bool font_engine::raster( wchar_t c )
 
 	// clear buffer
 	memset(buffer->data,0,buffer->size());
-	if(c==L' ') return true; // trivial handling of space
+	if(c==L' '||c==L'\t'||c==L'\n') return false; // trivial handling of (non-wide) space
 
 	RECT rc0={0,0,w,h};
 	wchar_t buff[] = {c,L' ',L' ',L' ',0};
