@@ -28,9 +28,6 @@
 	#include <nmmintrin.h>
 #endif
 
-using std::min;
-using std::max;
-
 struct mem_t : sized_ptr_t<void>
 {
 	__forceinline mem_t(){ ptr=nullptr; size=0; }

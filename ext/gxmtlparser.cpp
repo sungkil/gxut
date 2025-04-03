@@ -114,7 +114,7 @@ static bool is_normal_map( path file_path )
 	for( int k=0, kn=int(halton_samples.size()); k<kn&&bcount<bcount_thresh; k++ )
 	{
 		const auto& s = halton_samples[k];
-		ivec2 tc = ivec2(std::min(w-1,int((w-1)*s.x)),std::min(h-1,int((h-1)*s.y)));
+		ivec2 tc = ivec2(min(w-1,int((w-1)*s.x)),min(h-1,int((h-1)*s.y)));
 		uchar3 c = *i->ptr<uchar3>(tc.y,tc.x);
 		if(c.r==c.g&&c.r==c.b) continue;			// skip grayscale
 		if(c.b<c.r||c.b<c.g||c.b<127) continue;		// probably wrong

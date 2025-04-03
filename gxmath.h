@@ -31,9 +31,6 @@
 #include <numeric>	// for std::iota
 #include <random>	// for std::shuffle
 
-using std::min;
-using std::max;
-
 #ifdef PI
 #undef PI
 #endif

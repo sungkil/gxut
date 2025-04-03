@@ -145,7 +145,7 @@ inline void font_engine::end_raster( HBITMAP hBitmap0, HFONT hFont0 )
 
 inline bool font_engine::raster( wchar_t c )
 {
-	const int sof=std::min(2,std::max(1,(dpi+48)/96)); // shadow offsets
+	const int sof=min(2,max(1,(dpi+48)/96)); // shadow offsets
 
 	int w=buffer->width, hw=w/2, h=buffer->height;
 	static vector<image*> bmps;

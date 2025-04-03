@@ -219,6 +219,16 @@ using std::vector;
 #elif defined(__clang__)
 #endif
 
+// additional macros after including platform dependencies
+#ifdef min
+	#undef min
+#endif
+#ifdef max
+	#undef max
+#endif
+using std::min;
+using std::max;
+
 // definitinos for posix compatibility
 #if defined __msvc__
 	#define ftello		_ftelli64
