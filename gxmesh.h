@@ -314,9 +314,9 @@ struct cull_t
 #ifndef __cplusplus
 struct geometry // std430 layout for OpenGL shader storage buffers
 {
-	uint	count, instance_count, first_index, base_vertex, base_instance; // DrawElementsIndirectCommand
-	uint	material_index, acc_index, acc_prim_count, acc_prim_index, pad[3]; // geometry-bvh node index, primitive-bvh count/first_index
-	bbox	box;
+	uint	count, instance_count, first_index, base_vertex, base_instance;		// DrawElementsIndirectCommand
+	uint	material_index, acc_index, acc_prim_count, acc_prim_index, pad[3];	// geometry-bvh node index, primitive-bvh count/first_index
+	bbox	box; // object_index = floatBitsToUint(box.M.a)
 	mat4	mtx;
 };
 #else
