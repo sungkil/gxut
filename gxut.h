@@ -671,8 +671,8 @@ protected:
 	value_type*		__alloc(){ static constexpr size_t s=capacity*sizeof(value_type)+sizeof(attrib_t); _data=(value_type*)malloc(s); if(_data) _data[0]=0; return _data; }
 	const attrib_t&	__attrib() const { auto* a=(attrib_t*)(_data+capacity); if(!*_data||0!=stat64(_data,a)) memset(a,0,sizeof(attrib_t)); return *a; } // stat64()==ENOENT: not found; stat64()==EINVAL: invalid parameter
 	static __forceinline bool __is_separator( value_type c ){ return c=='/'||c=='\\'; }
-	static __forceinline path_t __to_separator( const path_t& p, value_type sep=preferred_separator ){ value_type* t=p._data; if(!*t) return p; size_t l=p.size(); for(size_t k=0; k<l; k++, t++) if(__is_separator(*t)) *t=sep; return p; }
-	static __forceinline path_t __append_separator( const path_t& p, value_type sep=preferred_separator ){ value_type* t=p._data; if(!*t) return p; size_t l=p.size(); if(!__is_separator(t[l-1])){t[l]=sep;t[l+1]=0;} return p; }
+	static __forceinline path_t __to_separator( path_t p, value_type sep=preferred_separator ){ value_type* t=p._data; if(!*t) return p; size_t l=p.size(); for(size_t k=0; k<l; k++, t++) if(__is_separator(*t)) *t=sep; return p; }
+	static __forceinline path_t __append_separator( path_t p, value_type sep=preferred_separator ){ value_type* t=p._data; if(!*t) return p; size_t l=p.size(); if(!__is_separator(t[l-1])){t[l]=sep;t[l+1]=0;} return p; }
 
 	// friend class/function definitions
 #if __has_include("gxfilesystem.h") && !defined(__gcc__) && !defined __NO_PATHIMPL__
