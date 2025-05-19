@@ -201,8 +201,10 @@ using std::vector;
 	#define PATH_MAX _MAX_PATH // _MAX_PATH = 260 in Windows
 	constexpr char preferred_separator = '\\';
 	typedef struct _stat64 stat_t;
-	template <class T> T*& safe_release( T*& p ){if(p) p->Release(); return p=nullptr; }
 	inline HANDLE& safe_close_handle( HANDLE& h ){ if(h!=INVALID_HANDLE_VALUE) CloseHandle(h); return h=INVALID_HANDLE_VALUE; }
+	template <class T> T*& safe_release( T*& p ){if(p) p->Release(); return p=nullptr; }
+	template <class T> void safe_release( std::vector<T*>& v ){ for( auto*& p:v ){ if(p){p->Release();p=nullptr;} } }
+	template <class T> struct auto_release_ptr_t { T* ptr=nullptr; ~auto_release_ptr_t(){ if(ptr){ ptr->Release(); ptr=nullptr; } } auto_release_ptr_t()=default; auto_release_ptr_t( T* p ){ ptr=p; } operator T*(){ return ptr; }	operator const T*() const { return ptr; } T* operator->(){ return ptr; } const T* operator->() const { return ptr; } };
 	template <typename T> struct dll_function_t { HMODULE hdll=nullptr;T* ptr=nullptr; dll_function_t(const char* dll,const char* func){if((hdll=LoadLibraryA(dll)))ptr=(T*)(GetProcAddress(hdll,func));} ~dll_function_t(){if(hdll){FreeLibrary(hdll);hdll=nullptr;}} operator T* (){return ptr;} }; // dll function wrapper: load from dll and operates as a function with auto dll release
 #elif defined(__gcc__)
 	#include <unistd.h>
