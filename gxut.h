@@ -888,11 +888,7 @@ __noinline string read_process( string cmd )
 	FILE* pp = popen(cmd.c_str(),"rb"); if(!pp) return "";
 	vector<char> v; v.reserve(1024); char buff[64]={}; size_t n=0; while( (n=fread(buff,1,sizeof(buff),pp)) ) v.insert(v.end(),buff,buff+n); v.emplace_back(0);
 	bool b_eof= feof(pp); pclose(pp); if(!b_eof) printf("%s(%s): broken pipe\n", __func__, cmd.c_str() );
-#ifdef __msvc__
-	char* s=v.data(); return is_utf8(s)?atoa(s,CP_UTF8,0):s;  // auto convert CP_UTF8 to current code page
-#elif defined __gcc__
-	char* s=v.data(); return s;
-#endif
+	return v.data();
 }
 
 //*************************************
