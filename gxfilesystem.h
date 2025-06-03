@@ -151,9 +151,13 @@ struct path : public path_t
 	path x()		const { return __super::extension(); }
 	path nox()		const { return __super::remove_extension(); }
 	// decompostion: extensions
-	vector<path> ancestors(path root="") const	{ auto a=__super::ancestors(root); vector<path> v;for(const auto& p:a) v.emplace_back(p); return v; }
-	vector<path> explode() const				{ vector<path> v; v.reserve(16); for( char *ctx=nullptr, *t=strtok_s(__strdup(_data),"\\/", &ctx); t; t=strtok_s(0,"\\/", &ctx)) v.emplace_back(t); return v; }
-	path drive() const							{ if(empty()) return ""; if(is_unc()) return unc_root(); char r[_MAX_DRIVE]={}; _splitpath_s(_data,r,_MAX_DRIVE,0,0,0,0,0,0); if(r&&*r) *r=toupper(*r); return r; }
+	vector<path> ancestors(path root="") const { auto a=__super::ancestors(root); vector<path> v;for(const auto& p:a) v.emplace_back(p); return v; }
+	vector<path> explode() const { vector<path> v; v.reserve(16); for( char *ctx=nullptr, *t=strtok_s(__strdup(_data),"\\/", &ctx); t; t=strtok_s(0,"\\/", &ctx)) v.emplace_back(t); return v; }
+	path drive() const	{ if(empty()) return ""; if(is_unc()) return unc_root(); char r[_MAX_DRIVE]={}; _splitpath_s(_data,r,_MAX_DRIVE,0,0,0,0,0,0); if(r&&*r) *r=toupper(*r); return r; }
+	// decompostion: extensions for remote
+	int port() const { if(!is_remote()) return 0; char* s=_data; const char* d=strstr(s,"://"); const char* c=strstr(d?d+3:s+2,":"); if(!c||!++c) return 0; const char* h=strstr(c,"/"); return atoi(h?__strdup(c,h-c):c); }
+	path remove_port() const { int port=this->port(); if(!port) return *this; path t=*this; char* s=t._data; char p[17]; snprintf(p,16,":%d",port); const char* d=strstr(s+2,"://"); const char* h=strstr(d?d+3:s+2,p); if(!h) return t; char* b=__strdup(s); strcpy(b+(h-s)+(d?0:1),h+strlen(p)); return b; }
+	path add_port( int port ) const { if(!is_remote()) return *this; path t=remove_port(); char* s=t._data; char p[17]; snprintf(p,16,":%d/",port); const char* d=strstr(s+2,"://"); const char* h=strstr(d?d+3:s+2,d?"/":":/"); if(!h) return t; char* b=__strdup(s); strcpy(strcpy(b+(h-s),p)+strlen(p),h+(d?1:2)); return b; }
 
 	// simpler alias to decompositions
 	const char* name( bool with_ext=true ) const { return __strdup((with_ext?filename():stem()).c_str()); }

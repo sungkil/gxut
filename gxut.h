@@ -619,9 +619,9 @@ struct path_t
 	bool is_pipe() const {		return strcmp(_data,"-")==0||strncmp(_data,"pipe:",5)==0; }
 	bool is_fifo() const {		if(empty()) return false; auto& a=__attrib(); return (a.st_mode&_S_IFIFO)!=0; } // as posix/std::filesystem does
 	bool is_unc() const {		return __is_separator(_data[0])&&__is_separator(_data[1]); }
-	bool is_ssh() const {		if(!_data[0]||!_data[1]) return false; return strstr(_data+2, ":/")!=nullptr||strstr(_data+2, ":\\")!=nullptr; }
-	bool is_http() const {		return strncmp(_data,"http://",7)==0||strncmp(_data,"https://",8)==0; }
-	bool is_remote() const {	return is_ssh()||is_http(); }
+	bool is_http() const {		if(!is_remote()) return false; return strncmp(_data,"http://",7)==0||strncmp(_data,"https://",8)==0; }
+	bool is_ssh() const {		if(!is_remote()) return false; return strstr(_data+2, ":")&&!strstr(_data+2, "://"); }
+	bool is_remote() const {	return _data[0]&&_data[1]&&strstr(_data+2, ":")!=nullptr; }
 
 	// path structure query
 	bool exists()		const {	return *_data&&access(_data,0)==0; }
@@ -713,7 +713,9 @@ __noinline string path_t::key() const
 
 __noinline path_t path_t::absolute( path_t base ) const
 {
-	if(empty()) return "";
+	if(empty()||is_pipe()) return *this;
+	if(is_remote()) return to_slash();
+
 #ifdef __msvc__
 	// do not directly return for non-canonicalized path
 	return _fullpath(__strbuf(capacity),(base.empty()||is_absolute())?_data:(base/_data)._data,capacity);
