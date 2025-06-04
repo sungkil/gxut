@@ -67,8 +67,8 @@ inline font_engine::~font_engine()
 	if(bitmap)		DeleteObject(bitmap);
 	if(hFont)		DeleteObject(hFont);
 	if(hDC)			DeleteDC(hDC);
-	if(buffer)		rex::release_image(&buffer);
-	if(table)		rex::release_image(&table);
+	if(buffer)		safe_delete(buffer);
+	if(table)		safe_delete(table);
 }
 
 inline font_engine::font_engine( const char* face, int point_size, uchar3 color, uchar3 shadow, bool vflip ):vflip_table(vflip)
@@ -84,7 +84,7 @@ inline font_engine::font_engine( const char* face, int point_size, uchar3 color,
 
 	if(hDC) bitmap = CreateCompatibleBitmap(hDC,TY,TY); // compatible (monochrome) bitmap
 	LOGFONTA lf={}; lf.lfHeight=-TY; lf.lfCharSet=DEFAULT_CHARSET;strcpy(lf.lfFaceName,face);hFont=CreateFontIndirectA(&lf);
-	buffer		= rex::create_image(TY,TY,8,4);
+	buffer		= new image(TY,TY,8,4);
 	bitmap_info	= create_font_bitmap_info(TY,TY,1);
 
 	text_color = uchar4{color.x,color.y,color.z,255};
@@ -124,8 +124,8 @@ inline image* font_engine::resize_table( int count )
 {
 	ivec2 size = ivec2(TY,TY)*ivec2(NX,(int(count)+NX-1)/NX);
 	if(table&&table->height>=uint(size.y)) return table;
-	image* t = rex::create_image( size.x, size.y, 8, 4 ); if(!t) return nullptr;
-	memset(t->data,0,t->size()); if(table){memcpy(t->data,table->data,table->size());rex::release_image(&table);}
+	image* t = new image( size.x, size.y, 8, 4 ); if(!t) return nullptr;
+	memset(t->data,0,t->size()); if(table){memcpy(t->data,table->data,table->size());safe_delete(table);}
 	return table = t;
 }
 
@@ -151,8 +151,8 @@ inline bool font_engine::raster( wchar_t c )
 	static vector<image*> bmps;
 	if(bmps.empty()||(bmps.front()->width*bmps.front()->height)!=w*h)
 	{
-		for(auto* b:bmps)			rex::release_image(&b); bmps.clear();
-		for(int k=0;k<sof+1;k++)	bmps.emplace_back(rex::create_image(w,h,8,1));
+		for(auto* b:bmps)			safe_delete(b); bmps.clear();
+		for(int k=0;k<sof+1;k++)	bmps.emplace_back(new image(w,h,8,1));
 	}
 
 	// clear buffer

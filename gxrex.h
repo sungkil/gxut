@@ -27,12 +27,10 @@ namespace rex {
 //*************************************
 
 // image functions that can be linked from the factory
-inline image* create_image( int width, int height, int depth=8 /* or 32 */, int channels=3 ){ static decltype(&create_image) rex_create_image = (decltype(&create_image)) GetProcAddress(GetModuleHandleW(nullptr),"rex_create_image"); return rex_create_image( width, height, depth, channels ); }
 inline image* load_image( const char* file_path, bool vflip=true, bool force_rgb=true, bool use_cache=false ){ static decltype(&load_image) rex_load_image = (decltype(&load_image)) GetProcAddress(GetModuleHandleW(nullptr),"rex_load_image"); return rex_load_image( file_path, vflip, force_rgb, use_cache ); }
 inline image* load_image_header( const char* file_path ){ static decltype(&load_image_header) rex_load_image_header = (decltype(&load_image_header)) GetProcAddress(GetModuleHandleW(nullptr),"rex_load_image_header"); return rex_load_image_header( file_path ); }
 inline image* load_image_from_memory( void* ptr, size_t size, bool vflip=true, bool force_rgb=true ){ static decltype(&load_image_from_memory) rex_load_image_from_memory = (decltype(&load_image_from_memory)) GetProcAddress(GetModuleHandleW(nullptr),"rex_load_image_from_memory"); return rex_load_image_from_memory( ptr, size, vflip, force_rgb ); }
 inline void   save_image( const char* file_path, image* pimage, bool vflip=true, bool force_rgb=false, int quality=95 ){ static decltype(&save_image) rex_save_image = (decltype(&save_image)) GetProcAddress(GetModuleHandleW(nullptr),"rex_save_image"); if(pimage) rex_save_image( file_path, pimage, vflip, force_rgb, quality ); }
-inline void   release_image( image** ppimage ){ static decltype(&release_image) rex_release_image = (decltype(&release_image)) GetProcAddress(GetModuleHandleW(nullptr),"rex_release_image"); if(ppimage&&*ppimage) rex_release_image(ppimage); }
 inline void   resize_image( image* src, image* dst ){ static decltype(&resize_image) rex_resize_image = (decltype(&resize_image)) GetProcAddress(GetModuleHandleW(nullptr),"rex_resize_image"); if(src&&dst) rex_resize_image(src,dst); }
 
 // progressive rendering plugin helper

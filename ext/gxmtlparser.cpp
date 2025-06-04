@@ -105,7 +105,7 @@ static bool is_normal_map( path file_path )
 	cache[file_path]=false; if(!file_path.exists()) return false;
 
 	image* header=gx::load_image_header(file_path.c_str()); if(!header){ printf("failed to load header of %s\n", file_path.c_str() ); return false; }
-	bool early_exit = header->channels!=3||header->width<8||header->height<8; gx::release_image_header(&header); if(early_exit) return false;
+	bool early_exit = header->channels!=3||header->width<8||header->height<8; safe_delete(header); if(early_exit) return false;
 
 	// do not force rgb to bump; and use cache
 	image* i = gx::load_image(file_path.c_str(),true,false,false); if(!i){ printf("failed to load the bump map %s\n", file_path.c_str() ); return false; }
@@ -122,8 +122,7 @@ static bool is_normal_map( path file_path )
 		bcount++;
 	}
 
-
-	gx::release_image(&i);
+	safe_delete(i);
 	return cache[file_path] = bcount<bcount_thresh ? false : true;
 }
 
@@ -142,7 +141,7 @@ static bool generate_normal_map( path normal_path, path bump_path, path mtl_path
 		!mtl_path.empty()?format("[%s] ", mtl_path.name()):"", normal_path.name(), bump_path.name());
 
 	// convert uchar bumpmap to 1-channel float image
-	image* bump = gx::create_image( bump0->width, bump0->height, 32, 1 );
+	image* bump = new image( bump0->width, bump0->height, 32, 1 );
 	int yn=bump->height, c0=bump0->channels, xn=bump->width;
 	for( int y=0; y<yn; y++ )
 	{
@@ -152,7 +151,7 @@ static bool generate_normal_map( path normal_path, path bump_path, path mtl_path
 	}
 
 	// create normal image
-	image* normal = gx::create_image( bump->width, bump->height, 8, 3 );
+	image* normal = new image( bump->width, bump->height, 8, 3 );
 
 	// apply sobel filter to the bump
 	float bump_scale = min(1000.0f,1.0f/(1.0f+0.000001f));
@@ -185,9 +184,9 @@ static bool generate_normal_map( path normal_path, path bump_path, path mtl_path
 	gx::save_image( normal_path.c_str(), normal );
 	if(normal_path.exists()) normal_path.utime(bump_mtime);
 
-	gx::release_image(&bump0);
-	gx::release_image(&bump);
-	gx::release_image(&normal);
+	safe_delete(bump0);
+	safe_delete(bump);
+	safe_delete(normal);
 
 	printf( "completed in %.f ms\n", t.end() );
 	return true;
