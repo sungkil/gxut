@@ -54,7 +54,7 @@ __noinline image* load_image( path file_path, bool vflip=true, bool force_rgb=tr
 	else // apply 4-byte alignment
 	{
 		i->data = (uchar*)malloc(i->size());
-		for( int y=0, c=i->channels; y<h; y++ ) memcpy( i->ptr<uchar>(y), data+y*w*c, w*c );
+		for( int y=0; y<h; y++ ) memcpy( i->ptr<uchar>(y), data+y*w*c, w*c );
 		stbi_image_free(data);
 	}
 	
