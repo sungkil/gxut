@@ -250,7 +250,9 @@ using std::max;
 	#define strtok_s	strtok_r
 #endif
 
-// deallocation functions
+// alloc/deallocation functions
+template <class T> T* malloc( size_t size ){ return (T*) ::malloc(size); }
+template <class T> T* realloc( void* ptr, size_t size ){ return (T*) ::realloc(ptr,size); }
 template <class T> T*& safe_free( T*& p ){if(p) free((void*)p); return p=nullptr; }
 template <class T> T*& safe_delete( T*& p ){if(p) delete p; return p=nullptr; }
 
