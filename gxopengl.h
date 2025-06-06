@@ -160,6 +160,17 @@ inline const char* gxGetErrorString( GLenum e ){ if(e==GL_NO_ERROR) return ""; i
 inline bool		gxHasMultidraw(){ return gxHasExtension(bindless_texture)&&gxHasExtension(shader_draw_parameters); }
 
 //***********************************************
+// simple extension loader
+__noinline void* gxLoadExtension( const char* name, HMODULE hOpenGL32=nullptr )
+{
+	HMODULE h=hOpenGL32; if(!h) h=LoadLibraryA( "opengl32.dll" ); if(!h) return nullptr;
+	typedef PROC(*PFNWGLGETPROCADDRESS)(LPCSTR); static PFNWGLGETPROCADDRESS __wglGetProcAddress=(PFNWGLGETPROCADDRESS)GetProcAddress(h,"wglGetProcAddress"); if(!__wglGetProcAddress){ ::printf("wglGetProcAddress==nullptr\n"); return nullptr; }
+	void* f=(void*)GetProcAddress(h,name); if(!f) f=__wglGetProcAddress(name); if(!f) ::printf("%s==nullptr\n",name);
+	if(h!=hOpenGL32) FreeLibrary(h);
+	return f;
+}
+
+//***********************************************
 // type-to-internalformat mapper
 template <class T>		GLenum gxTypeToInternalFormat();
 template <> constexpr	GLenum gxTypeToInternalFormat<bool>(){	return GL_R8UI; }
@@ -184,6 +195,7 @@ gl::Texture*		gxCreateTextureCube(const char*,GLint,GLsizei,GLsizei,GLsizei,GLin
 gl::Texture*		gxCreateTextureBuffer(const char*,gl::Buffer*,GLint);
 gl::Texture*		gxCreateTextureRectangle(const char*,GLsizei,GLsizei,GLint,GLvoid*);
 gl::Texture*		gxCreateTextureView(gl::Texture*,GLuint,GLuint,GLuint,GLuint,GLenum,bool);
+gl::Texture*		gxCreateTexture2DFromMemory(const char*,GLsizei,GLsizei,GLuint,GLint);
 gl::Buffer*			gxCreateBuffer(const char*,GLenum,GLsizeiptr,GLenum,const void*,GLbitfield,bool);
 gl::VertexArray*	gxCreateQuadVertexArray();
 gl::VertexArray*	gxCreatePointVertexArray( GLsizei width, GLsizei height );
@@ -424,6 +436,7 @@ struct Texture : public Object
 	friend Texture* ::gxCreateTextureBuffer(const char*,gl::Buffer*,GLint);
 	friend Texture* ::gxCreateTextureRectangle(const char*,GLsizei,GLsizei,GLint,GLvoid*);
 	friend Texture* ::gxCreateTextureView(Texture* src,GLuint,GLuint,GLuint,GLuint,GLenum,bool);
+	friend Texture* ::gxCreateTexture2DFromMemory( const char* name, GLsizei width, GLsizei height, GLuint memory_object, GLint internal_format );
 
 	friend struct fx::metadata_t;
 	fx::metadata_t* metadata = nullptr;
@@ -1724,7 +1737,7 @@ inline gl::TransformFeedback* gxCreateTransformFeedback( const char* name )
 	return new gl::TransformFeedback( ID, name );
 }
 
-inline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsizei width, GLsizei layers=1, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr, bool force_array=false )
+__noinline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsizei width, GLsizei layers=1, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr, bool force_array=false )
 {
 	if(layers>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "%s(): layer (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", __func__, layers, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
 	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
@@ -1762,7 +1775,7 @@ inline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsizei w
 	return texture;
 }
 
-inline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsizei width, GLsizei height, GLsizei layers=1, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr, bool force_array=false, bool multisample=false, GLsizei multisamples=4 )
+__noinline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsizei width, GLsizei height, GLsizei layers=1, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr, bool force_array=false, bool multisample=false, GLsizei multisamples=4 )
 {
 	if(layers>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "%s(): layer (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", __func__, layers, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
 	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
@@ -1815,7 +1828,45 @@ inline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsizei w
 	return texture;
 }
 
-inline gl::Texture* gxCreateTexture3D( const char* name, GLint levels, GLsizei width, GLsizei height, GLsizei depth, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr )
+__noinline gl::Texture* gxCreateTexture2DFromMemory( const char* name, GLsizei width, GLsizei height, GLuint memory_object, GLint internal_format=GL_RGBA8 )
+{
+	typedef void(*PFNGLTEXTURESTORAGEMEM2DEXTPROC)(GLuint texture,GLsizei levels,GLenum internalFormat,GLsizei width,GLsizei height,GLuint memory,GLuint64 offset);
+	static auto glTextureStorageMem2DEXT=(PFNGLTEXTURESTORAGEMEM2DEXTPROC)gxLoadExtension("glTextureStorageMem2DEXT"); if(!glTextureStorageMem2DEXT){ ::printf("%s(): glTextureStorageMem2DEXT==nullptr\n",__func__); return nullptr; }
+
+	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
+
+	GLenum target = GL_TEXTURE_2D;
+	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
+	GLenum format = gxGetTextureFormat( internal_format );
+	GLenum type = gxGetTextureType( internal_format );
+
+	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type); if(width==0||height==0) return texture;
+	texture->_key = gl::Texture::crc(0,1,0,1,target,false);
+	glBindTexture( target, ID );
+
+	// allocate storage: at this point, lock is not needed
+	GLenum e0 = glGetError(); // previous error from others
+	glTextureStorageMem2DEXT( ID, 1, GL_RGBA8, width, height, memory_object, 0 );
+	GLenum e1 = glGetError(); // texture error
+	if(e1!=GL_NO_ERROR&&e1!=e0){ printf( "%s(%s): error %s\n", __func__, name, 	gxGetErrorString(e1) ); delete texture; return nullptr; }
+
+	// set dimensions
+	texture->_width		= width;
+	texture->_height	= height;
+	texture->_depth		= 1;
+	texture->_levels	= 1;
+
+	// attributes
+	glTexParameteri( target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+	glTexParameteri( target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+	glTexParameteri( target, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+	glTexParameteri( target, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+
+	glBindTexture( target, 0 );
+	return texture;
+}
+
+__noinline gl::Texture* gxCreateTexture3D( const char* name, GLint levels, GLsizei width, GLsizei height, GLsizei depth, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr )
 {
 	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
 
@@ -1853,7 +1904,7 @@ inline gl::Texture* gxCreateTexture3D( const char* name, GLint levels, GLsizei w
 	return texture;
 }
 
-inline gl::Texture* gxCreateTextureCube( const char* name, GLint levels, GLsizei width, GLsizei height, GLsizei count=1, GLint internal_format=GL_RGBA16F, GLvoid* data[6]=nullptr, bool force_array=false )
+__noinline gl::Texture* gxCreateTextureCube( const char* name, GLint levels, GLsizei width, GLsizei height, GLsizei count=1, GLint internal_format=GL_RGBA16F, GLvoid* data[6]=nullptr, bool force_array=false )
 {
 	if(count*6>gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS )){ printf( "%s(): count*6 (=%d) > GL_MAX_ARRAY_TEXTURE_LAYERS (=%d)\n", __func__, count*6, gxGetIntegerv( GL_MAX_ARRAY_TEXTURE_LAYERS ) ); return nullptr; }
 	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
@@ -1904,7 +1955,7 @@ inline gl::Texture* gxCreateTextureCube( const char* name, GLint levels, GLsizei
 	return texture;
 }
 
-inline gl::Texture* gxCreateTextureBuffer( const char* name, gl::Buffer* buffer, GLint internal_format=GL_RGBA16F )
+__noinline gl::Texture* gxCreateTextureBuffer( const char* name, gl::Buffer* buffer, GLint internal_format=GL_RGBA16F )
 {
 	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
 
@@ -1933,7 +1984,7 @@ inline gl::Texture* gxCreateTextureBuffer( const char* name, gl::Buffer* buffer,
 	return texture;
 }
 
-inline gl::Texture* gxCreateTextureRectangle( const char* name, GLsizei width, GLsizei height, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr )
+__noinline gl::Texture* gxCreateTextureRectangle( const char* name, GLsizei width, GLsizei height, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr )
 {
 	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
 
@@ -1965,7 +2016,7 @@ inline gl::Texture* gxCreateTextureRectangle( const char* name, GLsizei width, G
 	return texture;
 }
 
-inline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLuint levels, GLuint min_layer=0, GLuint layers=1, GLenum target=0, bool force_array=false )
+__noinline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level, GLuint levels, GLuint min_layer=0, GLuint layers=1, GLenum target=0, bool force_array=false )
 {
 	if(!src) return nullptr;
 	uint key = gl::Texture::crc(min_level,levels,min_layer,layers,target,force_array);
