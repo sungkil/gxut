@@ -1,19 +1,17 @@
-#include <gxut/gxmath.h>
-#include <gxut/gxstring.h>
-#include <shlwapi.h>
-#include <gxut/gxfilesystem.h>
-#include <gxut/gxmemory.h>
-#include <gxut/gxtimer.h>
-#include <gxut/ext/gxobjparser.h>
-#include <gximage/gximage.h>
-#pragma comment( lib, "shlwapi" )
+#include "gxobjparser.h"
 
 // common local attributes
 const char* __GX_MTLPARSER_CPP_TIMESTAMP__ = __TIMESTAMP__;
-static path mtl_dir; 
+
+// local variables
+static path mtl_dir;
 static bool b_dirty = false;
 
-struct mtl_item_t
+//*************************************
+namespace mtl {
+//*************************************
+
+struct item_t
 {
 	string key;
 	vector<string> tokens; // tokens excluding key
@@ -22,7 +20,7 @@ struct mtl_item_t
 	uint crc = 0; // for maps
 	bool b_map_type = false;
 
-	mtl_item_t( const string& _key, const char* first_token=nullptr );
+	item_t( const string& _key, const char* first_token=nullptr );
 	void clear(){ key.clear(); tokens.clear(); crc=0; b_map_type=false; }
 	bool empty() const { return tokens.empty(); }
 	size_t size() const { return tokens.size(); }
@@ -39,46 +37,50 @@ struct mtl_item_t
 	bool make_canonical_relative_path();
 };
 
-struct mtl_section_t
+struct section_t
 {
-	string				name;
-	vector<mtl_item_t>	items;
+	string			name;
+	vector<item_t>	items;
 
-	mtl_section_t(){ items.reserve(256); }
-	mtl_section_t( const string& _name ):name(_name){ items.reserve(64); }
+	section_t(){ items.reserve(256); }
+	section_t( const string& _name ):name(_name){ items.reserve(64); }
 
 	bool empty() const { return name.empty()||items.empty(); }
 	auto begin(){ return items.begin(); }
 	auto end(){ return items.end(); }
-	auto maps(){ vector<mtl_item_t*> v;for(auto& t:items){if(t.is_map_type())v.emplace_back(&t);} return v; }
+	auto maps(){ vector<item_t*> v;for(auto& t:items){if(t.is_map_type())v.emplace_back(&t);} return v; }
 
-	mtl_item_t* find( const char* key ) const { for(auto& t:items){ if(!items.empty()&&stricmp(t.key.c_str(),key)==0) return (mtl_item_t*)&t; } return nullptr; }
+	item_t* find( const char* key ) const { for(auto& t:items){ if(!items.empty()&&stricmp(t.key.c_str(),key)==0) return (item_t*)&t; } return nullptr; }
 	int find_index( const char* key ) const	{ for( int k=0, kn=int(items.size()); k<kn; k++ ){ if(items[k].empty()) continue; if(stricmp(items[k].key.c_str(),key)==0) return k; } return -1; }
-	mtl_item_t* add_norm( string token )
+	item_t* add_norm( string token )
 	{
 		if(find("norm")) printf( "%s(%s): norm already exists\n", __func__, token.c_str() );
-		mtl_item_t t("norm",token.c_str());
+		item_t t("norm",token.c_str());
 		if(items.empty()) return &items.emplace_back(t);
 		int i=find_index("bump"), offset=i<0?int(items.size())-(items.back().empty()?1:0):i+1;
 		return &(*items.emplace(items.begin()+offset,t));
 	}
 };
 
-mtl_item_t::mtl_item_t( const string& _key, const char* first_token ):key(_key)
+//*************************************
+} // end namespace mtl
+//*************************************
+
+mtl::item_t::item_t( const string& _key, const char* first_token ):key(_key)
 {
 	if(first_token&&*first_token) tokens.emplace_back(first_token);
 	static nocase::set<string> map_keys = {"bump","refl","norm","pc","pcr","aniso","anisor"};
 	b_map_type = (key.size()>4&&strnicmp(key.c_str(),"map_",4)==0)||map_keys.find(key)!=map_keys.end();
 }
 
-path mtl_item_t::map_path()
+path mtl::item_t::map_path()
 {
 	if(tokens.empty()) return "";
 	auto& b=tokens.back(); if(::path p(b);p.is_absolute()){b=p.is_subdir(mtl_dir)?p.relative(mtl_dir).c_str():p.name();}
 	return mtl_dir+tokens.back();
 }
 
-bool mtl_item_t::make_canonical_relative_path()
+bool mtl::item_t::make_canonical_relative_path()
 {
 	auto &b=tokens.back(), b0=b;
 	for( int k=0;k<8&&strstr(b.c_str(),"\\\\");k++) b=str_replace(b.c_str(),"\\\\","\\");	// remove double backslash
@@ -88,222 +90,7 @@ bool mtl_item_t::make_canonical_relative_path()
 	return stricmp(b0.c_str(),b.c_str())!=0; // return change exists
 }
 
-static const vector<vec2> halton_samples =
-{
-	{0.015625f,0.061224f}, {0.515625f,0.204082f}, {0.265625f,0.346939f}, {0.765625f,0.489796f}, {0.140625f,0.632653f}, {0.640625f,0.775510f}, {0.390625f,0.918367f}, {0.890625f,0.081633f},
-	{0.078125f,0.224490f}, {0.578125f,0.367347f}, {0.328125f,0.510204f}, {0.828125f,0.653061f}, {0.203125f,0.795918f}, {0.703125f,0.938776f}, {0.453125f,0.102041f}, {0.953125f,0.244898f},
-	{0.046875f,0.387755f}, {0.546875f,0.530612f}, {0.296875f,0.673469f}, {0.796875f,0.816326f}, {0.171875f,0.959184f}, {0.671875f,0.122449f}, {0.421875f,0.265306f}, {0.921875f,0.408163f},
-	{0.109375f,0.551020f}, {0.609375f,0.693878f}, {0.359375f,0.836735f}, {0.859375f,0.979592f}, {0.234375f,0.142857f}, {0.734375f,0.285714f}, {0.484375f,0.428571f}, {0.984375f,0.571429f},
-};
-
-static bool is_normal_map( path file_path )
-{
-	if(file_path.empty()) return false;
-
-	static nocase::map<path,bool> cache;
-	if(auto it=cache.find(file_path); it!=cache.end()) return it->second;
-	cache[file_path]=false; if(!file_path.exists()) return false;
-
-	image* header=gx::load_image_header(file_path.c_str()); if(!header){ printf("failed to load header of %s\n", file_path.c_str() ); return false; }
-	bool early_exit = header->channels!=3||header->width<8||header->height<8; safe_delete(header); if(early_exit) return false;
-
-	// do not force rgb to bump; and use cache
-	image* i = gx::load_image(file_path.c_str(),true,false,false); if(!i){ printf("failed to load the bump map %s\n", file_path.c_str() ); return false; }
-	int w=i->width, h=i->height;
-	int bcount=0, bcount_thresh=int(halton_samples.size()*0.8f);
-	for( int k=0, kn=int(halton_samples.size()); k<kn&&bcount<bcount_thresh; k++ )
-	{
-		const auto& s = halton_samples[k];
-		ivec2 tc = ivec2(min(w-1,int((w-1)*s.x)),min(h-1,int((h-1)*s.y)));
-		uchar3 c = *i->ptr<uchar3>(tc.y,tc.x);
-		if(c.r==c.g&&c.r==c.b) continue;			// skip grayscale
-		if(c.b<c.r||c.b<c.g||c.b<127) continue;		// probably wrong
-		vec3 n = vec3(c.r,c.g,c.b)/127.5f-1.0f; if(fabs(n.length()-1.0f)>0.3f) continue;	// length around one
-		bcount++;
-	}
-
-	safe_delete(i);
-	return cache[file_path] = bcount<bcount_thresh ? false : true;
-}
-
-static bool generate_normal_map( path normal_path, path bump_path, path mtl_path="" )
-{
-	if(!bump_path.exists()){ printf("%s(): %s not exists\n", __func__, bump_path.name() ); return false; }
-	time_t bump_mtime = bump_path.mtime();
-	if(normal_path.exists()&&normal_path.mtime()>=bump_mtime) return true;
-
-	gx::timer_t t;
-
-	// test whether the bump map is actually a normal map
-	// do not force rgb to bump; and use cache
-	image* bump0 = gx::load_image(bump_path.c_str(),true,false,false); if(!bump0){ printf("%s(): failed to load %s\n", __func__, bump_path.name() ); return false; }
-	printf( "%sgenerating %s from %s... ",
-		!mtl_path.empty()?format("[%s] ", mtl_path.name()):"", normal_path.name(), bump_path.name());
-
-	// convert uchar bumpmap to 1-channel float image
-	image* bump = new image( bump0->width, bump0->height, 32, 1 );
-	int yn=bump->height, c0=bump0->channels, xn=bump->width;
-	for( int y=0; y<yn; y++ )
-	{
-		uchar* src = bump0->ptr<uchar>(y);
-		float* dst = bump->ptr<float>(y);
-		for( int x=0; x<xn; x++, src+=c0, dst++ ) dst[0] = float(src[0])/255.0f;
-	}
-
-	// create normal image
-	image* normal = new image( bump->width, bump->height, 8, 3 );
-
-	// apply sobel filter to the bump
-	float bump_scale = min(1000.0f,1.0f/(1.0f+0.000001f));
-	uchar *B=bump->data, *N=normal->data;
-	int NW=int(normal->stride()), BW=int(bump->stride());
-	
-	for( int y=0; y<yn; y++ )
-	{
-		uchar3* dst = (uchar3*)(N+y*NW);
-		float* src2 = (float*)(B+((y-1+yn)%yn)*BW);
-		float* src1 = (float*)(B+y*BW);
-		float* src0 = (float*)(B+((y+1)%yn)*BW);
-
-		for( int x=0; x<xn; x++, dst++ )
-		{
-			int l=(x-1+xn)%xn, r=(x+1)%xn;
-			float nx = -((src2[r]-src2[l]) + (src1[r]-src1[l])*2.0f + (src0[r]-src0[l]));
-			float ny = -((src2[l]-src0[l]) + (src2[x]-src0[x])*2.0f + (src2[r]-src0[r]));
-			float nz = bump_scale*2.4f;	// scaling
-			float nlen = sqrtf(nx*nx+ny*ny+nz*nz);
-
-			// save as RGB
-			dst->x = uchar((nx/nlen+1.0f)*127.5f);
-			dst->y = uchar((ny/nlen+1.0f)*127.5f);
-			dst->z = uchar((nz/nlen+1.0f)*127.5f);
-		}
-	}
-
-	// first write to the temporary image
-	gx::save_image( normal_path.c_str(), normal );
-	if(normal_path.exists()) normal_path.utime(bump_mtime);
-
-	safe_delete(bump0);
-	safe_delete(bump);
-	safe_delete(normal);
-
-	printf( "completed in %.f ms\n", t.end() );
-	return true;
-}
-
-static path get_normal_path( const path& bump_path, nocase::map<path,path>& bton, nocase::set<path> used_images )
-{
-	auto it = bton.find( bump_path );
-	if(it!=bton.end()&&is_normal_map(it->second)) return it->second;
-
-	path base = bump_path.remove_extension();
-	path ext = bump_path.extension();
-	
-	// remove postfix for bump
-	if(base.size()>4&&stristr(substr(base.c_str(),-4),"bump")) base=path(substr(base.c_str(),0,-4))+"norm";
-	else if(base.back()==L'b') base.back()=L'n';
-	else base+="n";
-	
-	for( int k=0; k<8; k++, base+="n" )
-	{
-		path dst = base+"."+ext;
-		if(!dst.exists()||used_images.find(dst)==used_images.end()) return dst;
-	}
-	printf("%s(): unable to find normal_path for %s\n",__func__,bump_path.slash());
-	return "";
-}
-
-static std::map<uint,string> build_crc_lut( vector<mtl_section_t>& sections )
-{
-	// scan crc
-	logical::map<string,uint> crc_map; // sorted by path
-	for( auto& section : sections ) for( auto* t: section.maps() )
-	{
-		auto it = crc_map.find(t->back()); if(it!=crc_map.end()){ t->crc = it->second; continue; }
-		t->crc = crc_map[t->back()] = t->map_path().exists() ? t->map_path().crc() : 0;
-	}
-
-	// invert lookup table for crc-unique maps
-	std::map<uint,string> lut;
-	for( auto& [token,crc] : crc_map ) if(auto it=lut.find(crc); it==lut.end()) lut[crc] = token;
-
-	return lut;
-}
-
-static float optimize_textures( path file_path, vector<mtl_section_t>& sections )
-{
-	gx::timer_t timer;
-
-	// replace redundant map path
-	nocase::set<path> dups; // duplicate images
-	auto crc_lut = build_crc_lut( sections );
-	for( auto& section : sections )
-		for( auto* t : section.maps() )
-		{
-			if(!t->map_path().exists()) continue;
-
-			auto &src=t->back();
-			auto &dst=crc_lut[t->crc]; if(stricmp(src.c_str(),dst.c_str())==0) continue;
-			printf( "[%s] replace: %s << %s\n", file_path.name(), src.c_str(), dst.c_str() );
-			dups.emplace(t->map_path());
-			src = dst;
-			b_dirty = true;
-		}
-
-	// normal map tests
-	// 1. clear invalid normal maps
-	// 2. add norm entry, when bump-as-normal maps are found
-	// 3. find existing bump-to-normal mapping
-	nocase::map<path,bool> valid_normals;
-	nocase::map<path,path> bton;
-	auto test_normal = [&]( mtl_item_t* t )->bool { path m=t->map_path(); if(auto it=valid_normals.find(m);it!=valid_normals.end()) return it->second; return valid_normals[m]=is_normal_map(m); };
-	for( auto& section : sections )
-	{
-		auto* n=section.find("norm"); if(n&&!test_normal(n)){ printf( "[%s] %s: %s is not a normal map\n", file_path.name(), section.name.c_str(), n->map_path().name() ); n->clear(); n=nullptr; b_dirty=true; }
-		auto* b=section.find("bump"); if(!n&&b&&test_normal(b)){ n=section.add_norm(b->back()); b_dirty=true; }
-		if(b&&n){ auto it=bton.find(b->map_path()); if(it==bton.end()) bton[b->map_path()]=n->map_path(); }
-	}
-
-	// find valid existing images
-	nocase::set<path> used_images;
-	for( auto& section : sections ) for( auto* t : section.maps() )
-	{
-		path m=t->map_path(); if(m.exists()){ used_images.insert(m); continue; }
-		printf( "[%s] %s.%s: %s not exists\n", file_path.name(), section.name.c_str(), t->key.c_str(), m.name() );
-		t->clear(); b_dirty=true;
-	}
-
-	// auto-generate normal maps
-	for( auto& m: sections )
-	{
-		auto *n=m.find("norm"), *b=m.find("bump"); if(n||!b) continue;
-		path norm_path = get_normal_path( b->map_path(), bton, used_images ); if(norm_path.empty()) continue;
-		if(!norm_path.exists()&&!generate_normal_map( norm_path, b->map_path(), file_path )) continue;
-		n = m.add_norm( norm_path.relative(mtl_dir).c_str() ); if(!n) continue;
-		
-		used_images.insert(norm_path);
-		bton[b->map_path()] = norm_path;
-		b_dirty=true;
-	}
-
-	// delete non-used images
-	for( auto& f : mtl_dir.scan<false>( "jpg;png" ) )
-	{
-		if(used_images.find(f)!=used_images.end()) continue;
-		if(dups.find(f)==dups.end()) // do not delete other non-duplicate non-used images
-		{
-			if(f.stem()!="index") printf( "[%s] potential redundancy: %s\n", file_path.name(), f.name() );
-			continue;
-		}
-		if(!f.delete_file(true)) continue;
-		printf( "[%s] deleting duplicates: %s\n", file_path.name(), f.name() );
-	}
-
-	return float(timer.end());
-}
-
-static bool save_mtl( path file_path, const vector<mtl_section_t>& sections, float opt_time )
+static bool save_mtl( path file_path, const vector<mtl::section_t>& sections, float opt_time )
 {
 	auto mtime0 = file_path.mtime();
 	FILE* fp = file_path.fopen("w"); if(!fp){ printf("%s(): failed to open %s\n", __func__, file_path.slash() ); return false; }
@@ -327,15 +114,15 @@ static bool save_mtl( path file_path, const vector<mtl_section_t>& sections, flo
 	return true;
 }
 
-vector<mtl_section_t> parse_mtl( path file_path )
+vector<mtl::section_t> parse_mtl( path file_path )
 {
-	vector<mtl_section_t> v; v.reserve(1024);
+	vector<mtl::section_t> v; v.reserve(1024);
 
 	if(!file_path.exists()){ printf("%s(): %s not exists\n", __func__, file_path.c_str() ); return v; }
 	FILE* fp = file_path.fopen("r"); if(!fp){ printf("%s(): unable to open %s\n", __func__, file_path.c_str()); return v; }
 	
 	// fill no-name header entry
-	v.emplace_back(mtl_section_t());
+	v.emplace_back(mtl::section_t());
 
 	char buff[4096]={};
 	auto is_empty_line = []( const char* s )->bool { char c0=s[0]; if(!c0||c0=='#'||strncmp(s,"Wavefront",9)==0) return true; char c1=s[1]; return !c1; };
@@ -346,8 +133,8 @@ vector<mtl_section_t> parse_mtl( path file_path )
 		{
 			if(*b)
 			{
-				if(!v.back().name.empty()) v.emplace_back(mtl_section_t()); 
-				v.back().items.emplace_back(mtl_item_t("",b));
+				if(!v.back().name.empty()) v.emplace_back(mtl::section_t()); 
+				v.back().items.emplace_back(mtl::item_t("",b));
 			}
 			continue;
 		}
@@ -358,11 +145,11 @@ vector<mtl_section_t> parse_mtl( path file_path )
 		
 		if(stricmp(key.c_str(),"newmtl")==0)
 		{
-			v.emplace_back(mtl_section_t(vs[1]));
+			v.emplace_back(mtl::section_t(vs[1]));
 		}
 		else
 		{
-			mtl_item_t t(key); for(size_t j=1;j<vs.size();j++) t.tokens.emplace_back(vs[j]);
+			mtl::item_t t(key); for(size_t j=1;j<vs.size();j++) t.tokens.emplace_back(vs[j]);
 			if(t.is_map_type()&&t.make_canonical_relative_path()) b_dirty=true;
 			v.back().items.emplace_back(std::move(t)); // add split tokens
 		}
@@ -379,26 +166,7 @@ vector<mtl_section_t> parse_mtl( path file_path )
 	return v;
 }
 
-//*************************************
-namespace mtl {
-//*************************************
-
-uint find_material( vector<material_impl>& materials, const char* name )
-{
-	for(uint k=0,kn=uint(materials.size());k<kn;k++)
-		if(stricmp(name,materials[k].name)==0) return k;
-	return -1;
-}
-
-void create_default_material( vector<material_impl>& materials )
-{
-	materials.emplace_back(material_impl(uint(materials.size())));
-	auto& m = materials.back();
-	strcpy(m.name,"default");
-	m.color = vec4(0.7f,0.7f,0.7f,1.0f);
-}
-
-material_impl create_light_material( uint ID )
+static material_impl create_light( uint ID )
 {
 	material_impl m(ID);
 	strcpy(m.name,"light");
@@ -408,7 +176,31 @@ material_impl create_light_material( uint ID )
 	return m;
 }
 
-bool load_mtl( path file_path, vector<material_impl>& materials, bool with_cache )
+// forward decl.
+#ifdef __GX_MTL_OPTIMIZE__
+	float optimize_textures( path file_path, vector<mtl::section_t>& sections );
+#endif
+
+//*************************************
+namespace mtl {
+//*************************************
+
+uint find( vector<material_impl>& materials, const char* name )
+{
+	for(uint k=0,kn=uint(materials.size());k<kn;k++)
+		if(stricmp(name,materials[k].name)==0) return k;
+	return -1;
+}
+
+void create_default( vector<material_impl>& materials )
+{
+	materials.emplace_back(material_impl(uint(materials.size())));
+	auto& m = materials.back();
+	strcpy(m.name,"default");
+	m.color = vec4(0.7f,0.7f,0.7f,1.0f);
+}
+
+bool load( path file_path, vector<material_impl>& materials, bool with_cache )
 {
 	gx::timer_t timer;
 
@@ -417,13 +209,16 @@ bool load_mtl( path file_path, vector<material_impl>& materials, bool with_cache
 	b_dirty = false; // something changed?
 
 	// pre-parse raw lines
-	vector<mtl_section_t> sections = std::move(parse_mtl(file_path)); if(sections.empty()) return false;
+	vector<mtl::section_t> sections = std::move(parse_mtl(file_path)); if(sections.empty()) return false;
 	
 	// default material for light source (mat_index==0 or emissive>0)
 	materials.clear();
 
 	// preprocessing only for fresh loading
-	float opt_time = with_cache ? 0.0f : optimize_textures( file_path, sections );
+	float opt_time = 0;
+#ifdef __GX_MTL_OPTIMIZE__
+	if(!with_cache) opt_time = optimize_textures( file_path, sections );
+#endif
 
 	// tags to bypass
 	static nocase::set<string> passtags
@@ -562,7 +357,7 @@ bool load_mtl( path file_path, vector<material_impl>& materials, bool with_cache
 	if(!light_source_exists(materials))
 	{
 		for(auto& m:materials) const_cast<uint&>(m.ID)++;
-		materials.insert(materials.begin(),create_light_material(0));
+		materials.insert(materials.begin(),create_light(0));
 	}
 
 	// update file after bump_as_normal
@@ -574,4 +369,231 @@ bool load_mtl( path file_path, vector<material_impl>& materials, bool with_cache
 
 //*************************************
 } // namespace mtl
+//*************************************
+
+//*************************************
+#ifdef __GX_MTL_OPTIMIZE__
+//*************************************
+
+#if __has_include(<gximage/gximage.h>)
+	#include <gximage/gximage.h>
+#endif
+
+static const vector<vec2> halton_samples =
+{
+	{0.015625f,0.061224f}, {0.515625f,0.204082f}, {0.265625f,0.346939f}, {0.765625f,0.489796f}, {0.140625f,0.632653f}, {0.640625f,0.775510f}, {0.390625f,0.918367f}, {0.890625f,0.081633f},
+	{0.078125f,0.224490f}, {0.578125f,0.367347f}, {0.328125f,0.510204f}, {0.828125f,0.653061f}, {0.203125f,0.795918f}, {0.703125f,0.938776f}, {0.453125f,0.102041f}, {0.953125f,0.244898f},
+	{0.046875f,0.387755f}, {0.546875f,0.530612f}, {0.296875f,0.673469f}, {0.796875f,0.816326f}, {0.171875f,0.959184f}, {0.671875f,0.122449f}, {0.421875f,0.265306f}, {0.921875f,0.408163f},
+	{0.109375f,0.551020f}, {0.609375f,0.693878f}, {0.359375f,0.836735f}, {0.859375f,0.979592f}, {0.234375f,0.142857f}, {0.734375f,0.285714f}, {0.484375f,0.428571f}, {0.984375f,0.571429f},
+};
+
+static std::map<uint,string> build_crc_lut( vector<mtl::section_t>& sections )
+{
+	// scan crc
+	logical::map<string,uint> crc_map; // sorted by path
+	for( auto& section : sections ) for( auto* t: section.maps() )
+	{
+		auto it = crc_map.find(t->back()); if(it!=crc_map.end()){ t->crc = it->second; continue; }
+		t->crc = crc_map[t->back()] = t->map_path().exists() ? t->map_path().crc() : 0;
+	}
+
+	// invert lookup table for crc-unique maps
+	std::map<uint,string> lut;
+	for( auto& [token,crc] : crc_map ) if(auto it=lut.find(crc); it==lut.end()) lut[crc] = token;
+
+	return lut;
+}
+
+static bool is_normal_map( path file_path )
+{
+	if(file_path.empty()) return false;
+
+	static nocase::map<path,bool> cache;
+	if(auto it=cache.find(file_path); it!=cache.end()) return it->second;
+	cache[file_path]=false; if(!file_path.exists()) return false;
+
+	image* header=gx::load_image_header(file_path.c_str()); if(!header){ printf("failed to load header of %s\n", file_path.c_str() ); return false; }
+	bool early_exit = header->channels!=3||header->width<8||header->height<8; safe_delete(header); if(early_exit) return false;
+
+	// do not force rgb to bump; and use cache
+	image* i = gx::load_image(file_path.c_str(),true,false,false); if(!i){ printf("failed to load the bump map %s\n", file_path.c_str() ); return false; }
+	int w=i->width, h=i->height;
+	int bcount=0, bcount_thresh=int(halton_samples.size()*0.8f);
+	for( int k=0, kn=int(halton_samples.size()); k<kn&&bcount<bcount_thresh; k++ )
+	{
+		const auto& s = halton_samples[k];
+		ivec2 tc = ivec2(min(w-1,int((w-1)*s.x)),min(h-1,int((h-1)*s.y)));
+		uchar3 c = *i->ptr<uchar3>(tc.y,tc.x);
+		if(c.r==c.g&&c.r==c.b) continue;			// skip grayscale
+		if(c.b<c.r||c.b<c.g||c.b<127) continue;		// probably wrong
+		vec3 n = vec3(c.r,c.g,c.b)/127.5f-1.0f; if(fabs(n.length()-1.0f)>0.3f) continue;	// length around one
+		bcount++;
+	}
+
+	safe_delete(i);
+	return cache[file_path] = bcount<bcount_thresh ? false : true;
+}
+
+static bool generate_normal_map( path normal_path, path bump_path, path mtl_path="" )
+{
+	if(!bump_path.exists()){ printf("%s(): %s not exists\n", __func__, bump_path.name() ); return false; }
+	time_t bump_mtime = bump_path.mtime();
+	if(normal_path.exists()&&normal_path.mtime()>=bump_mtime) return true;
+
+	gx::timer_t t;
+
+	// test whether the bump map is actually a normal map
+	// do not force rgb to bump; and use cache
+	image* bump0 = gx::load_image(bump_path.c_str(),true,false,false); if(!bump0){ printf("%s(): failed to load %s\n", __func__, bump_path.name() ); return false; }
+	printf( "%sgenerating %s from %s... ",
+		!mtl_path.empty()?format("[%s] ", mtl_path.name()):"", normal_path.name(), bump_path.name());
+
+	// convert uchar bumpmap to 1-channel float image
+	image* bump = new image( bump0->width, bump0->height, 32, 1 );
+	int yn=bump->height, c0=bump0->channels, xn=bump->width;
+	for( int y=0; y<yn; y++ )
+	{
+		uchar* src = bump0->ptr<uchar>(y);
+		float* dst = bump->ptr<float>(y);
+		for( int x=0; x<xn; x++, src+=c0, dst++ ) dst[0] = float(src[0])/255.0f;
+	}
+
+	// create normal image
+	image* normal = new image( bump->width, bump->height, 8, 3 );
+
+	// apply sobel filter to the bump
+	float bump_scale = min(1000.0f,1.0f/(1.0f+0.000001f));
+	uchar *B=bump->data, *N=normal->data;
+	int NW=int(normal->stride()), BW=int(bump->stride());
+	
+	for( int y=0; y<yn; y++ )
+	{
+		uchar3* dst = (uchar3*)(N+y*NW);
+		float* src2 = (float*)(B+((y-1+yn)%yn)*BW);
+		float* src1 = (float*)(B+y*BW);
+		float* src0 = (float*)(B+((y+1)%yn)*BW);
+
+		for( int x=0; x<xn; x++, dst++ )
+		{
+			int l=(x-1+xn)%xn, r=(x+1)%xn;
+			float nx = -((src2[r]-src2[l]) + (src1[r]-src1[l])*2.0f + (src0[r]-src0[l]));
+			float ny = -((src2[l]-src0[l]) + (src2[x]-src0[x])*2.0f + (src2[r]-src0[r]));
+			float nz = bump_scale*2.4f;	// scaling
+			float nlen = sqrtf(nx*nx+ny*ny+nz*nz);
+
+			// save as RGB
+			dst->x = uchar((nx/nlen+1.0f)*127.5f);
+			dst->y = uchar((ny/nlen+1.0f)*127.5f);
+			dst->z = uchar((nz/nlen+1.0f)*127.5f);
+		}
+	}
+
+	// first write to the temporary image
+	gx::save_image( normal_path.c_str(), normal );
+	if(normal_path.exists()) normal_path.utime(bump_mtime);
+
+	safe_delete(bump0);
+	safe_delete(bump);
+	safe_delete(normal);
+
+	printf( "completed in %.f ms\n", t.end() );
+	return true;
+}
+
+static path get_normal_path( const path& bump_path, nocase::map<path,path>& bton, nocase::set<path> used_images )
+{
+	auto it = bton.find( bump_path );
+	if(it!=bton.end()&&is_normal_map(it->second)) return it->second;
+
+	path base = bump_path.remove_extension();
+	path ext = bump_path.extension();
+	
+	// remove postfix for bump
+	if(base.size()>4&&stristr(substr(base.c_str(),-4),"bump")) base=path(substr(base.c_str(),0,-4))+"norm";
+	else if(base.back()==L'b') base.back()=L'n';
+	else base+="n";
+	
+	for( int k=0; k<8; k++, base+="n" )
+	{
+		path dst = base+"."+ext;
+		if(!dst.exists()||used_images.find(dst)==used_images.end()) return dst;
+	}
+	printf("%s(): unable to find normal_path for %s\n",__func__,bump_path.slash());
+	return "";
+}
+
+static float optimize_textures( path file_path, vector<mtl::section_t>& sections )
+{
+	gx::timer_t timer;
+
+	// replace redundant map path
+	nocase::set<path> dups; // duplicate images
+	auto crc_lut = build_crc_lut( sections );
+	for( auto& section : sections )
+		for( auto* t : section.maps() )
+		{
+			if(!t->map_path().exists()) continue;
+
+			auto &src=t->back();
+			auto &dst=crc_lut[t->crc]; if(stricmp(src.c_str(),dst.c_str())==0) continue;
+			printf( "[%s] replace: %s << %s\n", file_path.name(), src.c_str(), dst.c_str() );
+			dups.emplace(t->map_path());
+			src = dst;
+			b_dirty = true;
+		}
+	
+	// find valid existing images
+	nocase::set<path> used_images;
+	for( auto& section : sections ) for( auto* t : section.maps() )
+	{
+		path m=t->map_path(); if(m.exists()){ used_images.insert(m); continue; }
+		printf( "[%s] %s.%s: %s not exists\n", file_path.name(), section.name.c_str(), t->key.c_str(), m.name() );
+		t->clear(); b_dirty=true;
+	}
+
+	// normal map tests
+	// 1. clear invalid normal maps
+	// 2. add norm entry, when bump-as-normal maps are found
+	// 3. find existing bump-to-normal mapping
+	nocase::map<path,bool> valid_normals;
+	nocase::map<path,path> bton;
+	auto test_normal = [&]( mtl::item_t* t )->bool { path m=t->map_path(); if(auto it=valid_normals.find(m);it!=valid_normals.end()) return it->second; return valid_normals[m]=is_normal_map(m); };
+	for( auto& section : sections )
+	{
+		auto* n=section.find("norm"); if(n&&!test_normal(n)){ printf( "[%s] %s: %s is not a normal map\n", file_path.name(), section.name.c_str(), n->map_path().name() ); n->clear(); n=nullptr; b_dirty=true; }
+		auto* b=section.find("bump"); if(!n&&b&&test_normal(b)){ n=section.add_norm(b->back()); b_dirty=true; }
+		if(b&&n){ auto it=bton.find(b->map_path()); if(it==bton.end()) bton[b->map_path()]=n->map_path(); }
+	}
+
+	// auto-generate normal maps
+	for( auto& m: sections )
+	{
+		auto *n=m.find("norm"), *b=m.find("bump"); if(n||!b) continue;
+		path norm_path = get_normal_path( b->map_path(), bton, used_images ); if(norm_path.empty()) continue;
+		if(!norm_path.exists()&&!generate_normal_map( norm_path, b->map_path(), file_path )) continue;
+		n = m.add_norm( norm_path.relative(mtl_dir).c_str() ); if(!n) continue;
+		
+		used_images.insert(norm_path);
+		bton[b->map_path()] = norm_path;
+		b_dirty=true;
+	}
+
+	// delete non-used images
+	for( auto& f : mtl_dir.scan<false>( "jpg;png" ) )
+	{
+		if(used_images.find(f)!=used_images.end()) continue;
+		if(dups.find(f)==dups.end()) // do not delete other non-duplicate non-used images
+		{
+			if(f.stem()!="index") printf( "[%s] potential redundancy: %s\n", file_path.name(), f.name() );
+			continue;
+		}
+		if(!f.delete_file(true)) continue;
+		printf( "[%s] deleting duplicates: %s\n", file_path.name(), f.name() );
+	}
+
+	return float(timer.end());
+}
+
+//*************************************
+#endif // __GX_MTL_OPTIMIZE__
 //*************************************

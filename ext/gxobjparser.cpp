@@ -1,10 +1,5 @@
-#include <gxut/gxmath.h>
-#include <gxut/gxstring.h>
-#include <shellapi.h>
-#include <gxut/gxfilesystem.h>
-#include <gxut/gxtimer.h>
+#include "gxobjparser.h"
 #include <gxut/ext/gxzip.h>
-#include <gxut/ext/gxobjparser.h>
 #include <future> // std::async
 #if __has_include(<fgets_sse2/fgets_sse2_slee.h>)
 	#include <fgets_sse2/fgets_sse2_slee.h>
@@ -196,7 +191,7 @@ namespace obj::cache
 		strcpy(p_mesh->mtl_path,mtl_path.exists()?mtl_name:"default");
 		
 		// load materials
-		if(mtl_path.exists()&&!mtl::load_mtl(mtl_path, p_mesh->materials, true )){ delete p_mesh; return nullptr; }
+		if(mtl_path.exists()&&!mtl::load(mtl_path, p_mesh->materials, true )){ delete p_mesh; return nullptr; }
 
 		// load counters
 		uint object_count=0;	fgets(buff,8192,fp); sscanf(buff,"object_count = %u\n", &object_count );
@@ -513,7 +508,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 		else if(strcmp(key,"usemtl")==0)
 		{
 			g = get_or_create_geometry();
-			g->material_index = mat_index = mtl::find_material(p_mesh->materials,trim(buff));
+			g->material_index = mat_index = mtl::find(p_mesh->materials,trim(buff));
 		}
 		else if(strcmp(key,"mtllib")==0)
 		{
@@ -525,7 +520,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 					mtl_path = file_path.replace_extension("mtl");
 					if(mtl_path.exists()) printf("%s is used instead of missing %s\n", mtl_path.name(), mtl_path0.name());
 				}
-				if(!mtl::load_mtl(mtl_path, p_mesh->materials)){ printf("unable to load %s\n",mtl_path0.slash()); return nullptr; }
+				if(!mtl::load(mtl_path, p_mesh->materials)){ printf("unable to load %s\n",mtl_path0.slash()); return nullptr; }
 				strcpy( p_mesh->mtl_path, mtl_path.relative(path(file_path).dir()).c_str() );
 				
 				// postprocessing
@@ -589,7 +584,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	// if no materials are present, then create default materials
 	if(p_mesh->materials.empty()) // at least, it's one due to light source material
 	{
-		mtl::create_default_material( p_mesh->materials );
+		mtl::create_default( p_mesh->materials );
 		for( auto& j: p_mesh->geometries ) j.material_index = 0;
 	}
 
