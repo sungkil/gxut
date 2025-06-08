@@ -160,17 +160,6 @@ inline const char* gxGetErrorString( GLenum e ){ if(e==GL_NO_ERROR) return ""; i
 inline bool		gxHasMultidraw(){ return gxHasExtension(bindless_texture)&&gxHasExtension(shader_draw_parameters); }
 
 //***********************************************
-// simple extension loader
-__noinline void* gxLoadExtension( const char* name, HMODULE hOpenGL32=nullptr )
-{
-	HMODULE h=hOpenGL32; if(!h) h=LoadLibraryA( "opengl32.dll" ); if(!h) return nullptr;
-	typedef PROC(*PFNWGLGETPROCADDRESS)(LPCSTR); static PFNWGLGETPROCADDRESS __wglGetProcAddress=(PFNWGLGETPROCADDRESS)GetProcAddress(h,"wglGetProcAddress"); if(!__wglGetProcAddress){ ::printf("wglGetProcAddress==nullptr\n"); return nullptr; }
-	void* f=(void*)GetProcAddress(h,name); if(!f) f=__wglGetProcAddress(name); if(!f) ::printf("%s==nullptr\n",name);
-	if(h!=hOpenGL32) FreeLibrary(h);
-	return f;
-}
-
-//***********************************************
 // type-to-internalformat mapper
 template <class T>		GLenum gxTypeToInternalFormat();
 template <> constexpr	GLenum gxTypeToInternalFormat<bool>(){	return GL_R8UI; }
@@ -208,6 +197,21 @@ namespace context
 {
 	inline bool is_core_profile(){ static GLint mask=0; if(mask==0) glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &mask); return mask==GL_CONTEXT_CORE_PROFILE_BIT; }
 	inline bool is_compatibility_profile(){ static GLint mask=0; if(mask==0) glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &mask); return mask==GL_CONTEXT_COMPATIBILITY_PROFILE_BIT; } 
+}
+
+// simple GL/WGL extension loader
+struct module_t
+{
+	HMODULE handle=nullptr;
+	PROC(*__wglGetProcAddress)(LPCSTR)=nullptr;
+	~module_t(){ if(!handle) return; FreeLibrary(handle); handle=nullptr; }
+	module_t(){ handle=LoadLibraryA("opengl32.dll"); if(!handle){ printf("gl::module: unable to load opengl32.dll\n"); return; } if(handle) __wglGetProcAddress=(decltype(__wglGetProcAddress))GetProcAddress(handle,"wglGetProcAddress"); if(!__wglGetProcAddress) printf("gl::module_t(): wglGetProcAddress==nullptr\n"); }
+	static void* get_proc_address( const char* name ){ if(!name||!*name) return nullptr; static module_t m; void* f=nullptr; if(m.__wglGetProcAddress&&(f=m.__wglGetProcAddress(name))!=nullptr) return f; f=(void*)GetProcAddress(m.handle,name); if(!f) printf("gl::get_proc_address(%s)==nullptr\n",name); return f; }
+};
+
+template <class T=void*> __forceinline T get_proc_address( const char* name )
+{
+	return T(module_t::get_proc_address(name));
 }
 
 //***********************************************
@@ -1825,44 +1829,6 @@ __noinline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsiz
 	glTexParameteri( target, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
 	glTexParameteri( target, GL_TEXTURE_MIN_FILTER, levels>1?GL_NEAREST_MIPMAP_NEAREST : GL_NEAREST );
 
-	return texture;
-}
-
-__noinline gl::Texture* gxCreateTexture2DFromMemory( const char* name, GLsizei width, GLsizei height, GLuint memory_object, GLint internal_format=GL_RGBA8 )
-{
-	typedef void(*PFNGLTEXTURESTORAGEMEM2DEXTPROC)(GLuint texture,GLsizei levels,GLenum internalFormat,GLsizei width,GLsizei height,GLuint memory,GLuint64 offset);
-	static auto glTextureStorageMem2DEXT=(PFNGLTEXTURESTORAGEMEM2DEXTPROC)gxLoadExtension("glTextureStorageMem2DEXT"); if(!glTextureStorageMem2DEXT){ ::printf("%s(): glTextureStorageMem2DEXT==nullptr\n",__func__); return nullptr; }
-
-	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
-
-	GLenum target = GL_TEXTURE_2D;
-	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
-	GLenum format = gxGetTextureFormat( internal_format );
-	GLenum type = gxGetTextureType( internal_format );
-
-	gl::Texture* texture = new gl::Texture(ID,name,target,internal_format,format,type); if(width==0||height==0) return texture;
-	texture->_key = gl::Texture::crc(0,1,0,1,target,false);
-	glBindTexture( target, ID );
-
-	// allocate storage: at this point, lock is not needed
-	GLenum e0 = glGetError(); // previous error from others
-	glTextureStorageMem2DEXT( ID, 1, GL_RGBA8, width, height, memory_object, 0 );
-	GLenum e1 = glGetError(); // texture error
-	if(e1!=GL_NO_ERROR&&e1!=e0){ printf( "%s(%s): error %s\n", __func__, name, 	gxGetErrorString(e1) ); delete texture; return nullptr; }
-
-	// set dimensions
-	texture->_width		= width;
-	texture->_height	= height;
-	texture->_depth		= 1;
-	texture->_levels	= 1;
-
-	// attributes
-	glTexParameteri( target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
-	glTexParameteri( target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
-	glTexParameteri( target, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
-	glTexParameteri( target, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
-
-	glBindTexture( target, 0 );
 	return texture;
 }
 
