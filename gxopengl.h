@@ -1597,8 +1597,8 @@ inline gl::Program* gxCreateProgram( string prefix, string name, const gl::progr
 			GLint loc = glGetAttribLocation(program->ID,aname);
 
 			// bind attributes explicitely again
-			if(loc!=0&&(stristr(aname,"pos")||stristr(aname,"position")))						glBindAttribLocation( program->ID, 0, aname );
-			if(loc!=1&&(stristr(aname,"norm")||stristr(aname,"nrm")))							glBindAttribLocation( program->ID, 1, aname );
+			if(loc!=0&&(stristr(aname,"pos")||stristr(aname,"position")))					glBindAttribLocation( program->ID, 0, aname );
+			if(loc!=1&&(stristr(aname,"norm")||stristr(aname,"nrm")))						glBindAttribLocation( program->ID, 1, aname );
 			if(loc!=2&&(stristr(aname,"tex")||stristr(aname,"coord")||stristr(aname,"tc")))	glBindAttribLocation( program->ID, 2, aname );
 		}
 
