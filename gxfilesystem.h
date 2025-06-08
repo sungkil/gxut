@@ -123,7 +123,7 @@ struct path : public path_t
 	uint wattrib() const {				if(!*_data) return INVALID_FILE_ATTRIBUTES; WIN32_FILE_ATTRIBUTE_DATA a; if(!GetFileAttributesExA(_data,GetFileExInfoStandard,&a)||a.dwFileAttributes==INVALID_FILE_ATTRIBUTES) return INVALID_FILE_ATTRIBUTES; return a.dwFileAttributes; }
 	bool is_hidden() const {			if(!*_data) return false; auto a=wattrib(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_HIDDEN)!=0; }
 	bool is_system() const {			if(!*_data) return false; auto a=wattrib(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_SYSTEM)!=0; }
-	bool is_junction() const {			if(!*_data||is_drive()) return false; auto a=wattrib(); if(a==INVALID_FILE_ATTRIBUTES||(a&FILE_ATTRIBUTE_DIRECTORY)==0) return false; return (a&FILE_ATTRIBUTE_REPARSE_POINT)!=0; }
+	bool is_junction() const {			if(!*_data||is_drive()) return false; auto a=wattrib(); if(a==INVALID_FILE_ATTRIBUTES||(a&FILE_ATTRIBUTE_DIRECTORY)==0) return false; if((a&FILE_ATTRIBUTE_REPARSE_POINT)==0) return false; return canonical()!=junction().canonical(); } // the junction() name should be examined, because cloud services (e.g., Dropbox) often report FILE_ATTRIBUTE_REPARSE_POINT for a regular directory
 	void set_hidden( bool h ) const {	if(!*_data) return; auto a=wattrib(); if(a!=INVALID_FILE_ATTRIBUTES) SetFileAttributesA(_data,a=h?(a|FILE_ATTRIBUTE_HIDDEN):(a^FILE_ATTRIBUTE_HIDDEN)); }
 	void set_readonly( bool r ) const {	if(!*_data) return; auto a=wattrib(); if(a!=INVALID_FILE_ATTRIBUTES) SetFileAttributesA(_data,a=r?(a|FILE_ATTRIBUTE_READONLY):(a^FILE_ATTRIBUTE_READONLY)); }
 	void set_system( bool s ) const {	if(!*_data) return; auto a=wattrib(); if(a!=INVALID_FILE_ATTRIBUTES) SetFileAttributesA(_data,a=s?(a|FILE_ATTRIBUTE_SYSTEM):(a^FILE_ATTRIBUTE_SYSTEM)); }	
