@@ -85,6 +85,8 @@ struct path : public path_t
 	path operator/( const path& p ) const { return append_slash()+p; }
 	path& operator+=( const path& p ){ return reinterpret_cast<path&>(operator+=(reinterpret_cast<const path_t&>(p))); }
 	path& operator/=( const path& p ){ return reinterpret_cast<path&>(operator/=(reinterpret_cast<const path_t&>(p))); }
+	bool operator==( const path& p ) const { return stricmp(_data,p._data)==0; }
+	bool operator!=( const path& p ) const { return stricmp(_data,p._data)!=0; }
 
 	bool operator<( const path& p ) const { return strcmplogical(_data,p._data)<0; }
 	bool operator<( const value_type* s ) const { return strcmplogical(_data,s)<0; }
@@ -119,15 +121,15 @@ struct path : public path_t
 	// helpers for C-string functions
 	bool find( const char* s, bool case_insensitive=true ){ return (case_insensitive?stristr(_data,s):strstr(_data,s))!=nullptr; }
 
-	// get/set windows-only attributes
-	uint wattrib() const {				if(!*_data) return INVALID_FILE_ATTRIBUTES; WIN32_FILE_ATTRIBUTE_DATA a; if(!GetFileAttributesExA(_data,GetFileExInfoStandard,&a)||a.dwFileAttributes==INVALID_FILE_ATTRIBUTES) return INVALID_FILE_ATTRIBUTES; return a.dwFileAttributes; }
-	bool is_hidden() const {			if(!*_data) return false; auto a=wattrib(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_HIDDEN)!=0; }
-	bool is_system() const {			if(!*_data) return false; auto a=wattrib(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_SYSTEM)!=0; }
-	bool is_junction() const {			if(!*_data||is_drive()) return false; auto a=wattrib(); if(a==INVALID_FILE_ATTRIBUTES||(a&FILE_ATTRIBUTE_DIRECTORY)==0) return false; if((a&FILE_ATTRIBUTE_REPARSE_POINT)==0) return false; return canonical()!=junction().canonical(); } // the junction() name should be examined, because cloud services (e.g., Dropbox) often report FILE_ATTRIBUTE_REPARSE_POINT for a regular directory
+	// windows-only attributes
+	uint wattrib() const {		if(!*_data) return INVALID_FILE_ATTRIBUTES; WIN32_FILE_ATTRIBUTE_DATA a; if(!GetFileAttributesExA(_data,GetFileExInfoStandard,&a)||a.dwFileAttributes==INVALID_FILE_ATTRIBUTES) return INVALID_FILE_ATTRIBUTES; return a.dwFileAttributes; }
+	bool is_hidden() const {	if(!*_data) return false; auto a=wattrib(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_HIDDEN)!=0; }
+	bool is_system() const {	if(!*_data) return false; auto a=wattrib(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_SYSTEM)!=0; }
+	bool is_junction() const;
 	void set_hidden( bool h ) const {	if(!*_data) return; auto a=wattrib(); if(a!=INVALID_FILE_ATTRIBUTES) SetFileAttributesA(_data,a=h?(a|FILE_ATTRIBUTE_HIDDEN):(a^FILE_ATTRIBUTE_HIDDEN)); }
 	void set_readonly( bool r ) const {	if(!*_data) return; auto a=wattrib(); if(a!=INVALID_FILE_ATTRIBUTES) SetFileAttributesA(_data,a=r?(a|FILE_ATTRIBUTE_READONLY):(a^FILE_ATTRIBUTE_READONLY)); }
 	void set_system( bool s ) const {	if(!*_data) return; auto a=wattrib(); if(a!=INVALID_FILE_ATTRIBUTES) SetFileAttributesA(_data,a=s?(a|FILE_ATTRIBUTE_SYSTEM):(a^FILE_ATTRIBUTE_SYSTEM)); }	
-	path junction() const {				if(!*_data||!exists()) return ""; bool b_dir=is_dir(), j=false; for(auto& d:b_dir?ancestors():dir().ancestors()){ if(d.is_drive()) break; if((path(d).wattrib()&FILE_ATTRIBUTE_REPARSE_POINT)!=0){ j=true; break; } } if(!j) return ""; HANDLE h=CreateFileW(atow(c_str()), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0); if(h==INVALID_HANDLE_VALUE) return ""; auto* w=__strbuf<wchar_t>(capacity); path t; GetFinalPathNameByHandleW(h, w, t.capacity, FILE_NAME_NORMALIZED); CloseHandle(h); strcpy(t._data, wtoa(w)); if(strncmp(t._data, "\\\\?\\", 4)==0) t=path(t._data+4); return b_dir?t.append_slash():t; }
+	path junction() const;
 
 	// path structure query
 	bool is_drive()		const {	if(!*_data) return false; size_t l=size(); return l<4&&l>1&&_data[1]==':'; } // backslash-less drive fails with st_mode
@@ -211,7 +213,40 @@ protected:
 	void __scan_recursive( const wchar_t* dir, __scan_t& si ) const;
 	void __subdirs_recursive( const wchar_t* dir, __scan_t& si ) const;
 	void __canonicalize() const; // remove redundancies in directories (e.g., "../some/..", "./" )
+	path __normalize_final() const; // normalize path by GetFinalPathNameByHandleW(FILE_NAME_NORMALIZED)
 };
+
+__noinline path path::__normalize_final() const
+{
+	if(!*_data) return ""; auto a=wattrib(); if(a==INVALID_FILE_ATTRIBUTES) return "";
+	HANDLE h=CreateFileW(atow(_data),GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,0); if(h==INVALID_HANDLE_VALUE) return "";
+	auto* w=__strbuf<wchar_t>(capacity); GetFinalPathNameByHandleW(h,w,capacity,FILE_NAME_NORMALIZED); CloseHandle(h);
+	path t=wcsncmp(w,L"\\\\?\\",4)==0?w+4:w;
+	return (a&FILE_ATTRIBUTE_DIRECTORY)!=0?t.append_slash():t;
+}
+
+__noinline bool path::is_junction() const
+{
+	// After finding reparse_point, junction path should be examined. This is because
+	// a cloud service (e.g., Dropbox) often reports FILE_ATTRIBUTE_REPARSE_POINT for a regular directory but its junction path is actually identical
+	if(!*_data||is_drive()) return false;
+	auto a=wattrib(); if(a==INVALID_FILE_ATTRIBUTES||(a&FILE_ATTRIBUTE_REPARSE_POINT)==0) return false;
+	return (a&FILE_ATTRIBUTE_DIRECTORY)==0?false:canonical().append_slash()!=__normalize_final();
+} 
+
+__noinline path path::junction() const
+{
+	if(!*_data||is_drive()) return "";
+	auto a=wattrib(); if(a==INVALID_FILE_ATTRIBUTES) return "";
+	if((a&FILE_ATTRIBUTE_DIRECTORY)==0) a=dir().wattrib();
+	if((a&FILE_ATTRIBUTE_REPARSE_POINT)!=0) return __normalize_final();
+	for( const auto& k : ancestors() )
+	{
+		if(k.is_drive()) break; auto b=k.wattrib(); if(b==INVALID_FILE_ATTRIBUTES) break;
+		if((b&FILE_ATTRIBUTE_REPARSE_POINT)!=0&&(b&FILE_ATTRIBUTE_DIRECTORY)!=0) return __normalize_final();
+	}
+	return "";
+}
 
 __noinline FILE* path::fopen( const char* mode, bool utf8 ) const
 {
