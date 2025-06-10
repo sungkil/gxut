@@ -295,6 +295,12 @@ inline const char* system_dir()
 	return strcpy(e,wtoa(w));
 }
 
+inline path vstemp()
+{
+	path v = path(os::system_dir()).drive().append_slash()+"vstemp\\";
+	return v;
+}
+
 class mutex_t
 {
 	int		wait_counter = 256;
