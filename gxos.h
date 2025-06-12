@@ -333,13 +333,14 @@ inline vector<HWND> enum_windows( const char* filter=nullptr )
 	return p.v;
 }
 
-inline HWND find_window( const char* filter )
+inline HWND find_window( const char* name_filter_or_class )
 {
 	HWND h = GetTopWindow(GetDesktopWindow());
 	for(; h!=nullptr; h=GetWindow(h, GW_HWNDNEXT))
 	{
-		wchar_t buff[4096]; GetWindowTextW(h,buff,4096);
-		if(strstr(wtoa(buff),filter)) return h;
+		wchar_t buff[4096];
+		GetWindowTextW(h,buff,4096);	if(strstr(wtoa(buff),name_filter_or_class)) return h;
+		GetClassNameW(h,buff,4096);		if(stricmp(wtoa(buff),name_filter_or_class)==0) return h;
 	}
 	return nullptr;
 }
