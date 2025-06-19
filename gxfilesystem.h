@@ -325,7 +325,8 @@ __noinline bool path::write_file( const wchar_t* s ) const
 template <bool recursive> __noinline
 vector<path> path::scan( const char* ext_filter, const char* pattern ) const
 {
-	path src=empty()?path(".")+preferred_separator:(is_relative()?path(".").append_slash().absolute():*this).append_slash(); if (!src.is_dir()) return vector<path>{};
+	path src=empty()?path(".")+preferred_separator:(is_relative()?absolute():canonical()); if(src.exists()&&src.is_dir()) src=src.append_slash();
+	path srcp=src.filename(); if(!srcp.empty()){ if(!pattern) pattern=srcp.c_str(); src=src.dir(); }
 	vector<std::wstring> exts; if(ext_filter&&*ext_filter){ value_type ef[4096]={}, *ctx=nullptr; strcpy(ef,ext_filter); for(value_type* e=strtok_s(ef,";",&ctx);e;e=strtok_s(nullptr,";",&ctx)) if(e[0]) exts.push_back(L"."s+atow(e)); }
 	vector<sized_ptr_t<wchar_t>> eptr; for( auto& e:exts ) eptr.emplace_back(sized_ptr_t<wchar_t>{(wchar_t*)e.c_str(),e.size()});
 	__scan_t si; si.b.recursive=recursive; si.b.glob=pattern&&strpbrk(pattern,"*?"); si.ext.v=eptr.size()>0?eptr.data():nullptr; si.ext.l=eptr.size();
