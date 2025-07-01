@@ -132,9 +132,9 @@ struct parser_t
 	static const char* rebuild_arguments( int argc, char* argv[] );
 
 	// get<> specializations, and other get functions
-	template <class T=wstring>	inline T get( const string& name ) const;
-	template<> inline wstring	get<wstring>( const string& name ) const;
+	template <class T=string>	inline T get( const string& name ) const;
 	template<> inline string	get<string>( const string& name ) const { return wtoa(get<wstring>(name).c_str()); }
+	template<> inline wstring	get<wstring>( const string& name ) const;
 	template<> inline path		get<path>( const string& name ) const { return get<string>(name).c_str(); }
 	template<> inline int		get<int>( const string& name ) const { return atoi(get<string>(name).c_str()); }
 	template<> inline uint		get<uint>( const string& name ) const { return uint(atoi(get<string>(name).c_str())); }
@@ -142,8 +142,12 @@ struct parser_t
 	template<> inline double	get<double>( const string& name ) const { return atof(get<string>(name).c_str()); }
 	
 	// get multiple values
-	vector<wstring>				others( const string& name="" ) const;
-	vector<wstring>				get_values( const string& name ) const;
+	template <class T=string>	vector<T> others( const string& name="" ) const;
+	template <>					vector<string> others( const string& name ) const;
+	template <>					vector<wstring> others( const string& name ) const;
+	template <class T=string>	vector<T> get_values( const string& name ) const;
+	template <>					vector<string>	get_values( const string& name ) const;
+	template <>					vector<wstring> get_values( const string& name ) const;
 
 	// error handling, debugging
 	bool exit( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); const char* w=vformat(fmt,a); va_end(a); char msg[2048]; snprintf( msg, 2048, "[%s] %s\nUse -h option to see usage.\n", name(), trim(w,"\n") ); fprintf( stdout, msg ); return false; }
@@ -209,7 +213,7 @@ template<> inline wstring parser_t::get<wstring>( const string& name ) const
 	auto* o=find_option(name.c_str()); return o&&o->parsed.instance>0?o->parsed.value:L"";
 }
 
-inline vector<wstring> parser_t::others( const string& name ) const
+template<> inline vector<wstring> parser_t::others<wstring>( const string& name ) const
 {
 	vector<wstring> v;
 	if(name.empty()){ for(auto& a:arguments){ if(a->name.empty()) v.push_back(a->parsed.value); } }	// unnamed arguments
@@ -217,10 +221,25 @@ inline vector<wstring> parser_t::others( const string& name ) const
 	return v;
 }
 
-inline vector<wstring> parser_t::get_values( const string& name ) const
+template<> inline vector<string> parser_t::others<string>( const string& name ) const
+{
+	vector<string> v;
+	if(name.empty()){ for(auto& a:arguments){ if(a->name.empty()) v.push_back(wtoa(a->parsed.value.c_str())); } } // unnamed arguments
+	else{ auto* o=find_option(name.c_str()); if(o&&o->parsed.instance>1){ v.clear(); for(auto& t:o->parsed.others) v.emplace_back(wtoa(t.c_str())); }} // named options
+	return v;
+}
+
+template<> inline vector<wstring> parser_t::get_values( const string& name ) const
 {
 	vector<wstring> v = { get<wstring>(name) };
-	auto o=others(name); v.insert(v.end(),o.begin(),o.end());
+	auto o=others<wstring>(name); v.insert(v.end(),o.begin(),o.end());
+	return v;
+}
+
+template<> inline vector<string> parser_t::get_values( const string& name ) const
+{
+	vector<string> v = { get<string>(name) };
+	auto o=others<string>(name); v.insert(v.end(),o.begin(),o.end());
 	return v;
 }
 

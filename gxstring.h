@@ -379,10 +379,11 @@ __noinline const wchar_t* unicode_symbols_to_ansi( const wchar_t* str )
 	wchar_t* b=__strdup(str);
 	static std::map<int,wchar_t> lut =
 	{
-		{0x2013,L'-'}, {0x2014,L'-'}, {0x2015,L'-'}, {0x2212,L'-'},
-		{0x2018,L'\''},{0x2019,L'\''},{0x2032,L'\''},
-		{0x201C,L'\"'},{0x201D,L'\"'},{0x2033,L'\"'},
-		{0x2022,L'-'},{0x00B7,L'-'},{0x22C5,L'-'},
+		{0x00B7,L'-'},	{0x2022,L'-'},	{0x22C5,L'-'}, // middle dot, small circle, dot operator
+		{0x2010,L'-'},	{0x2011,L'-'},	{0x2012,L'-'}, {0x2013,L'-'}, {0x2212,L'-'}, {0xFE58,L'-'}, {0xFE63,L'-'}, // hyphen, non-breaking hyphen, figure dash, En dash, minus sign, small Em dash, small Hyphen-Minus
+		{0x2014,L'-'},	{0x2015,L'-'},	// Em dash, horizontal bar
+		{0x2018,L'\''},	{0x2019,L'\''},	{0x2032,L'\''},
+		{0x201C,L'\"'},	{0x201D,L'\"'},	{0x2033,L'\"'},
 	};
 
 	for( size_t k=0, kn=wcslen(b); k<kn; k++ )
