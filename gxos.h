@@ -450,62 +450,58 @@ namespace reg { // read-only registry reader
 template <HKEY root=HKEY_CLASSES_ROOT> // HKEY_CLASSES_ROOT, HKEY_LOCAL_MACHINE, ...
 struct key_t
 {
-	key_t( __printf_format_string__ const char* fmt, ... ){ if(!fmt) return; va_list a; va_start(a,fmt); size_t len=size_t(vsnprintf(0,0,fmt,a)); vector<char> b; b.resize(len+1,0); vsnprintf(b.data(),len+1,fmt,a); va_end(a); if(b.back()=='/'||b.back()=='\\') b.back()=0; this->key=atow(b.data()); }
-	~key_t(){ if(hkey) RegCloseKey(hkey); }
-
-	operator bool() const { return hkey!=nullptr; }
-	bool open(){ if(hkey) return true; if(key.empty()) return false; LONG r=RegOpenKeyExW(root, key.c_str(),0,KEY_READ,&hkey); if(r!=ERROR_SUCCESS) hkey=nullptr; return hkey!=nullptr; }
-	const wchar_t* c_str() const { return format( L"[%s\\%s]", _root_str(), key.c_str() ); }
-	template <class T=string> T get( const char* name=nullptr );
-
-	// template specialization
-	template <> inline string get<string>( const char* name )
-	{
-		vector<BYTE> v; DWORD t; if(!_query( name, &v, &t )) return "";
-		if(t==REG_SZ)		return string((char*)v.data());
-		if(t==REG_DWORD){ char b[256]; snprintf(b,256,"%u",*((DWORD*)v.data())); return b; }
-		return "";
-	}
-#ifdef __GX_FILESYSTEM_H__
-	template <> inline path get<path>( const char* name ){ return path(get<string>(name)); }
-#endif
-	template <> inline DWORD get<DWORD>( const char* name )
-	{
-		vector<BYTE> v; DWORD t; if(!_query( name, &v, &t )) return 0;
-		if(t==REG_DWORD)	return *((DWORD*)v.data());
-		if(t==REG_SZ)		return DWORD(atoi((char*)v.data()));
-		return 0;
-	}
-
-protected:
-	bool _query( const char* name, vector<BYTE>* v, DWORD* t )
-	{
-		if(!hkey&&!open()) return false;
-		DWORD n=4096; LONG r=RegQueryValueExW(hkey,atow(name),0,t,nullptr,&n); if(r!=ERROR_SUCCESS) return false;
-		v->resize(n+2,0); r=RegQueryValueExW(hkey,atow(name),0,t,v->data(),&n); if(r!=ERROR_SUCCESS) return false;
-		return true;
-	}
-
-	static const wchar_t* _root_str()
-	{
-		if(root==HKEY_CLASSES_ROOT) return L"HKEY_CLASSES_ROOT";
-		if(root==HKEY_CURRENT_USER) return L"HKEY_CURRENT_USER";
-		if(root==HKEY_LOCAL_MACHINE) return L"HKEY_LOCAL_MACHINE";
-		if(root==HKEY_USERS) return L"HKEY_USERS";
-		if(root==HKEY_PERFORMANCE_DATA) return L"HKEY_PERFORMANCE_DATA";
-		if(root==HKEY_PERFORMANCE_TEXT) return L"HKEY_PERFORMANCE_TEXT";
-		if(root==HKEY_PERFORMANCE_NLSTEXT) return L"HKEY_PERFORMANCE_NLSTEXT";
-#if(WINVER >= 0x0400)
-		if(root==HKEY_CURRENT_CONFIG) return L"HKEY_CURRENT_CONFIG";
-		if(root==HKEY_DYN_DATA) return L"HKEY_DYN_DATA";
-		if(root==HKEY_CURRENT_USER_LOCAL_SETTINGS) return L"HKEY_CURRENT_USER_LOCAL_SETTINGS";
-#endif
-		return L"";
-	}
-
 	HKEY hkey=nullptr;
 	std::wstring key;
+
+	key_t( __printf_format_string__ const char* fmt, ... ){ if(!fmt) return; va_list a; va_start(a,fmt); size_t len=size_t(vsnprintf(0,0,fmt,a)); vector<char> b; b.resize(len+1,0); vsnprintf(b.data(),len+1,fmt,a); va_end(a); if(b.back()=='/'||b.back()=='\\') b.back()=0; this->key=atow(b.data()); }
+	~key_t(){ close(); }
+
+	operator bool() const { return hkey!=nullptr; }
+	const wchar_t* c_str( bool b_add=true ) const { return format( L"[%s%s\\%s]", b_add?"":"-", root_name(), key.c_str()); }
+
+	bool open( REGSAM sam=KEY_READ ){ if(hkey) return true; if(key.empty()) return false; LONG r=RegOpenKeyExW(root, key.c_str(),0,sam,&hkey); if(r!=ERROR_SUCCESS) hkey=nullptr; return hkey!=nullptr; }
+	void close(){ if(!hkey) return; RegCloseKey(hkey); hkey=nullptr; }
+	vector<string> find_subkeys( const char* pattern=nullptr ){ bool b_closed=!hkey; vector<string> v; if(b_closed&&!open(KEY_ENUMERATE_SUB_KEYS)) return v; DWORD j=0; char name[512]; while(true){ DWORD szname=std::extent<decltype(name)>::value; auto s=RegEnumKeyExA(hkey,j++,name,&szname,0,0,0,0); if(s!=ERROR_SUCCESS) break; if(pattern&&*pattern&&!stristr(name,pattern)) continue; v.emplace_back(name); } if(b_closed) close(); return v; }
+	
+	// template specialization
+	template <class T=string> T get( const char* name=nullptr );
+	template <> inline string get<string>( const char* name ){ return wtoa(get<std::wstring>(name).c_str()); }
+	template <> inline std::wstring get<std::wstring>( const char* name ){ vector<BYTE> v; DWORD t; if(!query( name, &v, &t )) return L""; if(t==REG_SZ) return std::wstring((wchar_t*)v.data()); else if(t==REG_DWORD){ wchar_t b[256]; swprintf(b,256,L"%u",*((DWORD*)v.data())); return b; } return L""; }
+	template <> inline DWORD get<DWORD>( const char* name ){ vector<BYTE> v; DWORD t; if(!query( name, &v, &t )) return 0; if(t==REG_DWORD) return *((DWORD*)v.data()); else if(t==REG_SZ) return DWORD(atoi((char*)v.data())); return 0; }
+#ifdef __GX_FILESYSTEM_H__
+	template <> inline path get<path>( const char* name ){ return path(get<std::wstring>(name)); }
+#endif
+
+protected:
+
+	bool query( const char* name, vector<BYTE>* v, DWORD* t );
+	static const wchar_t* root_name();
 };
+
+template <HKEY root> inline bool key_t<root>::query( const char* name, vector<BYTE>* v, DWORD* t )
+{
+	if(!hkey&&!open()) return false;
+	DWORD n=4096; LONG r=RegQueryValueExW(hkey,atow(name),0,t,nullptr,&n); if(r!=ERROR_SUCCESS) return false;
+	v->resize(n+2,0); r=RegQueryValueExW(hkey,atow(name),0,t,v->data(),&n); if(r!=ERROR_SUCCESS) return false;
+	return true;
+}
+
+template <HKEY root> inline const wchar_t* key_t<root>::root_name()
+{
+	if(root==HKEY_CLASSES_ROOT) return L"HKEY_CLASSES_ROOT";
+	if(root==HKEY_CURRENT_USER) return L"HKEY_CURRENT_USER";
+	if(root==HKEY_LOCAL_MACHINE) return L"HKEY_LOCAL_MACHINE";
+	if(root==HKEY_USERS) return L"HKEY_USERS";
+	if(root==HKEY_PERFORMANCE_DATA) return L"HKEY_PERFORMANCE_DATA";
+	if(root==HKEY_PERFORMANCE_TEXT) return L"HKEY_PERFORMANCE_TEXT";
+	if(root==HKEY_PERFORMANCE_NLSTEXT) return L"HKEY_PERFORMANCE_NLSTEXT";
+#if(WINVER >= 0x0400)
+	if(root==HKEY_CURRENT_CONFIG) return L"HKEY_CURRENT_CONFIG";
+	if(root==HKEY_DYN_DATA) return L"HKEY_DYN_DATA";
+	if(root==HKEY_CURRENT_USER_LOCAL_SETTINGS) return L"HKEY_CURRENT_USER_LOCAL_SETTINGS";
+#endif
+	return L"";
+}
 
 //*************************************
 } // end namespace reg
