@@ -167,8 +167,7 @@ struct path : public path_t
 	const char* slash() const { return __strdup(to_slash().c_str()); }
 	const char* auto_quote() const { if(!*_data||(_data[0]=='\"'&&_data[strlen(_data)-1]=='\"')) return c_str(); auto* t=__strbuf(capacity); size_t l=strlen(_data); memcpy(t,_data,l*sizeof(value_type)); if(t[l]==' '||t[l]=='\t'||t[l]=='\n') t[l]=0; if(t[0]==' '||t[0]=='\t'||t[0]=='\n') t++; if(t[0]!='-'&&!strpbrk(t," \t\n|&<>")) return c_str(); path p; p[0]='\"'; memcpy(p._data+1, _data, l*sizeof(value_type)); p[l+1]='\"'; p[l+2]=0; return __strdup(p.c_str()); }
 
-	// file/dir shell operations
-	bool has_file( const path& file_name ) const { return is_dir()&&operator/(file_name).exists(); }
+	// shell operations
 	bool copy_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()||dst.empty()) return false; if(dst.is_dir()||__is_separator(dst.back())) dst=dst.append_slash()+name(); dst.dir().mkdir(); if(dst.exists()&&overwrite){ if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } return bool(CopyFileW( atow(c_str()), atow(dst.c_str()), overwrite?FALSE:TRUE)); }
 	bool move_file( path dst ) const { return !*_data||!dst._data||is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(atow(_data),atow(dst._data))!=0 : !copy_file(dst,true) ? false: rmfile(); }
 #ifndef _INC_SHELLAPI
@@ -181,7 +180,7 @@ struct path : public path_t
 	bool rmfile( bool b_undo=false ) const { return delete_file(b_undo); }
 	bool delete_dir( bool b_undo=true ) const { if(!exists()||!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=FOF_SILENT|FOF_NOCONFIRMATION|(b_undo?FOF_ALLOWUNDO:0); fop.pFrom=atow(to_preferred().c_str()); return SHFileOperationW(&fop)==0;}
 	bool rmdir( bool b_undo=true ) const { return delete_dir(b_undo); }
-	bool copy_dir( path dst, bool overwrite=true ) const { if(!is_dir()) return false;value_type* from=__strbuf(capacity);snprintf(from,capacity,"%s\\*\0",_data);dst[dst.size()+1]=0; SHFILEOPSTRUCTW fop={};fop.wFunc=FO_COPY;fop.fFlags=FOF_ALLOWUNDO|FOF_SILENT|FOF_NOCONFIRMATION; fop.pFrom=atow(path(from).to_preferred().c_str()); fop.pTo=atow(dst.to_preferred().c_str()); return SHFileOperationW(&fop)==0; }
+	bool copy_dir( path dst, bool overwrite=true ) const { if(!is_dir()) return false;value_type* from=__strbuf(capacity);snprintf(from,capacity,"%s\\*\0",_data);dst[dst.size()+1]=0; SHFILEOPSTRUCTW fop={};fop.wFunc=FO_COPY;fop.fFlags=FOF_ALLOWUNDO|FOF_SILENT|(overwrite?FOF_NOCONFIRMATION:0); fop.pFrom=atow(path(from).to_preferred().c_str()); fop.pTo=atow(dst.to_preferred().c_str()); return SHFileOperationW(&fop)==0; }
 	bool move_dir( path dst ) const { return !exists()||!is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(atow(_data),atow(dst._data))!=0 : !copy_dir(dst,true) ? false: rmdir(); }
 	bool open( const char* args=nullptr, bool b_show_window=true ) const { if(!*_data) return false; auto r=ShellExecuteW(GetDesktopWindow(),L"Open",atow(auto_quote()), args?atow(args):nullptr, nullptr, b_show_window?SW_SHOWNORMAL:SW_HIDE); return ((INT_PTR)r)>32; }
 #endif

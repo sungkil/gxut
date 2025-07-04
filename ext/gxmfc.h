@@ -1,5 +1,6 @@
 #pragma once
 #include <Shlobj.h>
+#include <shellapi.h>
 
 // modified macro for inline message map
 #if _MSC_VER >= 1911 // VS2017 Preview
@@ -286,9 +287,7 @@ struct explorer_t
 			return;
 		}
 
-#ifdef _INC_SHELLAPI
-		if(!path_t(dir).empty()&&path_t(dir).exists()){ ShellExecuteW(GetDesktopWindow(),L"Open",atow(auto_quote(dir)),0,0,SW_SHOW); }
-#endif
+		if(_access(dir,0)==0) ShellExecuteW(GetDesktopWindow(),L"Open",atow(auto_quote(dir)),0,0,SW_SHOW);
 		if(foreground_window) ::SetForegroundWindow( foreground_window ); // restore the old foreground window
 	}
 };
