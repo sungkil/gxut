@@ -337,7 +337,7 @@ inline void sampler_t::_reshape( vec4* v, surface_t dst )
 		for(uint k=0;k<n;k++)
 		{
 			vec3& s = v[k].xyz;
-			float phi=PI<float>*(s.x*2.0f-1.0f), theta=acos(1.0f-s.y); // [0,1] to [-PI,PI], [0,1] to [1,0] to [0,PI/2]
+			float phi=PI<float>*(s.x*2.0f-1.0f), theta=acos(1.0f-s.y); // [0,1] to [-PI,PI]; [0,1] to [1,0] to [0,PI/2]
 			s = vec3(vec2(cos(phi),sin(phi))*sin(theta),cos(theta));
 		}
 	}
