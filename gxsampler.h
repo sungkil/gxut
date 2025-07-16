@@ -51,8 +51,8 @@ struct sampler_t : public isampler_t
 	typedef const vec4*	iterator;	// actually, const_iterator
 	typedef const vec4&	reference;	// actually, const_reference
 
-	uint			crc;		// crc32c to detect the change of samples
-	uint			index=0;	// index for sequential sampling
+	uint crc;		// crc32c to detect the change of samples
+	uint index=0;	// index for sequential sampling
 
 	sampler_t(){ _data.reserve(4096); } // reserve up to 4K samples by default
 	sampler_t( size_t size, bool b_resample=true ){ _data.reserve(4096); _data.resize(const_cast<uint&>(n)=uint(size)); if(b_resample) resample(); }
@@ -106,9 +106,9 @@ struct bridson_t
 	struct cell {	vec2 pos; bool occupied; bool empty(){ return !occupied; } void clear(){ occupied=false; } };
 	struct sample { vec2 pos; ivec2	tc; int index( int grid_size ){ return grid_size*tc.y+tc.x; } };
 
-	const bool			circular;
-	float				r;
-	int					grid_size;
+	const bool		circular;
+	float			r;
+	int				grid_size;
 	vector<cell>	grid;
 	vector<vec2>	samples;
 	std::deque<sample>	active_queue;
@@ -266,6 +266,7 @@ __noinline vector<vec2> poisson_disk( uint _count, bool circular, uint seed )
 __noinline uint sampler_t::resample()
 {
 	if(surface==CYLINDER&&model!=HALTON){ printf("[Sampler] cylindrical sampling supports only Halton sequences\n" ); return 0; }
+	bool b_circular = surface==CIRCLE||surface==COSHEMI||surface==CYLINDER;
 
 	auto* v = _data.data();
 	for(uint k=0;k<n;k++) v[k].z=0.0f; // reset z=zero
@@ -275,8 +276,7 @@ __noinline uint sampler_t::resample()
 	float nrf =1.0f/float(n);
 	if(model==POISSON)
 	{
-		bool b_circle = surface==CIRCLE||surface==COSHEMI||surface==CYLINDER;
-		auto pd = std::move(poisson_disk(n,b_circle,seed));
+		auto pd = std::move(poisson_disk(n,b_circular,seed));
 		for(uint k=0;k<n;k++) v[k].xy = pd[k];
 	}
 	else if(model==HALTON)
@@ -294,11 +294,28 @@ __noinline uint sampler_t::resample()
 	}
 
 	_reshape(_data.data(),surface); // reshape to circle, hemisphere, sphere, ...
-	for(uint k=0;k<n;k++) v[k].w=nrf;			// weight
+	for(uint k=0;k<n;k++) v[k].w=nrf; // weight
 	if(surface==CIRCLE) _make_centered();
-	crc = crc32(0,&model,sizeof(isampler_t));	// to detect format change (equivalent to the detection of data change)
+	crc = crc32(0,&model,sizeof(isampler_t)); // to detect format change (equivalent to the detection of data change)
 	rewind(); // rewind the index
 	return n;
+}
+
+// this simple radial mapping is poor for Halton and Hammersley
+inline vec2 square_to_circle( vec2 v )
+{
+	float t=PI<float>*2.0f*v.y;
+	return vec2(cos(t),sin(t))*sqrt(v.x);
+}
+
+// shirley mapping
+// https://www.pbr-book.org/3ed-2018/Monte_Carlo_Integration/2D_Sampling_with_Multidimensional_Transformations
+inline vec2 square_to_circle_concentric( vec2 v )
+{
+	v = v*2.0f-1.0f; if(v.x==0&&v.y==0) return vec2(0);
+	constexpr float piover4 = PI<float>*0.25f;
+	float r, t; if(abs(v.x)>abs(v.y)){ r=v.x; t=piover4*v.y/v.x; } else { r=v.y; t=piover4*(2.0f-v.x/v.y); }
+	return vec2(cos(t),sin(t))*r;
 }
 
 inline void sampler_t::_reshape( vec4* v, surface_t dst )
@@ -310,9 +327,10 @@ inline void sampler_t::_reshape( vec4* v, surface_t dst )
 	{
 		// coshemi: apply Nusselt analog (2D uniform is a top view of cosine-weighted hemisphere)
 		// cylinder: keep z in [0,1]
-		if(model==POISSON) for(uint k=0;k<n;k++){ auto& s=v[k].xy; s=s*2.0f-1.0f; }
-		else { for(uint k=0;k<n;k++){ auto& s=v[k].xy; float r=sqrt(s.x), t=PI<float>*2.0f*s.y; s=vec2(cos(t),sin(t))*r; } }
-		if(dst==COSHEMI) for(uint k=0;k<n;k++) v[k].z = sqrt( 1.0f-v[k].xy.length() ); 
+		if(model==POISSON){ for(uint k=0; k<n; k++){ auto& s=v[k].xy; s=s*2.0f-1.0f; } }
+		else if(model==HAMMERSLEY||model==HALTON){ for(uint k=0;k<n;k++) v[k].xy=square_to_circle_concentric(v[k].xy); }
+		else { for(uint k=0;k<n;k++) v[k].xy=square_to_circle(v[k].xy); }
+		if(dst==COSHEMI) for(uint k=0;k<n;k++) v[k].z = sqrt(1.0f-v[k].xy.length());
 	}
 	else if(dst==HEMISPHERE)
 	{
