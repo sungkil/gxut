@@ -35,8 +35,9 @@
 #undef PI
 #endif
 
-template <class T=float> constexpr T PI = T(3.141592653589793);
 template <class T,class N,class X> T clamp( T v, N vmin, X vmax ){ return v<T(vmin)?T(vmin):v>T(vmax)?T(vmax):v; }
+constexpr float PI = 3.141592653589793f;
+template <class T=float> constexpr T T_PI = T(3.141592653589793);
 
 //*************************************
 // template type_traits helpers
@@ -496,7 +497,7 @@ template <class T> struct tmat4
 	__forceinline tmat4  look_at_inverse() const { V3 eye=look_at_eye(); return tmat4{_11,_21,_31,eye.x,_12,_22,_32,eye.y,_13,_23,_33,eye.z,0,0,0,T(1)}; }
 
 	// Canonical view volume in OpenGL: [-1,1]^3
-	__forceinline tmat4& set_perspective( T fovy, T aspect, T dn, T df ){ if(fovy>PI<T>) fovy*=PI<T>/T(180.0); /* autofix for fov in degrees */ set_identity(); _22=T(1.0/tanf(fovy*0.5)); _11=_22/aspect; _33=(dn+df)/(dn-df); _34=2.0f*dn*df/(dn-df); _43=T(-1.0); _44=0; return *this; }
+	__forceinline tmat4& set_perspective( T fovy, T aspect, T dn, T df ){ if(fovy>T_PI<T>) fovy*=T_PI<T>/T(180.0); /* autofix for fov in degrees */ set_identity(); _22=T(1.0/tanf(fovy*0.5)); _11=_22/aspect; _33=(dn+df)/(dn-df); _34=2.0f*dn*df/(dn-df); _43=T(-1.0); _44=0; return *this; }
 	__forceinline tmat4& set_perspective_off_center( T left, T right, T top, T bottom, T dn, T df ){ set_identity(); _11=T(2.0)*dn/(right-left); _22=T(2.0)*dn/(top-bottom); _13=(right+left)/(right-left); _23=(top+bottom)/(top-bottom); _33=(dn+df)/(dn-df); _34=T(2.0)*dn*df/(dn-df); _43=T(-1.0); _44=0; return *this; }
 	__forceinline tmat4& set_ortho( T width, T height, T dn, T df ){ set_identity(); _11=T(2.0)/width; _22=T(2.0)/height;  _33=2.0f/(dn-df); _34=(dn+df)/(dn-df); return *this; }
 	__forceinline tmat4& set_ortho_off_center( T left, T right, T top, T bottom, T dn, T df ){ set_ortho( right-left, top-bottom, dn, df ); _14=(left+right)/(left-right); _24=(bottom+top)/(bottom-top); return *this; }
@@ -632,8 +633,8 @@ template <class T> __forceinline tvec3<enable_float_t<T>> cross( const tvec3<T>&
 
 //*************************************
 // general math utility functions
-template <class T> __forceinline enable_float_t<T> radians( T f ){ return f*PI<T>/T(180.0); }
-template <class T> __forceinline enable_float_t<T> degrees( T f ){ return f*T(180.0)/PI<T>; }
+template <class T> __forceinline enable_float_t<T> radians( T f ){ return f*T_PI<T>/T(180.0); }
+template <class T> __forceinline enable_float_t<T> degrees( T f ){ return f*T(180.0)/T_PI<T>; }
 template <class T> __forceinline tvec2<enable_float_t<T>> minmax( const tvec2<T>& a, const tvec2<T>& b ){ return tvec2<T>(a.x<b.x?a.x:b.x,a.y>b.y?a.y:b.y); }
 template <class T> __forceinline enable_float_t<T> round( T f, int digits ){ T m=T(pow(10.0,digits)); return round(f*m)/m; }
 __forceinline bool ispot( uint i ){ return (i&(i-1))==0; }		// http://en.wikipedia.org/wiki/Power_of_two
@@ -657,25 +658,29 @@ __forceinline ivec4 effective_viewport( ivec2 size, ivec2 aspect_to_keep ){ retu
 
 //*************************************
 // {GLSL|HLSL}-like shader intrinsic functions
-__forceinline vec2 abs( const vec2& v ){ return vec2(fabs(v.x),fabs(v.y)); }
-__forceinline vec3 abs( const vec3& v ){ return vec3(fabs(v.x),fabs(v.y),fabs(v.z)); }
-__forceinline vec4 abs( const vec4& v ){ return vec4(fabs(v.x),fabs(v.y),fabs(v.z),fabs(v.w)); }
+__forceinline float fract( float f ){ return float(f-floor(f)); }
+__forceinline float saturate( float f ){ return f<0.0f?0.0f:f>1.0f?1.0f:f; }
+__forceinline int sign( int f ){ return f>0?1:f<0?-1:0; }
+__forceinline float sign( float f ){ return f>0.0f?1.0f:f<0.0f?-1.0f:0; }
+
+#define VEC2F(f) __forceinline vec2 f( const vec2& v ){ return vec2(f(v.x),f(v.y)); }
+#define VEC3F(f) __forceinline vec3 f( const vec3& v ){ return vec3(f(v.x),f(v.y),f(v.z)); }
+#define VEC4F(f) __forceinline vec4 f( const vec4& v ){ return vec4(f(v.x),f(v.y),f(v.z),f(v.w)); }
+#define VECF(f)	VEC2F(f) VEC3F(f) VEC4F(f)
+VECF(cos)	VECF(sin)	VECF(tan)	VECF(acos)	VECF(asin)	VECF(atan)
+VECF(cosh)	VECF(sinh)	VECF(tanh)	VECF(acosh)	VECF(asinh)	VECF(atanh)
+VECF(abs)	VECF(ceil)	VECF(fabs)	VECF(floor)	VECF(fract)	VECF(saturate)	VECF(sign)
+#undef VEC2F
+#undef VEC3F
+#undef VEC4F
+#undef VECF
+
 __forceinline float distance( const vec2& a, const vec2& b ){ return (a-b).length(); }
 __forceinline float distance( const vec3& a, const vec3& b ){ return (a-b).length(); }
 __forceinline float distance( const vec4& a, const vec4& b ){ return (a-b).length(); }
-__forceinline vec2 floor( const vec2& v ){ return vec2(floor(v.x),floor(v.y)); }
-__forceinline vec3 floor( const vec3& v ){ return vec3(floor(v.x),floor(v.y),floor(v.z)); }
-__forceinline vec4 floor( const vec4& v ){ return vec4(floor(v.x),floor(v.y),floor(v.z),floor(v.w)); }
-__forceinline float fract( float f ){ return float(f-floor(f)); }
-__forceinline vec2 fract( const vec2& v ){ return vec2(fract(v.x),fract(v.y)); }
-__forceinline vec3 fract( const vec3& v ){ return vec3(fract(v.x),fract(v.y),fract(v.z)); }
-__forceinline vec4 fract( const vec4& v ){ return vec4(fract(v.x),fract(v.y),fract(v.z),fract(v.w)); }
 __forceinline vec2 fma( vec2 a, vec2 b, vec2 c ){ return vec2(fma(a.x,b.x,c.x),fma(a.y,b.y,c.y)); }
 __forceinline vec3 fma( vec3 a, vec3 b, vec3 c ){ return vec3(fma(a.x,b.x,c.x),fma(a.y,b.y,c.y),fma(a.z,b.z,c.z)); }
 __forceinline vec4 fma( vec4 a, vec4 b, vec4 c ){ return vec4(fma(a.x,b.x,c.x),fma(a.y,b.y,c.y),fma(a.z,b.z,c.z),fma(a.w,b.w,c.w)); }
-__forceinline vec2 fabs( const vec2& v ){ return vec2(fabs(v.x),fabs(v.y)); }
-__forceinline vec3 fabs( const vec3& v ){ return vec3(fabs(v.x),fabs(v.y),fabs(v.z)); }
-__forceinline vec4 fabs( const vec4& v ){ return vec4(fabs(v.x),fabs(v.y),fabs(v.z),fabs(v.w)); }
 __forceinline float lerp( float v1, float v2, float t ){ return v1*(1.0f-t)+v2*t; }
 __forceinline vec2 lerp( const vec2& y1, const vec2& y2, float t ){ return y1*(-t+1.0f)+y2*t; }
 __forceinline vec3 lerp( const vec3& y1, const vec3& y2, float t ){ return y1*(-t+1.0f)+y2*t; }
@@ -710,15 +715,6 @@ __forceinline dvec4 mix( const dvec4& y1, const dvec4& y2, float t ){ return y1*
 __forceinline mat4 mix( const mat4& v1, const mat4& v2, float t ){ return v1*(1.0f-t)+v2*t; }
 __forceinline vec3 reflect( const vec3& I, const vec3& N ){ return I-N*dot(I,N)*2.0f; }	// I: incident vector, N: normal
 __forceinline vec3 refract( const vec3& I, const vec3& N, float eta /* = n0/n1 */ ){ float d = I.dot(N); float k = 1.0f-eta*eta*(1.0f-d*d); return k<0.0f?0.0f:(I*eta-N*(eta*d+sqrtf(k))); } // I: incident vector, N: normal
-__forceinline float saturate( float f ){ return f<0.0f?0.0f:f>1.0f?1.0f:f; }
-__forceinline vec2 saturate( const vec2& v ){ return vec2(saturate(v.x),saturate(v.y)); }
-__forceinline vec3 saturate( const vec3& v ){ return vec3(saturate(v.x),saturate(v.y),saturate(v.z)); }
-__forceinline vec4 saturate(const  vec4& v ){ return vec4(saturate(v.x),saturate(v.y),saturate(v.z),saturate(v.w)); }
-__forceinline int sign( int f ){ return f>0?1:f<0?-1:0; }
-__forceinline float sign( float f ){ return f>0.0f?1.0f:f<0.0f?-1.0f:0; }
-__forceinline vec2 sign( const vec2& v ){ return vec2(sign(v.x),sign(v.y)); }
-__forceinline vec3 sign( const vec3& v ){ return vec3(sign(v.x),sign(v.y),sign(v.z)); }
-__forceinline vec4 sign( const vec4& v ){ return vec4(sign(v.x),sign(v.y),sign(v.z),sign(v.w)); }
 __forceinline float smoothstep(float edge0, float edge1, float t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*(3-2*t); } // C1-continuity
 __forceinline vec2 smoothstep( float edge0, float edge1, vec2 t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*(3.0f-t*2.0f); }
 __forceinline vec3 smoothstep( float edge0, float edge1, vec3 t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*(3.0f-t*2.0f); }
