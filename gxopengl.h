@@ -1068,7 +1068,7 @@ inline void gl::Program::update_uniform_cache()
 		GLsizei l=gxGetActiveUniformBlockiv(ID,k,GL_UNIFORM_BLOCK_NAME_LENGTH); /* length includes NULL */ if(l>GLsizei(std::extent<decltype(UniformBlock::name)>::value)) printf("[%s] uniform block name is too long\n",_name);
 		glGetActiveUniformBlockName(ID,k,l,&l,ub.name);
 		_uniform_block_map[ub.name] = ub;
-		for(auto& it:_uniform_cache){ auto&n=it.first;auto&u=it.second; if(u.block_index==GLint(ub.ID)) strcpy(u.block_name,ub.name); } // update uniform block in uniform cache
+		for(auto& [n,u]:_uniform_cache){ if(u.block_index==GLint(ub.ID)) strcpy(u.block_name,ub.name); } // update uniform block in uniform cache
 	}
 
 	if(program0!=ID&&program0>=0) glUseProgram(program0); // restore the original program
@@ -1195,14 +1195,16 @@ struct Effect : public Object
 	Uniform* get_uniform( const char* name ){ if(active_program) return active_program->get_uniform(name); printf("%s.%s(%s): no program is bound.",this->name(),__func__,name); return nullptr; }
 
 	void set_uniform( const char* name, Texture* t ){ auto* p=_get_or_find_program_for_uniform(name,__func__); if(p) p->set_uniform(name,t); }
-	void set_uniform( const char* name, bool b ){ auto* p=_get_or_find_program_for_uniform(name,__func__); if(p) p->set_uniform(name,b); }
+	void set_uniform( const char* name, bool b ){ int i=b?1:0; return set_uniform(name, &i ); }
 	template <class T> void set_uniform( const char* name, const vector<T>& v ){ GLsizei count=GLsizei(v.size()); set_uniform(name,v.data(),count); }
 	template <class T> void set_uniform( const char* name, const T& v ){ set_uniform<T>(name,(T*)&v, 1); }
 	template <class T> void set_uniform( const char* name, T* v, GLsizei count=1 ) // [NOTE] do not make const T*; this causes some template instances go wrong
 	{
-		auto* p=_get_or_find_program_for_uniform(name,__func__); if(!p) return;
-		auto* u=p->get_uniform(name); if(!u) return; if(u->block_index==-1) p->set_uniform(name, v, count);
-		if(!u->block_name[0]||u->block_offset==-1) return; auto* b=get_uniform_buffer(u->block_name); if(!b) return; if(v) b->set_sub_data(v,sizeof(T)*count,u->block_offset);
+		if(!v) return; auto* p=_get_or_find_program_for_uniform(name,__func__); if(!p) return;
+		auto* u=p->get_uniform(name); if(!u) return; if(u->block_index==-1){ p->set_uniform(name, v, count); return; }
+		if(!u->block_name[0]||u->block_offset==-1) return;
+		auto* ub=get_uniform_buffer(u->block_name); if(!ub) return;
+		ub->set_sub_data(v,sizeof(T)*count,u->block_offset);
 	}
 
 	// image textures
