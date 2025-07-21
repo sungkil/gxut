@@ -800,22 +800,6 @@ protected:
 	void __set_log( const char* func, void* ptr, GLsizei count ){ printf( "Uniform[%s].%s(%p,%d): unsupported type\n", name, func, ptr, count ); }
 };
 
-template<> inline void Uniform::set<bool>( GLuint prog, const bool* ptr, GLsizei count )
-{
-	if(ID==-1) return;
-	
-	// convert bool to int arrays
-	static std::vector<int> i; if(i.size()<count) i.resize(count); for(int k=0;k<count;k++) i[k]=ptr[count]?1:0;
-
-	switch(type)
-	{
-	case GL_INT:				return glProgramUniform1iv( prog, ID, count, (const GLint*)i.data() );
-	case GL_UNSIGNED_INT:		return glProgramUniform1uiv( prog, ID, count, (const GLuint*)i.data() );
-	case GL_BOOL:				return glProgramUniform1iv( prog, ID, count, (const GLint*)i.data() );
-	}
-	__set_log(__func__,(void*)ptr,count);
-}
-
 template<> inline void Uniform::set<int>( GLuint prog, const int* ptr, GLsizei count )
 {
 	if(ID==-1) return;
@@ -1234,6 +1218,7 @@ struct Effect : public Object
 
 	Uniform* get_uniform( const char* name ){ if(active_program) return active_program->get_uniform(name); printf("%s.%s(%s): no program is bound.",this->name(),__func__,name); return nullptr; }
 	void set_uniform( const char* name, Texture* t ){ auto* p=active_program; if(!p) p=find_program_from_uniform(name,__func__); if(p) p->set_uniform(name,t); }
+	void set_uniform( const char* name, bool b ){ int i=b?1:0; return set_uniform(name, &i ); }
 	template <class T> void set_uniform( const char* name, const vector<T>& v ){ GLsizei count=GLsizei(v.size()); set_uniform(name,v.data(),count); }
 	template <class T> void set_uniform( const char* name, const T& v ){ set_uniform<T>(name,(T*)&v, 1); }
 	// [NOTE] do not make const T*; this causes some template instances go wrong
