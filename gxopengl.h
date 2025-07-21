@@ -800,6 +800,22 @@ protected:
 	void __set_log( const char* func, void* ptr, GLsizei count ){ printf( "Uniform[%s].%s(%p,%d): unsupported type\n", name, func, ptr, count ); }
 };
 
+template<> inline void Uniform::set<bool>( GLuint prog, const bool* ptr, GLsizei count )
+{
+	if(ID==-1) return;
+	
+	// convert bool to int arrays
+	static std::vector<int> i; if(i.size()<count) i.resize(count); for(int k=0;k<count;k++) i[k]=ptr[count]?1:0;
+
+	switch(type)
+	{
+	case GL_INT:				return glProgramUniform1iv( prog, ID, count, (const GLint*)i.data() );
+	case GL_UNSIGNED_INT:		return glProgramUniform1uiv( prog, ID, count, (const GLuint*)i.data() );
+	case GL_BOOL:				return glProgramUniform1iv( prog, ID, count, (const GLint*)i.data() );
+	}
+	__set_log(__func__,(void*)ptr,count);
+}
+
 template<> inline void Uniform::set<int>( GLuint prog, const int* ptr, GLsizei count )
 {
 	if(ID==-1) return;
@@ -956,11 +972,19 @@ struct Program : public Object
 	}
 
 	// special set_uniform functions: vector, texture, and bool
-	template <class T> void set_uniform( const char* name, T* v, GLsizei count=1 ){ Uniform* u=get_uniform(name); if(u) u->set(ID,v,count); }
-	template <class T> void set_uniform( const char* name, const T& v ){ Uniform* u=get_uniform(name); if(u) u->set(ID,&v,1); }
+	void set_uniform( const char* name, Texture* t ){ if(!t) return; Uniform* u=get_uniform(name); if(!u) return; if(u->ID<0||u->textureID<0) return; if(binding()!=ID) glUseProgram(ID); u->texture=t; glProgramUniform1i(ID,u->ID,u->textureID); if(glBindTextureUnit) glBindTextureUnit(u->textureID,u->texture->ID); else { glActiveTexture(GL_TEXTURE0+u->textureID); u->texture->bind();} }
+	void set_uniform( const char* name, bool b ){ int v=b?1:0; set_uniform( name, &v ); }
+	template <class T> void set_uniform( const char* name, const T& v ){ set_uniform( name, &v ); }
 	template <class T> void set_uniform( const char* name, const vector<T>& v ){ set_uniform( name, v.data(), GLsizei(v.size()) ); }
-	void set_uniform( const char* name, Texture* t ){ if(!t) return; Uniform* u=get_uniform(name); if(!u) return; if(u->ID<0||u->textureID<0) return; if(binding()!=ID) glUseProgram(ID); u->texture=t; glProgramUniform1i(ID,u->ID,u->textureID); if(glBindTextureUnit) glBindTextureUnit(u->textureID,u->texture->ID); else { glActiveTexture(GL_TEXTURE0+u->textureID);u->texture->bind();} }
-	void set_uniform( const char* name, bool b ){ Uniform* u=get_uniform(name); if(!u) return; int v=b?1:0; u->set(ID,(int*)&v,1); }
+	template <class T> void set_uniform( const char* name, T* v, GLsizei count=1 )
+	{
+		Uniform* u=get_uniform(name); if(!u) return;
+		if(u->block_index==-1) return u->set(ID,v,count);
+		if(!u->block_name[0]){ printf("%s(%s): uniform block name is empty\n",__func__,name); return; }
+		auto it=_uniform_block_map.find(u->block_name); if(it==_uniform_block_map.end()){ printf("%s(%s): unable to find uniform buffer '%s'\n",__func__,name,u->block_name); return; }
+		auto* ub=it->second.buffer; if(!ub){ printf("%s(%s): ub==nullptr\n",__func__,name); return; }
+		ub->set_sub_data(v,sizeof(T)*count,u->block_offset);
+	}
 
 	// bind image texture
 	void bind_image_texture( const char* name, Texture* t, GLenum access=GL_READ_WRITE /* or GL_WRITE_ONLY or GL_READ_ONLY */, GLint level=0, GLenum format=0, bool bLayered=false, GLint layer=0 )
@@ -970,6 +994,7 @@ struct Program : public Object
 	}
 
 	// uniform cache/block/dump
+	void update_uniform_block();
 	void update_uniform_cache();
 	const char* dump_uniforms( bool b_matrix=false, bool b_array=false );
 
@@ -998,18 +1023,17 @@ struct Program : public Object
 	friend struct Effect;
 
 	// public member variables
-	program_source_t					source;
+	program_source_t				source;
 
 protected:
 	std::map<string,Uniform>		_uniform_cache;
+	std::map<string,UniformBlock>	_uniform_block_map; // do not use ID as key, because uniform block ID varies across programs
 	std::set<string>				_invalid_uniform_cache;
 	std::map<string,GLint>			_shader_storage_block_binding_map;
 	std::map<string,GLint>			_atomic_counter_buffer_binding_map;
-	std::map<string,UniformBlock>	_uniform_block_map;
 	ivec3							_compute_work_group_size={}; // cache for get_compute_work_group_size()
 };
 
-// bind
 inline GLuint Program::bind( bool b_bind )
 {
 	GLuint b0=binding(); if(!b_bind||b0!=ID) glUseProgram(b_bind?ID:0); if(!b_bind) return b0;
@@ -1046,6 +1070,22 @@ inline vector<gl::Uniform> gl::Program::get_active_uniforms( bool b_bind )
 	return v;
 }
 
+inline void gl::Program::update_uniform_block()
+{
+	// this is done only once in order to keep the uniform buffer assignment from effect
+	if(!_uniform_block_map.empty()) return;
+
+	GLuint program0=-1; if(glProgramUniform1i) glGetIntegerv(GL_CURRENT_PROGRAM,(GLint*)&program0); if(program0!=ID) glUseProgram(ID);
+	for(int k=0,kn=gxGetProgramiv(ID,GL_ACTIVE_UNIFORM_BLOCKS);k<kn;k++)
+	{
+		UniformBlock ub; ub.ID=k; ub.program=this; ub.size=gxGetActiveUniformBlockiv(ID,k,GL_UNIFORM_BLOCK_DATA_SIZE);
+		GLsizei l=gxGetActiveUniformBlockiv(ID,k,GL_UNIFORM_BLOCK_NAME_LENGTH); /* length includes NULL */ if(l>GLsizei(std::extent<decltype(UniformBlock::name)>::value)) printf("[%s] uniform block name is too long\n",_name);
+		glGetActiveUniformBlockName(ID,k,l,&l,ub.name);
+		_uniform_block_map[ub.name] = ub;
+	}
+	if(program0!=ID&&program0>=0) glUseProgram(program0); // restore the original program
+}
+
 inline void gl::Program::update_uniform_cache()
 {
 	GLuint program0=-1; if(glProgramUniform1i) glGetIntegerv(GL_CURRENT_PROGRAM,(GLint*)&program0); if(program0!=ID) glUseProgram(ID);
@@ -1060,15 +1100,13 @@ inline void gl::Program::update_uniform_cache()
 		for( GLint loc=bracket?1:0;loc<u.array_size;loc++){ Uniform u1=u;sprintf(u1.name,"%s[%d]",name,loc);u1.ID=glGetUniformLocation(ID,u1.name);if(u1.ID==-1)continue;u1.array_size=u.array_size-loc;if(b_texture)u1.textureID=texture_id++;_uniform_cache[u1.name]=u1; }
 	}
 
-	// update uniform blocks
-	_uniform_block_map.clear();
-	for(int k=0,kn=gxGetProgramiv(ID,GL_ACTIVE_UNIFORM_BLOCKS);k<kn;k++)
+	// copy uniform block name to each uniform
+	for(auto& [n,u]:_uniform_cache)
 	{
-		UniformBlock ub; ub.ID=k; ub.program=this; ub.size=gxGetActiveUniformBlockiv(ID,k,GL_UNIFORM_BLOCK_DATA_SIZE);
-		GLsizei l=gxGetActiveUniformBlockiv(ID,k,GL_UNIFORM_BLOCK_NAME_LENGTH); /* length includes NULL */ if(l>GLsizei(std::extent<decltype(UniformBlock::name)>::value)) printf("[%s] uniform block name is too long\n",_name);
-		glGetActiveUniformBlockName(ID,k,l,&l,ub.name);
-		_uniform_block_map[ub.name] = ub;
-		for(auto& [n,u]:_uniform_cache){ if(u.block_index==GLint(ub.ID)) strcpy(u.block_name,ub.name); } // update uniform block in uniform cache
+		if(u.block_index==-1||u.block_name[0]) continue;
+		UniformBlock* ub=nullptr; for(auto [un,j]:_uniform_block_map){ if(j.ID==u.block_index){ ub=&j; break; } }
+		if(!ub){ printf( "%s(%s): unable to find uniform block for uniform '%s'\n", __func__, name(), u.name ); continue; }
+		strcpy(u.block_name,ub->name);
 	}
 
 	if(program0!=ID&&program0>=0) glUseProgram(program0); // restore the original program
@@ -1177,35 +1215,29 @@ struct Effect : public Object
 {
 	Effect( GLuint ID, const char* name ) : Object(ID,name,0){ if(!(quad=gxCreateQuadVertexArray())) printf("[%s] unable to create quad buffer\n",name); }
 	~Effect() override { active_program=nullptr; if(quad){ delete quad; quad=nullptr; } if(!pts.empty()){ for(auto& it:pts) safe_delete(it.second); pts.clear(); } for(auto& it:uniform_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} uniform_buffer_map.clear(); for(auto* p:programs) delete p; programs.clear(); }
+	
 	static void unbind(){ glUseProgram(0); }
-
 	Program* bind( __printf_format_string__ const char* program_name, ... ){ char buff[1024]; va_list a;va_start(a,program_name);vsnprintf(buff,1024,program_name,a);va_end(a); active_program=get_program(buff); if(active_program) active_program->bind(); else{ active_program=nullptr; glUseProgram(0); } return active_program; }
 	Program* bind( uint index ){ active_program=get_program_by_index(index); if(active_program) active_program->bind(); else { active_program=nullptr; glUseProgram(0); } return active_program; }
 
 	bool empty() const { return programs.empty(); }
 	size_t size() const { return programs.size(); }
+
+	bool append( gl::effect_source_t source );
+	template <class... Ts> bool append( Ts... args ){ gl::effect_source_t source; source.append_r(args...); return append(source); }
+
 	Program* get_program( const char* name ) const { for(auto* p:programs)if(stricmp(p->name(),name)==0) return p; printf("Unable to find program \"%s\" in effect \"%s\"\n", name, this->_name ); return nullptr; }
 	Program* get_program_by_index( uint index ) const { if(index<programs.size()) return programs[index]; else { printf("[%s] Out-of-bound program index\n", _name ); return nullptr; } }
 	Program* get_program_by_id( uint program_ID ) const { for(auto* p:programs)if(p->ID==program_ID) return p; printf("Unable to find program \"%u\" in effect \"%s\"\n", program_ID, this->_name ); return nullptr; }
 	Program* create_program( const char* name, const program_source_t& source );
-	Program* append_program( Program* program ){ if(!program) return nullptr; programs.emplace_back(program); auto& m=program->_uniform_block_map;for(auto& it:m){gl::Program::UniformBlock& ub=it.second;ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size);} return program; }
-	bool append( gl::effect_source_t source );
-	template <class... Ts> bool append( Ts... args ){ gl::effect_source_t source; source.append_r(args...); return append(source); }
+	Program* append_program( Program* program ){ if(!program) return nullptr; programs.emplace_back(program); auto& m=program->_uniform_block_map; for(auto& [ubname,ub] : m) ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size); return program; }
 
 	Uniform* get_uniform( const char* name ){ if(active_program) return active_program->get_uniform(name); printf("%s.%s(%s): no program is bound.",this->name(),__func__,name); return nullptr; }
-
-	void set_uniform( const char* name, Texture* t ){ auto* p=_get_or_find_program_for_uniform(name,__func__); if(p) p->set_uniform(name,t); }
-	void set_uniform( const char* name, bool b ){ int i=b?1:0; return set_uniform(name, &i ); }
+	void set_uniform( const char* name, Texture* t ){ auto* p=active_program; if(!p) p=find_program_from_uniform(name,__func__); if(p) p->set_uniform(name,t); }
 	template <class T> void set_uniform( const char* name, const vector<T>& v ){ GLsizei count=GLsizei(v.size()); set_uniform(name,v.data(),count); }
 	template <class T> void set_uniform( const char* name, const T& v ){ set_uniform<T>(name,(T*)&v, 1); }
-	template <class T> void set_uniform( const char* name, T* v, GLsizei count=1 ) // [NOTE] do not make const T*; this causes some template instances go wrong
-	{
-		if(!v) return; auto* p=_get_or_find_program_for_uniform(name,__func__); if(!p) return;
-		auto* u=p->get_uniform(name); if(!u) return; if(u->block_index==-1){ p->set_uniform(name, v, count); return; }
-		if(!u->block_name[0]||u->block_offset==-1) return;
-		auto* ub=get_uniform_buffer(u->block_name); if(!ub) return;
-		ub->set_sub_data(v,sizeof(T)*count,u->block_offset);
-	}
+	// [NOTE] do not make const T*; this causes some template instances go wrong
+	template <class T> void set_uniform( const char* name, T* v, GLsizei count=1 ){ auto* p=active_program; if(!p) p=find_program_from_uniform(name,__func__); if(p) p->set_uniform(name,v,count); }
 
 	// image textures
 	void bind_image_texture( const char* name, Texture* t, GLenum access=GL_READ_WRITE /* or GL_WRITE_ONLY or GL_READ_ONLY */, GLint level=0, GLenum format=0, bool bLayered=false, GLint layer=0 ){ if(!active_program) return void(printf("%s.%s(%s): no program is bound.\n",this->name(),__func__,name)); active_program->bind_image_texture(name,t,access,level,format,bLayered,layer); }
@@ -1248,18 +1280,16 @@ struct Effect : public Object
 	VertexArray*					quad=nullptr;
 	
 protected:
-	Program* _get_or_find_program_for_uniform( const char* name, const char* func=nullptr );
-};
 
-inline Program* Effect::_get_or_find_program_for_uniform( const char* name, const char* func )
-{
-	if(!func) func=__func__;
-	if(active_program) return active_program;
-	printf("%s.%s(%s): no program is bound; ",this->name(),func,name);
-	for(auto* p:programs){ auto* u=p->get_uniform(name); if(!u||u->block_index==-1) continue; printf( "using \"%s\" for the buffer-backed uniform.\n",p->name() ); return p; }
-	printf( "search ends up with no associated program.\n");
-	return nullptr;
-}
+	Program* find_program_from_uniform( const char* name, const char* func=nullptr )
+	{
+		if(active_program) return active_program;
+		printf("%s.%s(%s): no program is bound; ",this->name(),func?func:__func__,name);
+		for(auto* p:programs){ auto* u=p->get_uniform(name); if(!u||u->block_index==-1) continue; printf( "using \"%s\" for the buffer-backed uniform.\n",p->name() ); return p; }
+		printf( "search ends up with no associated program.\n");
+		return nullptr;
+	}
+};
 
 //***********************************************
 } // end namespace gl
@@ -1555,6 +1585,7 @@ inline gl::Program* gxCreateProgram( string prefix, string name, const gl::progr
 	{
 		gl::Program* program = new gl::Program(binary_program_ID, name.c_str());
 		program->source = source;
+		program->update_uniform_block();
 		program->update_uniform_cache();
 		return program;
 	}
@@ -1609,6 +1640,7 @@ inline gl::Program* gxCreateProgram( string prefix, string name, const gl::progr
 	}
 
 	// 9. update uniforms before validating the program
+	program->update_uniform_block();
 	program->update_uniform_cache(); // to avoid validation errors in Intel compilers
 
 	// 10. validation: test if the program can run in the current state
