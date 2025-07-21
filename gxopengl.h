@@ -748,7 +748,7 @@ struct Uniform
 	GLchar		block_name[256]={};
 	GLint		textureID=-1;
 	Texture*	texture=nullptr;
-	GLint		binding=-1;	// only for image texture unit
+	GLint		image_texture_binding=-1;	// only for image texture unit
 
 	const char* type_name()
 	{
@@ -973,8 +973,8 @@ struct Program : public Object
 	// bind image texture
 	void bind_image_texture( const char* name, Texture* t, GLenum access=GL_READ_WRITE /* or GL_WRITE_ONLY or GL_READ_ONLY */, GLint level=0, GLenum format=0, bool bLayered=false, GLint layer=0 )
 	{
-		Uniform* u=get_uniform(name); if(!u||u->ID<0||u->binding<0){ printf( "%s(): %s not found\n", __func__, name ); return; }
-		u->texture=t; glBindImageTexture( u->binding, t->ID, level, bLayered?GL_TRUE:GL_FALSE, layer, access, format?format:t->internal_format() );
+		Uniform* u=get_uniform(name); if(!u||u->ID<0||u->image_texture_binding<0){ printf( "%s(): %s not found\n", __func__, name ); return; }
+		u->texture=t; glBindImageTexture( u->image_texture_binding, t->ID, level, bLayered?GL_TRUE:GL_FALSE, layer, access, format?format:t->internal_format() );
 	}
 
 	// uniform cache/block/dump
@@ -1042,7 +1042,7 @@ inline vector<gl::Uniform> gl::Program::get_active_uniforms( bool b_bind )
 		static std::array<GLint,std::extent<decltype(pnames)>::value> values;
 		glGetProgramResourceiv(ID,GL_UNIFORM,k,GLsizei(values.size()),pnames,GLsizei(values.size()),nullptr,&values[0]);
 		static std::map<GLenum,GLint> prop; for(int j=0,jn=int(values.size());j<jn;j++) prop[pnames[j]]=values[j];
-		Uniform u; u.block_index=prop[GL_BLOCK_INDEX]; u.ID=prop[GL_LOCATION]; u.type=prop[GL_TYPE]; u.block_offset=prop[GL_OFFSET]; u.array_size=prop[GL_ARRAY_SIZE]; u.binding=-1;
+		Uniform u; u.block_index=prop[GL_BLOCK_INDEX]; u.ID=prop[GL_LOCATION]; u.type=prop[GL_TYPE]; u.block_offset=prop[GL_OFFSET]; u.array_size=prop[GL_ARRAY_SIZE]; u.image_texture_binding=-1;
 		glGetProgramResourceName(ID,GL_UNIFORM,k,prop[GL_NAME_LENGTH],nullptr,u.name);
 		if(strstr(u.name,"gl_")) continue; // query name now, and skip for built-in gl variables
 		if(u.ID<0&&u.block_index<0) continue; // invalid variables
@@ -1077,7 +1077,7 @@ inline void gl::Program::update_uniform_cache()
 	// update uniform variables
 	int texture_id=0; for( auto& u : get_active_uniforms(false) )
 	{
-		if(gxIsImageType(u.type)) glGetUniformiv(ID,u.ID,&u.binding);
+		if(gxIsImageType(u.type)) glGetUniformiv(ID,u.ID,&u.image_texture_binding);
 		bool b_texture = gxIsSamplerType(u.type); if(b_texture){ u.textureID=texture_id++; if(glProgramUniform1i)glProgramUniform1i(ID,u.ID,u.textureID);else glUniform1i(u.ID,u.textureID); } // setting sampler locations avoids validation error in Intel Compiler
 		_uniform_cache[u.name]=u; if(u.array_size==1) continue;
 		GLchar name[256]; strcpy(name,u.name); GLchar* bracket=strchr(name,'['); if(bracket) bracket[0]='\0';
@@ -1088,6 +1088,7 @@ inline void gl::Program::update_uniform_cache()
 	for(auto& [n,u]:_uniform_cache)
 	{
 		if(u.block_index==-1||u.block_name[0]) continue;
+		if(_atomic_counter_buffer_binding_map.find(u.name)!=_atomic_counter_buffer_binding_map.end()) continue; // bypass atomic counter buffer
 		UniformBlock* ub=nullptr; for(auto [un,j]:_uniform_block_map){ if(j.ID==u.block_index){ ub=&j; break; } }
 		if(!ub){ printf( "%s(%s): unable to find uniform block for uniform '%s'\n", __func__, name(), u.name ); continue; }
 		strcpy(u.block_name,ub->name);
