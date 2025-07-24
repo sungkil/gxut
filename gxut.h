@@ -54,9 +54,6 @@
 	#ifndef WIN32_LEAN_AND_MEAN
 		#define WIN32_LEAN_AND_MEAN
 	#endif
-	#ifndef NOMINMAX
-		#define NOMINMAX // suppress definition of min/max in <windows.h>
-	#endif
 	#ifndef __attribute__
 		#define __attribute__(a)
 	#endif
@@ -193,7 +190,11 @@ using std::vector;
 
 // platform-specific header files and configurations
 #ifdef __msvc__
+	#ifndef NOMINMAX
+		#define NOMINMAX // suppress definition of min/max in <windows.h>
+	#endif
 	#include <windows.h>
+	#undef NOMINMAX
 	#include <direct.h>	// directory control
 	#include <intrin.h>	// cpu info
 	#include <io.h>		// low-level io functions
