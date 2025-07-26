@@ -710,7 +710,7 @@ __noinline string path_t::key() const
 {
 	if(empty()) return "";
 	size_t l=size(); char* d=__strbuf(l);
-	size_t n=0; for(size_t k=0;k<l; k++){ char c=_data[k]; if(c!=':'&&c!=' ') d[n++]=__is_separator(c)?'.':(::tolower(c)); }
+	size_t n=0; for(size_t k=0;k<l; k++){ char c=_data[k]; if(c==':'||c==' ') continue; if(!__is_separator(c)) d[n++]=::tolower(c); else if(n>0&&d[n-1]!='.') d[n++]='.'; }
 	d[(d[n-1]=='.')?(n-1):n]=0; return d;
 }
 
@@ -757,10 +757,10 @@ __noinline path_t apptemp()
 	return d;
 }
 
-__noinline path_t localtemp( path_t keydir=exe::dir() )
+__noinline path_t localtemp( path_t keydir=exe::dir(), const char* prefix="." )
 {
 	static auto root=apptemp();
-	path_t t = root + "local\\"+keydir.key()+"\\"; if(!t.exists()) t.mkdir();
+	path_t t = root+(prefix&&*prefix?prefix:".")+keydir.key()+"\\"; if(!t.exists()) t.mkdir();
 	return t;
 }
 
