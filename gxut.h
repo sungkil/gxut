@@ -257,15 +257,6 @@ template <class T> T* realloc( void* ptr, size_t size ){ return (T*) ::realloc(p
 template <class T> T*& safe_free( T*& p ){if(p) free((void*)p); return p=nullptr; }
 template <class T> T*& safe_delete( T*& p ){if(p) delete p; return p=nullptr; }
 
-// compiler's utility
-namespace compiler
-{
-	inline int monthtoi( const char* month ){ if(!month||!month[0]||!month[1]||!month[2]) return 0; char a=tolower(month[0]), b=tolower(month[1]), c=tolower(month[2]); if(a=='j'){ if(b=='a') return 1; if(c=='n') return 6; return 7; } if(a=='f') return 2; if(a=='m'){ if(c=='r') return 3; return 5; } if(a=='a'){ if(b=='p') return 4; return 8; } if(a=='s') return 9; if(a=='o') return 10; if(a=='n') return 11; return 12; }
-	inline int year(){ static int y=0; if(y) return y; char buff[64]={}; int r=sscanf(__DATE__,"%*s %*s %s", buff); return y=atoi(buff); }
-	inline int month(){ static int m=0; if(m) return m; char buff[64]={}; int r=sscanf(__DATE__,"%s", buff); return m=monthtoi(buff); }
-	inline int day(){ static int d=0; if(d) return d; char buff[64]={}; int r=sscanf(__DATE__,"%*s %s %*s", buff); return d=atoi(buff); }
-}
-
 // shared circular string buffers
 template <class T=char> __forceinline T* __strbuf( size_t len ){ static T* C[1<<14]={}; static unsigned int cid=0; cid=cid%(sizeof(C)/sizeof(C[0])); C[cid]=(T*)(C[cid]?realloc(C[cid],sizeof(T)*(len+2)):malloc(sizeof(T)*(len+2))); if(C[cid]){ C[cid][0]=C[cid][len]=C[cid][len+1]=0; } return C[cid++]; } // add one more char for convenience
 template <class T=char> __forceinline T* __strdup( const T* s, size_t len ){ T* d=__strbuf<T>(size_t(len)); size_t k=0; while(k<len&&*s) d[k++]=*(s++); d[k]=d[k+1]=0; return d; }
@@ -460,7 +451,7 @@ __noinline const char* cwd(){ static char c[_MAX_PATH]={}; getcwd(c, _MAX_PATH);
 __forceinline time_t now(){ return time(0); }
 __forceinline time_t time_offset( int days, int hours=0, int mins=0, int secs=0 ){ return 1ll*secs + 60ll*mins + 3600ll*hours + 86400ll*days; } // time_t in second scale: 1 is one second
 __forceinline bool	 time_greater( time_t t0, time_t t1, time_t offset=30 ){ return t0>t1+offset; } // server-local difference can be up to several seconds; do not make time_less(), which causes confusion in use cases
-__forceinline const char* asctime( time_t t ){ return __strdup(::asctime(gmtime(&t))); }	
+__forceinline const char* asctime( time_t t ){ return __strdup(::asctime(gmtime(&t))); }
 
 // file pointer helpers
 inline bool		is_fifo( FILE* fp ){ if(!fp) return false; struct stat s; return fstat(fileno(fp),&s)==0?(s.st_mode&S_IFIFO?true:false):false; } // posix-like or std::filesystem-like utilities
@@ -771,6 +762,14 @@ __noinline path_t serial_path( path_t dir, string prefix, string postfix, int nu
 	char fmt[PATH_MAX+1]={}; snprintf(fmt,PATH_MAX,"%s%s%%0%dd%s%s",dir.c_str(),prefix.c_str(),numzero,postfix.empty()?"":".",postfix.c_str());
 	path_t f; for(int k=0;k<nMaxFiles;k++){snprintf(f.data(),PATH_MAX,fmt,k); if(!f.exists()) break; }
 	return f;
+}
+
+// compiler utility
+namespace compiler
+{
+	inline int year(){	static int d=0; if(d) return d; auto t=path_t(exe::path()).mtime(); auto* g=gmtime(&t); return d=g->tm_year; }
+	inline int month(){ static int d=0; if(d) return d; auto t=path_t(exe::path()).mtime(); auto* g=gmtime(&t); return d=g->tm_mon; }
+	inline int day(){	static int d=0; if(d) return d; auto t=path_t(exe::path()).mtime(); auto* g=gmtime(&t); return d=g->tm_mday; }
 }
 
 //*************************************
