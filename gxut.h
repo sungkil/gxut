@@ -767,8 +767,8 @@ __noinline path_t serial_path( path_t dir, string prefix, string postfix, int nu
 // compiler utility
 namespace compiler
 {
-	inline int year(){	static int d=0; if(d) return d; auto t=path_t(exe::path()).mtime(); auto* g=gmtime(&t); return d=g->tm_year; }
-	inline int month(){ static int d=0; if(d) return d; auto t=path_t(exe::path()).mtime(); auto* g=gmtime(&t); return d=g->tm_mon; }
+	inline int year(){	static int d=0; if(d) return d; auto t=path_t(exe::path()).mtime(); auto* g=gmtime(&t); return d=g->tm_year+1900; }
+	inline int month(){ static int d=0; if(d) return d; auto t=path_t(exe::path()).mtime(); auto* g=gmtime(&t); return d=g->tm_mon+1; }
 	inline int day(){	static int d=0; if(d) return d; auto t=path_t(exe::path()).mtime(); auto* g=gmtime(&t); return d=g->tm_mday; }
 }
 
