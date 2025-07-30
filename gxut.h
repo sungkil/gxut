@@ -783,9 +783,10 @@ __noinline path_t serial_path( path_t dir, string prefix, string postfix, int nu
 // compiler utility
 namespace compiler
 {
-	inline int year(){	static int d=0; if(d) return d; auto t=path_t(exe::path()).mtime(); auto* g=gmtime(&t); return d=g->tm_year+1900; }
-	inline int month(){ static int d=0; if(d) return d; auto t=path_t(exe::path()).mtime(); auto* g=gmtime(&t); return d=g->tm_mon+1; }
-	inline int day(){	static int d=0; if(d) return d; auto t=path_t(exe::path()).mtime(); auto* g=gmtime(&t); return d=g->tm_mday; }
+	inline int monthtoi( const char* month ){ if(!month||!month[0]||!month[1]||!month[2]) return 0; char a=tolower(month[0]), b=tolower(month[1]), c=tolower(month[2]); if(a=='j'){ if(b=='a') return 1; if(c=='n') return 6; return 7; } if(a=='f') return 2; if(a=='m'){ if(c=='r') return 3; return 5; } if(a=='a'){ if(b=='p') return 4; return 8; } if(a=='s') return 9; if(a=='o') return 10; if(a=='n') return 11; return 12; }
+	inline int year(){ static int y=0; if(y) return y; char buff[64]={}; int r=sscanf(__DATE__,"%*s %*s %s", buff); return y=atoi(buff); }
+	inline int month(){ static int m=0; if(m) return m; char buff[64]={}; int r=sscanf(__DATE__,"%s", buff); return m=monthtoi(buff); }
+	inline int day(){ static int d=0; if(d) return d; char buff[64]={}; int r=sscanf(__DATE__,"%*s %s %*s", buff); return d=atoi(buff); }
 }
 
 //*************************************
