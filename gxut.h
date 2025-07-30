@@ -745,9 +745,9 @@ __noinline path_t path_t::relative( path_t from ) const
 __noinline void __find_files( vector<path_t>& results, path_t dir, string pattern="*.*", bool recursive=true)
 {
 	WIN32_FIND_DATAA fd={}; HANDLE h=FindFirstFileExA((dir+pattern).c_str(),FindExInfoBasic,&fd,FindExSearchNameMatch,0,FIND_FIRST_EX_LARGE_FETCH);
-	if(h!=INVALID_HANDLE_VALUE){ do { results.emplace_back(dir+fd.cFileName); } while(FindNextFileA(h,&fd)); }
+	if(h!=INVALID_HANDLE_VALUE){ do { results.emplace_back(dir+fd.cFileName); } while(FindNextFileA(h,&fd)); } FindClose(h);
 	if(!recursive) return; h=FindFirstFileExA((dir+"*.*").c_str(),FindExInfoBasic,&fd,FindExSearchLimitToDirectories,0,FIND_FIRST_EX_LARGE_FETCH);
-	if(h!=INVALID_HANDLE_VALUE){ do { if(fd.cFileName[0]!='.'&&(fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)!=0) __find_files(results,dir+fd.cFileName+"\\",pattern,recursive); } while(FindNextFileA(h,&fd)); }
+	if(h!=INVALID_HANDLE_VALUE){ do { if(fd.cFileName[0]!='.'&&(fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)!=0) __find_files(results,dir+fd.cFileName+"\\",pattern,recursive); } while(FindNextFileA(h,&fd)); } FindClose(h);
 }
 __noinline vector<path_t> path_t::find_files( string pattern, bool recursive ){ vector<path_t> v; if(is_dir()) __find_files(v,append_slash(),pattern,recursive); return v; }
 #endif
