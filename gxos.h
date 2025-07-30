@@ -436,9 +436,9 @@ inline const char* title(){ static wchar_t buff[MAX_PATH+1]; GetConsoleTitleW(bu
 inline DWORD get_console_process(){ DWORD console; GetWindowThreadProcessId(GetConsoleWindow(),&console); return console; }
 inline bool has_parent(){ return GetCurrentProcessId()!=get_console_process(); }
 inline void setnobuf(){ setbuf(stdout,0);setbuf(stderr,0);setvbuf(stdout,nullptr,_IONBF,0); }
-static auto get_default_color(){ static WORD c=0; if(!c){ HANDLE h=GetStdHandle(STD_OUTPUT_HANDLE); if(h!=INVALID_HANDLE_VALUE){CONSOLE_SCREEN_BUFFER_INFO csbi;GetConsoleScreenBufferInfo(h,&csbi);c=csbi.wAttributes; CloseHandle(h);} } return c; } // usually 7
-inline void set_color( int color=0 ){ HANDLE h=GetStdHandle(STD_OUTPUT_HANDLE); if(h==INVALID_HANDLE_VALUE) return; auto d=get_default_color(); SetConsoleTextAttribute(h,color?color:d); CloseHandle(h); } // console color: 10: lightgreen, 11: sky, 12: red, 14: lightyellow
-inline void clear_color(){ HANDLE h=GetStdHandle(STD_OUTPUT_HANDLE); if(h==INVALID_HANDLE_VALUE) return; auto d=get_default_color(); SetConsoleTextAttribute(h,d); CloseHandle(h); }
+static auto get_default_color(){ static WORD c=0; if(!c){ HANDLE h=GetStdHandle(STD_OUTPUT_HANDLE); if(h!=INVALID_HANDLE_VALUE){CONSOLE_SCREEN_BUFFER_INFO csbi;GetConsoleScreenBufferInfo(h,&csbi);c=csbi.wAttributes; } } return c; } // usually 7
+inline void set_color( int color=0 ){ HANDLE h=GetStdHandle(STD_OUTPUT_HANDLE); if(h==INVALID_HANDLE_VALUE) return; auto d=get_default_color(); SetConsoleTextAttribute(h,color?color:d); } // console color: 10: lightgreen, 11: sky, 12: red, 14: lightyellow
+inline void clear_color(){ HANDLE h=GetStdHandle(STD_OUTPUT_HANDLE); if(h==INVALID_HANDLE_VALUE) return; auto d=get_default_color(); SetConsoleTextAttribute(h,d); }
 //*************************************
 } // namespace console
 //*************************************

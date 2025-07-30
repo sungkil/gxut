@@ -202,7 +202,6 @@ struct path : public path_t
 	// scan(): ext_filter (specific extensions delimited by semicolons), str_filter (path should contain this string)
 	template <bool recursive=true> vector<path> scan( const char* pattern=nullptr, const char* ext_filter=nullptr ) const;
 	template <bool recursive=true> vector<path> subdirs( const char* pattern=nullptr ) const;
-	
 
 	// crc32c/md5 checksums of the file content implement in gxmemory.h
 	inline uint crc() const;
