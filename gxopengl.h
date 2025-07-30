@@ -1638,7 +1638,7 @@ inline std::map<int,string> gxExplodeShaderSourceMap( const char* source, int fi
 inline const char* gxGetProgramBinaryPath( const char* name )
 {
 	auto d=localtemp()+"glfx\\"s; if(!d.exists()) d.mkdir();
-	return format("%s%s.bin",d.c_str(),name);
+	return format("%s%08x",d.c_str(),crc32(0,(const void*)name,strlen(name)*sizeof(*name)));
 }
 
 inline void gxSaveProgramBinary( const char* name, GLuint ID, uint crc )
