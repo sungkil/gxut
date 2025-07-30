@@ -200,8 +200,9 @@ struct path : public path_t
 	bool is_binary_file() const	{ FILE* f=fopen("rb"); if(!f) return false; char b[4096]; while(1){ size_t n=fread(b, 1, sizeof(b), f); if(!n) break; if(memchr(b, 0, n)){ fclose(f); return true; } } fclose(f); return false; }
 
 	// scan(): ext_filter (specific extensions delimited by semicolons), str_filter (path should contain this string)
-	template <bool recursive=true> vector<path> scan( const char* ext_filter=nullptr, const char* pattern=nullptr ) const;
+	template <bool recursive=true> vector<path> scan( const char* pattern=nullptr, const char* ext_filter=nullptr ) const;
 	template <bool recursive=true> vector<path> subdirs( const char* pattern=nullptr ) const;
+	
 
 	// crc32c/md5 checksums of the file content implement in gxmemory.h
 	inline uint crc() const;
@@ -322,7 +323,7 @@ __noinline bool path::write_file( const wchar_t* s ) const
 }
 
 template <bool recursive> __noinline
-vector<path> path::scan( const char* ext_filter, const char* pattern ) const
+vector<path> path::scan( const char* pattern, const char* ext_filter ) const
 {
 	path src=empty()?path(".")+preferred_separator:(is_relative()?absolute():canonical()); if(src.exists()&&src.is_dir()) src=src.append_slash();
 	path srcp=src.filename(); if(!srcp.empty()){ if(!pattern) pattern=srcp.c_str(); src=src.dir(); }
@@ -350,10 +351,9 @@ __noinline void path::__scan_recursive( const wchar_t* _dir, path::__scan_t& si 
 	WIN32_FIND_DATAW fd={}; HANDLE h=FindFirstFileExW(dir,FindExInfoBasic/*minimal(faster)*/,&fd,FindExSearchNameMatch,0,FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
 	wchar_t *f=fd.cFileName, *p=dir+dl; auto* e=si.ext.v; dir[dl]=0; // revert wildcard
 	vector<std::wstring> sdir; if(si.b.recursive) sdir.reserve(32);
-
 	while(FindNextFileW(h,&fd)) // skip directly first '.'
 	{
-		if(f[0]==L'.'){ if(!f[0]||(f[1]==L'.'&&f[2]==0)||memcmp(f+1,L"git",sizeof(wchar_t)*4)==0) continue; } // skip ., .., .git
+		if(f[0]==L'.'){ if(!f[1]||(f[1]==L'.'&&f[2]==0)||memcmp(f+1,L"git",sizeof(wchar_t)*4)==0) continue; } // skip ., .., .git
 		if((fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)==0) // files
 		{
 			size_t fl=wcslen(f); if(e){size_t j=0;for(;j<si.ext.l;j++){if(e[j].size<fl&&wcsicmp(e[j],f+fl-e[j].size)==0)break;}if(j==si.ext.l)continue;}
@@ -372,11 +372,10 @@ __noinline void path::__subdirs_recursive( const wchar_t* _dir, path::__scan_t& 
 	size_t dl=wcslen(_dir); wchar_t dir[capacity]={}; wcsncpy(dir,_dir,dl); wcscpy(dir+dl,L"*.*"); // append wildcard for search
 	WIN32_FIND_DATAW fd={}; HANDLE h=FindFirstFileExW(dir,FindExInfoBasic/*minimal(faster)*/,&fd,FindExSearchNameMatch,0,FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
 	wchar_t *f=fd.cFileName, *p=dir+dl; auto* e=si.ext.v; dir[dl]=0; // revert wildcard
-
 	while(FindNextFileW(h,&fd)) // skip directly first '.'
 	{
 		if((fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)==0) continue; // skip files
-		if(f[0]==L'.'){ if(!f[0]||(f[1]==L'.'&&f[2]==0)||memcmp(f+1,L"git",sizeof(wchar_t)*4)==0) continue; } // skip ., .., .git
+		if(f[0]==L'.'){ if(!f[1]||(f[1]==L'.'&&f[2]==0)||memcmp(f+1,L"git",sizeof(wchar_t)*4)==0) continue; } // skip ., .., .git
 		size_t fl=wcslen(f); wcsncpy(p,f,fl); p[fl]=preferred_separator; p[fl+1]=0;
 		if(si.glob.l==0) si.result.emplace_back(dir);
 		else if(!si.b.glob){ if(iglob(f,fl,si.glob.pattern,si.glob.l)) si.result.emplace_back(dir); }

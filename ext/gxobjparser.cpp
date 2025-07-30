@@ -92,7 +92,7 @@ namespace obj::cache
 			string(__GX_OBJPARSER_CPP_TIMESTAMP__)+
 			string(__GX_MTLPARSER_CPP_TIMESTAMP__);
 		string s = codestamp+file_path.mtimestamp();
-		for( auto& f : file_path.dir().absolute().scan( "obj;mtl;7z;zip;jpg;jpeg;png;hdr" ) )
+		for( auto& f : file_path.dir().absolute().scan(nullptr,"obj;mtl;7z;zip;jpg;jpeg;png;hdr") )
 			s += f.mtimestamp();
 		return crc32c(s);
 	}
@@ -414,7 +414,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 
 	//*********************************
 	// start logging in case that there is no material
-	if(file_path.dir().scan<false>("mtl").empty()) log_begin(); 
+	if(file_path.dir().scan<false>(nullptr,"mtl").empty()) log_begin(); 
 
 	//*********************************
 	// string buffers

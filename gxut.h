@@ -661,7 +661,7 @@ struct path_t
 
 	// search child files
 #ifdef __msvc__
-	vector<path_t> find_files( string pattern="*.*", bool recursive=true);
+	vector<path_t> find_files( string pattern="*.*", bool recursive=true );
 #endif
 
 protected:
