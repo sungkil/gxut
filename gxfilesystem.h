@@ -199,8 +199,10 @@ struct path : public path_t
 	bool write_file( const wchar_t* s ) const;
 	bool is_binary_file() const	{ FILE* f=fopen("rb"); if(!f) return false; char b[4096]; while(1){ size_t n=fread(b, 1, sizeof(b), f); if(!n) break; if(memchr(b, 0, n)){ fclose(f); return true; } } fclose(f); return false; }
 
-	// scan(): ext_filter (specific extensions delimited by semicolons), str_filter (path should contain this string)
-	template <bool recursive=true> vector<path> scan( const char* pattern=nullptr, const char* ext_filter=nullptr ) const;
+	// scan(): file name pattern, ext_filter (specific extensions delimited by semicolons)
+	struct filter_t { filter_t( const path& _self, const string& delimited_extensions ); template <bool recursive=true> vector<path> scan( const char* pattern=nullptr ) const { return std::move(self.__scan(recursive,pattern,this)); } vector<sized_ptr_t<wchar_t>> v; protected: const path& self; vector<std::wstring> __buffer; };
+	filter_t filter( const string& delimited_extensions ) const { return filter_t(*this,delimited_extensions); }
+	template <bool recursive=true> vector<path> scan(const char* pattern=nullptr) const { return std::move(__scan(recursive,pattern,nullptr)); }
 	template <bool recursive=true> vector<path> subdirs( const char* pattern=nullptr ) const;
 
 	// crc32c/md5 checksums of the file content implement in gxmemory.h
