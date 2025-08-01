@@ -210,7 +210,8 @@ struct path : public path_t
 
 protected:
 
-	struct __scan_t { vector<path> result; struct { bool recursive, glob; } b; struct { sized_ptr_t<wchar_t>* v; size_t l; } ext; struct { const wchar_t* pattern; size_t l; } glob; };
+	struct __scan_t { vector<path> result; struct { bool recursive, glob; } b; struct { const sized_ptr_t<wchar_t>* v; size_t l; } ext; struct { const wchar_t* pattern; size_t l; } glob; };
+	vector<path> __scan( bool recursive, const char* pattern, const filter_t* extension_filter ) const;
 	void __scan_recursive( const wchar_t* dir, __scan_t& si ) const;
 	void __subdirs_recursive( const wchar_t* dir, __scan_t& si ) const;
 	void __canonicalize() const; // remove redundancies in directories (e.g., "../some/..", "./" )
@@ -323,14 +324,19 @@ __noinline bool path::write_file( const wchar_t* s ) const
 	return ret>=0;
 }
 
-template <bool recursive> __noinline
-vector<path> path::scan( const char* pattern, const char* ext_filter ) const
+__noinline path::filter_t::filter_t( const path& _self, const string& delimited_extensions ):self(_self)
+{
+	if(delimited_extensions.empty()) return;
+	path::value_type f[4096]={}, *ctx=nullptr; strcpy(f,delimited_extensions.c_str());
+	for(path::value_type* x=strtok_s(f,";|",&ctx);x;x=strtok_s(nullptr,";|",&ctx)){ if(*x) __buffer.push_back(L"."s+atow(x)); }
+	for(auto& x:__buffer) v.emplace_back(sized_ptr_t<wchar_t>{(wchar_t*)x.c_str(),x.size()});
+}
+
+__noinline vector<path> path::__scan( bool recursive, const char* pattern, const filter_t* extension_filter ) const
 {
 	path src=empty()?path(".")+preferred_separator:(is_relative()?absolute():canonical()); if(src.exists()&&src.is_dir()) src=src.append_slash();
 	path srcp=src.filename(); if(!srcp.empty()){ if(!pattern) pattern=srcp.c_str(); src=src.dir(); }
-	vector<std::wstring> exts; if(ext_filter&&*ext_filter){ value_type ef[4096]={}, *ctx=nullptr; strcpy(ef,ext_filter); for(value_type* e=strtok_s(ef,";",&ctx);e;e=strtok_s(nullptr,";",&ctx)) if(e[0]) exts.push_back(L"."s+atow(e)); }
-	vector<sized_ptr_t<wchar_t>> eptr; for( auto& e:exts ) eptr.emplace_back(sized_ptr_t<wchar_t>{(wchar_t*)e.c_str(),e.size()});
-	__scan_t si; si.b.recursive=recursive; si.b.glob=pattern&&strpbrk(pattern,"*?"); si.ext.v=eptr.size()>0?eptr.data():nullptr; si.ext.l=eptr.size();
+	__scan_t si; si.b.recursive=recursive; si.b.glob=pattern&&strpbrk(pattern,"*?"); si.ext.v=extension_filter&&!extension_filter->v.empty()?extension_filter->v.data():nullptr; si.ext.l=extension_filter?extension_filter->v.size():0;
 	std::wstring wpattern=pattern?atow(pattern):L""; si.glob.pattern=pattern?wpattern.c_str():nullptr; si.glob.l=pattern?wpattern.size():0;
 	si.result.reserve(1ull<<12);__scan_recursive(atow(src.c_str()),si);
 	return si.result;

@@ -75,12 +75,12 @@ auto register_tvec4( lua::state& t )
 }
 
 #define register_float_functions_impl(V,T) \
-	u["length2"]	= &V::length2<T,enable_float_t<T>>; \
-	u["norm2"]		= &V::norm2<T,enable_float_t<T>>; \
-	u["length"]		= &V::length<T,enable_float_t<T>>; \
-	u["norm"]		= &V::norm<T,enable_float_t<T>>; \
-	u["dot"]		= &V::dot<T,enable_float_t<T>>; \
-	u["normalize"]	= &V::normalize<T,enable_float_t<T>>;
+	u["length2"]	= &V::length2<floating_point_t<T>>; \
+	u["norm2"]		= &V::norm2<floating_point_t<T>>; \
+	u["length"]		= &V::length<floating_point_t<T>>; \
+	u["norm"]		= &V::norm<floating_point_t<T>>; \
+	u["dot"]		= &V::dot<floating_point_t<T>>; \
+	u["normalize"]	= &V::normalize<floating_point_t<T>>;
 
 #define register_float_functions(V) register_float_functions_impl(V,V::value_type)
 
