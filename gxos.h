@@ -430,7 +430,7 @@ __noinline bool runas( const char* app, const char* args=nullptr, bool wait=true
 #endif
 
 //*************************************
-namespace console {
+inline namespace console {
 //*************************************
 inline const char* title(){ static wchar_t buff[MAX_PATH+1]; GetConsoleTitleW(buff,MAX_PATH); return wtoa(buff); }
 inline DWORD get_console_process(){ DWORD console; GetWindowThreadProcessId(GetConsoleWindow(),&console); return console; }
@@ -444,7 +444,7 @@ inline void clear_color(){ HANDLE h=GetStdHandle(STD_OUTPUT_HANDLE); if(h==INVAL
 //*************************************
 
 //*************************************
-namespace reg { // read-only registry reader
+inline namespace reg { // read-only registry reader
 //*************************************
 
 template <HKEY root=HKEY_CLASSES_ROOT> // HKEY_CLASSES_ROOT, HKEY_LOCAL_MACHINE, ...
@@ -508,7 +508,7 @@ template <HKEY root> inline const wchar_t* key_t<root>::root_name()
 //*************************************
 
 //*************************************
-} // namespace os
+} // end namespace os
 //*************************************
 
 #endif // __GX_OS_H__

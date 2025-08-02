@@ -20,7 +20,7 @@
 #pragma comment( lib, "Dnsapi" )
 
 //***********************************************
-namespace gx { namespace inet {
+namespace gx { inline namespace inet {
 //***********************************************
 
 inline bool is_online(){ static int status=-1; if(status<0){ DWORD s; status=InternetGetConnectedState(&s,0)&&s!=INTERNET_CONNECTION_OFFLINE?1:0; } return status>0; }
