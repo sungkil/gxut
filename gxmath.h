@@ -630,18 +630,18 @@ __forceinline vec4 mul( const mat4& m, const vec4& v ){ return m*v; }
 
 //*************************************
 // scalar-vector algebra
-template <class X, class T> __forceinline tvec2<T> operator+( X f, const tvec2<T>& v ){ return v+T(f); }
-template <class X, class T> __forceinline tvec2<T> operator*( X f, const tvec2<T>& v ){ return v*T(f); }
-template <class X, class T> __forceinline tvec2<T> operator/( X f, const tvec2<T>& v ){ return tvec2<T>(T(f)/v.x,T(f)/v.y); }
-template <class X, class T> __forceinline tvec3<T> operator+( X f, const tvec3<T>& v ){ return v+T(f); }
-template <class X, class T> __forceinline tvec3<T> operator*( X f, const tvec3<T>& v ){ return v*T(f); }
-template <class X, class T> __forceinline tvec3<T> operator/( X f, const tvec3<T>& v ){ return tvec3<T>(T(f)/v.x,T(f)/v.y,T(f)/v.z); }
-template <class X, class T> __forceinline tvec4<T> operator+( X f, const tvec4<T>& v ){ return v+T(f); }
-template <class X, class T> __forceinline tvec4<T> operator*( X f, const tvec4<T>& v ){ return v*T(f); }
-template <class X, class T> __forceinline tvec4<T> operator/( X f, const tvec4<T>& v ){ return tvec4<T>(T(f)/v.x,T(f)/v.y,T(f)/v.z,T(f)/v.w); }
-template <class X, class T> __forceinline tvec2<T> operator-( X f, const tvec2<T>& v ){ return -v+T(f); }
-template <class X, class T> __forceinline tvec3<T> operator-( X f, const tvec3<T>& v ){ return -v+T(f); }
-template <class X, class T> __forceinline tvec4<T> operator-( X f, const tvec4<T>& v ){ return -v+T(f); }
+template <class T> __forceinline tvec2<T> operator+( T f, const tvec2<T>& v ){ return v+f; }
+template <class T> __forceinline tvec2<T> operator*( T f, const tvec2<T>& v ){ return v*f; }
+template <class T> __forceinline tvec2<T> operator/( T f, const tvec2<T>& v ){ return tvec2<T>(f/v.x,f/v.y); }
+template <class T> __forceinline tvec3<T> operator+( T f, const tvec3<T>& v ){ return v+f; }
+template <class T> __forceinline tvec3<T> operator*( T f, const tvec3<T>& v ){ return v*f; }
+template <class T> __forceinline tvec3<T> operator/( T f, const tvec3<T>& v ){ return tvec3<T>(f/v.x,f/v.y,f/v.z); }
+template <class T> __forceinline tvec4<T> operator+( T f, const tvec4<T>& v ){ return v+f; }
+template <class T> __forceinline tvec4<T> operator*( T f, const tvec4<T>& v ){ return v*f; }
+template <class T> __forceinline tvec4<T> operator/( T f, const tvec4<T>& v ){ return tvec4<T>(f/v.x,f/v.y,f/v.z,f/v.w); }
+template <class T> __forceinline tvec2<T> operator-( T f, const tvec2<T>& v ){ return -v+f; }
+template <class T> __forceinline tvec3<T> operator-( T f, const tvec3<T>& v ){ return -v+f; }
+template <class T> __forceinline tvec4<T> operator-( T f, const tvec4<T>& v ){ return -v+f; }
 
 //*************************************
 // global operators for vector length/normalize/dot/cross
