@@ -35,15 +35,44 @@
 #undef PI
 #endif
 
-template <class T,class N,class X> T clamp( T v, N vmin, X vmax ){ return v<T(vmin)?T(vmin):v>T(vmax)?T(vmax):v; }
-constexpr float PI = 3.141592653589793f;
-template <class T=float> constexpr T T_PI = T(3.141592653589793);
+#if (__cplusplus>=202002L)||(defined(_MSVC_LANG)&&_MSVC_LANG>=202002L)||(defined(_HAS_CXX20)&&_HAS_CXX20)
+	#include <numbers>
+	using std::numbers::pi_v;
+	using std::numbers::inv_pi_v;
+	using std::numbers::inv_sqrtpi_v;
+	using std::numbers::sqrt2_v;
+	template <class T> constexpr T pi2_v = T(6.283185307179586);
+	// template type_traits helpers
+	template<typename T> using floating_point_t = T;	template<typename T> concept floating_point_c = std::is_floating_point_v<T>;
+	template<typename T> using signed_t = T;			template<typename T> concept signed_c = std::is_signed_v<T>;
+	template<typename T> using integral_t = T;			template<typename T> concept integral_c = std::is_integral_v<T>;
+	#define requires_floating_point_t(T)	requires floating_point_c<T>
+	#define requires_signed_t(T)			requires signed_c<T>
+	#define requires_integral_t(T)			requires integral_c<T>
+	#define float_memfun(T)
+	#define signed_memfun(T)
+#else
+	template <class T> constexpr T pi_v = T(3.141592653589793);
+	template <class T> constexpr T inv_pi_v = T(0.3183098861837907);
+	template <class T> constexpr T inv_sqrtpi_v = T(0.5641895835477563);
+	template <class T> constexpr T sqrt2_v = T(1.4142135623730951);
+	template <class T> constexpr T pi2_v = T(6.283185307179586);
+	// template type_traits helpers
+	template <class T> using floating_point_t	= typename std::enable_if_t<std::is_floating_point<T>::value,T>;
+	template <class T> using signed_t			= typename std::enable_if_t<std::is_signed<T>::value,T>;
+	template <class T> using integral_t			= typename std::enable_if_t<std::is_integral<T>::value,T>;
+	#define requires_floating_point_t(T)
+	#define requires_signed_t(T)
+	#define requires_integral_t(T)
+	#define float_memfun(U)		template <typename U=floating_point_t<T>>
+	#define signed_memfun(U)	template <typename U=signed_t<T>>
+#endif
 
-//*************************************
-// template type_traits helpers
-template <class T> using floating_point_t = typename std::enable_if_t<std::is_floating_point<T>::value,T>;
-template <class T> using signed_t = typename std::enable_if_t<std::is_signed<T>::value,T>;
-#define float_memfun(U)	 template <typename U=floating_point_t<T>>
+constexpr float PI = pi_v<float>;
+constexpr float pi = pi_v<float>;
+constexpr float inv_pi = inv_pi_v<float>;
+constexpr float inv_sqrtpi = inv_sqrtpi_v<float>;
+constexpr float pi2 = pi2_v<float>;
 
 //*************************************
 // legacy: template <class T,template <class> class A=tarray2> struct tvec2 (template argument for template)
@@ -77,7 +106,7 @@ template <class T> struct tvec2
 	// unary operators
 	__forceinline tvec2& operator+(){ return *this; }
 	__forceinline const tvec2& operator+() const { return *this; }
-	__forceinline tvec2 operator-() const { return tvec2(-x,-y); }
+	signed_memfun(T) __forceinline tvec2 operator-() const requires_signed_t(T) { return tvec2(-x,-y); }
 
 	// binary operators
 	__forceinline tvec2 operator+( T a ) const { return tvec2(x+a, y+a); }
@@ -100,12 +129,12 @@ template <class T> struct tvec2
 	__forceinline tvec2& operator/=(const tvec2& v) { x/=v.x; y/=v.y; return *this; }
 
 	// norm/length/dot: floating-point only functions
-	float_memfun(T) __forceinline T length2() const { return T(x*x+y*y); }
-	float_memfun(T) __forceinline T norm2() const { return T(x*x+y*y); }
-	float_memfun(T) __forceinline T length() const { return T(sqrt(x*x+y*y)); }
-	float_memfun(T) __forceinline T norm() const { return T(sqrt(x*x+y*y)); }
-	float_memfun(T) __forceinline T dot( const tvec2& v ) const { return x*v.x+y*v.y; }
-	float_memfun(T) __forceinline tvec2<T> normalize() const { return operator/(length()); }
+	float_memfun(T) __forceinline T length2() const requires_floating_point_t(T) { return T(x*x+y*y); }
+	float_memfun(T) __forceinline T norm2() const requires_floating_point_t(T) { return T(x*x+y*y); }
+	float_memfun(T) __forceinline T length() const requires_floating_point_t(T) { return T(sqrt(x*x+y*y)); }
+	float_memfun(T) __forceinline T norm() const requires_floating_point_t(T) { return T(sqrt(x*x+y*y)); }
+	float_memfun(T) __forceinline T dot( const tvec2& v ) const requires_floating_point_t(T) { return x*v.x+y*v.y; }
+	float_memfun(T) __forceinline tvec2<T> normalize() const requires_floating_point_t(T) { return operator/(length()); }
 };
 
 template <class T> struct tvec3
@@ -145,7 +174,7 @@ template <class T> struct tvec3
 	// unary operators
 	__forceinline tvec3& operator+(){ return *this; }
 	__forceinline const tvec3& operator+() const { return *this; }
-	__forceinline tvec3 operator-() const { return tvec3(-x,-y,-z); }
+	signed_memfun(T) __forceinline tvec3 operator-() const requires_signed_t(T) { return tvec3(-x,-y,-z); }
 
 	// binary operators
 	__forceinline tvec3 operator+( T a ) const { return tvec3(x+a, y+a, z+a); }
@@ -168,15 +197,15 @@ template <class T> struct tvec3
 	__forceinline tvec3& operator/=( const tvec3& v ){ x/=v.x; y/=v.y; z/=v.z; return *this; }
 
 	// norm/length/dot: floating-point only functions
-	float_memfun(T) __forceinline T length2() const { return T(x*x+y*y+z*z); }
-	float_memfun(T) __forceinline T norm2() const { return T(x*x+y*y+z*z); }
-	float_memfun(T) __forceinline T length() const { return T(sqrt(x*x+y*y+z*z)); }
-	float_memfun(T) __forceinline T norm() const { return T(sqrt(x*x+y*y+z*z)); }
-	float_memfun(T) __forceinline T dot( const tvec3& v ) const { return x*v.x+y*v.y+z*v.z; }
-	float_memfun(T) __forceinline tvec3<T> normalize() const { return operator/(length()); }
+	float_memfun(T) __forceinline T length2() const requires_floating_point_t(T) { return T(x*x+y*y+z*z); }
+	float_memfun(T) __forceinline T norm2() const requires_floating_point_t(T) { return T(x*x+y*y+z*z); }
+	float_memfun(T) __forceinline T length() const requires_floating_point_t(T) { return T(sqrt(x*x+y*y+z*z)); }
+	float_memfun(T) __forceinline T norm() const requires_floating_point_t(T) { return T(sqrt(x*x+y*y+z*z)); }
+	float_memfun(T) __forceinline T dot( const tvec3& v ) const requires_floating_point_t(T) { return x*v.x+y*v.y+z*v.z; }
+	float_memfun(T) __forceinline tvec3<T> normalize() const requires_floating_point_t(T) { return operator/(length()); }
 
 	// tvec3 only: cross product (floating-point only)
-	float_memfun(T) __forceinline tvec3<T> cross( const tvec3& v ) const { return tvec3( y*v.z-z*v.y, z*v.x-x*v.z, x*v.y-y*v.x ); }
+	float_memfun(T) __forceinline tvec3<T> cross( const tvec3& v ) const requires_floating_point_t(T) { return tvec3( y*v.z-z*v.y, z*v.x-x*v.z, x*v.y-y*v.x ); }
 };
 
 template <class T> struct tvec4
@@ -225,7 +254,7 @@ template <class T> struct tvec4
 	// unary operators
 	__forceinline tvec4& operator+(){ return *this; }
 	__forceinline const tvec4& operator+() const { return *this; }
-	__forceinline tvec4 operator-() const { return tvec4(-x,-y,-z,-w); }
+	signed_memfun(T) __forceinline tvec4 operator-() const requires_signed_t(T) { return tvec4(-x,-y,-z,-w); }
 
     // binary operators
     __forceinline tvec4 operator+( T a ) const { return tvec4(x+a,y+a,z+a,w+a); }
@@ -248,12 +277,12 @@ template <class T> struct tvec4
     __forceinline tvec4& operator/=( const tvec4& v){ x/=v.x; y/=v.y; z/=v.z; w/=v.w; return *this; }
 
 	// norm/length/dot: floating-point only functions
-	float_memfun(T) __forceinline T length2() const { return T(x*x+y*y+z*z+w*w); }
-	float_memfun(T) __forceinline T norm2() const { return T(x*x+y*y+z*z+w*w); }
-	float_memfun(T) __forceinline T length() const { return T(sqrt(x*x+y*y+z*z+w*w)); }
-	float_memfun(T) __forceinline T norm() const { return T(sqrt(x*x+y*y+z*z+w*w)); }
-	float_memfun(T) __forceinline T dot( const tvec4& v ) const { return x*v.x+y*v.y+z*v.z+w*v.w; }
-	float_memfun(T) __forceinline tvec4<T> normalize() const { return operator/(length()); }
+	float_memfun(T) __forceinline T length2() const requires_floating_point_t(T) { return T(x*x+y*y+z*z+w*w); }
+	float_memfun(T) __forceinline T norm2() const requires_floating_point_t(T) { return T(x*x+y*y+z*z+w*w); }
+	float_memfun(T) __forceinline T length() const requires_floating_point_t(T) { return T(sqrt(x*x+y*y+z*z+w*w)); }
+	float_memfun(T) __forceinline T norm() const requires_floating_point_t(T) { return T(sqrt(x*x+y*y+z*z+w*w)); }
+	float_memfun(T) __forceinline T dot( const tvec4& v ) const requires_floating_point_t(T) { return x*v.x+y*v.y+z*v.z+w*v.w; }
+	float_memfun(T) __forceinline tvec4<T> normalize() const requires_floating_point_t(T) { return operator/(length()); }
 };
 
 // member function specialization
@@ -496,7 +525,7 @@ template <class T> struct tmat4
 	__forceinline tmat4  look_at_inverse() const { V3 eye=look_at_eye(); return tmat4{_11,_21,_31,eye.x,_12,_22,_32,eye.y,_13,_23,_33,eye.z,0,0,0,T(1)}; }
 
 	// Canonical view volume in OpenGL: [-1,1]^3
-	__forceinline tmat4& set_perspective( T fovy, T aspect, T dn, T df ){ if(fovy>T_PI<T>) fovy*=T_PI<T>/T(180.0); /* autofix for fov in degrees */ set_identity(); _22=T(1.0/tanf(fovy*0.5)); _11=_22/aspect; _33=(dn+df)/(dn-df); _34=2.0f*dn*df/(dn-df); _43=T(-1.0); _44=0; return *this; }
+	__forceinline tmat4& set_perspective( T fovy, T aspect, T dn, T df ){ if(fovy>pi_v<T>) fovy*=pi_v<T>/T(180.0); /* autofix for fov in degrees */ set_identity(); _22=T(1.0/tanf(fovy*0.5)); _11=_22/aspect; _33=(dn+df)/(dn-df); _34=2.0f*dn*df/(dn-df); _43=T(-1.0); _44=0; return *this; }
 	__forceinline tmat4& set_perspective_off_center( T left, T right, T top, T bottom, T dn, T df ){ set_identity(); _11=T(2.0)*dn/(right-left); _22=T(2.0)*dn/(top-bottom); _13=(right+left)/(right-left); _23=(top+bottom)/(top-bottom); _33=(dn+df)/(dn-df); _34=T(2.0)*dn*df/(dn-df); _43=T(-1.0); _44=0; return *this; }
 	__forceinline tmat4& set_ortho( T width, T height, T dn, T df ){ set_identity(); _11=T(2.0)/width; _22=T(2.0)/height;  _33=2.0f/(dn-df); _34=(dn+df)/(dn-df); return *this; }
 	__forceinline tmat4& set_ortho_off_center( T left, T right, T top, T bottom, T dn, T df ){ set_ortho( right-left, top-bottom, dn, df ); _14=(left+right)/(left-right); _24=(bottom+top)/(bottom-top); return *this; }
@@ -601,50 +630,50 @@ __forceinline vec4 mul( const mat4& m, const vec4& v ){ return m*v; }
 
 //*************************************
 // scalar-vector algebra
-template <class T> __forceinline tvec2<T> operator+( T f, const tvec2<T>& v ){ return v+f; }
-template <class T> __forceinline tvec2<signed_t<T>> operator-( T f, const tvec2<T>& v ){ return -v+f; }
-template <class T> __forceinline tvec2<T> operator*( T f, const tvec2<T>& v ){ return v*f; }
-template <class T> __forceinline tvec2<T> operator/( T f, const tvec2<T>& v ){ return tvec2<T>(f/v.x,f/v.y); }
-template <class T> __forceinline tvec3<T> operator+( T f, const tvec3<T>& v ){ return v+f; }
-template <class T> __forceinline tvec3<signed_t<T>> operator-( T f, const tvec3<T>& v ){ return -v+f; }
-template <class T> __forceinline tvec3<T> operator*( T f, const tvec3<T>& v ){ return v*f; }
-template <class T> __forceinline tvec3<T> operator/( T f, const tvec3<T>& v ){ return tvec3<T>(f/v.x,f/v.y,f/v.z); }
-template <class T> __forceinline tvec4<T> operator+( T f, const tvec4<T>& v ){ return v+f; }
-template <class T> __forceinline tvec4<signed_t<T>> operator-( T f, const tvec4<T>& v ){ return -v+f; }
-template <class T> __forceinline tvec4<T> operator*( T f, const tvec4<T>& v ){ return v*f; }
-template <class T> __forceinline tvec4<T> operator/( T f, const tvec4<T>& v ){ return tvec4<T>(f/v.x,f/v.y,f/v.z,f/v.w); }
+template <class X, class T> __forceinline tvec2<T> operator+( X f, const tvec2<T>& v ){ return v+T(f); }
+template <class X, class T> __forceinline tvec2<T> operator*( X f, const tvec2<T>& v ){ return v*T(f); }
+template <class X, class T> __forceinline tvec2<T> operator/( X f, const tvec2<T>& v ){ return tvec2<T>(T(f)/v.x,T(f)/v.y); }
+template <class X, class T> __forceinline tvec3<T> operator+( X f, const tvec3<T>& v ){ return v+T(f); }
+template <class X, class T> __forceinline tvec3<T> operator*( X f, const tvec3<T>& v ){ return v*T(f); }
+template <class X, class T> __forceinline tvec3<T> operator/( X f, const tvec3<T>& v ){ return tvec3<T>(T(f)/v.x,T(f)/v.y,T(f)/v.z); }
+template <class X, class T> __forceinline tvec4<T> operator+( X f, const tvec4<T>& v ){ return v+T(f); }
+template <class X, class T> __forceinline tvec4<T> operator*( X f, const tvec4<T>& v ){ return v*T(f); }
+template <class X, class T> __forceinline tvec4<T> operator/( X f, const tvec4<T>& v ){ return tvec4<T>(T(f)/v.x,T(f)/v.y,T(f)/v.z,T(f)/v.w); }
+template <class X, class T> __forceinline tvec2<T> operator-( X f, const tvec2<T>& v ){ return -v+T(f); }
+template <class X, class T> __forceinline tvec3<T> operator-( X f, const tvec3<T>& v ){ return -v+T(f); }
+template <class X, class T> __forceinline tvec4<T> operator-( X f, const tvec4<T>& v ){ return -v+T(f); }
 
 //*************************************
 // global operators for vector length/normalize/dot/cross
-template <class T> __forceinline floating_point_t<T> length( const tvec2<T>& v ){ return v.length(); }
-template <class T> __forceinline floating_point_t<T> length( const tvec3<T>& v ){ return v.length(); }
-template <class T> __forceinline floating_point_t<T> length( const tvec4<T>& v ){ return v.length(); }
-template <class T> __forceinline floating_point_t<T> length2( const tvec2<T>& v ){ return v.length2(); }
-template <class T> __forceinline floating_point_t<T> length2( const tvec3<T>& v ){ return v.length2(); }
-template <class T> __forceinline floating_point_t<T> length2( const tvec4<T>& v ){ return v.length2(); }
-template <class T> __forceinline tvec2<floating_point_t<T>> normalize( const tvec2<T>& v ){ return v.normalize(); }
-template <class T> __forceinline tvec3<floating_point_t<T>> normalize( const tvec3<T>& v ){ return v.normalize(); }
-template <class T> __forceinline tvec4<floating_point_t<T>> normalize( const tvec4<T>& v ){ return v.normalize(); }
-template <class T> __forceinline floating_point_t<T> dot( const tvec2<T>& v1, const tvec2<T>& v2){ return v1.dot(v2); }
-template <class T> __forceinline floating_point_t<T> dot( const tvec3<T>& v1, const tvec3<T>& v2){ return v1.dot(v2); }
-template <class T> __forceinline floating_point_t<T> dot( const tvec4<T>& v1, const tvec4<T>& v2){ return v1.dot(v2); }
-template <class T> __forceinline tvec3<floating_point_t<T>> cross( const tvec3<T>& v1, const tvec3<T>& v2){ return v1.cross(v2); }
+template <class T> __forceinline T length( const tvec2<T>& v ){ return v.length(); }
+template <class T> __forceinline T length( const tvec3<T>& v ){ return v.length(); }
+template <class T> __forceinline T length( const tvec4<T>& v ){ return v.length(); }
+template <class T> __forceinline T length2( const tvec2<T>& v ){ return v.length2(); }
+template <class T> __forceinline T length2( const tvec3<T>& v ){ return v.length2(); }
+template <class T> __forceinline T length2( const tvec4<T>& v ){ return v.length2(); }
+template <class T> __forceinline tvec2<T> normalize( const tvec2<T>& v ){ return v.normalize(); }
+template <class T> __forceinline tvec3<T> normalize( const tvec3<T>& v ){ return v.normalize(); }
+template <class T> __forceinline tvec4<T> normalize( const tvec4<T>& v ){ return v.normalize(); }
+template <class T> __forceinline T dot( const tvec2<T>& v1, const tvec2<T>& v2){ return v1.dot(v2); }
+template <class T> __forceinline T dot( const tvec3<T>& v1, const tvec3<T>& v2){ return v1.dot(v2); }
+template <class T> __forceinline T dot( const tvec4<T>& v1, const tvec4<T>& v2){ return v1.dot(v2); }
+template <class T> __forceinline tvec3<T> cross( const tvec3<T>& v1, const tvec3<T>& v2){ return v1.cross(v2); }
 
 //*************************************
 // general math utility functions
-template <class T> __forceinline floating_point_t<T> radians( T f ){ return f*T_PI<T>/T(180.0); }
-template <class T> __forceinline floating_point_t<T> degrees( T f ){ return f*T(180.0)/T_PI<T>; }
-template <class T> __forceinline tvec2<floating_point_t<T>> minmax( const tvec2<T>& a, const tvec2<T>& b ){ return tvec2<T>(a.x<b.x?a.x:b.x,a.y>b.y?a.y:b.y); }
-template <class T> __forceinline floating_point_t<T> round( T f, int digits ){ T m=T(pow(10.0,digits)); return round(f*m)/m; }
-__forceinline bool ispot( uint i ){ return (i&(i-1))==0; }		// http://en.wikipedia.org/wiki/Power_of_two
-__forceinline uint nextpot( uint n ){ int m=int(n)-1; for( uint k=1; k<uint(sizeof(int))*8; k<<=1 ) m=m|m>>k; return m+1; }	// closest (equal or larger) power-of-two
-__forceinline uint nextsqrt( uint n ){ return uint(ceil(sqrt(double(n)))+0.001); } // root of closest (equal or larger) square
-__forceinline uint nextsquare( uint n ){ uint r=nextsqrt(n); return r*r; } // closest (equal or larger) square
-__forceinline uint miplevels( uint width, uint height=1 ){ uint l=0; uint s=width>height?width:height; while(s){s=s>>1;l++;} return l; }
+template <class X, class T=float> __forceinline T radians( X f ){ return f*pi_v<T>/T(180.0); }
+template <class X, class T=float> __forceinline T degrees( X f ){ return f*T(180.0)/pi_v<T>; }
+template <class X, class T=float> __forceinline T round( X f, int digits ){ T m=T(pow(10.0,digits)); return round(f*m)/m; }
+template <class X, class T=float> __forceinline T triangle_area( tvec2<X> a, tvec2<X> b, tvec2<X> c ){ return T(abs(a.x*b.y+b.x*c.y+c.x*a.y-a.x*c.y-c.x*b.y-b.x*a.y))*T(0.5); }
+template <class T> __forceinline tvec2<T> minmax( const tvec2<T>& a, const tvec2<T>& b ){ return tvec2<T>(a.x<b.x?a.x:b.x,a.y>b.y?a.y:b.y); }
+template <class T, class I=integral_t<T>> __forceinline bool ispot( T i ) requires_integral_t(T) { return (uint(i)&(uint(i)-1))==0; } // http://en.wikipedia.org/wiki/Power_of_two
+template <class T, class I=integral_t<T>> __forceinline uint nextpot( T n ) requires_integral_t(T) { int m=int(n)-1; for( uint k=1; k<uint(sizeof(int))*8; k<<=1 ) m=m|m>>k; return m+1; }	// closest (equal or larger) power-of-two
+template <class T, class I=integral_t<T>> __forceinline uint nextsqrt( T n ) requires_integral_t(T) { return uint(ceil(sqrt(double(n)))+0.001); } // root of closest (equal or larger) square
+template <class T, class I=integral_t<T>> __forceinline uint nextsquare( T n ) requires_integral_t(T) { uint r=nextsqrt(n); return r*r; } // closest (equal or larger) square
+template <class T, class I=integral_t<T>> __forceinline uint miplevels( T width, T height=1 ) requires_integral_t(T) { uint l=0; uint s=width>height?width:height; while(s){s=s>>1;l++;} return l; }
+__forceinline uint bitswap( uint n ){ n=((n&0x55555555)<<1)|((n&0xaaaaaaaa)>>1); n=((n&0x33333333)<<2)|((n&0xcccccccc)>>2); n=((n&0x0f0f0f0f)<<4)|((n&0xf0f0f0f0)>>4); n=((n&0x00ff00ff)<<8)|((n&0xff00ff00)>>8); return (n<<16)|(n>>16); }
 __forceinline float rsqrt( float x ){ float y=0.5f*x; int i=*(int*)&x; i=0x5F375A86-(i>>1); x=*(float*)&i; x=x*(1.5f-y*x*x); x=x*(1.5f-y*x*x); return x; }						// Quake3's Fast InvSqrt(): 1/sqrt(x): magic number changed from 0x5f3759df to 0x5F375A86 for more accuracy; 2 iteration has quite good accuracy
 __forceinline double rsqrt( double x ){ double y=0.5*x; int64_t i=*(int64_t*)&x; i=0x5FE6EB50C7B537A9-(i>>1); x=*(double*)&i; x=x*(1.5-y*x*x); x=x*(1.5-y*x*x); return x; }		// Quake3's Fast InvSqrt(): 1/sqrt(x): 64-bit magic number (0x5FE6EB50C7B537A9) used; 2 iteration has quite good accuracy
-__forceinline uint bitswap( uint n ){ n=((n&0x55555555)<<1)|((n&0xaaaaaaaa)>>1); n=((n&0x33333333)<<2)|((n&0xcccccccc)>>2); n=((n&0x0f0f0f0f)<<4)|((n&0xf0f0f0f0)>>4); n=((n&0x00ff00ff)<<8)|((n&0xff00ff00)>>8); return (n<<16)|(n>>16); }
-__forceinline float triangle_area( vec2 a, vec2 b, vec2 c ){ return abs(a.x*b.y+b.x*c.y+c.x*a.y-a.x*c.y-c.x*b.y-b.x*a.y)*0.5f; }
 
 //*************************************
 // viewport helpers
@@ -674,9 +703,10 @@ VECF(abs)	VECF(ceil)	VECF(fabs)	VECF(floor)	VECF(fract)	VECF(saturate)	VECF(sign
 #undef VEC4F
 #undef VECF
 
-__forceinline float distance( const vec2& a, const vec2& b ){ return (a-b).length(); }
-__forceinline float distance( const vec3& a, const vec3& b ){ return (a-b).length(); }
-__forceinline float distance( const vec4& a, const vec4& b ){ return (a-b).length(); }
+template <class T,class N,class X> T clamp( T v, N vmin, X vmax ){ return v<T(vmin)?T(vmin):v>T(vmax)?T(vmax):v; }
+template <class T> __forceinline T distance( const tvec2<T>& a, const tvec2<T>& b ){ return (a-b).length(); }
+template <class T> __forceinline T distance( const tvec3<T>& a, const tvec3<T>& b ){ return (a-b).length(); }
+template <class T> __forceinline T distance( const tvec4<T>& a, const tvec4<T>& b ){ return (a-b).length(); }
 __forceinline vec2 fma( vec2 a, vec2 b, vec2 c ){ return vec2(fma(a.x,b.x,c.x),fma(a.y,b.y,c.y)); }
 __forceinline vec3 fma( vec3 a, vec3 b, vec3 c ){ return vec3(fma(a.x,b.x,c.x),fma(a.y,b.y,c.y),fma(a.z,b.z,c.z)); }
 __forceinline vec4 fma( vec4 a, vec4 b, vec4 c ){ return vec4(fma(a.x,b.x,c.x),fma(a.y,b.y,c.y),fma(a.z,b.z,c.z),fma(a.w,b.w,c.w)); }
@@ -713,7 +743,7 @@ __forceinline dvec3 mix( const dvec3& y1, const dvec3& y2, float t ){ return y1*
 __forceinline dvec4 mix( const dvec4& y1, const dvec4& y2, float t ){ return y1*(-t+1.0)+y2*t; }
 __forceinline mat4 mix( const mat4& v1, const mat4& v2, float t ){ return v1*(1.0f-t)+v2*t; }
 __forceinline vec3 reflect( const vec3& I, const vec3& N ){ return I-N*dot(I,N)*2.0f; }	// I: incident vector, N: normal
-__forceinline vec3 refract( const vec3& I, const vec3& N, float eta /* = n0/n1 */ ){ float d = I.dot(N); float k = 1.0f-eta*eta*(1.0f-d*d); return k<0.0f?0.0f:(I*eta-N*(eta*d+sqrtf(k))); } // I: incident vector, N: normal
+__forceinline vec3 refract( const vec3& I, const vec3& N, float eta /* = n0/n1 */ ){ float d = dot(I,N); float k = 1.0f-eta*eta*(1.0f-d*d); return k<0.0f?0.0f:(I*eta-N*(eta*d+sqrtf(k))); } // I: incident vector, N: normal
 __forceinline float smoothstep(float edge0, float edge1, float t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*(3-2*t); } // C1-continuity
 __forceinline vec2 smoothstep( float edge0, float edge1, vec2 t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*(3.0f-t*2.0f); }
 __forceinline vec3 smoothstep( float edge0, float edge1, vec3 t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*(3.0f-t*2.0f); }
