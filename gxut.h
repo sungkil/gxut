@@ -164,23 +164,33 @@ using std::string;
 using std::string_view;
 using std::vector;
 
-// C++11/14/17/20: 201402L, 201703L, 202002L, ...
-#if (__cplusplus>199711L)||(defined(_MSVC_LANG)&&_MSVC_LANG>199711L) // MSVC define not __cplusplus but _MSVC_LANG
-	#include <chrono>	// microtimer		
-	#include <functional>
-	#include <filesystem> // std::filesystem
-	namespace fs = std::filesystem;
-	#include <random>
-	#include <type_traits>
-	#include <thread> // usleep
-	#include <unordered_map>
-	#include <unordered_set>
-	#if (__cplusplus>=201703L)||(defined(_MSVC_LANG)&&_MSVC_LANG>=201703L)||(defined(_HAS_CXX17)&&_HAS_CXX17)
-		#include <string_view>
-	#endif
-	#if (__cplusplus>=202002L)||(defined(_MSVC_LANG)&&_MSVC_LANG>=202002L)||(defined(_HAS_CXX20)&&_HAS_CXX20)
-		#include <span>
-	#endif
+// MSVC define not __cplusplus but _MSVC_LANG
+// add /Zc:__cplusplus to get updated __cplusplus value
+// C++11/14/17/20/23: 201103L, 201402L, 201703L, 202002L, 202302L, ...
+#if defined(_MSVC_LANG) && __cplusplus<_MSVC_LANG
+	#error __cplusplus!=_MSVC_LANG: update __cplusplus in C/C++ > Command Line > Additional Options > /Zc:__cplusplus
+#endif
+#if __cplusplus<201703L
+	#error __cplusplus<201703L: gxut requires at least C++17
+#endif
+
+// C++11
+#include <chrono>	// microtimer
+#include <functional>
+#include <filesystem> // std::filesystem
+namespace fs = std::filesystem;
+#include <random>
+#include <type_traits>
+#include <thread> // usleep
+#include <unordered_map>
+#include <unordered_set>
+// C++17
+#include <string_view>
+// C++20: __cpluplus works here; keep for this for vcpp legacy check
+#if (__cplusplus>=202002L)||(defined(_MSVC_LANG)&&_MSVC_LANG>=202002L)||(defined(_HAS_CXX20)&&_HAS_CXX20)
+	#include <span>
+#else
+	// placeholder for compatibility macros
 #endif
 
 // platform-independent posix headers
