@@ -120,7 +120,7 @@ struct bridson_t
 	bool in_grid( ivec2 v ){ return v.x>=0&&v.x<grid_size&&v.y>=0&&v.y<grid_size; }
 	ivec2 to_grid( vec2& v ){ return ivec2(int((v.x/cell_size())), int((v.y/cell_size()))); }
 	sample gen_intial_sample(){ sample s={}; s.pos=vec2(0.5f,0.5f); s.tc = to_grid(s.pos); return s; }
-	sample gen_annulus( vec2 p ){ sample s={}; float t = prand()*PI*2.0f; s.pos = p + vec2(cosf(t),sinf(t))*(prand()+1.0f)*r; s.tc = to_grid(s.pos); return s; } 
+	sample gen_annulus( vec2 p ){ sample s={}; float t = prand()*pi2; s.pos = p + vec2(cosf(t),sinf(t))*(prand()+1.0f)*r; s.tc = to_grid(s.pos); return s; } 
 	static std::array<ivec2,20> gen_neighbors(){ std::array<ivec2,20> n={}; for(int k=0,y=-2;y<3;y++)for(int x=-2;x<3;x++){ if((x==0&&y==0)||(abs(x)==2&&abs(y)==2)) continue; n[k++]=ivec2(x,y); } return n; }
 
 	int generate( const int count, float radius );
@@ -221,7 +221,7 @@ __noinline vector<vec2> poisson_disk( uint _count, bool circular, uint seed )
 
 	int			count = _count;
 	bridson_t	b(circular);
-	float r0	= sqrtf((circular?(2.0f/5.0f):(8.0f/(5.0f*PI))))/sqrtf(float(count));
+	float r0	= sqrtf((circular?(2.0f/5.0f):(8.0f/(5.0f*pi))))/sqrtf(float(count));
 	vec3 r		= vec3(2.0f,0.1f,0.0f)*r0;
 	ivec3 n		= ivec3( b.generate(count,r.x), b.generate(count,r.y), 0 );
 
@@ -304,7 +304,7 @@ __noinline uint sampler_t::resample()
 // this simple radial mapping is poor for Halton and Hammersley
 inline vec2 square_to_circle( vec2 v )
 {
-	float t=PI*2.0f*v.y;
+	float t=pi2*v.y;
 	return vec2(cos(t),sin(t))*sqrt(v.x);
 }
 
@@ -313,7 +313,7 @@ inline vec2 square_to_circle( vec2 v )
 inline vec2 square_to_circle_concentric( vec2 v )
 {
 	v = v*2.0f-1.0f; if(v.x==0&&v.y==0) return vec2(0);
-	constexpr float piover4 = PI*0.25f;
+	constexpr float piover4 = pi*0.25f;
 	float r, t; if(abs(v.x)>abs(v.y)){ r=v.x; t=piover4*v.y/v.x; } else { r=v.y; t=piover4*(2.0f-v.x/v.y); }
 	return vec2(cos(t),sin(t))*r;
 }
@@ -337,7 +337,7 @@ inline void sampler_t::_reshape( vec4* v, surface_t dst )
 		for(uint k=0;k<n;k++)
 		{
 			vec3& s = v[k].xyz;
-			float phi=PI*(s.x*2.0f-1.0f), theta=acos(1.0f-s.y); // [0,1] to [-PI,PI]; [0,1] to [1,0] to [0,PI/2]
+			float phi=pi*(s.x*2.0f-1.0f), theta=acos(1.0f-s.y); // [0,1] to [-PI,PI]; [0,1] to [1,0] to [0,PI/2]
 			s = vec3(vec2(cos(phi),sin(phi))*sin(theta),cos(theta));
 		}
 	}
@@ -346,7 +346,7 @@ inline void sampler_t::_reshape( vec4* v, surface_t dst )
 		for(uint k=0;k<n;k++)
 		{
 			vec3& s = v[k].xyz;
-			float phi=PI*(s.x*2.0f-1.0f), r=sqrtf(4.0f*(1-s.y)*s.y); // [0,1] to [-PI,PI], [0,1] to [0,1]
+			float phi=pi*(s.x*2.0f-1.0f), r=sqrtf(4.0f*(1-s.y)*s.y); // [0,1] to [-PI,PI], [0,1] to [0,1]
 			s = vec3(vec2(cos(phi),sin(phi))*r,s.y);
 		}
 	}

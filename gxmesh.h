@@ -244,7 +244,7 @@ struct camera : public camera_t
 	
 	bool cull( const bbox_t& b ) const { return frustum.cull(b); }
 	void update_view_frustum(){ frustum.update(projection_matrix*view_matrix); }
-	void update_stereo(){ if(!stereo.model) return; float s=0.5f*stereo.ipd, o=s*dnear/df, t=dnear*tanf(0.5f*fovy*(fovy<PI?1.0f:PI/180.0f)), R=t*aspect; vec3 stereo_dir = normalize(cross(dir,up))*s; auto& l=stereo.left; memcpy(&l,this,sizeof(l)); l.eye-=stereo_dir; l.center-=stereo_dir; l.view_matrix=mat4::look_at(l.eye, l.center, l.up); l.projection_matrix=mat4::perspective_off_center(-R+o, R+o, t, -t, dnear, dfar); auto& r=stereo.right; memcpy(&r,this,sizeof(r)); r.eye+=stereo_dir; r.center+=stereo_dir; r.view_matrix=mat4::look_at(r.eye,r.center,r.up); r.projection_matrix=mat4::perspective_off_center(-R-o, R-o, t, -t, dnear, dfar);}
+	void update_stereo(){ if(!stereo.model) return; float s=0.5f*stereo.ipd, o=s*dnear/df, t=dnear*tanf(0.5f*fovy*(fovy<pi?1.0f:pi/180.0f)), R=t*aspect; vec3 stereo_dir = normalize(cross(dir,up))*s; auto& l=stereo.left; memcpy(&l,this,sizeof(l)); l.eye-=stereo_dir; l.center-=stereo_dir; l.view_matrix=mat4::look_at(l.eye, l.center, l.up); l.projection_matrix=mat4::perspective_off_center(-R+o, R+o, t, -t, dnear, dfar); auto& r=stereo.right; memcpy(&r,this,sizeof(r)); r.eye+=stereo_dir; r.center+=stereo_dir; r.view_matrix=mat4::look_at(r.eye,r.center,r.up); r.projection_matrix=mat4::perspective_off_center(-R-o, R-o, t, -t, dnear, dfar);}
 };
 
 // utilities for camera

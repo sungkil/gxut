@@ -72,6 +72,7 @@ constexpr float PI = pi_v<float>;
 constexpr float pi = pi_v<float>;
 constexpr float inv_pi = inv_pi_v<float>;
 constexpr float inv_sqrtpi = inv_sqrtpi_v<float>;
+constexpr float sqrt2 = sqrt2_v<float>;
 constexpr float pi2 = pi2_v<float>;
 
 //*************************************
