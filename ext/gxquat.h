@@ -6,15 +6,14 @@
 //*************************************
 struct quat
 {
-	union { struct { vec3 v; }; struct { float x, y, z; }; }; float w;
+	float w; union { struct { vec3 v; }; struct { float x, y, z; }; }; // scalar-first representation
 
 	// constructors
-	__forceinline quat(){x=y=z=0.0f;w=1.0f;}
+	__forceinline quat(){w=1.0f;x=y=z=0.0f;}
 	__forceinline quat( quat&& q ) = default;
-	__forceinline quat( const quat& q ):quat(q.x,q.y,q.z,q.w){}
-	__forceinline quat( float a, float b, float c, float d ){x=a;y=b;z=c;w=d;}
-	__forceinline quat( const vec3& v, float d ):quat(v.x,v.y,v.z,d){}
-	__forceinline quat( const vec4& v ):quat(v.x,v.y,v.z,v.w){}
+	__forceinline quat( const quat& q ):quat(q.w,q.x,q.y,q.z){}
+	__forceinline quat( float w, float x, float y, float z ){ this->w=w; this->x=x; this->y=y; this->z=z; }
+	__forceinline quat( float w, const vec3& v ):quat(w,v.x,v.y,v.z){}
 	__forceinline quat( const mat4& m ){ operator=(m); }
 	__forceinline quat( const vec3& v1, const vec3& v2 ):quat()	// rotation from v1 to v2
 	{
@@ -31,17 +30,17 @@ struct quat
 	__forceinline quat& operator/=( const quat& q ){ return *this=operator/(q); }
 
 	// scalar operators
-	__forceinline quat operator*( float s ) const { return quat( v*s, w*s ); }	// scalar multiplication
-	__forceinline quat operator/( float s ) const { return quat( v/s, w/s ); }	// scalar division
+	__forceinline quat operator*( float s ) const { return quat( w*s, v*s ); }	// scalar multiplication
+	__forceinline quat operator/( float s ) const { return quat( w/s, v/s ); }	// scalar division
 
 	// quat unary operators
 	__forceinline quat operator+() const { return *this; }
-	__forceinline quat operator-() const { return quat(-v,-w); }
+	__forceinline quat operator-() const { return quat(-w,-v); }
 
 	// quat binary operators
-	__forceinline quat operator+( const quat& q ) const { return quat(v+q.v,w+q.w); }
-	__forceinline quat operator-( const quat& q ) const { return quat(v-q.v,w-q.w); }
-	__forceinline quat operator*( const quat& q ) const { return quat( v*q.w+q.v*w+v.cross(q.v), w*q.w-v.dot(q.v) ); }
+	__forceinline quat operator+( const quat& q ) const { return quat(w+q.w,v+q.v); }
+	__forceinline quat operator-( const quat& q ) const { return quat(w-q.w,v-q.v); }
+	__forceinline quat operator*( const quat& q ) const { return quat(w*q.w-v.dot(q.v),v*q.w+q.v*w+v.cross(q.v)); }
 	__forceinline quat operator/( const quat& q ) const { return *this*q.inverse(); }
 
 	// dot product
@@ -52,28 +51,35 @@ struct quat
 	__forceinline float length2() const { return x*x+y*y+z*z+w*w; }
 	__forceinline float norm() const { return sqrtf(x*x+y*y+z*z+w*w); }
 	__forceinline float norm2() const { return x*x+y*y+z*z+w*w; }
-	__forceinline quat normalize() const { float l=1.0f/norm(); return quat(x*l,y*l,z*l,w*l); }
+	__forceinline quat normalize() const { float l=1.0f/norm(); return quat(w*l,x*l,y*l,z*l); }
 
 	// conjugate/inverse
-	__forceinline quat conjugate() const { return quat(-v,w); }
+	__forceinline quat conjugate() const { return quat(w,-v); }
 	__forceinline quat inverse() const { return conjugate()/norm2(); }
 
 	// conversion with row-major rotation matrix
 	__forceinline quat& operator=( const mat4& m ) // convert row-major rotation matrix to quaternion
 	{
 		float trace = m._11+m._22+m._33;
-		if( trace>0.0000001f ){				float s=sqrtf(trace+1.0f)*2.0f;				return *this=quat( (m._32-m._23)/s, (m._13-m._31)/s, (m._21-m._12)/s, 0.25f*s ); } 
-		else if(m._11>m._22&&m._11>m._33){	float s=sqrtf(1.0f+m._11-m._22-m._33)*2.0f;	return *this=quat( 0.25f*s, (m._21+m._12 )/s, (m._12+m._31)/s, (m._32-m._23)/s ); }
-		else if (m._22>m._33){				float s=sqrtf(1.0f+m._22-m._11-m._33)*2.0f;	return *this=quat( (m._21+m._12 )/s, 0.25f*s, (m._32+m._23)/s, (m._13-m._31)/s ); } 
-		else{								float s=sqrtf(1.0f+m._33-m._11-m._22)*2.0f;	return *this=quat( (m._13+m._31)/s, (m._23+m._32)/s, 0.25f*s, (m._21-m._12)/s ); }
+		if( trace>0.0000001f ){				float s=sqrtf(trace+1.0f)*2.0f;				return *this=quat( 0.25f*s, (m._32-m._23)/s, (m._13-m._31)/s, (m._21-m._12)/s ); }
+		else if(m._11>m._22&&m._11>m._33){	float s=sqrtf(1.0f+m._11-m._22-m._33)*2.0f;	return *this=quat( (m._32-m._23)/s, 0.25f*s, (m._21+m._12 )/s, (m._12+m._31)/s ); }
+		else if (m._22>m._33){				float s=sqrtf(1.0f+m._22-m._11-m._33)*2.0f;	return *this=quat( (m._13-m._31)/s, (m._21+m._12 )/s, 0.25f*s, (m._32+m._23)/s ); }
+		else{								float s=sqrtf(1.0f+m._33-m._11-m._22)*2.0f;	return *this=quat( (m._21-m._12)/s, (m._13+m._31)/s, (m._23+m._32)/s, 0.25f*s ); }
+	}
+
+	__forceinline operator mat3 () const
+	{
+		return mat3	(1.0f-(2.0f*y*y)-(2.0f*z*z),	(2.0f*x*y)-(2.0f*w*z),		(2.0f*x*z)+(2.0f*w*y),
+					(2.0f*x*y)+(2.0f*w*z),			1.0f-(2.0f*x*x)-(2.0f*z*z),	(2.0f*y*z)-(2.0f*w*x),
+					(2.0f*x*z)-(2.0f*w*y),			(2.0f*y*z)+(2.0f*w*x),		1.0f-(2.0f*x*x)-(2.0f*y*y) );
 	}
 
 	__forceinline operator mat4 () const
 	{
-		return mat4	(1.0f-(2.0f*y*y)-(2.0f*z*z),	(2.0f*x*y)-(2.0f*w*z),		(2.0f*x*z)+(2.0f*w*y),		0.0f,
-					(2.0f*x*y)+(2.0f*w*z),			1.0f-(2.0f*x*x)-(2.0f*z*z),	(2.0f*y*z)-(2.0f*w*x),		0.0f,
-					(2.0f*x*z)-(2.0f*w*y),			(2.0f*y*z)+(2.0f*w*x),		1.0f-(2.0f*x*x)-(2.0f*y*y),	0.0f,
-					0.0f,							0.0f,						0.0f,						1.0f );
+		return mat4	(1.0f-(2.0f*y*y)-(2.0f*z*z),	(2.0f*x*y)-(2.0f*w*z),		(2.0f*x*z)+(2.0f*w*y),		0,
+					(2.0f*x*y)+(2.0f*w*z),			1.0f-(2.0f*x*x)-(2.0f*z*z),	(2.0f*y*z)-(2.0f*w*x),		0,
+					(2.0f*x*z)-(2.0f*w*y),			(2.0f*y*z)+(2.0f*w*x),		1.0f-(2.0f*x*x)-(2.0f*y*y),	0,
+					0,								0,							0,							1.0f );
 	}
 };
 

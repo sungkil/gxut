@@ -404,7 +404,7 @@ template <class T> struct tmat2
 	__forceinline tmat2(){ _12=_21=0;_11=_22=T(1.0); }
 	__forceinline tmat2( T f11, T f12, T f21, T f22 ){ _11=f11;_12=f12;_21=f21;_22=f22; }
 
-	// identity and transpose
+	// transpose
 	__forceinline tmat2 transpose() const { return tmat2{_11,_21,_12,_22}; }
 
 	// determinant/trace/inverse
@@ -436,7 +436,7 @@ template <class T> struct tmat3
 	// casting operators
 	__forceinline operator tmat2<T>() const { return tmat2<T>(_11,_12,_21,_22); }
 
-	// identity and transpose
+	// transpose
 	__forceinline tmat3 transpose() const { return tmat3(_11,_21,_31,_12,_22,_32,_13,_23,_33); }
 
 	// determinant/trace/inverse
@@ -471,6 +471,10 @@ template <class T> struct tmat4
 	// constructors
 	__forceinline tmat4(){ _12=_13=_14=_21=_23=_24=_31=_32=_34=_41=_42=_43=0;_11=_22=_33=_44=T(1.0); }
 	__forceinline tmat4( T f11, T f12, T f13, T f14, T f21, T f22, T f23, T f24, T f31, T f32, T f33, T f34, T f41, T f42, T f43, T f44 ){_11=f11;_12=f12;_13=f13;_14=f14;_21=f21;_22=f22;_23=f23;_24=f24;_31=f31;_32=f32;_33=f33;_34=f34;_41=f41;_42=f42;_43=f43;_44=f44;}
+	__forceinline tmat4( const tmat3<T>& m ){ _11=m._11;_12=m._12;_13=m._13;_14=0;_21=m._21;_22=m._22;_23=m._23;_24=0;_31=m._31;_32=m._32;_33=m._33;_34=0;_41=0;_42=0;_43=0;_44=T(1); }
+
+	// assignment operator
+	__forceinline tmat4& operator=( const tmat3<T>& m ){ _11=m._11;_12=m._12;_13=m._13;_14=0;_21=m._21;_22=m._22;_23=m._23;_24=0;_31=m._31;_32=m._32;_33=m._33;_34=0;_41=0;_42=0;_43=0;_44=T(1); return *this; }
 
 	// casting operators
 	__forceinline operator tmat3<T>() const { return tmat3<T>(_11,_12,_13,_21,_22,_23,_31,_32,_33); }
@@ -479,7 +483,7 @@ template <class T> struct tmat4
 	// multiplication operators
 	__forceinline tvec3<T> operator*( const tvec3<T>& f ) const { tvec4<T> g(f,T(1)); return tvec3<T>(v[0].dot(g),v[1].dot(g),v[2].dot(g)); }
 
-	// identity and transpose
+	// transpose
 	__forceinline tmat4 transpose() const { return tmat4(_11,_21,_31,_41,_12,_22,_32,_42,_13,_23,_33,_43,_14,_24,_34,_44); }
 
 	// determinant/trace/inverse
