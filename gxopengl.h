@@ -590,8 +590,8 @@ struct Texture : public Object
 	friend Texture* ::gxCreateTextureCube(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,GLvoid* data[6],bool);
 	friend Texture* ::gxCreateTextureBuffer(const char*,gl::Buffer*,GLint);
 	friend Texture* ::gxCreateTextureRectangle(const char*,GLsizei,GLsizei,GLint,GLvoid*);
-	friend Texture* ::gxCreateTextureView(Texture* src,GLuint,GLuint,GLuint,GLuint,GLenum,bool);
-	friend Texture* ::gxCreateTexture2DFromMemory( const char* name, GLsizei width, GLsizei height, GLuint memory_object, GLint internal_format );
+	friend Texture* ::gxCreateTextureView(Texture*,GLuint,GLuint,GLuint,GLuint,GLenum,bool);
+	friend Texture* ::gxCreateTexture2DFromMemory(const char*,GLsizei,GLsizei,GLuint,GLint);
 
 	friend struct fx::metadata_t;
 	fx::metadata_t* metadata = nullptr;

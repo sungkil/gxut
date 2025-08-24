@@ -327,7 +327,7 @@ template <> __forceinline mat3 tbn_matrix<true>( vec3 normal ) // used in normal
 }
 
 // find an up vector from mesh
-__noinline int find_up_vector( mesh* p_mesh )
+__noinline int find_up_vector( const mesh* p_mesh )
 {
 	if(!p_mesh) return 2;
 	if(p_mesh->box.max_extent()>(p_mesh->box.min_extent()*4.0f)) return p_mesh->box.min_axis();
