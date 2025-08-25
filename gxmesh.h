@@ -197,7 +197,7 @@ struct camera_t // std140 layout for OpenGL uniform buffer objects
 {
 	mat4	view_matrix, projection_matrix;
 	float	fovy, aspect, dnear, dfar;
-	vec4	eye, center, up;			// 16-bytes aligned for std140 layout
+	vec4	eye, center, up, dir; // 16-bytes aligned for std140 layout
 	float	F, E, df, fn;
 };
 #else
@@ -205,7 +205,7 @@ struct camera_t
 {
 	mat4 view_matrix, projection_matrix;
 	union { struct { union {float fovy, height;}; float aspect,dnear,dfar; }; vec4 pp; }; // fov in radians; height for orthographic projection; pp=perspective parameters
-	alignas(16)	vec3 eye, center, up;			// lookAt params (16-bytes aligned for std140 layout)
+	alignas(16)	vec3 eye, center, up, dir;		// lookAt params (16-bytes aligned for std140 layout), dir=center-eye
 	union { float F, focal; }; float E, df, fn;	// focal length, lens radius, focusing depth (in object distance), f-number
 
 	camera_t() = default;
@@ -229,12 +229,8 @@ struct camera : public camera_t
 {
 	camera*		last=nullptr;		// current to last
 	camera*		next=nullptr;		// last to current
-	vec3		dir;				// dir = center - eye (view direction vector)
 	int			frame = RAND_MAX;	// frame used for this camera; used in a motion tracer
 	frustum_t	frustum;			// view frustum for culling
-	
-	bool cull( const bbox_t& b ) const { return frustum.cull(b); }
-	void update_view_frustum(){ frustum.update(projection_matrix*view_matrix); }
 };
 
 struct stereo_t
