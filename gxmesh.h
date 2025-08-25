@@ -61,6 +61,7 @@ struct light_t
 	float	theta() const { return acos(dir().z); }					// angle between outgoing light direction and the optical axis
 };
 static_assert(sizeof(light_t)%16==0, "size of struct light_t should be aligned at 16-byte boundaries");
+inline string STR_GLSL_STRUCT_LIGHT = "struct light_t { vec4 pos, color, normal; }; // normal: use only normal.xyz\n"; // std140 definition for shaders
 #endif
 
 // overloading light transformations to camera space
@@ -164,6 +165,7 @@ struct bbox : public bbox_t
 };
 
 inline bbox operator*(const mat4& m, const bbox& b){ return bbox(b).expand(m); }
+inline string STR_GLSL_STRUCT_BBOX = "struct bbox { vec4 m; vec4 M; }; // bounding box in std140 layout\n";
 #endif
 
 //*************************************
@@ -223,6 +225,7 @@ struct camera_t
 	void	extend_frustum( double scale ){ projection_matrix.set_perspective( fovy=float(atan2(tan(fovy*0.5)*scale,1.0)*2.0), aspect, dnear, dfar ); }
 };
 static_assert(sizeof(camera_t)%16==0, "size of struct camera_t should be aligned at 16-byte boundary");
+inline string STR_GLSL_STRUCT_CAMERA = "struct camera_t { mat4 view_matrix, projection_matrix; float fovy, aspect, dnear, dfar; vec4 eye, center, up, dir; float F, E, df, fn; };\n";
 #endif
 
 struct camera : public camera_t
@@ -267,6 +270,7 @@ struct material
 	uint64_t	PBR=0;				// GPU handle to PBR texture: (ambient occlusion,roughness,metallic), where RM follows glTF spec
 };
 static_assert(sizeof(material)%16==0, "struct material must be aligned at a 16-byte boundary");
+inline string STR_GLSL_STRUCT_MATERIAL = "struct material { vec4 color; uint bsdf; float metal, rough, beta, specular, n; uvec2 TEX, NRM, PBR; };\n";
 #endif
 
 inline float beta_to_roughness(float b){ return float(sqrtf(2.0f/(b+2.0f))); }  // Beckmann roughness in [0,1] (0:mirror, 1: Lambertian)
@@ -349,7 +353,13 @@ struct geometry
 };
 static_assert(sizeof(geometry)%16==0,	"sizeof(geometry) should be multiple of 16-byte");
 static_assert(sizeof(geometry)==144,	"sizeof(geometry) should be 144, when aligned correctly");
+inline string STR_GLSL_STRUCT_GEOMETRY = "struct geometry { uint count, instance_count, first_index, base_vertex, base_instance; uint material_index, acc_index, acc_prim_count, acc_prim_index, pad[3]; bbox box; mat4 mtx; };\n";
 #endif
+
+//*************************************
+// unified glsl includes
+inline string STR_GLSL_STRUCT_GBUFFER = "struct gbuffer_t { vec4 albedo; vec3 normal, epos; int item; };\n";
+inline string STR_GLSL_STRUCT_MESH = STR_GLSL_STRUCT_CAMERA+STR_GLSL_STRUCT_LIGHT+STR_GLSL_STRUCT_BBOX+STR_GLSL_STRUCT_MATERIAL+STR_GLSL_STRUCT_GEOMETRY+STR_GLSL_STRUCT_GBUFFER;
 
 //*************************************
 // a set of geometries for batch control (not related to the rendering)
@@ -645,9 +655,6 @@ __noinline void mesh::update_proxy()
 	}
 }
 
-//*************************************
-// utility
-#ifdef __GX_FILESYSTEM_H__
 inline void mesh::dump_binary( const char* _dir )
 {
 	if(vertices.empty() || indices.empty()) return;
@@ -657,6 +664,5 @@ inline void mesh::dump_binary( const char* _dir )
 	FILE* fp = fopen(vertex_bin_path.c_str(),"wb"); fwrite(&vertices[0], sizeof(vertex), vertices.size(), fp); fclose(fp);
 	fp = fopen(index_bin_path.c_str(),"wb");  fwrite(&indices[0], sizeof(uint), indices.size(), fp); fclose(fp);
 }
-#endif
 
 #endif // __GX_MESH_H__

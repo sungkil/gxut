@@ -1346,12 +1346,20 @@ template<> inline void Uniform::set<float4>( GLuint prog, const float4* ptr, GLs
 
 //*************************************
 // shader/program/effect source structures
+struct named_string_t { string name, value; };
 struct shader_macro_t : public vector<string>
 {
+	using vector<string>::vector;
+	using vector<string>::operator=;	// inherit operator=
 	void append( __printf_format_string__ const char* m, ... ){ char b[4096];va_list a;va_start(a,m);size_t len=size_t(vsnprintf(0,0,m,a));vsnprintf(b,len+1,m,a);va_end(a); for(auto& s:*this) if(strcmp(s.c_str(),b)==0) return; emplace_back(b); }
 	string merge() const { string m; for(auto& s:*this){ m+=s; if(s.back()!='\n') m+='\n'; } if(!m.empty()) m+='\n'; return m; }
 };
-struct named_string_t { string name, value; };
+struct shader_include_t : public vector<named_string_t>
+{
+	using vector<named_string_t>::vector;
+	using vector<named_string_t>::operator=;	// inherit operator=
+	void append( string name, string source ){ if(!name.empty()){for(auto& s:*this) if(stricmp(s.name.c_str(),name.c_str())==0){ s.value=source; return; }} emplace_back( named_string_t{name,source} ); }
+};
 struct shader_source_t : public vector<named_string_t> // a list of source strings
 {
 	using vector<named_string_t>::vector;		// inherit ctors
@@ -1506,11 +1514,13 @@ struct indexed_string_t : public string
 struct directive_t
 {
 	string version, extension, pragma, layout;
-	string merge() const { return version+extension+pragma+layout; }
+	struct { bool include=false; } b;
+	string merge() const { string i=b.include?"#extension GL_ARB_shading_language_include : require\n":""; return version+extension+i+pragma+layout; }
 	directive_t& operator+=( const directive_t& other )
 	{
 		if(!other.version.empty())		version+=other.version;
 		if(!other.extension.empty())	extension+=other.extension;
+		if(other.b.include)				b.include=true;
 		if(!other.pragma.empty())		pragma+=other.pragma;
 		if(!other.layout.empty())		layout+=other.layout;
 		return *this;
@@ -1776,7 +1786,7 @@ inline gl::directive_t gxPreprocessShaderDirectives( uint shader_type, string& s
 	return d;
 }
 
-inline gl::Program* gxCreateProgram( string prefix, string name, const gl::program_source_t& source )
+inline gl::Program* gxCreateProgram( string prefix, string name, const gl::program_source_t& source, uint crc0=0 )
 {
 	if(!prefix.empty()) prefix+='.';
 	string pname_s = prefix+name; const char* pname = pname_s.c_str();
@@ -1792,6 +1802,7 @@ inline gl::Program* gxCreateProgram( string prefix, string name, const gl::progr
 		{
 			auto& s = const_cast<string&>(f.value); // source element
 			directives += gxPreprocessShaderDirectives(it.first,s);
+			if(stristr(s.c_str(),"#include")) directives.b.include=true;
 		}
 		auto& first = const_cast<string&>(it.second.front().value); // first source element
 		first = directives.merge()+first; // merge all together
@@ -1804,7 +1815,7 @@ inline gl::Program* gxCreateProgram( string prefix, string name, const gl::progr
 
 	// 3. create md5 hash of shader souces
 	string crcsrc=pname; for( auto& it : source ){ for( auto& s : it.second ) crcsrc += s.value; }
-	uint crc = crc32(0,crcsrc.c_str(),crcsrc.size()*sizeof(decltype(crcsrc)::value_type));
+	uint crc = crc32(crc0,crcsrc.c_str(),crcsrc.size()*sizeof(decltype(crcsrc)::value_type));
 
 	// 4. try to load binary cache
 	GLuint binary_program_ID = gxLoadProgramBinary( pname, crc );
@@ -1897,7 +1908,12 @@ namespace gl {
 
 struct effect_source_t : public vector<named_string_t>
 {
-	shader_macro_t macro; // embedded macro
+	shader_macro_t		macro;		// embedded macros
+#ifdef __GX_MESH_H__
+	shader_include_t	include = {{"/gxut/gxmesh.h",STR_GLSL_STRUCT_MESH}};
+#else
+	shader_include_t	include;	// named strings for glsl built-in includes	
+#endif
 
 	effect_source_t() = default;
 	effect_source_t( const vector<value_type>& v ){ reinterpret_cast<vector<value_type>&>(*this)=v; }
@@ -1907,8 +1923,8 @@ struct effect_source_t : public vector<named_string_t>
 	void clear() noexcept { vector<named_string_t>::clear(); macro.clear(); }
 	iterator find( string name ){ for( auto it=begin(); it!=end(); it++ ) if(stricmp(it->name.c_str(),name.c_str())==0) return it; return end(); }
 	void append( string name, string source ){ if(!name.empty()){for(auto& s:*this) if(stricmp(s.name.c_str(),name.c_str())==0){ s.value=source; return; }} emplace_back( value_type{name,source} ); }
-	bool replace( string _Where, string name, string source ){ auto it=find(_Where); if(it==end()) return false; it->name = name; it->value = source; return true; }
-	bool replace( iterator _Where, string name, string source ){ if(_Where==end()) return false; _Where->name = name; _Where->value = source; return true; }
+	bool replace( string _where, string name, string source ){ auto it=find(_where); if(it==end()) return false; it->name=name; it->value=source; return true; }
+	bool replace( iterator _where, string name, string source ){ if(_where==end()) return false; _where->name = name; _where->value = source; return true; }
 		
 	string get_name( int index ) const { if(!macro.empty()){ if(index==0) return "macro.fx"; index--; } return this->at(index).name; }
 	vector<string> names() const { vector<string> vs; if(!macro.empty()) vs.emplace_back("macro.fx"); for( auto& s:*this) vs.emplace_back(s.name); return vs; }
@@ -1926,7 +1942,7 @@ struct effect_source_t : public vector<named_string_t>
 struct Effect : public Object
 {
 	Effect( GLuint ID, const char* name ) : Object(ID,name,0){ if(!(quad=gxCreateQuadVertexArray())) printf("[%s] unable to create quad buffer\n",name); }
-	~Effect() override { active_program=nullptr; if(quad){ delete quad; quad=nullptr; } if(!pts.empty()){ for(auto& it:pts) safe_delete(it.second); pts.clear(); } for(auto& it:uniform_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} uniform_buffer_map.clear(); for(auto* p:programs) delete p; programs.clear(); }
+	~Effect() override { active_program=nullptr; if(quad){ delete quad; quad=nullptr; } if(!pts.empty()){ for(auto& it:pts) safe_delete(it.second); pts.clear(); } for(auto& it:uniform_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} uniform_buffer_map.clear(); for(auto* p:programs) delete p; programs.clear(); if(glDeleteNamedStringARB){for(auto& i:include_names) glDeleteNamedStringARB(-1,i.c_str());} }
 	
 	static void unbind(){ glUseProgram(0); }
 	Program* bind( __printf_format_string__ const char* program_name, ... ){ char buff[1024]; va_list a;va_start(a,program_name);vsnprintf(buff,1024,program_name,a);va_end(a); active_program=get_program(buff); if(active_program) active_program->bind(); else{ active_program=nullptr; glUseProgram(0); } return active_program; }
@@ -1942,7 +1958,7 @@ struct Effect : public Object
 	Program* get_program_by_index( uint index ) const { if(index<programs.size()) return programs[index]; else { printf("[%s] Out-of-bound program index\n", _name ); return nullptr; } }
 	Program* get_program_by_id( uint program_ID ) const { for(auto* p:programs)if(p->ID==program_ID) return p; printf("Unable to find program \"%u\" in effect \"%s\"\n", program_ID, this->_name ); return nullptr; }
 	Program* append_program( Program* program ){ if(!program) return nullptr; programs.emplace_back(program); for(auto& [ubname,ub] : program->_uniform_block_map) ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size); return program; }
-	Program* create_program( const char* name, const program_source_t& source ){ Program* p=gxCreateProgram(this->name(),name,source); return p?append_program(p):nullptr; }
+	Program* create_program( const char* name, const program_source_t& source ){ return append_program(gxCreateProgram(this->name(),name,source)); }
 
 	Uniform* get_uniform( const char* name ){ if(active_program) return active_program->get_uniform(name); printf("%s.%s(%s): no program is bound.",this->name(),__func__,name); return nullptr; }
 	void set_uniform( const char* name, Texture* t ){ auto* p=active_program; if(!p) p=find_program_from_uniform(name,__func__); if(p) p->set_uniform(name,t); }
@@ -1986,6 +2002,7 @@ struct Effect : public Object
 	// internal members
 	Program*						active_program=nullptr;
 	vector<Program*>				programs;
+	std::set<string>				include_names;		// in order to delete them
 	std::map<string,Buffer*>		uniform_buffer_map;	// do not define uniform buffers in each program, since they are shared across programs.
 	std::map<uint64_t,VertexArray*>	pts;				// point vertex array
 	VertexArray*					quad=nullptr;
@@ -2070,7 +2087,19 @@ inline gl::Effect* __gxCreateEffectImpl( gl::Effect* parent, const char* fxname,
 	glfx::IParser* parser = glfxCreateParser(); if(!parser){ printf( "%s(): unable to create parser\n", __func__ ); return nullptr; }
 	if(!parser->parse(source.merge().c_str())){ printf( "%s(): failed to parse %s\n%s\n", __func__, fxname, parser->parse_log() ); return nullptr; }
 
-	gl::Effect* e = parent ? parent : new gl::Effect(0, fxname);
+	gl::Effect* e = parent?parent:new gl::Effect(0, fxname);
+
+	// define includes
+	if(!glNamedStringARB&&!source.include.empty()){ printf( "%s(): glNamedStringARB==nullptr\n",__func__); return nullptr; }
+	uint crc0=0;
+	for( auto& i : source.include )
+	{
+		glNamedStringARB(GL_SHADER_INCLUDE_ARB,-1,i.name.c_str(),-1,i.value.c_str() );
+		e->include_names.emplace(i.name);
+		crc0 = crc32(crc0,(const void*)i.name.c_str(),i.name.size());
+		crc0 = crc32(crc0,(const void*)i.value.c_str(),i.value.size());
+	}
+	
 	for( int k=0, kn=parser->program_count(); k<kn; k++ )
 	{
 		gl::program_source_t ss;
@@ -2082,7 +2111,7 @@ inline gl::Effect* __gxCreateEffectImpl( gl::Effect* parent, const char* fxname,
 			ss[parser->shader_type(k,j)] = ns;
 		}
 		
-		gl::Program* program = gxCreateProgram(fxname?fxname:"",parser->program_name(k),ss); if(!program){ glfxDeleteParser(&parser); if(e!=parent) delete e; return nullptr; }
+		gl::Program* program = gxCreateProgram(fxname?fxname:"",parser->program_name(k),ss,crc0); if(!program){ glfxDeleteParser(&parser); if(e!=parent) delete e; return nullptr; }
 		e->append_program(program);
 	}
 
