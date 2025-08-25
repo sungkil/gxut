@@ -225,14 +225,6 @@ struct camera_t
 static_assert(sizeof(camera_t)%16==0, "size of struct camera_t should be aligned at 16-byte boundary");
 #endif
 
-struct stereo_t
-{
-	enum model_t {NONE=0,LEFT=1,RIGHT=2,BOTH=3,ALTER=4}; // bitwise-and with left/right indicates left/right is drawn; ALTER renders left/right for even/odd frames
-	uint		model = 0;			// stereo-rendering model
-	float		ipd = 64.0f;		// inter-pupil distance for stereoscopy: 6.4 cm = men's average
-	camera_t	left, right;		// left, right cameras
-};
-
 struct camera : public camera_t
 {
 	camera*		last=nullptr;		// current to last
@@ -240,11 +232,18 @@ struct camera : public camera_t
 	vec3		dir;				// dir = center - eye (view direction vector)
 	int			frame = RAND_MAX;	// frame used for this camera; used in a motion tracer
 	frustum_t	frustum;			// view frustum for culling
-	stereo_t	stereo;				// stereo rendering attributes
 	
 	bool cull( const bbox_t& b ) const { return frustum.cull(b); }
 	void update_view_frustum(){ frustum.update(projection_matrix*view_matrix); }
-	void update_stereo(){ if(!stereo.model) return; float s=0.5f*stereo.ipd, o=s*dnear/df, t=dnear*tanf(0.5f*fovy*(fovy<pi?1.0f:pi/180.0f)), R=t*aspect; vec3 stereo_dir = normalize(cross(dir,up))*s; auto& l=stereo.left; memcpy(&l,this,sizeof(l)); l.eye-=stereo_dir; l.center-=stereo_dir; l.view_matrix=mat4::look_at(l.eye, l.center, l.up); l.projection_matrix=mat4::perspective_off_center(-R+o, R+o, t, -t, dnear, dfar); auto& r=stereo.right; memcpy(&r,this,sizeof(r)); r.eye+=stereo_dir; r.center+=stereo_dir; r.view_matrix=mat4::look_at(r.eye,r.center,r.up); r.projection_matrix=mat4::perspective_off_center(-R-o, R-o, t, -t, dnear, dfar);}
+};
+
+struct stereo_t
+{
+	enum model_t {NONE=0,LEFT=1,RIGHT=2,BOTH=3}; // bitwise-and with left/right indicates left/right is drawn; ALTER renders left/right for even/odd frames
+	uint		model = 0;			// stereo-rendering model
+	float		ipd = 64.0f;		// inter-pupil distance for stereoscopy: 6.4 cm = men's average
+	camera_t	left, right;		// left, right cameras
+	void		update( const camera& c ){ if(!model) return; float s=0.5f*ipd, o=s*c.dnear/c.df, t=c.dnear*tanf(0.5f*c.fovy*(c.fovy<pi?1.0f:pi/180.0f)), R=t*c.aspect; vec3 stereo_dir = normalize(cross(c.dir,c.up))*s; auto& l=left; memcpy(&l,&c,sizeof(l)); l.eye-=stereo_dir; l.center-=stereo_dir; l.view_matrix=mat4::look_at(l.eye,l.center,l.up); l.projection_matrix=mat4::perspective_off_center(-R+o,R+o,t,-t,c.dnear,c.dfar); auto& r=right; memcpy(&r,&c,sizeof(r)); r.eye+=stereo_dir; r.center+=stereo_dir; r.view_matrix=mat4::look_at(r.eye,r.center,r.up); r.projection_matrix=mat4::perspective_off_center(-R-o,R-o,t,-t,c.dnear,c.dfar);}
 };
 
 // utilities for camera
