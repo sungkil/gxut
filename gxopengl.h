@@ -392,18 +392,6 @@ struct VertexArray : public Object
 } // end namespace gl
 //*************************************
 
-#ifdef __GX_MESH_H__
-inline void mesh::draw_arrays( GLint first, GLsizei count, GLenum mode, bool b_bind ){ buffer.vertex->draw_arrays(first,count,mode,b_bind); }
-inline void mesh::draw_arrays_instanced( GLint first, GLsizei instance_count, GLsizei count, GLenum mode, bool b_bind ){ buffer.vertex->draw_arrays_instanced( first, instance_count, count, mode, b_bind ); }
-inline void mesh::draw_elements( GLuint first, GLsizei count, GLenum mode, bool b_bind ){ buffer.vertex->draw_elements( first, count, mode, b_bind ); }
-inline void mesh::draw_elements_instanced( GLuint first, GLsizei instance_count, GLsizei count, GLenum mode, bool b_bind ){ buffer.vertex->draw_elements_instanced( first, instance_count, count, mode, b_bind ); }
-inline void mesh::draw_elements_indirect( GLvoid* indirect, GLenum mode, bool b_bind ){ buffer.vertex->draw_elements_indirect( indirect, mode, b_bind ); }
-inline void mesh::draw_range_elements( GLuint first, GLuint end, GLsizei count, GLenum mode, bool b_bind ){ buffer.vertex->draw_range_elements( first, end, count, mode, b_bind ); }
-inline void mesh::multi_draw_elements( GLuint* pfirst, const GLsizei* pcount, GLsizei draw_count, GLenum mode, bool b_bind ){ buffer.vertex->multi_draw_elements( pfirst, pcount, draw_count, mode, b_bind ); }
-inline void mesh::multi_draw_elements_indirect( GLsizei draw_count, GLsizei stride, GLvoid* indirect, GLenum mode, bool b_bind ){ buffer.vertex->multi_draw_elements_indirect( draw_count, stride, indirect, mode, b_bind ); }
-inline void mesh::multi_draw_elements_indirect_count( GLsizei max_draw_count, GLsizei stride, const void* indirect, GLintptr draw_count, GLenum mode, bool b_bind ){ buffer.vertex->multi_draw_elements_indirect_count( max_draw_count, stride, indirect, draw_count, mode, b_bind ); }
-#endif
-
 inline gl::VertexArray* gxCreateVertexArray( const char* name, const vertex* p_vertices, size_t vertex_count, const uint* p_indices=nullptr, size_t index_count=0, GLenum usage=GL_STATIC_DRAW )
 {
 	GLuint ID=gxCreateVertexArray(); if(ID==0) return nullptr; if(ID==0){ printf( "%s(): unable to create vertex array %s\n", __func__, name ); return nullptr; }
@@ -439,13 +427,6 @@ inline gl::VertexArray* gxCreateVertexArray( const char* name, const vector<vert
 {
 	return vertices.empty()?nullptr:gxCreateVertexArray(name,vertices.data(),vertices.size(),indices.empty()?nullptr:indices.data(),indices.size(),usage);
 }
-
-#ifdef __GX_MESH_H__
-inline gl::VertexArray* gxCreateVertexArray( const char* name, mesh* p_mesh, GLenum usage=GL_STATIC_DRAW )
-{
-	return p_mesh?gxCreateVertexArray(name,&p_mesh->vertices[0],p_mesh->vertices.size(),&p_mesh->indices[0],p_mesh->indices.size(),usage):nullptr;
-}
-#endif
 
 inline gl::VertexArray* gxCreateQuadVertexArray()
 {
@@ -1349,16 +1330,17 @@ template<> inline void Uniform::set<float4>( GLuint prog, const float4* ptr, GLs
 struct named_string_t { string name, value; };
 struct shader_macro_t : public vector<string>
 {
-	using vector<string>::vector;
+	using vector<string>::vector;		// inherit ctors
 	using vector<string>::operator=;	// inherit operator=
 	void append( __printf_format_string__ const char* m, ... ){ char b[4096];va_list a;va_start(a,m);size_t len=size_t(vsnprintf(0,0,m,a));vsnprintf(b,len+1,m,a);va_end(a); for(auto& s:*this) if(strcmp(s.c_str(),b)==0) return; emplace_back(b); }
 	string merge() const { string m; for(auto& s:*this){ m+=s; if(s.back()!='\n') m+='\n'; } if(!m.empty()) m+='\n'; return m; }
 };
 struct shader_include_t : public vector<named_string_t>
 {
-	using vector<named_string_t>::vector;
+	using vector<named_string_t>::vector;		// inherit ctors
 	using vector<named_string_t>::operator=;	// inherit operator=
 	void append( string name, string source ){ if(!name.empty()){for(auto& s:*this) if(stricmp(s.name.c_str(),name.c_str())==0){ s.value=source; return; }} emplace_back( named_string_t{name,source} ); }
+	static inline vector<named_string_t> global; // global instances for auto inclusion
 };
 struct shader_source_t : public vector<named_string_t> // a list of source strings
 {
@@ -1896,7 +1878,6 @@ inline gl::Program* gxCreateProgram( string prefix, string name, const gl::progr
 	// 13. logging
 	std::chrono::high_resolution_clock::time_point tend=std::chrono::high_resolution_clock::now();
 	double tdelta = std::chrono::duration_cast<std::chrono::duration<double,std::milli>>(tend-tbegin).count();
-
 	printf( "completed in %.1f ms\n", float(tdelta) );
 
 	return program;
@@ -1909,11 +1890,7 @@ namespace gl {
 struct effect_source_t : public vector<named_string_t>
 {
 	shader_macro_t		macro;		// embedded macros
-#ifdef __GX_MESH_H__
-	shader_include_t	include = {{"/gxut/gxmesh.h",STR_GLSL_STRUCT_MESH}};
-#else
-	shader_include_t	include;	// named strings for glsl built-in includes	
-#endif
+	shader_include_t	include;
 
 	effect_source_t() = default;
 	effect_source_t( const vector<value_type>& v ){ reinterpret_cast<vector<value_type>&>(*this)=v; }
@@ -2092,6 +2069,13 @@ inline gl::Effect* __gxCreateEffectImpl( gl::Effect* parent, const char* fxname,
 	// define includes
 	if(!glNamedStringARB&&!source.include.empty()){ printf( "%s(): glNamedStringARB==nullptr\n",__func__); return nullptr; }
 	uint crc0=0;
+	for( auto& i : gl::shader_include_t::global )
+	{
+		glNamedStringARB(GL_SHADER_INCLUDE_ARB,-1,i.name.c_str(),-1,i.value.c_str() );
+		e->include_names.emplace(i.name);
+		crc0 = crc32(crc0,(const void*)i.name.c_str(),i.name.size());
+		crc0 = crc32(crc0,(const void*)i.value.c_str(),i.value.size());
+	}
 	for( auto& i : source.include )
 	{
 		glNamedStringARB(GL_SHADER_INCLUDE_ARB,-1,i.name.c_str(),-1,i.value.c_str() );
@@ -2139,5 +2123,19 @@ inline bool gl::Effect::append( gl::effect_source_t source )
 {
 	return __gxCreateEffectImpl(this,this->_name,source);
 }
+
+#if defined(__GX_MESH_H__)&&!defined(__GX_MESH_OPENGL_IMPL__)
+#define __GX_MESH_OPENGL_IMPL__
+inline void mesh::draw_arrays( GLint first, GLsizei count, GLenum mode, bool b_bind ){ buffer.vertex->draw_arrays(first,count,mode,b_bind); }
+inline void mesh::draw_arrays_instanced( GLint first, GLsizei instance_count, GLsizei count, GLenum mode, bool b_bind ){ buffer.vertex->draw_arrays_instanced( first, instance_count, count, mode, b_bind ); }
+inline void mesh::draw_elements( GLuint first, GLsizei count, GLenum mode, bool b_bind ){ buffer.vertex->draw_elements( first, count, mode, b_bind ); }
+inline void mesh::draw_elements_instanced( GLuint first, GLsizei instance_count, GLsizei count, GLenum mode, bool b_bind ){ buffer.vertex->draw_elements_instanced( first, instance_count, count, mode, b_bind ); }
+inline void mesh::draw_elements_indirect( GLvoid* indirect, GLenum mode, bool b_bind ){ buffer.vertex->draw_elements_indirect( indirect, mode, b_bind ); }
+inline void mesh::draw_range_elements( GLuint first, GLuint end, GLsizei count, GLenum mode, bool b_bind ){ buffer.vertex->draw_range_elements( first, end, count, mode, b_bind ); }
+inline void mesh::multi_draw_elements( GLuint* pfirst, const GLsizei* pcount, GLsizei draw_count, GLenum mode, bool b_bind ){ buffer.vertex->multi_draw_elements( pfirst, pcount, draw_count, mode, b_bind ); }
+inline void mesh::multi_draw_elements_indirect( GLsizei draw_count, GLsizei stride, GLvoid* indirect, GLenum mode, bool b_bind ){ buffer.vertex->multi_draw_elements_indirect( draw_count, stride, indirect, mode, b_bind ); }
+inline void mesh::multi_draw_elements_indirect_count( GLsizei max_draw_count, GLsizei stride, const void* indirect, GLintptr draw_count, GLenum mode, bool b_bind ){ buffer.vertex->multi_draw_elements_indirect_count( max_draw_count, stride, indirect, draw_count, mode, b_bind ); }
+inline gl::VertexArray* gxCreateVertexArray( const char* name, mesh* p_mesh, GLenum usage=GL_STATIC_DRAW ){ return p_mesh?gxCreateVertexArray(name,&p_mesh->vertices[0],p_mesh->vertices.size(),&p_mesh->indices[0],p_mesh->indices.size(),usage):nullptr; }
+#endif
 
 #endif // __GX_OPENGL_H__
