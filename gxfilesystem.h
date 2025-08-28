@@ -447,7 +447,7 @@ namespace nocase
 
 // disk volume type for windows
 #ifdef _APISETFILE_
-struct volume_t
+struct disk_volume_t
 {
 	static const int	capacity = 256;
 	wchar_t				root[4]={}; // trailing backslash required
@@ -458,10 +458,10 @@ struct volume_t
 	struct {			unsigned long flags=0; wchar_t name[capacity+1]={}; } filesystem;
 
 	// constructor
-	volume_t() = default;
-	volume_t( const volume_t& other ) = default;
-	volume_t& operator=( const volume_t& other ) = default;
-	volume_t( const path& file_path )
+	disk_volume_t() = default;
+	disk_volume_t( const disk_volume_t& other ) = default;
+	disk_volume_t& operator=( const disk_volume_t& other ) = default;
+	disk_volume_t( const path& file_path )
 	{
 		if(file_path.is_unc()||file_path.is_remote()) return;
 		path drive = file_path.drive(); if(drive.empty()||!isalpha(drive[0])||!drive.exists()) return;

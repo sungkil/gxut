@@ -235,10 +235,10 @@ inline path usertemp()
 	static path t; if(!t.empty()) return t;
 	wchar_t b[path::capacity]; GetTempPathW(path::capacity,b); t=wtoa(b); t=t.absolute().append_slash();
 	path tmp=t.drive().append_slash()+"temp\\"; if(t==tmp.junction()) t=tmp; t[0]=::toupper(t[0]);
-	if(volume_t(t).has_free_space()) return t;
+	if(disk_volume_t(t).has_free_space()) return t;
 	printf("temp(): not enough space in %s\n", t.c_str() );
 	t=path(exe::dir())+"temp\\"; if(!t.exists()) t.mkdir(); printf("temp(): %s is used instead", t.c_str() );
-	if(!volume_t(t).has_free_space()) printf(", but still not enough space." );
+	if(!disk_volume_t(t).has_free_space()) printf(", but still not enough space." );
 	printf("\n");
 	return t;
 }
