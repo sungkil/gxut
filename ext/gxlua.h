@@ -105,7 +105,7 @@ struct lua_state_t
 	operator lua_State*(){ return L; }
 
 	// library
-	inline static int print( lua_State* L ){ string s; for(int i=1, nargs=lua_gettop(L);i<=nargs;i++){ if(lua_isstring(L, i)) s+=lua_tolstring(L,i,0); else if(lua_isnumber(L,i)) s+=dtoa(lua_tonumberx(L,i,0)); else if(lua_isinteger(L,i)) s+=itoa((int)lua_tointegerx(L,i,0)); else if(lua_type(L,i)==LUA_TBOOLEAN)	s+=btoa(lua_toboolean(L,i)); else if(lua_isuserdata(L,i)) s+=format("0x%p",lua_topointer(L,i)); } printf("%s",s.c_str()); return 0; }
+	inline static int print( lua_State* L ){ string s; for(int i=1, nargs=lua_gettop(L);i<=nargs;i++){ if(lua_isstring(L, i)) s+=lua_tolstring(L,i,0); else if(lua_isnumber(L,i)) s+=ftoa(lua_tonumberx(L,i,0)); else if(lua_isinteger(L,i)) s+=itoa((int)lua_tointegerx(L,i,0)); else if(lua_type(L,i)==LUA_TBOOLEAN)	s+=btoa(lua_toboolean(L,i)); else if(lua_isuserdata(L,i)) s+=format("0x%p",lua_topointer(L,i)); } printf("%s",s.c_str()); return 0; }
 	inline static void register_default_lib( lua_State* L ){ static const struct luaL_Reg libs[]={{"print",print},{0,0}}; lua_getglobal(L,"_G");luaL_newlib(L,libs);lua_settop(L,-3); }
 	void require_c( const char* name, lua_CFunction func ){ luaL_requiref(L,name,func,0); }
 	void require_string( const char* name, const char* src ){ luaL_getsubtable(L,LUA_REGISTRYINDEX,"_LOADED"); lua_getfield(L,-1,name ); if(!lua_toboolean(L,-1)){ do_string(src); lua_setfield(L,-3,name); } lua_settop(L,-3); /*restore the stack*/ } // equivalent to : package.loaded[name] = load(src)() in Lua code
@@ -274,7 +274,7 @@ __noinline string __call_tostring( sol::stack_object v, sol::this_state L )
 {
 	sol::type t = v.get_type();
 	if(t==sol::type::boolean)	return v.as<bool>()?"true":"false";
-	if(t==sol::type::number)	return dtoa(v.as<double>());
+	if(t==sol::type::number)	return ftoa(v.as<double>());
 	if(t==sol::type::string)	return v.as<string>();
 	if(t==sol::type::userdata)
 	{

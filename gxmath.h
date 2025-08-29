@@ -606,17 +606,13 @@ static_assert(sizeof(dmat3)%sizeof(double)*9==0,"sizeof(dmat3)!=sizeof(double)*9
 static_assert(sizeof(dmat4)%sizeof(double)*16==0,"sizeof(dmat4)!=sizeof(double)*16" );
 
 //*************************************
-// string-matrix conversion functions
+// matrix types to string
 inline const char* ftoa( const mat2& m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3]);return buff;}
 inline const char* ftoa( const mat3& m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]);return buff;}
 inline const char* ftoa( const mat4& m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]);return buff;}
 inline const char* ftoa( const dmat2&m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3]);return buff;}
 inline const char* ftoa( const dmat3&m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]);return buff;}
 inline const char* ftoa( const dmat4&m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]);return buff;}
-inline mat3 atof9( const char* a ){		mat3 m;char* e=0; for(int k=0;k<9;k++,a=e) (&m._11)[k]=strtof(a,&e); return m; }
-inline mat4 atof16( const char* a ){	mat4 m;char* e=0; for(int k=0;k<16;k++,a=e)(&m._11)[k]=strtof(a,&e); return m; }
-inline dmat3 atod9( const char* a ){	dmat3 m;char* e=0;for(int k=0;k<9;k++,a=e) (&m._11)[k]=strtod(a,&e); return m; }
-inline dmat4 atod16( const char* a ){	dmat4 m;char* e=0;for(int k=0;k<16;k++,a=e)(&m._11)[k]=strtod(a,&e); return m; }
 
 //*************************************
 // vertor-matrix multiplications

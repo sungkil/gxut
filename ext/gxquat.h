@@ -102,4 +102,8 @@ __forceinline quat squad( const quat& q0, const quat& q1, const quat& q2, const 
 __forceinline quat shermite( const quat& q0, const quat& q1, const quat& q2, const quat& q3, float t, double tension=0.5, double bias=0.0, double continuity=-0.5 ){ return squad(q0,q1,q2,q3,t); } // need to implement correctly
 
 //*************************************
+// vector interpolation
+__forceinline vec3 slerp( vec3 v1, vec3 v2, float t ){ float l1=v1.length(), l2=v2.length(); vec3 w1=v1/l1,w2=v2/l2; mat4 r = slerp(quat(),quat(w1,w2),t,true); return (r*w1)*lerp(l1,l2,t); }
+
+//*************************************
 #endif

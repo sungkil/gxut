@@ -182,12 +182,12 @@ template<> __noinline uint parser_t::get<uint>( const char* key ){			return uint
 template<> __noinline int64_t parser_t::get<int64_t>( const char* key ){	auto* v=get(key); return *v==0?0:_atoi64(v); }
 template<> __noinline uint64_t parser_t::get<uint64_t>( const char* key ){	return uint64_t(get<int64_t>(key)); }
 template<> __noinline float parser_t::get<float>( const char* key ){		auto* v=get(key); return *v==0?0:float(atof(v)); }
-template<> __noinline int2 parser_t::get<int2>( const char* key ){			auto* v=get(key); return *v==0?int2{}:atoi2(v); }
-template<> __noinline int3 parser_t::get<int3>( const char* key ){			auto* v=get(key); return *v==0?int3{}:atoi3(v); }
-template<> __noinline int4 parser_t::get<int4>( const char* key ){			auto* v=get(key); return *v==0?int4{}:atoi4(v); }
-template<> __noinline float2 parser_t::get<float2>( const char* key ){		auto* v=get(key); return *v==0?float2{}:atof2(v); }
-template<> __noinline float3 parser_t::get<float3>( const char* key ){		auto* v=get(key); return *v==0?float3{}:atof3(v); }
-template<> __noinline float4 parser_t::get<float4>( const char* key ){		auto* v=get(key); return *v==0?float4{}:atof4(v); }
+template<> __noinline int2 parser_t::get<int2>( const char* key ){			auto* v=get(key); return *v==0?int2{}:atoi<int2>(v); }
+template<> __noinline int3 parser_t::get<int3>( const char* key ){			auto* v=get(key); return *v==0?int3{}:atoi<int3>(v); }
+template<> __noinline int4 parser_t::get<int4>( const char* key ){			auto* v=get(key); return *v==0?int4{}:atoi<int4>(v); }
+template<> __noinline float2 parser_t::get<float2>( const char* key ){		auto* v=get(key); return *v==0?float2{}:atof<float2>(v); }
+template<> __noinline float3 parser_t::get<float3>( const char* key ){		auto* v=get(key); return *v==0?float3{}:atof<float3>(v); }
+template<> __noinline float4 parser_t::get<float4>( const char* key ){		auto* v=get(key); return *v==0?float4{}:atof<float4>(v); }
 
 // template specializations for set()
 template<> __noinline void parser_t::set<const char*>( const char* key, const char* value ){ bool b=key_exists(key); entry_t* e=get_or_create_entry(key); if(b&&e->value==value) return; e->value=value; save(); }

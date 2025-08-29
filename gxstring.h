@@ -56,73 +56,118 @@ namespace logical
 }
 #endif
 
-// conversion to string types
+// conversion for POD and POD-like types
 inline const char* btoa( bool b ){ return b?"true":"false"; }
 inline const char* itoa( int i ){ return format("%d",i); }
 inline const char* utoa( uint u ){ return format("%u",u); }
 inline const char* ftoa( float f ){ if(fabs(f)<0.00000001f) return "0"; return format("%g",f); }
-inline const char* dtoa( double d ){ if(fabs(d)<0.00000001) return "0"; return format("%g",d); }
+inline const char* ftoa( double d ){ if(fabs(d)<0.00000001) return "0"; return format("%g",d); }
 inline const char* illtoa( int64_t i ){ return format("%lld",i); }
 inline const char* ulltoa( uint64_t u ){ return format("%llu",u); }
+inline bool		atob( const char* a ){ return a&&*a&&(stricmp(a,"true")==0||atoi(a)!=0); }
+inline uint		atou( const char* a ){ char* e=nullptr;uint v=(uint)strtoul(a,&e,10); return v; }
+inline int64_t	atoill( const char* a ){ char* e=nullptr;int64_t v=strtoll(a,&e,10); return v; }
+inline uint64_t	atoull( const char* a ){ char* e=nullptr;uint64_t v=strtoull(a,&e,10); return v; }
+
+// user types to string
 inline const char* itoa( const int2& v ){ return format("%d %d",v.x,v.y); }
 inline const char* itoa( const int3& v ){ return format("%d %d %d",v.x,v.y,v.z); }
 inline const char* itoa( const int4& v ){ return format("%d %d %d %d",v.x,v.y,v.z,v.w); }
-inline const char* itoa( const short2& v ){ int2 i={v.x,v.y};return itoa(i); }
-inline const char* itoa( const short3& v ){ int3 i={v.x,v.y,v.z};return itoa(i); }
-inline const char* itoa( const short4& v ){ int4 i={v.x,v.y,v.z,v.w};return itoa(i); }
-inline const char* itoa( const char2& v ){ int2 i={v.x,v.y};return itoa(i); }
-inline const char* itoa( const char3& v ){ int3 i={v.x,v.y,v.z};return itoa(i); }
-inline const char* itoa( const char4& v ){ int4 i={v.x,v.y,v.z,v.w};return itoa(i); }
 inline const char* utoa( const uint2& v ){ return format("%u %u",v.x,v.y); }
 inline const char* utoa( const uint3& v ){ return format("%u %u %u",v.x,v.y,v.z); }
 inline const char* utoa( const uint4& v ){ return format("%u %u %u %u",v.x,v.y,v.z,v.w); }
-inline const char* utoa( const ushort2& v ){ uint2 u={v.x,v.y};return utoa(u); }
-inline const char* utoa( const ushort3& v ){ uint3 u={v.x,v.y,v.z};return utoa(u); }
-inline const char* utoa( const ushort4& v ){ uint4 u={v.x,v.y,v.z,v.w};return utoa(u); }
-inline const char* utoa( const uchar2& v ){ uint2 u={v.x,v.y};return utoa(u); }
-inline const char* utoa( const uchar3& v ){ uint3 u={v.x,v.y,v.z};return utoa(u); }
-inline const char* utoa( const uchar4& v ){ uint4 u={v.x,v.y,v.z,v.w};return utoa(u); }
 inline const char* ftoa( const float2& v ){ return format("%g %g",fabs(v.x)<0.00000001f?0:v.x,fabs(v.y)<0.00000001f?0:v.y); }
 inline const char* ftoa( const float3& v ){ return format("%g %g %g",fabs(v.x)<0.00000001f?0:v.x,fabs(v.y)<0.00000001f?0:v.y,fabs(v.z)<0.00000001f?0:v.z); }
 inline const char* ftoa( const float4& v ){ return format("%g %g %g %g",fabs(v.x)<0.00000001f?0:v.x,fabs(v.y)<0.00000001f?0:v.y,fabs(v.z)<0.00000001f?0:v.z,fabs(v.w)<0.00000001f?0:v.w); }
-inline const char* dtoa( const double2& v ){ return format("%g %g",v.x,v.y); }
-inline const char* dtoa( const double3& v ){ return format("%g %g %g",v.x,v.y,v.z); }
-inline const char* dtoa( const double4& v ){ return format("%g %g %g %g",v.x,v.y,v.z,v.w); }
+inline const char* ftoa( const double2& v ){ return format("%g %g",v.x,v.y); }
+inline const char* ftoa( const double3& v ){ return format("%g %g %g",v.x,v.y,v.z); }
+inline const char* ftoa( const double4& v ){ return format("%g %g %g %g",v.x,v.y,v.z,v.w); }
 
-// templated generic conversion
+// templated string to user types
+template <class T> T		atoi( const char* a );
+template <class T> T		atou( const char* a );
+template <class T> T		atof( const char* a );
+template<> inline int		atoi<int>( const char* a ){ return atoi(a); }
+template<> inline uint		atou<uint>( const char* a ){ return atou(a); }
+template<> inline float		atof<float>( const char* a ){ return float(atof(a)); }
+template<> inline double	atof<double>( const char* a ){ return double(atof(a)); }
+template<> inline int2		atoi<int2>( const char* a ){ int2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) (&v.x)[k]=(int)strtol(a,&e,10); return v; }
+template<> inline int3		atoi<int3>( const char* a ){ int3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) (&v.x)[k]=(int)strtol(a,&e,10); return v; }
+template<> inline int4		atoi<int4>( const char* a ){ int4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) (&v.x)[k]=(int)strtol(a,&e,10); return v; }
+template<> inline uint2		atou<uint2>( const char* a ){ uint2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) (&v.x)[k]=strtoul(a,&e,10); return v; }
+template<> inline uint3		atou<uint3>( const char* a ){ uint3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) (&v.x)[k]=strtoul(a,&e,10); return v; }
+template<> inline uint4		atou<uint4>( const char* a ){ uint4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) (&v.x)[k]=strtoul(a,&e,10); return v; }
+template<> inline float2	atof<float2>( const char* a ){ float2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) (&v.x)[k]=strtof(a,&e); return v; }
+template<> inline float3	atof<float3>( const char* a ){ float3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) (&v.x)[k]=strtof(a,&e); return v; }
+template<> inline float4	atof<float4>( const char* a ){ float4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) (&v.x)[k]=strtof(a,&e); return v; }
+template<> inline double2	atof<double2>( const char* a ){ double2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) (&v.x)[k]=strtod(a,&e); return v; }
+template<> inline double3	atof<double3>( const char* a ){ double3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) (&v.x)[k]=strtod(a,&e); return v; }
+template<> inline double4	atof<double4>( const char* a ){ double4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) (&v.x)[k]=strtod(a,&e); return v; }
+
+// templated generic conversion from user types
 template <class T> const char* ntoa( T v );
 template<> inline const char* ntoa<bool>( bool v ){ return btoa(v); }
 template<> inline const char* ntoa<int>( int v ){ return itoa(v); }
 template<> inline const char* ntoa<uint>( uint v ){ return utoa(v); }
 template<> inline const char* ntoa<float>( float v ){ return ftoa(v); }
-template<> inline const char* ntoa<double>( double v ){ return dtoa(v); }
+template<> inline const char* ntoa<double>( double v ){ return ftoa(v); }
 template<> inline const char* ntoa<int64_t>( int64_t v ){ return illtoa(v); }
 template<> inline const char* ntoa<uint64_t>( uint64_t v ){ return ulltoa(v); }
 template<> inline const char* ntoa<int2>( int2 v ){ return itoa(v); }
 template<> inline const char* ntoa<int3>( int3 v ){ return itoa(v); }
 template<> inline const char* ntoa<int4>( int4 v ){ return itoa(v); }
-template<> inline const char* ntoa<short2>( short2 v ){ return itoa(v); }
-template<> inline const char* ntoa<short3>( short3 v ){ return itoa(v); }
-template<> inline const char* ntoa<short4>( short4 v ){ return itoa(v); }
-template<> inline const char* ntoa<char2>( char2 v ){ return itoa(v); }
-template<> inline const char* ntoa<char3>( char3 v ){ return itoa(v); }
-template<> inline const char* ntoa<char4>( char4 v ){ return itoa(v); }
 template<> inline const char* ntoa<uint2>( uint2 v ){ return utoa(v); }
 template<> inline const char* ntoa<uint3>( uint3 v ){ return utoa(v); }
 template<> inline const char* ntoa<uint4>( uint4 v ){ return utoa(v); }
-template<> inline const char* ntoa<ushort2>( ushort2 v ){ return utoa(v); }
-template<> inline const char* ntoa<ushort3>( ushort3 v ){ return utoa(v); }
-template<> inline const char* ntoa<ushort4>( ushort4 v ){ return utoa(v); }
-template<> inline const char* ntoa<uchar2>( uchar2 v ){ return utoa(v); }
-template<> inline const char* ntoa<uchar3>( uchar3 v ){ return utoa(v); }
-template<> inline const char* ntoa<uchar4>( uchar4 v ){ return utoa(v); }
 template<> inline const char* ntoa<float2>( float2 v ){ return ftoa(v); }
 template<> inline const char* ntoa<float3>( float3 v ){ return ftoa(v); }
 template<> inline const char* ntoa<float4>( float4 v ){ return ftoa(v); }
-template<> inline const char* ntoa<double2>( double2 v ){ return dtoa(v); }
-template<> inline const char* ntoa<double3>( double3 v ){ return dtoa(v); }
-template<> inline const char* ntoa<double4>( double4 v ){ return dtoa(v); }
+template<> inline const char* ntoa<double2>( double2 v ){ return ftoa(v); }
+template<> inline const char* ntoa<double3>( double3 v ){ return ftoa(v); }
+template<> inline const char* ntoa<double4>( double4 v ){ return ftoa(v); }
+
+// templated generic conversion from string
+template <class T> T		aton( const char* a );
+template<> inline bool		aton<bool>( const char* a ){	return atob(a); }
+template<> inline int		aton<int>( const char* a ){		return atoi(a); }
+template<> inline uint		aton<uint>( const char* a ){	return atou(a); }
+template<> inline float		aton<float>( const char* a ){	return float(atof(a)); }
+template<> inline double	aton<double>( const char* a ){	return double(atof(a)); }
+template<> inline int64_t	aton<int64_t>( const char* a ){	return atoill(a); }
+template<> inline uint64_t	aton<uint64_t>( const char* a ){return atoull(a); }
+template<> inline int2		aton<int2>( const char* a ){	return atoi<int2>(a); }
+template<> inline int3		aton<int3>( const char* a ){	return atoi<int3>(a); }
+template<> inline int4		aton<int4>( const char* a ){	return atoi<int4>(a); }
+template<> inline uint2		aton<uint2>( const char* a ){	return atou<uint2>(a); }
+template<> inline uint3		aton<uint3>( const char* a ){	return atou<uint3>(a); }
+template<> inline uint4		aton<uint4>( const char* a ){	return atou<uint4>(a); }
+template<> inline float2	aton<float2>( const char* a ){	return atof<float2>(a); }
+template<> inline float3	aton<float3>( const char* a ){	return atof<float3>(a); }
+template<> inline float4	aton<float4>( const char* a ){	return atof<float4>(a); }
+template<> inline double2	aton<double2>( const char* a ){	return atof<double2>(a); }
+template<> inline double3	aton<double3>( const char* a ){	return atof<double3>(a); }
+template<> inline double4	aton<double4>( const char* a ){	return atof<double4>(a); }
+
 #if defined(__GX_MATH_H__)&&!defined(__cuda__) // type definitions in CUDA/vector_types.h
+template<> inline ivec2	atoi<ivec2>( const char* a ){ ivec2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) (&v.x)[k]=(int)strtol(a,&e,10); return v; }
+template<> inline ivec3	atoi<ivec3>( const char* a ){ ivec3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) (&v.x)[k]=(int)strtol(a,&e,10); return v; }
+template<> inline ivec4	atoi<ivec4>( const char* a ){ ivec4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) (&v.x)[k]=(int)strtol(a,&e,10); return v; }
+template<> inline uvec2	atou<uvec2>( const char* a ){ uvec2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) (&v.x)[k]=strtoul(a,&e,10); return v; }
+template<> inline uvec3	atou<uvec3>( const char* a ){ uvec3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) (&v.x)[k]=strtoul(a,&e,10); return v; }
+template<> inline uvec4	atou<uvec4>( const char* a ){ uvec4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) (&v.x)[k]=strtoul(a,&e,10); return v; }
+template<> inline vec2	atof<vec2>( const char* a ){ vec2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) (&v.x)[k]=strtof(a,&e); return v; }
+template<> inline vec3	atof<vec3>( const char* a ){ vec3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) (&v.x)[k]=strtof(a,&e); return v; }
+template<> inline vec4	atof<vec4>( const char* a ){ vec4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) (&v.x)[k]=strtof(a,&e); return v; }
+template<> inline dvec2	atof<dvec2>( const char* a ){ dvec2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) (&v.x)[k]=strtod(a,&e); return v; }
+template<> inline dvec3	atof<dvec3>( const char* a ){ dvec3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) (&v.x)[k]=strtod(a,&e); return v; }
+template<> inline dvec4	atof<dvec4>( const char* a ){ dvec4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) (&v.x)[k]=strtod(a,&e); return v; }
+template<> inline mat2	atof<mat2>( const char* a ){ mat2 m;char* e=0; for(int k=0;k<4;k++,a=e) (&m._11)[k]=strtof(a,&e); return m; }
+template<> inline mat3	atof<mat3>( const char* a ){ mat3 m;char* e=0; for(int k=0;k<9;k++,a=e) (&m._11)[k]=strtof(a,&e); return m; }
+template<> inline mat4	atof<mat4>( const char* a ){ mat4 m;char* e=0; for(int k=0;k<16;k++,a=e)(&m._11)[k]=strtof(a,&e); return m; }
+template<> inline dmat2	atof<dmat2>( const char* a ){ dmat2 m;char* e=0;for(int k=0;k<4;k++,a=e) (&m._11)[k]=strtod(a,&e); return m; }
+template<> inline dmat3	atof<dmat3>( const char* a ){ dmat3 m;char* e=0;for(int k=0;k<9;k++,a=e) (&m._11)[k]=strtod(a,&e); return m; }
+template<> inline dmat4	atof<dmat4>( const char* a ){ dmat4 m;char* e=0;for(int k=0;k<16;k++,a=e)(&m._11)[k]=strtod(a,&e); return m; }
+
 template<> inline const char* ntoa<ivec2>( ivec2 v ){ return itoa(v); }
 template<> inline const char* ntoa<ivec3>( ivec3 v ){ return itoa(v); }
 template<> inline const char* ntoa<ivec4>( ivec4 v ){ return itoa(v); }
@@ -132,9 +177,26 @@ template<> inline const char* ntoa<uvec4>( uvec4 v ){ return utoa(v); }
 template<> inline const char* ntoa<vec2>( vec2 v ){ return ftoa(v); }
 template<> inline const char* ntoa<vec3>( vec3 v ){ return ftoa(v); }
 template<> inline const char* ntoa<vec4>( vec4 v ){ return ftoa(v); }
-template<> inline const char* ntoa<dvec2>( dvec2 v ){ return dtoa(v); }
-template<> inline const char* ntoa<dvec3>( dvec3 v ){ return dtoa(v); }
-template<> inline const char* ntoa<dvec4>( dvec4 v ){ return dtoa(v); }
+template<> inline const char* ntoa<dvec2>( dvec2 v ){ return ftoa(v); }
+template<> inline const char* ntoa<dvec3>( dvec3 v ){ return ftoa(v); }
+template<> inline const char* ntoa<dvec4>( dvec4 v ){ return ftoa(v); }
+
+template<> inline ivec2	aton<ivec2>( const char* a ){	return atoi<ivec2>(a); }
+template<> inline ivec3	aton<ivec3>( const char* a ){	return atoi<ivec3>(a); }
+template<> inline ivec4	aton<ivec4>( const char* a ){	return atoi<ivec4>(a); }
+template<> inline uvec2	aton<uvec2>( const char* a ){	return atou<uvec2>(a); }
+template<> inline uvec3	aton<uvec3>( const char* a ){	return atou<uvec3>(a); }
+template<> inline uvec4	aton<uvec4>( const char* a ){	return atou<uvec4>(a); }
+template<> inline vec2	aton<vec2>( const char* a ){	return atof<vec2>(a); }
+template<> inline vec3	aton<vec3>( const char* a ){	return atof<vec3>(a); }
+template<> inline vec4	aton<vec4>( const char* a ){	return atof<vec4>(a); }
+template<> inline dvec2	aton<dvec2>( const char* a ){	return atof<dvec2>(a); }
+template<> inline dvec3	aton<dvec3>( const char* a ){	return atof<dvec3>(a); }
+template<> inline dvec4	aton<dvec4>( const char* a ){	return atof<dvec4>(a); }
+template<> inline mat3	aton<mat3>( const char* a ){	return atof<mat3>(a); }
+template<> inline mat4	aton<mat4>( const char* a ){	return atof<mat4>(a); }
+template<> inline dmat3	aton<dmat3>( const char* a ){	return atof<dmat3>(a); }
+template<> inline dmat4	aton<dmat4>( const char* a ){	return atof<dmat4>(a); }
 #endif
 
 // bitwise conversion
@@ -188,25 +250,6 @@ namespace fast
 		return neg?-v:v;
 	}
 }
-
-// conversion from string to user types
-inline bool atob( const char* a ){		return a&&*a&&(stricmp(a,"true")==0||fast::atoi(a)!=0); }
-inline uint atou( const char* a ){		char* e=nullptr;uint v=(uint)strtoul(a,&e,10); return v; }
-inline uint atou( const wchar_t* w ){	wchar_t* e=nullptr;uint v=(uint)wcstoul(w,&e,10); return v; }
-inline int64_t atoill( const char* a ){	char* e=nullptr;int64_t v=strtoll(a,&e,10); return v; }
-inline uint64_t atoull( const char* a ){char* e=nullptr;uint64_t v=strtoull(a,&e,10); return v; }
-inline int2 atoi2( const char* a ){		int2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) (&v.x)[k]=(int)strtol(a,&e,10); return v; }
-inline int3 atoi3( const char* a ){		int3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) (&v.x)[k]=(int)strtol(a,&e,10); return v; }
-inline int4 atoi4( const char* a ){		int4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) (&v.x)[k]=(int)strtol(a,&e,10); return v; }
-inline uint2 atou2( const char* a ){	uint2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) (&v.x)[k]=strtoul(a,&e,10); return v; }
-inline uint3 atou3( const char* a ){	uint3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) (&v.x)[k]=strtoul(a,&e,10); return v; }
-inline uint4 atou4( const char* a ){	uint4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) (&v.x)[k]=strtoul(a,&e,10); return v; }
-inline float2 atof2( const char* a ){	float2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) (&v.x)[k]=strtof(a,&e); return v; }
-inline float3 atof3( const char* a ){	float3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) (&v.x)[k]=strtof(a,&e); return v; }
-inline float4 atof4( const char* a ){	float4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) (&v.x)[k]=strtof(a,&e); return v; }
-inline double2 atod2( const char* a ){	double2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) (&v.x)[k]=strtod(a,&e); return v; }
-inline double3 atod3( const char* a ){	double3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) (&v.x)[k]=strtod(a,&e); return v; }
-inline double4 atod4( const char* a ){	double4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) (&v.x)[k]=strtod(a,&e); return v; }
 
 // hexadecimanal conversion
 inline const char* tohex( void* ptr, size_t size ){ unsigned char* u=(unsigned char*)ptr; char *buff=__strbuf(size*2), *b=buff; for(size_t k=0;k<size;k++,u++,b+=2) sprintf(b,"%02x",*u); buff[size*2]=0; return buff; }
