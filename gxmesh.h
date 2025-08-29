@@ -118,6 +118,9 @@ struct bbox : public bbox_t
 	inline const vec3& operator[]( ptrdiff_t i ) const { return (&m)[i]; }
 	inline vec3& operator[]( ptrdiff_t i ){ return (&m)[i]; }
 
+	// type cast
+	operator bool() const { return (m.x+0.00001f)<M.x&&(m.y+0.00001f)<M.y&&(m.z+0.00001f)<M.z; }
+
 	// attribute query
 	inline vec3 center() const { return (M+m)*0.5f; }
 	inline vec3 size() const { return (M-m); }
@@ -539,9 +542,7 @@ inline geometry& object::front(){ return root->geometries[geometries.front()]; }
 inline geometry& object::back(){ return root->geometries[geometries.back()]; }
 inline geometry& object::operator[]( size_t i ){ return root->geometries[i]; }
 
-//*************************************
 // late implementations for mesh
-
 __noinline void mesh::update_bound( bool b_recalc_tris )
 {
 	// update geometry first
@@ -563,6 +564,33 @@ __noinline void mesh::update_bound( bool b_recalc_tris )
 	box.clear();
 	for( auto& obj : objects )
 		box.expand(obj.update_bound());
+}
+
+// find an up vector from box or mesh
+__noinline int find_up_vector( const bbox& box )
+{
+	if(box.max_extent()>(box.min_extent()*4.0f)) return box.min_axis();
+	return 2;
+}
+
+__noinline int find_up_vector( const mesh* p_mesh )
+{
+	if(!p_mesh) return 2;
+	if(p_mesh->box.max_extent()>(p_mesh->box.min_extent()*4.0f)) return p_mesh->box.min_axis();
+
+	ivec3 d=0;
+	for(auto f:{"floor","ground","ceil","terrain","plane"})
+	for(auto& o:p_mesh->objects)
+	{
+		char buff[4096]; strcpy(buff,o.name);
+		if(!strstr(strlwr(buff),f)||o.box.max_extent()<(o.box.min_extent()*4.0f)) continue;
+		d[o.box.min_axis()]++; break;
+	}
+	
+	int a=2;
+	if(d[0]>0&&d[0]>d[2]) a=0;
+	if(d[1]>0&&d[1]>d[a]) a=1;
+	return a;
 }
 
 __noinline vector<uint> get_box_indices( bool double_sided, bool quads )

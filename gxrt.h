@@ -326,27 +326,6 @@ template <> __forceinline mat3 tbn_matrix<true>( vec3 normal ) // used in normal
 	return mat3{t.x,b.x,normal.x,t.y,b.y,normal.y,t.z,b.z,normal.z};
 }
 
-// find an up vector from mesh
-__noinline int find_up_vector( const mesh* p_mesh )
-{
-	if(!p_mesh) return 2;
-	if(p_mesh->box.max_extent()>(p_mesh->box.min_extent()*4.0f)) return p_mesh->box.min_axis();
-
-	vec3 d=0;
-	for(auto f:{"floor","ground","ceil","terrain","plane"})
-	for(auto& o:p_mesh->objects)
-	{
-		char buff[4096]; strcpy(buff,o.name);
-		if(!strstr(strlwr(buff),f)||o.box.max_extent()<(o.box.min_extent()*4.0f)) continue;
-		d[o.box.min_axis()] += 1.0; break;
-	}
-	
-	int a=2;
-	if(d[0]>0&&d[0]>d[2]) a=0;
-	if(d[1]>0&&d[1]>d[a]) a=1;
-	return a;
-}
-
 // find area lights from mesh
 __noinline vector<area_light_t> find_area_lights( mesh* p_mesh )
 {
