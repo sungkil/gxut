@@ -210,8 +210,8 @@ struct camera_t
 {
 	mat4 view_matrix, projection_matrix;
 	union { struct { union {float fovy, height;}; float aspect,dnear,dfar; }; vec4 pp; }; // fov in radians; height for orthographic projection; pp=perspective parameters
-	alignas(16)	vec3 eye, center, up, dir;		// lookAt params (16-bytes aligned for std140 layout), dir=center-eye
-	union { float F, focal; }; float E, df, fn;	// focal length, lens radius, focusing depth (in object distance), f-number
+	alignas(16)	vec3 eye, center, up, dir; // lookAt params (16-bytes aligned for std140 layout), dir=center-eye
+	union { float F=0, focal; }; float E=0, df=0, fn=0;	// focal length (F in mm, focal in pixels), lens radius, focusing depth (in object distance), f-number
 
 	camera_t() = default;
 	camera_t(camera_t&& c) = default;
@@ -219,13 +219,15 @@ struct camera_t
 	camera_t& operator=(camera_t&& c) = default;
 	camera_t& operator=(const camera_t& c) = default;
 
-	mat4	inverse_view_matrix() const { return mat4::look_at_inverse(eye,center,up); } // works without eye, center, up
+	mat4 inverse_view_matrix() const { return mat4::look_at_inverse(eye,center,up); } // works without eye, center, up
+	mat4 perspective_dx() const { mat4 m=projection_matrix; m._33=dfar/(dnear-dfar); m._34*=0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
+	vec2 plane_size( float ecd=1.0f) const { return vec2(2.0f/projection_matrix._11, 2.0f/projection_matrix._22)*ecd; } // plane size (width, height) at eye-coordinate distance 1
+	void update_depth_clips( const bbox& bound, const float min_near_scale=0.0005f ){ bbox b=view_matrix*bound; vec2 z(max(0.001f,-b.M.z),max(0.001f,-b.m.z)); float r=bound.radius(); dnear=max(max(r*min_near_scale,0.05f),z.x*0.99f); dfar=max(max(dnear+1.0f,dnear*1.01f),z.y*1.01f); }
+	void extend_frustum( double scale ){ projection_matrix=mat4::perspective(fovy=float(atan2(tan(fovy*0.5)*scale,1.0)*2.0),aspect,dnear,dfar); }
+
+	// lens attributes
 	float	coc_norm_scale() const { float E=F/fn*0.5f; return E/df/tan(fovy*0.5f); } // normalized coc scale in the screen space; E: lens_radius
 	float	coc_scale( int height ) const { return coc_norm_scale()*float(height)*0.5f; } // screen-space coc scale; so called "K" so far
-	mat4	perspective_dx() const { mat4 m = projection_matrix; m._33 = dfar/(dnear-dfar); m._34*=0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
-	vec2	plane_size(float ecd = 1.0f) const { return vec2(2.0f/projection_matrix._11, 2.0f/projection_matrix._22)*ecd; } // plane size (width, height) at eye-coordinate distance 1
-	void	update_depth_clips( const bbox& bound, const float min_near_scale=0.005f ){ bbox b=view_matrix*bound; vec2 z(max(0.001f,-b.M.z),max(0.001f,-b.m.z)); float br=bound.radius(); dnear=max(max(br*min_near_scale,0.05f),z.x*0.99f); dfar=max(max(dnear+1.0f,dnear*1.01f),z.y*1.01f); }
-	void	extend_frustum( double scale ){ projection_matrix.set_perspective( fovy=float(atan2(tan(fovy*0.5)*scale,1.0)*2.0), aspect, dnear, dfar ); }
 };
 static_assert(sizeof(camera_t)%16==0, "size of struct camera_t should be aligned at 16-byte boundary");
 inline string STR_GLSL_STRUCT_CAMERA = "struct camera_t { mat4 view_matrix, projection_matrix; float fovy, aspect, dnear, dfar; vec4 eye, center, up, dir; float F, E, df, fn; };\n";
