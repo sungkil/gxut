@@ -68,7 +68,7 @@ struct path : public path_t
 	path( path_t&& p ) noexcept : path_t(p){}
 	path( const path& p ) noexcept : path_t(reinterpret_cast<const path_t&>(p)){}
 	path( path&& p ) noexcept { _data=p._data; p._data=nullptr; } // cache moves as well
-	path( const wchar_t* s ) noexcept : path_t() { if(s) strcpy(_data,wtoa(s)); }
+	path( const wchar_t* s ) noexcept : path_t() { if(s&&*s) strcpy(_data,wtoa(s)); }
 	path( const std::wstring& s ) noexcept : path_t() { if(!s.empty()) strcpy(_data,wtoa(s.c_str())); }
 	path( std::wstring_view s ) noexcept : path_t() { if(!s.empty()) strcpy(_data,wtoa(s.data())); }
 
