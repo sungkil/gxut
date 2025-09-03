@@ -18,8 +18,12 @@
 #ifndef __GX_REX_H__
 #define __GX_REX_H__
 
-#if !defined(__GXUT_H__) && __has_include(<gxut/gxut.h>)
-	#include <gxut/gxut.h>
+#if !defined(__GXUT_H__)
+	#if __has_include("gxut.h")
+		#include "gxut.h"
+	#elif __has_include(<gxut/gxut.h>)
+		#include <gxut/gxut.h>
+	#endif
 #endif
 
 //*************************************
@@ -64,5 +68,52 @@ inline progressive_t& get_progressive()
 //*************************************
 
 #define progress (rex::get_progressive())
+
+//*************************************
+namespace rex {
+//*************************************
+
+// globally shared data; registerd or allocated in factory
+struct shared_t
+{
+	struct var // shared variable type
+	{
+		std::type_index type=typeid(void*); void* ptr=nullptr; size_t size=0; string name; bool allocated=false; var()=default;
+		template <class T> var(T& v,const char* _name):type(typeid(T)),ptr((void*)&v),size(sizeof(T)),name(_name&&*_name?_name:""){}
+		template <class T> var(T* v,const char* _name):type(typeid(T*)),ptr((void*)v),size(sizeof(T)),name(_name&&*_name?_name:""){}
+		var( std::type_index t, void* p, size_t z, const char* n, bool a=false ):type(t),ptr(p),size(z),name(n&&*n?n:""),allocated(a){}
+	};
+
+	static shared_t& instance();
+	~shared_t(){ clear(); }
+	void clear(){ for(auto& [n,t]:data) if(t.allocated){ if(t.ptr){delete t.ptr;t.ptr=nullptr;} t.size=0; t.name.clear(); t.allocated=false; } data.clear(); }
+	template <class T> void set( const char* name, T& v ){ data.emplace(std::pair{name,var(v,name)}); }
+	template <class T> void set( const char* name, T* v ){ data.emplace(std::pair{name,var(v,name)}); }
+	template <class T> void set_function( const char* name, T func ){ data.emplace(std::pair{name,var{typeid(T),func,sizeof(void*),name}}); } // for functions
+	template <class T> T*	get( const char* name ){ return (T*)get_impl(name,typeid(T),sizeof(T),false).ptr; }
+	template <class T> T	get_function( const char* name ){ return (T)get_impl(name,typeid(T),sizeof(void*),false).ptr; } // for functions
+	template <class T> T*	get_or_create( const char* name ){ T* p=(T*)get_impl(name,typeid(T),sizeof(T),true).ptr; if(p) return p; var t{typeid(T),new T(),sizeof(T),name,true}; data.emplace(std::pair{name,t}); return (T*)t.ptr; }
+
+protected:
+	var& get_impl( const char* name, std::type_index type, size_t size, bool b_alloc ){ static var nil; auto it=data.find(name); if(it==data.end()){ if(!b_alloc) printf("shared_t::get(%s): unable to find\n",name); return nil; } auto& t=it->second; if(t.type==type) return t; printf("shared_t::get(%s): type is different from found\nquery: %s\nfound: %s\n", name, type.name(), t.type.name()); return nil; }
+	nocase::map<string,var>	data;
+};
+
+// simpler wrappers
+template <class T> T* shared( const char* name ){ return shared_t::instance().get<T>(name); }
+template <class T> T shared_function( const char* name ){ return shared_t::instance().get_function<T>(name); }
+
+//*************************************
+} // end namespace rex
+//*************************************
+
+#ifdef REX_FACTORY_IMPL
+// this is created only in application, and shared with any plugins
+extern "C" __declspec(dllexport) inline rex::shared_t* __rex_shared=nullptr;
+__noinline rex::shared_t& rex::shared_t::instance(){ if(!__rex_shared) __rex_shared=new rex::shared_t(); return *__rex_shared; }
+#else
+__noinline rex::shared_t& rex::shared_t::instance(){ static shared_t** i=(shared_t**)GetProcAddress(nullptr,"__rex_shared"); if(i&&*i) return **i; if(!i) printf( "shared_t::instance() not found\n"); else if(!*i) printf( "shared_t::instance()==nullptr\n"); static shared_t nil; return nil; }
+#endif
+
 
 #endif // __GX_REX_H__
