@@ -70,6 +70,17 @@ inline progressive_t& get_progressive()
 #define progress (rex::get_progressive())
 
 //*************************************
+namespace animation {
+//*************************************
+// animation related
+inline float  index(){	static decltype(&index) rex_animation_index = (decltype(&index)) GetProcAddress(GetModuleHandleW(nullptr),"rex_animation_index"); return rex_animation_index(); }
+inline void   play(){	static decltype(&play) rex_animation_play	= (decltype(&play)) GetProcAddress(GetModuleHandleW(nullptr),"rex_animation_play"); return rex_animation_play(); }
+inline void   stop(){	static decltype(&stop) rex_animation_stop	= (decltype(&stop)) GetProcAddress(GetModuleHandleW(nullptr),"rex_animation_stop"); return rex_animation_stop(); }
+//*************************************
+} // end namespace animation
+//*************************************
+
+//*************************************
 namespace rex {
 //*************************************
 
@@ -80,7 +91,6 @@ struct shared_t
 	{
 		std::type_index type=typeid(void*); void* ptr=nullptr; size_t size=0; string name; bool allocated=false; var()=default;
 		template <class T> var(T& v,const char* _name):type(typeid(T)),ptr((void*)&v),size(sizeof(T)),name(_name&&*_name?_name:""){}
-		template <class T> var(T* v,const char* _name):type(typeid(T*)),ptr((void*)v),size(sizeof(T)),name(_name&&*_name?_name:""){}
 		var( std::type_index t, void* p, size_t z, const char* n, bool a=false ):type(t),ptr(p),size(z),name(n&&*n?n:""),allocated(a){}
 	};
 
@@ -88,7 +98,6 @@ struct shared_t
 	~shared_t(){ clear(); }
 	void clear(){ for(auto& [n,t]:data) if(t.allocated){ if(t.ptr){delete t.ptr;t.ptr=nullptr;} t.size=0; t.name.clear(); t.allocated=false; } data.clear(); }
 	template <class T> void set( const char* name, T& v ){ data.emplace(std::pair{name,var(v,name)}); }
-	template <class T> void set( const char* name, T* v ){ data.emplace(std::pair{name,var(v,name)}); }
 	template <class T> void set_function( const char* name, T func ){ data.emplace(std::pair{name,var{typeid(T),func,sizeof(void*),name}}); } // for functions
 	template <class T> T*	get( const char* name ){ return (T*)get_impl(name,typeid(T),sizeof(T),false).ptr; }
 	template <class T> T	get_function( const char* name ){ return (T)get_impl(name,typeid(T),sizeof(void*),false).ptr; } // for functions
@@ -102,6 +111,9 @@ protected:
 // simpler wrappers
 template <class T> T* shared( const char* name ){ return shared_t::instance().get<T>(name); }
 template <class T> T shared_function( const char* name ){ return shared_t::instance().get_function<T>(name); }
+
+// window functions
+__noinline void close_window(){ HWND* h=rex::shared<HWND>("Window"); if(h&&*h) SendMessageW(*h,WM_CLOSE,0,0); }
 
 //*************************************
 } // end namespace rex
