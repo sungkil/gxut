@@ -203,15 +203,15 @@ struct camera_t // std140 layout for OpenGL uniform buffer objects
 	mat4	view_matrix, projection_matrix;
 	float	fovy, aspect, dnear, dfar;
 	vec4	eye, center, up, dir; // 16-bytes aligned for std140 layout
-	float	F, E, df, fn;
+	float	focal, height, E, df;
 };
 #else
 struct camera_t
 {
 	mat4 view_matrix, projection_matrix;
-	union { struct { union {float fovy, height;}; float aspect,dnear,dfar; }; vec4 pp; }; // fov in radians; height for orthographic projection; pp=perspective parameters
-	alignas(16)	vec3 eye, center, up, dir; // lookAt params (16-bytes aligned for std140 layout), dir=center-eye
-	union { float F=0, focal; }; float E=0, df=0, fn=0;	// focal length (F in mm, focal in pixels), lens radius, focusing depth (in object distance), f-number
+	float fovy, aspect, dnear, dfar; // fov in radians; height for orthographic projection
+	vec3 eye; float width; vec3 center; float fn; alignas(16) vec3 up, dir; // 16-bytes aligned for std140 layout; eye.a=width, center.a=fn, dir=center-eye
+	float focal=0, height=0, E=0, df=0; // focal length (in mm or pixels), lens radius, focusing depth (in object distance), f-number (or image height)
 
 	camera_t() = default;
 	camera_t(camera_t&& c) = default;
@@ -226,11 +226,11 @@ struct camera_t
 	void extend_frustum( double scale ){ projection_matrix=mat4::perspective(fovy=float(atan2(tan(fovy*0.5)*scale,1.0)*2.0),aspect,dnear,dfar); }
 
 	// lens attributes
-	float	coc_norm_scale() const { float E=F/fn*0.5f; return E/df/tan(fovy*0.5f); } // normalized coc scale in the screen space; E: lens_radius
+	float	coc_norm_scale() const { float E=focal/fn*0.5f; return E/df/tan(fovy*0.5f); } // normalized coc scale in the screen space; E: lens_radius
 	float	coc_scale( int height ) const { return coc_norm_scale()*float(height)*0.5f; } // screen-space coc scale; so called "K" so far
 };
 static_assert(sizeof(camera_t)%16==0, "size of struct camera_t should be aligned at 16-byte boundary");
-inline string STR_GLSL_STRUCT_CAMERA = "struct camera_t { mat4 view_matrix, projection_matrix; float fovy, aspect, dnear, dfar; vec4 eye, center, up, dir; float F, E, df, fn; };\n";
+inline string STR_GLSL_STRUCT_CAMERA = "struct camera_t { mat4 view_matrix, projection_matrix; float fovy, aspect, dnear, dfar; vec4 eye, center, up, dir; float focal, height, E, df; };\n";
 #endif
 
 struct camera : public camera_t
