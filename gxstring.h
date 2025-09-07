@@ -161,12 +161,12 @@ template<> inline vec4	atof<vec4>( const char* a ){ vec4 v={};char* e=nullptr;fo
 template<> inline dvec2	atof<dvec2>( const char* a ){ dvec2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) (&v.x)[k]=strtod(a,&e); return v; }
 template<> inline dvec3	atof<dvec3>( const char* a ){ dvec3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) (&v.x)[k]=strtod(a,&e); return v; }
 template<> inline dvec4	atof<dvec4>( const char* a ){ dvec4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) (&v.x)[k]=strtod(a,&e); return v; }
-template<> inline mat2	atof<mat2>( const char* a ){ mat2 m;char* e=0; for(int k=0;k<4;k++,a=e) (&m._11)[k]=strtof(a,&e); return m; }
-template<> inline mat3	atof<mat3>( const char* a ){ mat3 m;char* e=0; for(int k=0;k<9;k++,a=e) (&m._11)[k]=strtof(a,&e); return m; }
-template<> inline mat4	atof<mat4>( const char* a ){ mat4 m;char* e=0; for(int k=0;k<16;k++,a=e)(&m._11)[k]=strtof(a,&e); return m; }
-template<> inline dmat2	atof<dmat2>( const char* a ){ dmat2 m;char* e=0;for(int k=0;k<4;k++,a=e) (&m._11)[k]=strtod(a,&e); return m; }
-template<> inline dmat3	atof<dmat3>( const char* a ){ dmat3 m;char* e=0;for(int k=0;k<9;k++,a=e) (&m._11)[k]=strtod(a,&e); return m; }
-template<> inline dmat4	atof<dmat4>( const char* a ){ dmat4 m;char* e=0;for(int k=0;k<16;k++,a=e)(&m._11)[k]=strtod(a,&e); return m; }
+template<> inline mat2	atof<mat2>( const char* a ){ mat2 m;char* e=0; for(int k=0;k<4;k++,a=e) (&m._00)[k]=strtof(a,&e); return m; }
+template<> inline mat3	atof<mat3>( const char* a ){ mat3 m;char* e=0; for(int k=0;k<9;k++,a=e) (&m._00)[k]=strtof(a,&e); return m; }
+template<> inline mat4	atof<mat4>( const char* a ){ mat4 m;char* e=0; for(int k=0;k<16;k++,a=e)(&m._00)[k]=strtof(a,&e); return m; }
+template<> inline dmat2	atof<dmat2>( const char* a ){ dmat2 m;char* e=0;for(int k=0;k<4;k++,a=e) (&m._00)[k]=strtod(a,&e); return m; }
+template<> inline dmat3	atof<dmat3>( const char* a ){ dmat3 m;char* e=0;for(int k=0;k<9;k++,a=e) (&m._00)[k]=strtod(a,&e); return m; }
+template<> inline dmat4	atof<dmat4>( const char* a ){ dmat4 m;char* e=0;for(int k=0;k<16;k++,a=e)(&m._00)[k]=strtod(a,&e); return m; }
 
 template<> inline const char* ntoa<ivec2>( ivec2 v ){ return itoa(v); }
 template<> inline const char* ntoa<ivec3>( ivec3 v ){ return itoa(v); }

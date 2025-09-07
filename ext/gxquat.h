@@ -60,11 +60,11 @@ struct quat
 	// conversion with row-major rotation matrix
 	__forceinline quat& operator=( const mat4& m ) // convert row-major rotation matrix to quaternion
 	{
-		float trace = m._11+m._22+m._33;
-		if( trace>0.0000001f ){				float s=sqrtf(trace+1.0f)*2.0f;				return *this=quat( 0.25f*s, (m._32-m._23)/s, (m._13-m._31)/s, (m._21-m._12)/s ); }
-		else if(m._11>m._22&&m._11>m._33){	float s=sqrtf(1.0f+m._11-m._22-m._33)*2.0f;	return *this=quat( (m._32-m._23)/s, 0.25f*s, (m._21+m._12 )/s, (m._12+m._31)/s ); }
-		else if (m._22>m._33){				float s=sqrtf(1.0f+m._22-m._11-m._33)*2.0f;	return *this=quat( (m._13-m._31)/s, (m._21+m._12 )/s, 0.25f*s, (m._32+m._23)/s ); }
-		else{								float s=sqrtf(1.0f+m._33-m._11-m._22)*2.0f;	return *this=quat( (m._21-m._12)/s, (m._13+m._31)/s, (m._23+m._32)/s, 0.25f*s ); }
+		float trace = m._00+m._11+m._22;
+		if( trace>0.0000001f ){				float s=sqrtf(trace+1.0f)*2.0f;				return *this=quat( 0.25f*s, (m._21-m._12)/s, (m._02-m._20)/s, (m._10-m._01)/s ); }
+		else if(m._00>m._11&&m._00>m._22){	float s=sqrtf(1.0f+m._00-m._11-m._22)*2.0f;	return *this=quat( (m._21-m._12)/s, 0.25f*s, (m._10+m._01 )/s, (m._01+m._20)/s ); }
+		else if (m._11>m._22){				float s=sqrtf(1.0f+m._11-m._00-m._22)*2.0f;	return *this=quat( (m._02-m._20)/s, (m._10+m._01 )/s, 0.25f*s, (m._21+m._12)/s ); }
+		else{								float s=sqrtf(1.0f+m._22-m._00-m._11)*2.0f;	return *this=quat( (m._10-m._01)/s, (m._02+m._20)/s, (m._12+m._21)/s, 0.25f*s ); }
 	}
 
 	__forceinline operator mat3 () const

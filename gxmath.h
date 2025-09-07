@@ -371,16 +371,16 @@ __forceinline half* ftoh( const float* pf, half* ph, size_t nElements, size_t ha
 	__forceinline M( T diag ){for(int k=0;k<D;k++)for(int j=0;j<D;j++){v[k][j]=(k==j)?diag:0;} }\
 	__forceinline M& operator=( M&& m )=default;\
 	__forceinline M& operator=( const M& m )=default;\
-	__forceinline bool operator==( const M& m ) const { for(int k=0;k<N;k++) if(std::abs((&_11)[k]-(&m._11)[k])>precision<T>::value()) return false; return true; }\
+	__forceinline bool operator==( const M& m ) const { for(int k=0;k<N;k++) if(std::abs((&_00)[k]-(&m._00)[k])>precision<T>::value()) return false; return true; }\
 	__forceinline bool operator!=( const M& m ) const { return !operator==(m); }\
 	__forceinline M& operator+(){ return *this; }\
 	__forceinline const M& operator+() const { return *this; }\
-	__forceinline M operator-() const { M m; for(int k=0;k<N;k++) (&m._11)[k]=-(&_11)[k]; return m; }\
-	__forceinline M& operator+=( const M& m ){ for(int k=0;k<N;k++) (&_11)[k]+=(&m._11)[k]; return *this; }\
-	__forceinline M& operator-=( const M& m ){ for(int k=0;k<N;k++) (&_11)[k]-=(&m._11)[k]; return *this; }\
+	__forceinline M operator-() const { M m; for(int k=0;k<N;k++) (&m._00)[k]=-(&_00)[k]; return m; }\
+	__forceinline M& operator+=( const M& m ){ for(int k=0;k<N;k++) (&_00)[k]+=(&m._00)[k]; return *this; }\
+	__forceinline M& operator-=( const M& m ){ for(int k=0;k<N;k++) (&_00)[k]-=(&m._00)[k]; return *this; }\
 	__forceinline M& operator*=( const M& m ){ M t=m.transpose(); for(int k=0;k<D;k++) v[k]=t*v[k]; return *this; }\
-	__forceinline M& operator*=( T f ){ for(int k=0;k<N;k++) (&_11)[k]*=f; return *this; }\
-	__forceinline M& operator/=( T f ){ for(int k=0;k<N;k++) (&_11)[k]/=f; return *this; }\
+	__forceinline M& operator*=( T f ){ for(int k=0;k<N;k++) (&_00)[k]*=f; return *this; }\
+	__forceinline M& operator/=( T f ){ for(int k=0;k<N;k++) (&_00)[k]/=f; return *this; }\
 	__forceinline M operator+( const M& m ) const { return M(*this)+=m; }\
 	__forceinline M operator-( const M& m ) const { return M(*this)-=m; }\
 	__forceinline M operator*( const M& m ) const { return M(*this)*=m; }\
@@ -397,19 +397,19 @@ __forceinline half* ftoh( const float* pf, half* ph, size_t nElements, size_t ha
 template <class T> struct tmat2
 {
 	__default_matrix_impl(tmat2,2);
-
-	union { V v[2]; struct { T _11,_12,_21,_22;}; };
+	
+	union { V v[2]; struct { T _00,_01,_10,_11;}; };
 
 	// constructors
-	__forceinline tmat2(){ _12=_21=0;_11=_22=T(1.0); }
-	__forceinline tmat2( T f11, T f12, T f21, T f22 ){ _11=f11;_12=f12;_21=f21;_22=f22; }
+	__forceinline tmat2(){ _01=_10=0;_00=_11=T(1.0); }
+	__forceinline tmat2( T f00, T f01, T f10, T f11 ){ _00=f00;_01=f01;_10=f10;_11=f11; }
 
 	// transpose
-	__forceinline tmat2 transpose() const { return tmat2{_11,_21,_12,_22}; }
+	__forceinline tmat2 transpose() const { return tmat2{_00,_10,_01,_11}; }
 
 	// determinant/trace/inverse
-	__forceinline T det() const { return _11*_22 - _12*_21; }
-	__forceinline tmat2 inverse() const { T s=T(1.0)/det(); return tmat2(_22*s,-_12*s,-_21*s,_11*s); }
+	__forceinline T det() const { return _00*_11 - _01*_10; }
+	__forceinline tmat2 inverse() const { T s=T(1.0)/det(); return tmat2(_11*s,-_01*s,-_10*s,_00*s); }
 
 	// static row-major transformations: 2D transformation in 2D Cargesian coordinate system
 	__forceinline static tmat2 scale( const V& v ){ return tmat2().set_scale(v); }
@@ -418,45 +418,73 @@ template <class T> struct tmat2
 
 	// row-major transformations: 2D transformation in 2D Cargesian coordinate system
 	__forceinline tmat2& set_scale( V v ){ return set_scale(v.x,v.y); }
-	__forceinline tmat2& set_scale( T x, T y ){ _11=x; _22=y; _12=_21=0; return *this; }
-	__forceinline tmat2& set_rotate( T theta ){ _11=_22=T(cos(theta));_21=T(sin(theta));_12=-_21; return *this; }
+	__forceinline tmat2& set_scale( T x, T y ){ _00=x; _11=y; _01=_10=0; return *this; }
+	__forceinline tmat2& set_rotate( T theta ){ _00=_11=T(cos(theta));_10=T(sin(theta));_01=-_10; return *this; }
 };
 
 //*************************************
 template <class T> struct tmat3
 {
 	__default_matrix_impl(tmat3,3);
+	using V2 = tvec2<T>;
 
-	union{ V v[3]; struct{T _11,_12,_13,_21,_22,_23,_31,_32,_33;}; };
+	union{ V v[3]; struct{T _00,_01,_02,_10,_11,_12,_20,_21,_22;}; };
 
 	// constructors
-	__forceinline tmat3(){ _12=_13=_21=_23=_31=_32=0;_11=_22=_33=T(1.0); }
-	__forceinline tmat3( T f11, T f12, T f13, T f21, T f22, T f23, T f31, T f32, T f33 ){_11=f11;_12=f12;_13=f13;_21=f21;_22=f22;_23=f23;_31=f31;_32=f32;_33=f33;}
+	__forceinline tmat3(){ _01=_02=_10=_12=_20=_21=0;_00=_11=_22=T(1.0); }
+	__forceinline tmat3( T f00, T f01, T f02, T f10, T f11, T f12, T f20, T f21, T f22 ){_00=f00;_01=f01;_02=f02;_10=f10;_11=f11;_12=f12;_20=f20;_21=f21;_22=f22;}
 
 	// casting operators
-	__forceinline operator tmat2<T>() const { return tmat2<T>(_11,_12,_21,_22); }
+	__forceinline operator tmat2<T>() const { return tmat2<T>(_00,_01,_10,_11); }
 
 	// transpose
-	__forceinline tmat3 transpose() const { return tmat3(_11,_21,_31,_12,_22,_32,_13,_23,_33); }
+	__forceinline tmat3 transpose() const { return tmat3(_00,_10,_20,_01,_11,_21,_02,_12,_22); }
 
 	// determinant/trace/inverse
-	__forceinline T det() const { return _11*(_22*_33-_23*_32) + _12*(_23*_31-_21*_33) + _13*(_21*_32-_22*_31); }
-	__forceinline tmat3 inverse() const { T s=T(1.0)/det(); return tmat3( (_22*_33-_32*_23)*s, (_13*_32-_12*_33)*s, (_12*_23-_13*_22)*s, (_23*_31-_21*_33)*s, (_11*_33-_13*_31)*s, (_21*_13-_11*_23)*s, (_21*_32-_31*_22)*s, (_31*_12-_11*_32)*s, (_11*_22-_21*_12)*s ); }
+	__forceinline T det() const { return _00*(_11*_22-_12*_21) + _01*(_12*_20-_10*_22) + _02*(_10*_21-_11*_20); }
+	__forceinline tmat3 inverse() const { T s=T(1.0)/det(); return tmat3( (_11*_22-_21*_12)*s, (_02*_21-_01*_22)*s, (_01*_12-_02*_11)*s, (_12*_20-_10*_22)*s, (_00*_22-_02*_20)*s, (_10*_02-_00*_12)*s, (_10*_21-_20*_11)*s, (_20*_01-_00*_21)*s, (_00*_11-_10*_01)*s ); }
 
-	// static row-major transformations: 2D transformation in 3D homogeneous coordinate system
-	__forceinline static tmat3 translate( const V& v ){ return tmat3().set_translate(v); }
+	// row-major 2D transformations in 3D homogeneous coordinate system
+	__forceinline static tmat3 translate( const V2& v ){ return tmat3().set_translate(v); }
 	__forceinline static tmat3 translate( T x, T y ){ return tmat3().set_translate(x,y); }
-	__forceinline static tmat3 scale( const V& v ){ return tmat3().set_scale(v); }
+	__forceinline tmat3& set_translate( const V2& v ){ set_identity(); _02=v.x; _12=v.y; return *this; }
+	__forceinline tmat3& set_translate( T x, T y ){ set_identity(); _02=x; _12=y; return *this; }
+	__forceinline static tmat3 scale( const V2& v ){ return tmat3().set_scale(v); }
 	__forceinline static tmat3 scale( T x, T y ){ return tmat3().set_scale(x,y); }
+	__forceinline tmat3& set_scale( const V2& v ){ set_identity(); _00=v.x; _11=v.y; return *this; }
+	__forceinline tmat3& set_scale( T x, T y ){ set_identity(); _00=x; _11=y; return *this; }
 	__forceinline static tmat3 rotate( T theta ){ return tmat3().set_rotate(theta); }
+	__forceinline tmat3& set_rotate( T theta ){ set_identity(); _00=_11=T(cos(theta));_10=T(sin(theta));_01=-_10; return *this; }
 
-	// row-major transformations: 2D transformation in 3D homogeneous coordinate system
-	__forceinline tmat3& set_translate( const V& v ){ set_identity(); _13=v.x; _23=v.y; return *this; }
-	__forceinline tmat3& set_translate( T x,T y ){ set_identity(); _13=x; _23=y; return *this; }
-	__forceinline tmat3& set_scale( const V& v ){ set_identity(); _11=v.x; _22=v.y; return *this; }
-	__forceinline tmat3& set_scale( T x, T y ){ set_identity(); _11=x; _22=y; return *this; }
-	__forceinline tmat3& set_rotate( T theta ){ set_identity(); _11=_22=T(cos(theta));_21=T(sin(theta));_12=-_21; return *this; }
+	// row-major 3D transformations in 3D Cartesian coordinate system
+	__forceinline static tmat3 scale( const V& v ){ return tmat3().set_scale(v); }
+	__forceinline static tmat3 scale( T x, T y, T z ){ return tmat3().set_scale(x,y,z); }
+	__forceinline tmat3& set_scale( const V& v ){ set_identity(); _00=v.x; _11=v.y; _22=v.z; return *this; }
+	__forceinline tmat3& set_scale( T x, T y, T z ){ set_identity(); _00=x; _11=y; _22=z; return *this; }
+	__forceinline static tmat3 rotate( const V& from, const V& to ){ return tmat3().set_rotate(from,to); }
+	__forceinline static tmat3 rotate( const V& axis, T angle ){ return tmat3().set_rotate(axis,angle); }
+	tmat3& set_rotate( const V& from, const V& to );
+	tmat3& set_rotate( const V& axis, T angle );
 };
+
+template <class T>
+__noinline tmat3<T>& tmat3<T>::set_rotate( const V& from, const V& to )
+{
+	vec3 f=from.normalize(), t=to.normalize();
+	T d=T(f.dot(t)); if(d>T(0.999999)) return set_identity(); else if(d<T(-0.999999)) return set_scale(-1,-1,-1);
+	V n=f.cross(t); T l=T(n.length());
+	return set_rotate(n/l, asin(l));
+}
+
+template <class T>
+__noinline tmat3<T>& tmat3<T>::set_rotate( const V& axis, T angle )
+{
+	T c=T(cos(angle)), s=T(sin(angle)), x=axis.x, y=axis.y, z=axis.z;
+	_00 = x*x*(1-c)+c;		_01 = x*y*(1-c)-z*s;	_02 = x*z*(1-c)+y*s;
+	_10 = x*y*(1-c)+z*s;	_11 = y*y*(1-c)+c;		_12 = y*z*(1-c)-x*s;
+	_20 = x*z*(1-c)-y*s;	_21 = y*z*(1-c)+x*s;	_22 = z*z*(1-c)+c;
+	return *this;
+}
 
 //*************************************
 // mat4 uses only row-major and right-hand (RH) notations even for D3D
@@ -466,25 +494,25 @@ template <class T> struct tmat4
 	using V2 = tvec2<T>;
 	using V3 = tvec3<T>;
 
-	union{ V v[4]; struct{T _11,_12,_13,_14,_21,_22,_23,_24,_31,_32,_33,_34,_41,_42,_43,_44;}; };
+	union{ V v[4]; struct{T _00,_01,_02,_03,_10,_11,_12,_13,_20,_21,_22,_23,_30,_31,_32,_33;}; };
 
 	// constructors
-	__forceinline tmat4(){ _12=_13=_14=_21=_23=_24=_31=_32=_34=_41=_42=_43=0;_11=_22=_33=_44=T(1.0); }
-	__forceinline tmat4( T f11, T f12, T f13, T f14, T f21, T f22, T f23, T f24, T f31, T f32, T f33, T f34, T f41, T f42, T f43, T f44 ){_11=f11;_12=f12;_13=f13;_14=f14;_21=f21;_22=f22;_23=f23;_24=f24;_31=f31;_32=f32;_33=f33;_34=f34;_41=f41;_42=f42;_43=f43;_44=f44;}
-	__forceinline tmat4( const tmat3<T>& m ){ _11=m._11;_12=m._12;_13=m._13;_14=0;_21=m._21;_22=m._22;_23=m._23;_24=0;_31=m._31;_32=m._32;_33=m._33;_34=0;_41=0;_42=0;_43=0;_44=T(1); }
+	__forceinline tmat4(){ _01=_02=_03=_10=_12=_13=_20=_21=_23=_30=_31=_32=0;_00=_11=_22=_33=T(1.0); }
+	__forceinline tmat4( T f00, T f01, T f02, T f03, T f10, T f11, T f12, T f13, T f20, T f21, T f22, T f23, T f30, T f31, T f32, T f33 ){_00=f00;_01=f01;_02=f02;_03=f03;_10=f10;_11=f11;_12=f12;_13=f13;_20=f20;_21=f21;_22=f22;_23=f23;_30=f30;_31=f31;_32=f32;_33=f33;}
+	__forceinline tmat4( const tmat3<T>& m ){ _00=m._00;_01=m._01;_02=m._02;_03=0;_10=m._10;_11=m._11;_12=m._12;_13=0;_20=m._20;_21=m._21;_22=m._22;_23=0;_30=0;_31=0;_32=0;_33=T(1); }
 
 	// assignment operator
-	__forceinline tmat4& operator=( const tmat3<T>& m ){ _11=m._11;_12=m._12;_13=m._13;_14=0;_21=m._21;_22=m._22;_23=m._23;_24=0;_31=m._31;_32=m._32;_33=m._33;_34=0;_41=0;_42=0;_43=0;_44=T(1); return *this; }
+	__forceinline tmat4& operator=( const tmat3<T>& m ){ _00=m._00;_01=m._01;_02=m._02;_03=0;_10=m._10;_11=m._11;_12=m._12;_13=0;_20=m._20;_21=m._21;_22=m._22;_23=0;_30=0;_31=0;_32=0;_33=T(1); return *this; }
 
 	// casting operators
-	__forceinline operator tmat3<T>() const { return tmat3<T>(_11,_12,_13,_21,_22,_23,_31,_32,_33); }
-	__forceinline operator tmat2<T>() const { return tmat2<T>(_11,_12,_21,_22); }
+	__forceinline operator tmat3<T>() const { return tmat3<T>(_00,_01,_02,_10,_11,_12,_20,_21,_22); }
+	__forceinline operator tmat2<T>() const { return tmat2<T>(_00,_01,_10,_11); }
 
 	// multiplication operators
 	__forceinline tvec3<T> operator*( const tvec3<T>& f ) const { tvec4<T> g(f,T(1)); return tvec3<T>(v[0].dot(g),v[1].dot(g),v[2].dot(g)); }
 
 	// transpose
-	__forceinline tmat4 transpose() const { return tmat4(_11,_21,_31,_41,_12,_22,_32,_42,_13,_23,_33,_43,_14,_24,_34,_44); }
+	__forceinline tmat4 transpose() const { return tmat4(_00,_10,_20,_30,_01,_11,_21,_31,_02,_12,_22,_32,_03,_13,_23,_33); }
 
 	// determinant/trace/inverse
 	V _xdet() const;	// support function for det() and inverse()
@@ -514,61 +542,63 @@ template <class T> struct tmat4
 	__forceinline static tmat4 ortho_off_center_dx( T left, T right, T top, T bottom, T dn, T df ){ return tmat4().set_ortho_off_center_dx(left,right,top,bottom,dn,df); }
 
 	// row-major transformations
-	__forceinline tmat4& set_translate( const V3& v ){ set_identity(); _14=v.x; _24=v.y; _34=v.z; return *this; }
-	__forceinline tmat4& set_translate( T x,T y,T z ){ set_identity(); _14=x; _24=y; _34=z; return *this; }
-	__forceinline tmat4& set_scale( const V3& v ){ set_identity(); _11=v.x; _22=v.y; _33=v.z; return *this; }
-	__forceinline tmat4& set_scale( T x,T y,T z ){ set_identity(); _11=x; _22=y; _33=z; return *this; }
-	__forceinline tmat4& set_shear( const V2& yz, const V2& zx, const V2& xy ){ set_identity(); _12=yz.x; _13=yz.y; _21=zx.y; _23=zx.x; _31=xy.x; _32=xy.y; return *this; }
-	tmat4& set_rotate( V3 from, V3 to );
+	__forceinline tmat4& set_translate( const V3& v ){ set_identity(); _03=v.x; _13=v.y; _23=v.z; return *this; }
+	__forceinline tmat4& set_translate( T x,T y,T z ){ set_identity(); _03=x; _13=y; _23=z; return *this; }
+	__forceinline tmat4& set_scale( const V3& v ){ set_identity(); _00=v.x; _11=v.y; _22=v.z; return *this; }
+	__forceinline tmat4& set_scale( T x,T y,T z ){ set_identity(); _00=x; _11=y; _22=z; return *this; }
+	__forceinline tmat4& set_shear( const V2& yz, const V2& zx, const V2& xy ){ set_identity(); _01=yz.x; _02=yz.y; _10=zx.y; _12=zx.x; _20=xy.x; _21=xy.y; return *this; }
+	tmat4& set_rotate( const V3& from, const V3& to );
 	tmat4& set_rotate( const V3& axis, T angle );
 
 	// viewport, lookat, projection
-	__forceinline tmat4& set_viewport( int width, int height ){ set_identity(); _11=width*T(0.5); _22=-height*T(0.5); _14=width*T(0.5); _24=height*T(0.5); return *this; }
+	__forceinline tmat4& set_viewport( int width, int height ){ set_identity(); _00=width*T(0.5); _11=-height*T(0.5); _03=width*T(0.5); _13=height*T(0.5); return *this; }
 	__forceinline tmat4& set_look_at( const V3& eye, const V3& center, const V3& up ){ V3 n=(eye-center).normalize(), u=(up.cross(n)).normalize(), v=n.cross(u); return *this = tmat4{u.x,u.y,u.z,-u.dot(eye),v.x,v.y,v.z,-v.dot(eye),n.x,n.y,n.z,-n.dot(eye),0,0,0,T(1.0)}; }
 	__forceinline tmat4& set_look_at_inverse( const V3& eye, const V3& center, const V3& up ){ V3 n=(eye-center).normalize(), u=(up.cross(n)).normalize(), v=n.cross(u); return *this = tmat4{u.x,v.x,n.x,eye.x,u.y,v.y,n.y,eye.y,u.z,v.z,n.z,eye.z,0,0,0,T(1.0)}; }
-	__forceinline V3	 look_at_eye() const { const V3 &u=v[0].xyz,&V=v[1].xyz,&n=v[2].xyz,uv=u.cross(V),vn=V.cross(n),nu=n.cross(u); return (vn*_14+nu*_24+uv*_34)/(-u.dot(vn)); }
-	__forceinline tmat4  look_at_inverse() const { V3 eye=look_at_eye(); return tmat4{_11,_21,_31,eye.x,_12,_22,_32,eye.y,_13,_23,_33,eye.z,0,0,0,T(1)}; }
+	__forceinline V3	 look_at_eye() const { const V3 &u=v[0].xyz,&V=v[1].xyz,&n=v[2].xyz,uv=u.cross(V),vn=V.cross(n),nu=n.cross(u); return (vn*_03+nu*_13+uv*_23)/(-u.dot(vn)); }
+	__forceinline tmat4  look_at_inverse() const { V3 eye=look_at_eye(); return tmat4{_00,_10,_20,eye.x,_01,_11,_21,eye.y,_02,_12,_22,eye.z,0,0,0,T(1)}; }
 
 	// Canonical view volume in OpenGL: [-1,1]^3
-	__forceinline tmat4& set_perspective( T fovy, T aspect, T dn, T df ){ if(fovy>pi_v<T>) fovy*=pi_v<T>/T(180.0); /* autofix for fov in degrees */ set_identity(); _22=T(1.0/tanf(fovy*0.5)); _11=_22/aspect; _33=(dn+df)/(dn-df); _34=2.0f*dn*df/(dn-df); _43=T(-1.0); _44=0; return *this; }
-	__forceinline tmat4& set_perspective_off_center( T left, T right, T top, T bottom, T dn, T df ){ set_identity(); _11=T(2.0)*dn/(right-left); _22=T(2.0)*dn/(top-bottom); _13=(right+left)/(right-left); _23=(top+bottom)/(top-bottom); _33=(dn+df)/(dn-df); _34=T(2.0)*dn*df/(dn-df); _43=T(-1.0); _44=0; return *this; }
-	__forceinline tmat4& set_ortho( T width, T height, T dn, T df ){ set_identity(); _11=T(2.0)/width; _22=T(2.0)/height;  _33=2.0f/(dn-df); _34=(dn+df)/(dn-df); return *this; }
-	__forceinline tmat4& set_ortho_off_center( T left, T right, T top, T bottom, T dn, T df ){ set_ortho( right-left, top-bottom, dn, df ); _14=(left+right)/(left-right); _24=(bottom+top)/(bottom-top); return *this; }
+	__forceinline tmat4& set_perspective( T fovy, T aspect, T dn, T df ){ if(fovy>pi_v<T>) fovy*=pi_v<T>/T(180.0); /* autofix for fov in degrees */ set_identity(); _11=T(1.0/tanf(fovy*0.5)); _00=_11/aspect; _22=(dn+df)/(dn-df); _23=2.0f*dn*df/(dn-df); _32=T(-1.0); _33=0; return *this; }
+	__forceinline tmat4& set_perspective_off_center( T left, T right, T top, T bottom, T dn, T df ){ set_identity(); _00=T(2.0)*dn/(right-left); _11=T(2.0)*dn/(top-bottom); _02=(right+left)/(right-left); _12=(top+bottom)/(top-bottom); _22=(dn+df)/(dn-df); _23=T(2.0)*dn*df/(dn-df); _32=T(-1.0); _33=0; return *this; }
+	__forceinline tmat4& set_ortho( T width, T height, T dn, T df ){ set_identity(); _00=T(2.0)/width; _11=T(2.0)/height;  _22=2.0f/(dn-df); _23=(dn+df)/(dn-df); return *this; }
+	__forceinline tmat4& set_ortho_off_center( T left, T right, T top, T bottom, T dn, T df ){ set_ortho( right-left, top-bottom, dn, df ); _03=(left+right)/(left-right); _13=(bottom+top)/(bottom-top); return *this; }
 
-	// Canonical view volume in DirectX: [-1,1]^2*[0,1]: diffes only in _33 and _34
-	__forceinline tmat4& set_perspective_dx( T fovy, T aspect, T dn, T df ){ set_perspective( fovy, aspect, dn, df ); _33=df/(dn-df); _34*=T(0.5); return *this; } // equivalent to D3DXMatrixPerspectiveFovRH()
-	__forceinline tmat4& set_perspective_off_center_dx( T left, T right, T top, T bottom, T dn, T df ){ set_perspective_off_center( left, right, top, bottom, dn, df ); _33=df/(dn-df); _34*=T(0.5); return *this; }
-	__forceinline tmat4& set_ortho_dx( T width, T height, T dn, T df ){ set_ortho( width, height, dn, df ); _33*=T(0.5); _34=dn/(dn-df); return *this; }
-	__forceinline tmat4& set_ortho_off_center_dx( T left, T right, T top, T bottom, T dn, T df ){ set_ortho_off_center( left, right, top, bottom, dn, df ); _33*=T(0.5); _34=dn/(dn-df); return *this; }
+	// Canonical view volume in DirectX: [-1,1]^2*[0,1]: diffes only in _22 and _23
+	__forceinline tmat4& set_perspective_dx( T fovy, T aspect, T dn, T df ){ set_perspective( fovy, aspect, dn, df ); _22=df/(dn-df); _23*=T(0.5); return *this; } // equivalent to D3DXMatrixPerspectiveFovRH()
+	__forceinline tmat4& set_perspective_off_center_dx( T left, T right, T top, T bottom, T dn, T df ){ set_perspective_off_center( left, right, top, bottom, dn, df ); _22=df/(dn-df); _23*=T(0.5); return *this; }
+	__forceinline tmat4& set_ortho_dx( T width, T height, T dn, T df ){ set_ortho( width, height, dn, df ); _22*=T(0.5); _23=dn/(dn-df); return *this; }
+	__forceinline tmat4& set_ortho_off_center_dx( T left, T right, T top, T bottom, T dn, T df ){ set_ortho_off_center( left, right, top, bottom, dn, df ); _22*=T(0.5); _23=dn/(dn-df); return *this; }
 };
 
 template <class T>
-__noinline tmat4<T>& tmat4<T>::set_rotate( V3 from, V3 to )
+__noinline tmat4<T>& tmat4<T>::set_rotate( const V3& from, const V3& to )
 {
-	from=from.normalize(); to=to.normalize();
-	T d=T(from.dot(to)); if(d>T(0.999999)) return set_identity(); else if(d<T(-0.999999)) return set_scale(-1,-1,-1);
-	V3 n=from.cross(to); T l=T(n.length());
-	return set_rotate(n/l, asin(l));
+	tmat3<T> r=tmat3<T>::rotate(from,to);
+	_00=r._00; _01=r._01; _02=r._02; _03=0;
+	_10=r._10; _11=r._11; _12=r._12; _13=0;
+	_20=r._20; _21=r._21; _22=r._22; _23=0;
+	_30=0;     _31=0;     _32=0;     _33=T(1.0);
+	return *this;
 }
 
 template <class T>
-__noinline tmat4<T>& tmat4<T>::set_rotate( const tvec3<T>& axis, T angle )
+__noinline tmat4<T>& tmat4<T>::set_rotate( const V3& axis, T angle )
 {
-	T c=T(cos(angle)), s=T(sin(angle)), x=axis.x, y=axis.y, z=axis.z;
-	_11 = x*x*(1-c)+c;		_12 = x*y*(1-c)-z*s;	_13 = x*z*(1-c)+y*s;	_14 = 0;
-	_21 = x*y*(1-c)+z*s;	_22 = y*y*(1-c)+c;		_23 = y*z*(1-c)-x*s;	_24 = 0;
-	_31 = x*z*(1-c)-y*s;	_32 = y*z*(1-c)+x*s;	_33 = z*z*(1-c)+c;		_34 = 0;
-	_41 = 0;				_42 = 0;				_43 = 0;				_44 = T(1.0);
+	tmat3<T> r=tmat3<T>::rotate(axis,angle);
+	_00=r._00; _01=r._01; _02=r._02; _03=0;
+	_10=r._10; _11=r._11; _12=r._12; _13=0;
+	_20=r._20; _21=r._21; _22=r._22; _23=0;
+	_30=0;     _31=0;     _32=0;     _33=T(1.0);
 	return *this;
 }
 
 template <class T>
 __noinline tvec4<T> tmat4<T>::_xdet() const
 {
-	return V((_41*_32-_31*_42)*_23+(_21*_42-_41*_22)*_33+(_31*_22-_21*_32)*_43,
-			 (_31*_42-_41*_32)*_13+(_41*_12-_11*_42)*_33+(_11*_32-_31*_12)*_43,
-			 (_41*_22-_21*_42)*_13+(_11*_42-_41*_12)*_23+(_21*_12-_11*_22)*_43,
-			 (_21*_32-_31*_22)*_13+(_31*_12-_11*_32)*_23+(_11*_22-_21*_12)*_33);
+	return V((_30*_21-_20*_31)*_12+(_10*_31-_30*_11)*_22+(_20*_11-_10*_21)*_32,
+			 (_20*_31-_30*_21)*_02+(_30*_01-_00*_31)*_22+(_00*_21-_20*_01)*_32,
+			 (_30*_11-_10*_31)*_02+(_00*_31-_30*_01)*_12+(_10*_01-_00*_11)*_32,
+			 (_10*_21-_20*_11)*_02+(_20*_01-_00*_21)*_12+(_00*_11-_10*_01)*_22);
 }
 
 template <class T>
@@ -576,18 +606,18 @@ __noinline tmat4<T> tmat4<T>::inverse() const
 {
 	auto xd=_xdet();
 	// http://www.cg.info.hiroshima-cu.ac.jp/~miyazaki/knowledge/teche23.html
-	return tmat4((_32*_43-_42*_33)*_24 + (_42*_23-_22*_43)*_34 + (_22*_33-_32*_23)*_44,
-				 (_42*_33-_32*_43)*_14 + (_12*_43-_42*_13)*_34 + (_32*_13-_12*_33)*_44,
-				 (_22*_43-_42*_23)*_14 + (_42*_13-_12*_43)*_24 + (_12*_23-_22*_13)*_44,
-				 (_32*_23-_22*_33)*_14 + (_12*_33-_32*_13)*_24 + (_22*_13-_12*_23)*_34,
-				 (_41*_33-_31*_43)*_24 + (_21*_43-_41*_23)*_34 + (_31*_23-_21*_33)*_44,
-				 (_31*_43-_41*_33)*_14 + (_41*_13-_11*_43)*_34 + (_11*_33-_31*_13)*_44,
-				 (_41*_23-_21*_43)*_14 + (_11*_43-_41*_13)*_24 + (_21*_13-_11*_23)*_44,
-				 (_21*_33-_31*_23)*_14 + (_31*_13-_11*_33)*_24 + (_11*_23-_21*_13)*_34,
-				 (_31*_42-_41*_32)*_24 + (_41*_22-_21*_42)*_34 + (_21*_32-_31*_22)*_44,
-				 (_41*_32-_31*_42)*_14 + (_11*_42-_41*_12)*_34 + (_31*_12-_11*_32)*_44,
-				 (_21*_42-_41*_22)*_14 + (_41*_12-_11*_42)*_24 + (_11*_22-_21*_12)*_44,
-				 (_31*_22-_21*_32)*_14 + (_11*_32-_31*_12)*_24 + (_21*_12-_11*_22)*_34,
+	return tmat4((_21*_32-_31*_22)*_13 + (_31*_12-_11*_32)*_23 + (_11*_22-_21*_12)*_33,
+				 (_31*_22-_21*_32)*_03 + (_01*_32-_31*_02)*_23 + (_21*_02-_01*_22)*_33,
+				 (_11*_32-_31*_12)*_03 + (_31*_02-_01*_32)*_13 + (_01*_12-_11*_02)*_33,
+				 (_21*_12-_11*_22)*_03 + (_01*_22-_21*_02)*_13 + (_11*_02-_01*_12)*_23,
+				 (_30*_22-_20*_32)*_13 + (_10*_32-_30*_12)*_23 + (_20*_12-_10*_22)*_33,
+				 (_20*_32-_30*_22)*_03 + (_30*_02-_00*_32)*_23 + (_00*_22-_20*_02)*_33,
+				 (_30*_12-_10*_32)*_03 + (_00*_32-_30*_02)*_13 + (_10*_02-_00*_12)*_33,
+				 (_10*_22-_20*_12)*_03 + (_20*_02-_00*_22)*_13 + (_00*_12-_10*_02)*_23,
+				 (_20*_31-_30*_21)*_13 + (_30*_11-_10*_31)*_23 + (_10*_21-_20*_11)*_33,
+				 (_30*_21-_20*_31)*_03 + (_00*_31-_30*_01)*_23 + (_20*_01-_00*_21)*_33,
+				 (_10*_31-_30*_11)*_03 + (_30*_01-_00*_31)*_13 + (_00*_11-_10*_01)*_33,
+				 (_20*_11-_10*_21)*_03 + (_00*_21-_20*_01)*_13 + (_10*_01-_00*_11)*_23,
 				 xd.x, xd.y, xd.z, xd.w )*(T(1.0)/cvec(3).dot(xd));
 }
 
@@ -607,12 +637,12 @@ static_assert(sizeof(dmat4)%sizeof(double)*16==0,"sizeof(dmat4)!=sizeof(double)*
 
 //*************************************
 // matrix types to string
-inline const char* ftoa( const mat2& m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3]);return buff;}
-inline const char* ftoa( const mat3& m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]);return buff;}
-inline const char* ftoa( const mat4& m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]);return buff;}
-inline const char* ftoa( const dmat2&m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3]);return buff;}
-inline const char* ftoa( const dmat3&m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]);return buff;}
-inline const char* ftoa( const dmat4&m ){ const auto* f=&m._11;static const char* fmt="%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]);return buff;}
+inline const char* ftoa( const mat2& m ){ const auto* f=&m._00;static const char* fmt="%g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3]);return buff;}
+inline const char* ftoa( const mat3& m ){ const auto* f=&m._00;static const char* fmt="%g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]);return buff;}
+inline const char* ftoa( const mat4& m ){ const auto* f=&m._00;static const char* fmt="%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]);return buff;}
+inline const char* ftoa( const dmat2&m ){ const auto* f=&m._00;static const char* fmt="%g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3]);return buff;}
+inline const char* ftoa( const dmat3&m ){ const auto* f=&m._00;static const char* fmt="%g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]);return buff;}
+inline const char* ftoa( const dmat4&m ){ const auto* f=&m._00;static const char* fmt="%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]);return buff;}
 
 //*************************************
 // vertor-matrix multiplications

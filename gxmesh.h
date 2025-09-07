@@ -220,8 +220,8 @@ struct camera_t
 	camera_t& operator=(const camera_t& c) = default;
 
 	mat4 inverse_view_matrix() const { return mat4::look_at_inverse(eye,center,up); } // works without eye, center, up
-	mat4 perspective_dx() const { mat4 m=projection_matrix; m._33=dfar/(dnear-dfar); m._34*=0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
-	vec2 plane_size( float ecd=1.0f) const { return vec2(2.0f/projection_matrix._11, 2.0f/projection_matrix._22)*ecd; } // plane size (width, height) at eye-coordinate distance 1
+	mat4 perspective_dx() const { mat4 m=projection_matrix; m._22=dfar/(dnear-dfar); m._23*=0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
+	vec2 plane_size( float ecd=1.0f) const { return vec2(2.0f/projection_matrix._00, 2.0f/projection_matrix._11)*ecd; } // plane size (width, height) at eye-coordinate distance 1
 	void update_depth_clips( const bbox& bound, const float min_near_scale=0.0005f ){ bbox b=view_matrix*bound; vec2 z(max(0.001f,-b.M.z),max(0.001f,-b.m.z)); float r=bound.radius(); dnear=max(max(r*min_near_scale,0.05f),z.x*0.99f); dfar=max(max(dnear+1.0f,dnear*1.01f),z.y*1.01f); }
 	void extend_frustum( double scale ){ projection_matrix=mat4::perspective(fovy=float(atan2(tan(fovy*0.5)*scale,1.0)*2.0),aspect,dnear,dfar); }
 
