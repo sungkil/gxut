@@ -365,12 +365,11 @@ __forceinline half* ftoh( const float* pf, half* ph, size_t nElements, size_t ha
 	static const int D = dim;\
 	using V = tvec##dim<T>;\
 	__default_types(dim*dim);\
-	__default_index(V);\
 	__forceinline M( M&& m )=default;\
 	__forceinline M( const M& m )=default;\
-	__forceinline M( T diag ){for(int k=0;k<D;k++)for(int j=0;j<D;j++){v[k][j]=(k==j)?diag:0;} }\
 	__forceinline M& operator=( M&& m )=default;\
 	__forceinline M& operator=( const M& m )=default;\
+	__forceinline V operator[]( ptrdiff_t col ) const { V v; for(int k=0;k<D;k++) v[k]=(&_00)[k*D+col]; return v; }\
 	__forceinline bool operator==( const M& m ) const { for(int k=0;k<N;k++) if(std::abs((&_00)[k]-(&m._00)[k])>precision<T>::value()) return false; return true; }\
 	__forceinline bool operator!=( const M& m ) const { return !operator==(m); }\
 	__forceinline M& operator+(){ return *this; }\
@@ -378,31 +377,32 @@ __forceinline half* ftoh( const float* pf, half* ph, size_t nElements, size_t ha
 	__forceinline M operator-() const { M m; for(int k=0;k<N;k++) (&m._00)[k]=-(&_00)[k]; return m; }\
 	__forceinline M& operator+=( const M& m ){ for(int k=0;k<N;k++) (&_00)[k]+=(&m._00)[k]; return *this; }\
 	__forceinline M& operator-=( const M& m ){ for(int k=0;k<N;k++) (&_00)[k]-=(&m._00)[k]; return *this; }\
-	__forceinline M& operator*=( const M& m ){ M t=m.transpose(); for(int k=0;k<D;k++) v[k]=t*v[k]; return *this; }\
+	__forceinline M& operator*=( const M& m ){ M t=m.transpose(); for(int k=0;k<D;k++){ auto& v=reinterpret_cast<V&>((&_00)[k*D]); v=t*v; } return *this; }\
 	__forceinline M& operator*=( T f ){ for(int k=0;k<N;k++) (&_00)[k]*=f; return *this; }\
 	__forceinline M& operator/=( T f ){ for(int k=0;k<N;k++) (&_00)[k]/=f; return *this; }\
 	__forceinline M operator+( const M& m ) const { return M(*this)+=m; }\
 	__forceinline M operator-( const M& m ) const { return M(*this)-=m; }\
 	__forceinline M operator*( const M& m ) const { return M(*this)*=m; }\
-	__forceinline V operator*( const V& w ) const { V f; for(int k=0;k<D;k++) f[k]=v[k].dot(w); return f; }\
+	__forceinline V operator*( const V& w ) const { V f; for(int k=0;k<D;k++){ auto& v=reinterpret_cast<const V&>((&_00)[k*D]); f[k]=w.dot(v); } return f; }\
 	__forceinline M operator*( T f ) const { return M(*this)*=f; }\
 	__forceinline M operator/( T f ) const { return M(*this)/=f; }\
 	__forceinline static M identity(){ return M(); }\
 	__forceinline M& set_identity(){ return *this=M(); }\
-	__forceinline V diag() const { V f; for(int k=0;k<D;k++) f[k]=v[k][k]; return f; }\
-	__forceinline V cvec( int col ) const { V f; for(int k=0;k<D;k++) f[k]=v[k][col]; return f; }\
-	__forceinline T trace() const { T f=0; for(int k=0;k<D;k++) f+=v[k][k]; return f; }
+	__forceinline V diag() const { V v; for(int k=0;k<D;k++) v[k]=(&_00)[k*D+k]; return v; }\
+	__forceinline T trace() const { V d=diag(); T f=0; for(int k=0;k<D;k++) f+=d[k]; return f; }\
+	__forceinline V rvec( int row ) const { return reinterpret_cast<const V&>((&_00)[D*row]); }
 
 //*************************************
 template <class T> struct tmat2
 {
 	__default_matrix_impl(tmat2,2);
 	
-	union { V v[2]; struct { T _00,_01,_10,_11;}; };
+	T _00,_01,_10,_11;
 
 	// constructors
 	__forceinline tmat2(){ _01=_10=0;_00=_11=T(1.0); }
 	__forceinline tmat2( T f00, T f01, T f10, T f11 ){ _00=f00;_01=f01;_10=f10;_11=f11; }
+	__forceinline tmat2( const V& c0, const V& c1 ){ _00=c0.x;_01=c1.x;_10=c0.y;_11=c1.y; }
 
 	// transpose
 	__forceinline tmat2 transpose() const { return tmat2{_00,_10,_01,_11}; }
@@ -428,11 +428,12 @@ template <class T> struct tmat3
 	__default_matrix_impl(tmat3,3);
 	using V2 = tvec2<T>;
 
-	union{ V v[3]; struct{T _00,_01,_02,_10,_11,_12,_20,_21,_22;}; };
+	T _00,_01,_02,_10,_11,_12,_20,_21,_22;
 
 	// constructors
 	__forceinline tmat3(){ _01=_02=_10=_12=_20=_21=0;_00=_11=_22=T(1.0); }
 	__forceinline tmat3( T f00, T f01, T f02, T f10, T f11, T f12, T f20, T f21, T f22 ){_00=f00;_01=f01;_02=f02;_10=f10;_11=f11;_12=f12;_20=f20;_21=f21;_22=f22;}
+	__forceinline tmat3( const V& c0, const V& c1, const V& c2 ){ _00=c0.x;_01=c1.x;_02=c2.x;_10=c0.y;_11=c1.y;_12=c2.y;_20=c0.z;_21=c1.z;_22=c2.z; }
 
 	// casting operators
 	__forceinline operator tmat2<T>() const { return tmat2<T>(_00,_01,_10,_11); }
@@ -494,7 +495,7 @@ template <class T> struct tmat4
 	using V2 = tvec2<T>;
 	using V3 = tvec3<T>;
 
-	union{ V v[4]; struct{T _00,_01,_02,_03,_10,_11,_12,_13,_20,_21,_22,_23,_30,_31,_32,_33;}; };
+	T _00,_01,_02,_03,_10,_11,_12,_13,_20,_21,_22,_23,_30,_31,_32,_33;
 
 	// constructors
 	__forceinline tmat4(){ _01=_02=_03=_10=_12=_13=_20=_21=_23=_30=_31=_32=0;_00=_11=_22=_33=T(1.0); }
@@ -509,14 +510,14 @@ template <class T> struct tmat4
 	__forceinline operator tmat2<T>() const { return tmat2<T>(_00,_01,_10,_11); }
 
 	// multiplication operators
-	__forceinline tvec3<T> operator*( const tvec3<T>& f ) const { tvec4<T> g(f,T(1)); return tvec3<T>(v[0].dot(g),v[1].dot(g),v[2].dot(g)); }
+	__forceinline tvec3<T> operator*( const tvec3<T>& f ) const { tvec4<T> g(f,T(1)); return tvec3<T>(rvec(0).dot(g),rvec(1).dot(g),rvec(2).dot(g)); }
 
 	// transpose
 	__forceinline tmat4 transpose() const { return tmat4(_00,_10,_20,_30,_01,_11,_21,_31,_02,_12,_22,_32,_03,_13,_23,_33); }
 
 	// determinant/trace/inverse
 	V _xdet() const;	// support function for det() and inverse()
-	__forceinline T det() const { return cvec(3).dot(_xdet()); }
+	__forceinline T det() const { return operator[](3).dot(_xdet()); }
 	tmat4 inverse() const;
 
 	// static row-major transformations
@@ -554,7 +555,7 @@ template <class T> struct tmat4
 	__forceinline tmat4& set_viewport( int width, int height ){ set_identity(); _00=width*T(0.5); _11=-height*T(0.5); _03=width*T(0.5); _13=height*T(0.5); return *this; }
 	__forceinline tmat4& set_look_at( const V3& eye, const V3& center, const V3& up ){ V3 n=(eye-center).normalize(), u=(up.cross(n)).normalize(), v=n.cross(u); return *this = tmat4{u.x,u.y,u.z,-u.dot(eye),v.x,v.y,v.z,-v.dot(eye),n.x,n.y,n.z,-n.dot(eye),0,0,0,T(1.0)}; }
 	__forceinline tmat4& set_look_at_inverse( const V3& eye, const V3& center, const V3& up ){ V3 n=(eye-center).normalize(), u=(up.cross(n)).normalize(), v=n.cross(u); return *this = tmat4{u.x,v.x,n.x,eye.x,u.y,v.y,n.y,eye.y,u.z,v.z,n.z,eye.z,0,0,0,T(1.0)}; }
-	__forceinline V3	 look_at_eye() const { const V3 &u=v[0].xyz,&V=v[1].xyz,&n=v[2].xyz,uv=u.cross(V),vn=V.cross(n),nu=n.cross(u); return (vn*_03+nu*_13+uv*_23)/(-u.dot(vn)); }
+	__forceinline V3	 look_at_eye() const { const V3 &u=rvec(0).xyz,&V=rvec(1).xyz,&n=rvec(2).xyz,uv=u.cross(V),vn=V.cross(n),nu=n.cross(u); return (vn*_03+nu*_13+uv*_23)/(-u.dot(vn)); }
 	__forceinline tmat4  look_at_inverse() const { V3 eye=look_at_eye(); return tmat4{_00,_10,_20,eye.x,_01,_11,_21,eye.y,_02,_12,_22,eye.z,0,0,0,T(1)}; }
 
 	// Canonical view volume in OpenGL: [-1,1]^3
@@ -618,7 +619,7 @@ __noinline tmat4<T> tmat4<T>::inverse() const
 				 (_30*_21-_20*_31)*_03 + (_00*_31-_30*_01)*_23 + (_20*_01-_00*_21)*_33,
 				 (_10*_31-_30*_11)*_03 + (_30*_01-_00*_31)*_13 + (_00*_11-_10*_01)*_33,
 				 (_20*_11-_10*_21)*_03 + (_00*_21-_20*_01)*_13 + (_10*_01-_00*_11)*_23,
-				 xd.x, xd.y, xd.z, xd.w )*(T(1.0)/cvec(3).dot(xd));
+				 xd.x, xd.y, xd.z, xd.w )*(T(1.0)/operator[](3).dot(xd));
 }
 
 //*************************************
@@ -685,10 +686,13 @@ template <class T> __forceinline T length2( const tvec4<T>& v ){ return v.length
 template <class T> __forceinline tvec2<T> normalize( const tvec2<T>& v ){ return v.normalize(); }
 template <class T> __forceinline tvec3<T> normalize( const tvec3<T>& v ){ return v.normalize(); }
 template <class T> __forceinline tvec4<T> normalize( const tvec4<T>& v ){ return v.normalize(); }
-template <class T> __forceinline T dot( const tvec2<T>& v1, const tvec2<T>& v2){ return v1.dot(v2); }
-template <class T> __forceinline T dot( const tvec3<T>& v1, const tvec3<T>& v2){ return v1.dot(v2); }
-template <class T> __forceinline T dot( const tvec4<T>& v1, const tvec4<T>& v2){ return v1.dot(v2); }
-template <class T> __forceinline tvec3<T> cross( const tvec3<T>& v1, const tvec3<T>& v2){ return v1.cross(v2); }
+template <class T> __forceinline T dot( const tvec2<T>& v0, const tvec2<T>& v1){ return v0.dot(v1); }
+template <class T> __forceinline T dot( const tvec3<T>& v0, const tvec3<T>& v1){ return v0.dot(v1); }
+template <class T> __forceinline T dot( const tvec4<T>& v0, const tvec4<T>& v1){ return v0.dot(v1); }
+template <class T> __forceinline tvec3<T> cross( const tvec3<T>& v0, const tvec3<T>& v1){ return v0.cross(v1); }
+template <class T> __forceinline tmat2<T> outer_product( const tvec2<T>& v0, const tvec2<T>& v1 ){ return tmat2<T>{ v0.x*v1.x, v0.x*v1.y, v0.y*v1.x, v0.y*v1.y }; }
+template <class T> __forceinline tmat3<T> outer_product( const tvec3<T>& v0, const tvec3<T>& v1 ){ return tmat3<T>{ v0.x*v1.x, v0.x*v1.y, v0.x*v1.z, v0.y*v1.x, v0.y*v1.y, v0.y*v1.z, v0.z*v1.x, v0.z*v1.y, v0.z*v1.z }; }
+template <class T> __forceinline tmat4<T> outer_product( const tvec4<T>& v0, const tvec4<T>& v1 ){ return tmat4<T>{v0.x*v1.x, v0.x*v1.y, v0.x*v1.z, v0.x*v1.w, v0.y*v1.x, v0.y*v1.y, v0.y*v1.z, v0.y*v1.w, v0.z*v1.x, v0.z*v1.y, v0.z*v1.z, v0.z*v1.w, v0.w*v1.x, v0.w*v1.y, v0.w*v1.z, v0.w*v1.w }; }
 
 //*************************************
 // general math utility functions

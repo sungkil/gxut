@@ -4,16 +4,16 @@
 #include "gxquat.h"	// quaternion
 
 // view matrix analysis
-inline vec3 extract_eye( const mat4& m ){ return mat3(m).transpose()*(-vec3(m._14,m._24,m._34)); }
+inline vec3 extract_eye( const mat4& m ){ return mat3(m).transpose()*(-vec3(m._03,m._13,m._23)); }
 inline std::pair<vec3,vec3> extract_eyes( const mat4& m0, const mat4& m1 ){ return {extract_eye(m0),extract_eye(m1)}; }
 inline std::tuple<vec3,vec3,vec3,vec3> extract_eyes( const mat4& m0, const mat4& m1, const mat4& m2, const mat4& m3 ){ return {extract_eye(m0),extract_eye(m1),extract_eye(m2),extract_eye(m3)}; }
 
 inline mat4& assign_eyes( mat4& r, const vec3& eye )
 {
 	// re-translate the eye
-	r._14 = -eye.dot(r.v[0].xyz);
-	r._24 = -eye.dot(r.v[1].xyz);
-	r._34 = -eye.dot(r.v[2].xyz);
+	r._03 = -eye.dot(r.rvec(0).xyz);
+	r._13 = -eye.dot(r.rvec(1).xyz);
+	r._23 = -eye.dot(r.rvec(2).xyz);
 	return r;
 }
 
