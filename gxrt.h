@@ -315,7 +315,7 @@ template <> __forceinline mat3 tbn_matrix<false>( vec3 normal ) // used in ray t
 {
 	vec3 t = normalize(cross(abs(normal.x)>0.0f?vec3(0,1,0):vec3(1,0,0),normal)); // tangent: typical choice in path tracer
 	vec3 b = normalize(cross(normal,t)); // binormal
-	return mat3{t.x,b.x,normal.x,t.y,b.y,normal.y,t.z,b.z,normal.z};
+	return mat3(t,b,normal); // column-vector initialization
 }
 template <> __forceinline mat3 tbn_matrix<true>( vec3 normal ) // used in normal/bump mapping
 {
@@ -323,7 +323,7 @@ template <> __forceinline mat3 tbn_matrix<true>( vec3 normal ) // used in normal
 	vec3 c = cross(normal,vec3(0,0,1)), d = cross(normal,vec3(0,1,0));
 	vec3 t = normalize(length(c)>length(d)?c:d); // tangent
 	vec3 b = normalize(cross(normal,t)); // binormal
-	return mat3{t.x,b.x,normal.x,t.y,b.y,normal.y,t.z,b.z,normal.z};
+	return mat3{t,b,normal}; // column-vector initialization
 }
 
 // find area lights from mesh

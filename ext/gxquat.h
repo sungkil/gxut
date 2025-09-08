@@ -69,17 +69,19 @@ struct quat
 
 	__forceinline operator mat3 () const
 	{
-		return mat3	(1.0f-(2.0f*y*y)-(2.0f*z*z),	(2.0f*x*y)-(2.0f*w*z),		(2.0f*x*z)+(2.0f*w*y),
-					(2.0f*x*y)+(2.0f*w*z),			1.0f-(2.0f*x*x)-(2.0f*z*z),	(2.0f*y*z)-(2.0f*w*x),
-					(2.0f*x*z)-(2.0f*w*y),			(2.0f*y*z)+(2.0f*w*x),		1.0f-(2.0f*x*x)-(2.0f*y*y) );
+		mat3 m;	m._00=1.0f-(2.0f*y*y)-(2.0f*z*z);	m._01=(2.0f*x*y)-(2.0f*w*z);		m._02=(2.0f*x*z)+(2.0f*w*y);
+				m._10=(2.0f*x*y)+(2.0f*w*z);		m._11=1.0f-(2.0f*x*x)-(2.0f*z*z);	m._12=(2.0f*y*z)-(2.0f*w*x);
+				m._20=(2.0f*x*z)-(2.0f*w*y);		m._21=(2.0f*y*z)+(2.0f*w*x);		m._22=1.0f-(2.0f*x*x)-(2.0f*y*y);
+		return m;
 	}
 
 	__forceinline operator mat4 () const
 	{
-		return mat4	(1.0f-(2.0f*y*y)-(2.0f*z*z),	(2.0f*x*y)-(2.0f*w*z),		(2.0f*x*z)+(2.0f*w*y),		0,
-					(2.0f*x*y)+(2.0f*w*z),			1.0f-(2.0f*x*x)-(2.0f*z*z),	(2.0f*y*z)-(2.0f*w*x),		0,
-					(2.0f*x*z)-(2.0f*w*y),			(2.0f*y*z)+(2.0f*w*x),		1.0f-(2.0f*x*x)-(2.0f*y*y),	0,
-					0,								0,							0,							1.0f );
+		mat3 m=operator mat3();
+		mat4 r;	r._00=m._00; r._01=m._01; r._02=m._02;
+				r._10=m._10; r._11=m._11; r._12=m._12;
+				r._20=m._20; r._21=m._21; r._22=m._22;
+		return r;
 	}
 };
 
