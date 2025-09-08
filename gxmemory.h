@@ -190,8 +190,8 @@ inline unsigned int crc32c( unsigned int crc0, const string& s ){ return crc32c(
 inline unsigned int crc32c( unsigned int crc0, const std::wstring& s ){ return crc32c(crc0,(const void*)s.c_str(), s.size()*sizeof(wchar_t)); }
 template <class T> inline unsigned int crc32c( unsigned int crc0, const vector<T>& v ){ return v.empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
 template <class T> inline unsigned int crc32c( unsigned int crc0, const vector<T>* v ){ return !v||v->empty()?crc0:crc32c(crc0,v->data(),v->size()*sizeof(T)); }
-template <class T, size_t N> inline unsigned int crc32c( unsigned int crc0, const std::array<T,N>& v ){ return v.empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
-template <class T, size_t N> inline unsigned int crc32c( unsigned int crc0, const std::array<T,N>* v ){ return !v||v->empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
+template <class T, size_t N> inline unsigned int crc32c( unsigned int crc0, const array<T,N>& v ){ return v.empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
+template <class T, size_t N> inline unsigned int crc32c( unsigned int crc0, const array<T,N>* v ){ return !v||v->empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
 
 inline unsigned int crc32c( const void* ptr, size_t size ){ return crc32c(0,ptr,size); }
 inline unsigned int crc32c( sized_ptr_t<void> p ){ return crc32c(0,p); }
@@ -202,8 +202,8 @@ inline unsigned int crc32c(	const std::wstring& s ){ return crc32c(0,s); }
 
 template <class T> inline unsigned int crc32c( const vector<T>& v ){ return crc32c<T>(0,v); }
 template <class T> inline unsigned int crc32c( const vector<T>* v ){ return crc32c<T>(0,v); }
-template <class T, size_t N> inline unsigned int crc32c( const std::array<T,N>& v ){ return crc32c<T,N>(v); }
-template <class T, size_t N> inline unsigned int crc32c( const std::array<T,N>* v ){ return crc32c<T,N>(v); }
+template <class T, size_t N> inline unsigned int crc32c( const array<T,N>& v ){ return crc32c<T,N>(v); }
+template <class T, size_t N> inline unsigned int crc32c( const array<T,N>* v ){ return crc32c<T,N>(v); }
 
 //***********************************************
 // MD5 implementation

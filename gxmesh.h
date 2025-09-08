@@ -140,9 +140,9 @@ struct bbox : public bbox_t
 	inline vec3 lerp( const vec3& t ) const { return lerp(t.x,t.y,t.z); }
 	inline vec3 offset( const vec3& v ) const { return (v-m)/size(); }
 	inline uvec3 corner_index( uint index ) const { uint j=index%4; return uvec3((j>>1)^(j&1),j>>1,index>>2); }
-	inline std::array<uvec3,8> corner_indices() const { std::array<uvec3,8> v={}; for(uint k=0; k<8; k++) v[k]=corner_index(k); return v; }
+	inline array<uvec3,8> corner_indices() const { array<uvec3,8> v={}; for(uint k=0; k<8; k++) v[k]=corner_index(k); return v; }
 	inline vec3 corner( uint index ) const { uvec3 i=corner_index(index); return lerp(float(i.x), float(i.y), float(i.z)); }
-	inline std::array<vec3,8> corners() const { std::array<vec3,8> v={}; for(uint k=0; k<8; k++) v[k]=corner(k); return v; }	// returns 000 100 110 010 001 101 111 011
+	inline array<vec3,8> corners() const { array<vec3,8> v={}; for(uint k=0; k<8; k++) v[k]=corner(k); return v; }	// returns 000 100 110 010 001 101 111 011
 
 	// comparison
 	bool operator==( const bbox& b ) const { return m==b.m&&M==b.M; }
@@ -182,7 +182,7 @@ struct sphere
 
 //*************************************
 // view frustum for culling
-struct frustum_t : public std::array<vec4, 6> // left, right, top, bottom, near, far
+struct frustum_t : public array<vec4, 6> // left, right, top, bottom, near, far
 {
 	__forceinline frustum_t() = default;
 	__forceinline frustum_t( frustum_t&& ) = default;
@@ -219,6 +219,7 @@ struct camera_t
 	camera_t& operator=(camera_t&& c) = default;
 	camera_t& operator=(const camera_t& c) = default;
 
+	mat4 view_projection_matrix() const { return projection_matrix*view_matrix; }
 	mat4 inverse_view_matrix() const { return mat4::look_at_inverse(eye,center,up); } // works without eye, center, up
 	mat4 perspective_dx() const { mat4 m=projection_matrix; m._22=dfar/(dnear-dfar); m._23*=0.5f; return m; } // you may use mat4::perspectiveDX() to set canonical depth range in [0,1] instead of [-1,1]
 	vec2 plane_size( float ecd=1.0f) const { return vec2(2.0f/projection_matrix._00, 2.0f/projection_matrix._11)*ecd; } // plane size (width, height) at eye-coordinate distance 1

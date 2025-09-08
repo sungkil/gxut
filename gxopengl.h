@@ -268,11 +268,11 @@ struct Buffer : public Object
 
 	void set_sub_data( const GLvoid* data, GLsizeiptr size, GLintptr offset=0 ){ if(glNamedBufferSubData) glNamedBufferSubData(ID,offset,size,data); else { GLuint b0=bind(); glBufferSubData(target,offset,size,data); glBindBuffer(target,b0); } }
 	template <class T> void set_sub_data( const vector<T>& data, GLintptr offset=0 ){ set_sub_data(data.data(),GLsizeiptr(sizeof(T)*data.size()),offset); }
-	template <class T, size_t N> void set_sub_data( const std::array<T,N>& data, GLintptr offset=0 ){ set_sub_data(data.data(),GLsizeiptr(sizeof(T)*N),offset); }
+	template <class T, size_t N> void set_sub_data( const array<T,N>& data, GLintptr offset=0 ){ set_sub_data(data.data(),GLsizeiptr(sizeof(T)*N),offset); }
 	template <class T> void set_data( const T* data, GLsizeiptr count ){ set_sub_data((const GLvoid*)data,sizeof(T)*count,0); }
 	template <class T> void set_data( T data ){ set_sub_data(&data,GLsizeiptr(sizeof(T)),0); }
 	template <class T> void set_data( const vector<T>& data ){ set_sub_data(data.data(),GLsizeiptr(sizeof(T)*data.size()),0); }
-	template <class T, size_t N> void set_data( const std::array<T,N>& data ){ set_sub_data(data.data(),GLsizeiptr(sizeof(T)*N),0); }
+	template <class T, size_t N> void set_data( const array<T,N>& data ){ set_sub_data(data.data(),GLsizeiptr(sizeof(T)*N),0); }
 	void copy_data( Buffer* write_buffer, GLsizeiptr size=0 ){ copy_sub_data( write_buffer, size?size:this->size() ); }
 	void copy_sub_data( Buffer* write_buffer, GLsizeiptr size, GLintptr read_offset=0, GLintptr write_offset=0 ){ if(glCopyNamedBufferSubData) glCopyNamedBufferSubData(ID,write_buffer->ID,read_offset,write_offset,size); else printf("Buffer::copySubData(): glCopyNamedBufferSubData==nullptr (only supports named mode)\n" ); }
 	template <class T> void clear( const T value ){ constexpr GLenum iformat=gxTypeToInternalFormat<T>(); static GLenum format=gxGetTextureFormat(iformat), type=gxGetTextureType(iformat); if(glClearNamedBufferData) glClearNamedBufferData(ID,iformat,format,type,&value); else if(glClearBufferData){ GLuint b0=bind(); glClearBufferData(target,iformat,format,type,&value); bind(b0); } }
@@ -346,7 +346,7 @@ template <class T> gl::Buffer* gxCreateBuffer(const char* name, GLenum target, c
 	return gxCreateBuffer(name,target,GLsizeiptr(data.size()*sizeof(T)),usage,(const void*)data.data(),storage_flags,persistent);
 }
 
-template <class T, size_t N> gl::Buffer* gxCreateBuffer(const char* name, GLenum target, const std::array<T,N>& data, GLenum usage, GLbitfield storage_flags=GL_MAP_READ_BIT|GL_MAP_WRITE_BIT|GL_DYNAMIC_STORAGE_BIT, bool persistent=false)
+template <class T, size_t N> gl::Buffer* gxCreateBuffer(const char* name, GLenum target, const array<T,N>& data, GLenum usage, GLbitfield storage_flags=GL_MAP_READ_BIT|GL_MAP_WRITE_BIT|GL_DYNAMIC_STORAGE_BIT, bool persistent=false)
 {
 	return gxCreateBuffer(name,target,GLsizeiptr(N*sizeof(T)),usage,(const void*)data.data(),storage_flags,persistent);
 }
@@ -1526,7 +1526,7 @@ inline vector<Uniform> Program::get_active_uniforms( bool b_bind )
 {
 	GLint program0=-1; if(b_bind&&glProgramUniform1i) glGetIntegerv(GL_CURRENT_PROGRAM,&program0); if(program0>=0) glUseProgram(ID);
 	static const GLenum pnames[]={GL_BLOCK_INDEX,GL_LOCATION,GL_NAME_LENGTH,GL_TYPE,GL_OFFSET,GL_ARRAY_SIZE,GL_ARRAY_STRIDE,GL_MATRIX_STRIDE,GL_IS_ROW_MAJOR,GL_ATOMIC_COUNTER_BUFFER_INDEX};
-	static std::array<GLint,std::extent<decltype(pnames)>::value> values;
+	static array<GLint,std::extent<decltype(pnames)>::value> values;
 	static std::map<GLenum,GLint> prop;
 	vector<Uniform> v; for(int k=0,kn=get_active_uniform_count();k<kn;k++)
 	{

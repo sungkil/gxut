@@ -121,7 +121,7 @@ struct bridson_t
 	ivec2 to_grid( vec2& v ){ return ivec2(int((v.x/cell_size())), int((v.y/cell_size()))); }
 	sample gen_intial_sample(){ sample s={}; s.pos=vec2(0.5f,0.5f); s.tc = to_grid(s.pos); return s; }
 	sample gen_annulus( vec2 p ){ sample s={}; float t = prand()*pi2; s.pos = p + vec2(cosf(t),sinf(t))*(prand()+1.0f)*r; s.tc = to_grid(s.pos); return s; } 
-	static std::array<ivec2,20> gen_neighbors(){ std::array<ivec2,20> n={}; for(int k=0,y=-2;y<3;y++)for(int x=-2;x<3;x++){ if((x==0&&y==0)||(abs(x)==2&&abs(y)==2)) continue; n[k++]=ivec2(x,y); } return n; }
+	static array<ivec2,20> gen_neighbors(){ array<ivec2,20> n={}; for(int k=0,y=-2;y<3;y++)for(int x=-2;x<3;x++){ if((x==0&&y==0)||(abs(x)==2&&abs(y)==2)) continue; n[k++]=ivec2(x,y); } return n; }
 
 	int generate( const int count, float radius );
 };
@@ -168,7 +168,7 @@ __noinline int bridson_t::generate( const int count, float radius )
 {
 	// 0. reset all
 	reset(count,radius);
-	static const std::array<ivec2,20> neighbors = gen_neighbors();
+	static const array<ivec2,20> neighbors = gen_neighbors();
 		
 	// 1. generate first sample
 	const float r2 = r*r;

@@ -189,8 +189,7 @@ namespace fs = std::filesystem;
 // C++20: __cpluplus works here; keep for this for vcpp legacy check
 #if (__cplusplus>=202002L)||(defined(_MSVC_LANG)&&_MSVC_LANG>=202002L)||(defined(_HAS_CXX20)&&_HAS_CXX20)
 	#include <span>
-#else
-	// placeholder for compatibility macros
+	using std::span;
 #endif
 
 // platform-independent posix headers
@@ -281,7 +280,7 @@ namespace logical { template <class T> struct less {}; };
 // user types
 #define __default_types(n)		static const int N=n; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+N; } static constexpr size_t size(){ return N; }
 #define __default_index(T)		__forceinline T& operator[]( ptrdiff_t i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( ptrdiff_t i ) const { return ((T*)this)[i]; }
-#define __default_ctors(D,T,c)	__forceinline c()=default;__forceinline c(c&&)=default;__forceinline c(const c&)=default;__forceinline c(std::initializer_list<T> v){ memset(&x,0,sizeof(T)*D); size_t k=0; for(auto& i:v){(&x)[k++]=i;if(k>=D)break;}} __forceinline c(const std::array<T,D>& v){memcpy(&x,v.data(),sizeof(T)*D);} __forceinline c(const std::vector<T>& v){memset(&x,0,sizeof(T)*D);if(!v.empty())memcpy(&x,v.data(),sizeof(T)*std::min(D,int(v.size())));}
+#define __default_ctors(D,T,c)	__forceinline c()=default;__forceinline c(c&&)=default;__forceinline c(const c&)=default;__forceinline c(std::initializer_list<T> v){ memset(&x,0,sizeof(T)*D); size_t k=0; for(auto& i:v){(&x)[k++]=i;if(k>=D)break;}} __forceinline c(const array<T,D>& v){memcpy(&x,v.data(),sizeof(T)*D);} __forceinline c(const std::vector<T>& v){memset(&x,0,sizeof(T)*D);if(!v.empty())memcpy(&x,v.data(),sizeof(T)*std::min(D,int(v.size())));}
 #define __default_assns(c)		__forceinline c& operator=(c&&)=default;__forceinline c& operator=(const c&)=default; __forceinline c& operator=(T a){ for(auto& it:*this) it=a; return *this; }
 #define __default_cmps(A)		__forceinline bool operator==( const A& other ) const { return memcmp(this,&other,sizeof(*this))==0; } __forceinline bool operator!=( const A& other ) const { return memcmp(this,&other,sizeof(*this))!=0; }
 #define __default_array_impl(D,T,V) __default_types(D); __default_index(T); __default_ctors(D,T,V); __default_assns(V);

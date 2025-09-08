@@ -309,68 +309,20 @@ static_assert(sizeof(vec2)==(sizeof(float)*2),"sizeof(vec2)!=sizeof(float)*2" );
 static_assert(sizeof(vec3)==(sizeof(float)*3),"sizeof(vec3)!=sizeof(float)*3" );
 static_assert(sizeof(vec4)==(sizeof(float)*4),"sizeof(vec4)!=sizeof(float)*4" );
 
-// fundamental types for computer graphics
-struct vertex { vec3 pos; vec3 norm; vec2 tex; }; // default vertex layout
-struct bbox_t { vec3 m=3.402823466e+38F; uint __0; vec3 M=-3.402823466e+38F; uint __1; }; // bounding box in std140 layout; FLT_MAX = 3.402823466e+38F; __0, __1: padding
-
-//*************************************
-// std::hash support here
-
-#if defined(_M_X64)||defined(__LP64__)
-template <class T> struct bitwise_hash {size_t operator()(const T v)const{ size_t h=14695981039346656037ULL;const uchar* p=(const uchar*)&v;for(size_t k=0;k<sizeof(T);k++){h^=size_t(p[k]);h*=1099511628211ULL;}return h;}}; // FNV-1a hash function (from VC2015/2017)
-#elif defined(_M_IX86)
-template <class T> struct bitwise_hash {size_t operator()(const T v)const{ size_t h=2166136261U;const uchar* p=(const uchar*)&v;for(size_t k=0;k<sizeof(T);k++){h^=size_t(p[k]);h*=16777619U;}return h;}}; // FNV-1a hash function (from VC2015/2017)
-#endif
-
-namespace std
-{
-	template<> struct hash<int2> :	public bitwise_hash<int2> {};
-	template<> struct hash<int3> :	public bitwise_hash<int3> {};
-	template<> struct hash<int4> :	public bitwise_hash<int4> {};
-	template<> struct hash<uint2> :	public bitwise_hash<uint2> {};
-	template<> struct hash<uint3> :	public bitwise_hash<uint3> {};
-	template<> struct hash<uint4> :	public bitwise_hash<uint4> {};
-	template<> struct hash<ivec2> :	public bitwise_hash<int2> {};
-	template<> struct hash<ivec3> :	public bitwise_hash<int3> {};
-	template<> struct hash<ivec4> :	public bitwise_hash<int4> {};
-	template<> struct hash<uvec2> :	public bitwise_hash<uint2> {};
-	template<> struct hash<uvec3> :	public bitwise_hash<uint3> {};
-	template<> struct hash<uvec4> :	public bitwise_hash<uint4> {};
-}
-
-//*************************************
-// half-precision float and conversion
-#ifndef __GXMATH_NO_HALF__
-#define __GXMATH_HALF__
-struct half { unsigned short mantissa:10,exponent:5,sign:1; __forceinline operator float() const; };	// IEEE 754-2008 half-precision (16-bit) floating-point storage. // https://github.com/HeliumProject/Helium/blob/master/Math/Float16.cpp
-__forceinline float	htof( half value ){ struct _float32_t {uint mantissa:23,exponent:8,sign:1;}; _float32_t result={};result.sign = value.sign;uint exponent=value.exponent,mantissa=value.mantissa; if(exponent==31){result.exponent=255;result.mantissa=0;} else if(exponent==0&&mantissa==0){result.exponent=0;result.mantissa=0;} else if(exponent==0){uint mantissa_shift=10-static_cast<uint>(log2(float(mantissa)));result.exponent=127-(15-1)-mantissa_shift;result.mantissa=mantissa<<(mantissa_shift+23-10);} else{result.exponent=127-15+exponent;result.mantissa=static_cast<uint>(value.mantissa)<<(23-10);} return reinterpret_cast<float&>(result); }
-__forceinline half::operator float() const {return htof(*this);}
-__forceinline float*htof( const half* ph, float* pf, size_t nElements, size_t float_stride=1 ){ if(pf==nullptr||ph==nullptr||nElements==0) return pf; float* pf0=pf; for( size_t k=0; k < nElements; k++, ph++, pf+=float_stride ) *pf=htof(*ph); return pf0; }
-__forceinline half ftoh( float f ){ struct _float32_t {uint mantissa:23,exponent:8,sign:1;}; _float32_t value=reinterpret_cast<_float32_t&>(f);half result={};result.sign=value.sign; uint exponent=value.exponent; if(exponent==255){result.exponent=31;result.mantissa=0;} else if(exponent<127-15+1){uint mantissa=(1<<23)|value.mantissa; uint mantissa_shift=(23-10)+(127-15+1)-exponent;result.exponent=0;result.mantissa=static_cast<ushort>(mantissa>>mantissa_shift);} else if(exponent>127+(31-15-1)){result.exponent=31-1;result.mantissa=1023;} else {result.exponent=static_cast<ushort>(127-15+exponent);result.mantissa=static_cast<ushort>(value.mantissa>>(23-10));} return result; }
-using half2	= tarray2<half>;	using half3	= tarray3<half>;	using half4 = tarray4<half>;
-
-// half vector conversion
-__forceinline vec2	htof( const half2& h ){ return vec2(htof(h.x),htof(h.y)); }
-__forceinline vec3	htof( const half3& h ){ return vec3(htof(h.x),htof(h.y),htof(h.z)); }
-__forceinline vec4	htof( const half4& h ){ return vec4(htof(h.x),htof(h.y),htof(h.z),htof(h.w)); }
-__forceinline half2	ftoh( const vec2& v ){ return half2{ftoh(v.x),ftoh(v.y)}; }
-__forceinline half3	ftoh( const vec3& v ){ return half3{ftoh(v.x),ftoh(v.y),ftoh(v.z)}; }
-__forceinline half4 ftoh( const vec4& v ){ return half4{ftoh(v.x),ftoh(v.y),ftoh(v.z),ftoh(v.w)}; }
-__forceinline half* ftoh( const float* pf, half* ph, size_t nElements, size_t half_stride=1 ){ if(pf==nullptr||ph==nullptr||nElements==0) return ph; half* ph0=ph; for( size_t k=0; k < nElements; k++, pf++, ph+=half_stride ) *ph=ftoh(*pf); return ph0; }
-#endif
-
 //*************************************
 // common matrix implemenetations
-#define __default_matrix_impl(M,dim)	\
-	static const int D = dim;\
-	using V = tvec##dim<T>;\
-	__default_types(dim*dim);\
+#define __default_matrix_impl(M,dim) \
+	static constexpr int D=dim; using V=tvec##dim<T>; static constexpr int N=dim*dim; static constexpr size_t size(){ return N; }\
+	using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t;\
+	constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+N; }\
+	__forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; }\
+	__forceinline T* data(){ return (T*)this; } __forceinline const T* data() const { return (T*)this; }\
 	__forceinline M( M&& m )=default;\
 	__forceinline M( const M& m )=default;\
-	__forceinline M( T f ){ memset(this,0,*this); for(int k=0;k<D;k++) (&_00)[k*D+k]=f; }\
+	__forceinline M( T f ){ memset(this,0,sizeof(*this)); for(int k=0;k<D;k++) (&_00)[k*D+k]=f; }\
 	__forceinline M& operator=( M&& m )=default;\
 	__forceinline M& operator=( const M& m )=default;\
-	__forceinline V operator[]( ptrdiff_t col ) const { V v; for(int k=0;k<D;k++) v[k]=(&_00)[k*D+col]; return v; }\
+	__forceinline const V operator[]( ptrdiff_t col ) const { V v; for(int k=0;k<D;k++) v[k]=(&_00)[k*D+col]; return v; }\
 	__forceinline bool operator==( const M& m ) const { for(int k=0;k<N;k++) if(std::abs((&_00)[k]-(&m._00)[k])>precision<T>::value()) return false; return true; }\
 	__forceinline bool operator!=( const M& m ) const { return !operator==(m); }\
 	__forceinline M& operator+(){ return *this; }\
@@ -388,18 +340,15 @@ __forceinline half* ftoh( const float* pf, half* ph, size_t nElements, size_t ha
 	__forceinline M operator*( T f ) const { return M(*this)*=f; }\
 	__forceinline M operator/( T f ) const { return M(*this)/=f; }\
 	__forceinline static M identity(){ return M(); }\
-	__forceinline M& set_identity(){ return *this=M(); }\
 	__forceinline V diag() const { V v; for(int k=0;k<D;k++) v[k]=(&_00)[k*D+k]; return v; }\
-	__forceinline T trace() const { V d=diag(); T f=0; for(int k=0;k<D;k++) f+=d[k]; return f; }\
-	__forceinline V& rvec( int row ){ return reinterpret_cast<V&>(((T*)&_00)[D*row]); }\
-	__forceinline const V& rvec( int row ) const { return reinterpret_cast<const V&>(((T*)&_00)[D*row]); }
+	__forceinline T trace() const { V d=diag(); T f=0; for(int k=0;k<D;k++) f+=d[k]; return f; }
 
 //*************************************
 template <class T> struct tmat2
 {
 	__default_matrix_impl(tmat2,2);
 	
-	T _00,_01,_10,_11;
+	union { struct {T _00,_01,_10,_11;}; V rvec[2]; };
 
 	// constructors
 	__forceinline tmat2(){ _01=_10=0;_00=_11=T(1); }
@@ -425,7 +374,7 @@ template <class T> struct tmat3
 	__default_matrix_impl(tmat3,3);
 	using V2 = tvec2<T>;
 
-	T _00,_01,_02,_10,_11,_12,_20,_21,_22;
+	union { struct {T _00,_01,_02,_10,_11,_12,_20,_21,_22;}; V rvec[3]; };
 
 	// constructors
 	__forceinline tmat3(){ _01=_02=_10=_12=_20=_21=0;_00=_11=_22=T(1.0); }
@@ -484,7 +433,7 @@ template <class T> struct tmat4
 	using V2 = tvec2<T>;
 	using V3 = tvec3<T>;
 
-	T _00,_01,_02,_03,_10,_11,_12,_13,_20,_21,_22,_23,_30,_31,_32,_33;
+	union { struct {T _00,_01,_02,_03,_10,_11,_12,_13,_20,_21,_22,_23,_30,_31,_32,_33;}; V rvec[4]; };
 
 	// constructors
 	__forceinline tmat4(){ _01=_02=_03=_10=_12=_13=_20=_21=_23=_30=_31=_32=0;_00=_11=_22=_33=T(1.0); }
@@ -502,14 +451,14 @@ template <class T> struct tmat4
 	__forceinline operator tmat3<T>() const { tmat3<T> m; m._00=_00; m._01=_01; m._02=_02; m._10=_10; m._11=_11; m._12=_12; m._20=_20; m._21=_21; m._22=_22; return m; }
 
 	// multiplication operators
-	__forceinline tvec3<T> operator*( const tvec3<T>& f ) const { tvec4<T> g(f,T(1)); return tvec3<T>(rvec(0).dot(g),rvec(1).dot(g),rvec(2).dot(g)); }
+	__forceinline tvec3<T> operator*( const tvec3<T>& f ) const { tvec4<T> g(f,T(1)); return tvec3<T>(rvec[0].dot(g),rvec[1].dot(g),rvec[2].dot(g)); }
 
 	// transpose
 	__forceinline tmat4 transpose() const { tmat4 m; m._00=_00; m._01=_10; m._02=_20; m._03=_30; m._10=_01; m._11=_11; m._12=_21; m._13=_31; m._20=_02; m._21=_12; m._22=_22; m._23=_32; m._30=_03; m._31=_13; m._32=_23; m._33=_33; return m; }
 
 	// determinant/trace/inverse
 	V _xdet() const;	// support function for det() and inverse()
-	__forceinline T det() const { return operator[](3).dot(_xdet()); }
+	__forceinline T det() const { return vec4(_03,_13,_23,_33).dot(_xdet()); }
 	tmat4 inverse() const;
 
 	// static row-major transformations
@@ -530,7 +479,7 @@ template <class T> struct tmat4
 
 	// viewport, lookat inferred from view matrix
 	__forceinline static tmat4 viewport( int width, int height ){ tmat4 m; m._00=width*T(0.5); m._11=-height*T(0.5); m._03=width*T(0.5); m._13=height*T(0.5); return m; }
-	__forceinline V3	 look_at_eye() const { const V3 &u=rvec(0).xyz,&V=rvec(1).xyz,&n=rvec(2).xyz,uv=u.cross(V),vn=V.cross(n),nu=n.cross(u); return (vn*_03+nu*_13+uv*_23)/(-u.dot(vn)); }
+	__forceinline V3	 look_at_eye() const { const V3 &u=rvec[0].xyz,&V=rvec[1].xyz,&n=rvec[2].xyz,uv=u.cross(V),vn=V.cross(n),nu=n.cross(u); return (vn*_03+nu*_13+uv*_23)/(-u.dot(vn)); }
 	__forceinline tmat4  look_at_inverse() const { V3 eye=look_at_eye(); tmat4 m; m._00=_00; m._01=_10; m._02=_20; m._03=eye.x; m._10=_01; m._11=_11; m._12=_21; m._13=eye.y; m._20=_02; m._21=_12; m._22=_22; m._23=eye.z; return m; }
 
 	// Canonical view volume in DirectX: [-1,1]^2*[0,1]: diffes only in _22 and _23
@@ -568,7 +517,7 @@ __noinline tmat4<T> tmat4<T>::inverse() const
 	m._22=(_10*_31-_30*_11)*_03 + (_30*_01-_00*_31)*_13 + (_00*_11-_10*_01)*_33;
 	m._23=(_20*_11-_10*_21)*_03 + (_00*_21-_20*_01)*_13 + (_10*_01-_00*_11)*_23;
 	m._30=xd.x; m._31=xd.y; m._32=xd.z; m._33=xd.w;
-	return m*(T(1.0)/operator[](3).dot(xd));
+	return m*(T(1.0)/vec4(_03,_13,_23,_33).dot(xd));
 }
 
 //*************************************
@@ -584,6 +533,56 @@ static_assert(sizeof(mat4)%sizeof(float)*16==0,"sizeof(mat4)!=sizeof(float)*16" 
 static_assert(sizeof(dmat2)%sizeof(double)*4==0,"sizeof(dmat2)!=sizeof(double)*4" );
 static_assert(sizeof(dmat3)%sizeof(double)*9==0,"sizeof(dmat3)!=sizeof(double)*9" );
 static_assert(sizeof(dmat4)%sizeof(double)*16==0,"sizeof(dmat4)!=sizeof(double)*16" );
+
+// fundamental types for computer graphics
+struct vertex { vec3 pos; vec3 norm; vec2 tex; }; // default vertex layout
+struct bbox_t { vec3 m=3.402823466e+38F; uint __0; vec3 M=-3.402823466e+38F; uint __1; }; // bounding box in std140 layout; FLT_MAX = 3.402823466e+38F; __0, __1: padding
+
+//*************************************
+// std::hash support here
+
+#if defined(_M_X64)||defined(__LP64__)
+template <class T> struct bitwise_hash {size_t operator()(const T v)const{ size_t h=14695981039346656037ULL;const uchar* p=(const uchar*)&v;for(size_t k=0;k<sizeof(T);k++){h^=size_t(p[k]);h*=1099511628211ULL;}return h;}}; // FNV-1a hash function (from VC2015/2017)
+#elif defined(_M_IX86)
+template <class T> struct bitwise_hash {size_t operator()(const T v)const{ size_t h=2166136261U;const uchar* p=(const uchar*)&v;for(size_t k=0;k<sizeof(T);k++){h^=size_t(p[k]);h*=16777619U;}return h;}}; // FNV-1a hash function (from VC2015/2017)
+#endif
+
+namespace std
+{
+	template<> struct hash<int2> :	public bitwise_hash<int2> {};
+	template<> struct hash<int3> :	public bitwise_hash<int3> {};
+	template<> struct hash<int4> :	public bitwise_hash<int4> {};
+	template<> struct hash<uint2> :	public bitwise_hash<uint2> {};
+	template<> struct hash<uint3> :	public bitwise_hash<uint3> {};
+	template<> struct hash<uint4> :	public bitwise_hash<uint4> {};
+	template<> struct hash<ivec2> :	public bitwise_hash<int2> {};
+	template<> struct hash<ivec3> :	public bitwise_hash<int3> {};
+	template<> struct hash<ivec4> :	public bitwise_hash<int4> {};
+	template<> struct hash<uvec2> :	public bitwise_hash<uint2> {};
+	template<> struct hash<uvec3> :	public bitwise_hash<uint3> {};
+	template<> struct hash<uvec4> :	public bitwise_hash<uint4> {};
+}
+
+//*************************************
+// half-precision float and conversion
+#ifndef __GXMATH_NO_HALF__
+#define __GXMATH_HALF__
+struct half { unsigned short mantissa:10,exponent:5,sign:1; __forceinline operator float() const; };	// IEEE 754-2008 half-precision (16-bit) floating-point storage. // https://github.com/HeliumProject/Helium/blob/master/Math/Float16.cpp
+__forceinline float	htof( half value ){ struct _float32_t {uint mantissa:23,exponent:8,sign:1;}; _float32_t result={};result.sign = value.sign;uint exponent=value.exponent,mantissa=value.mantissa; if(exponent==31){result.exponent=255;result.mantissa=0;} else if(exponent==0&&mantissa==0){result.exponent=0;result.mantissa=0;} else if(exponent==0){uint mantissa_shift=10-static_cast<uint>(log2(float(mantissa)));result.exponent=127-(15-1)-mantissa_shift;result.mantissa=mantissa<<(mantissa_shift+23-10);} else{result.exponent=127-15+exponent;result.mantissa=static_cast<uint>(value.mantissa)<<(23-10);} return reinterpret_cast<float&>(result); }
+__forceinline half::operator float() const {return htof(*this);}
+__forceinline float*htof( const half* ph, float* pf, size_t nElements, size_t float_stride=1 ){ if(pf==nullptr||ph==nullptr||nElements==0) return pf; float* pf0=pf; for( size_t k=0; k < nElements; k++, ph++, pf+=float_stride ) *pf=htof(*ph); return pf0; }
+__forceinline half ftoh( float f ){ struct _float32_t {uint mantissa:23,exponent:8,sign:1;}; _float32_t value=reinterpret_cast<_float32_t&>(f);half result={};result.sign=value.sign; uint exponent=value.exponent; if(exponent==255){result.exponent=31;result.mantissa=0;} else if(exponent<127-15+1){uint mantissa=(1<<23)|value.mantissa; uint mantissa_shift=(23-10)+(127-15+1)-exponent;result.exponent=0;result.mantissa=static_cast<ushort>(mantissa>>mantissa_shift);} else if(exponent>127+(31-15-1)){result.exponent=31-1;result.mantissa=1023;} else {result.exponent=static_cast<ushort>(127-15+exponent);result.mantissa=static_cast<ushort>(value.mantissa>>(23-10));} return result; }
+using half2	= tarray2<half>;	using half3	= tarray3<half>;	using half4 = tarray4<half>;
+
+// half vector conversion
+__forceinline vec2	htof( const half2& h ){ return vec2(htof(h.x),htof(h.y)); }
+__forceinline vec3	htof( const half3& h ){ return vec3(htof(h.x),htof(h.y),htof(h.z)); }
+__forceinline vec4	htof( const half4& h ){ return vec4(htof(h.x),htof(h.y),htof(h.z),htof(h.w)); }
+__forceinline half2	ftoh( const vec2& v ){ return half2{ftoh(v.x),ftoh(v.y)}; }
+__forceinline half3	ftoh( const vec3& v ){ return half3{ftoh(v.x),ftoh(v.y),ftoh(v.z)}; }
+__forceinline half4 ftoh( const vec4& v ){ return half4{ftoh(v.x),ftoh(v.y),ftoh(v.z),ftoh(v.w)}; }
+__forceinline half* ftoh( const float* pf, half* ph, size_t nElements, size_t half_stride=1 ){ if(pf==nullptr||ph==nullptr||nElements==0) return ph; half* ph0=ph; for( size_t k=0; k < nElements; k++, pf++, ph+=half_stride ) *ph=ftoh(*pf); return ph0; }
+#endif
 
 //*************************************
 // matrix types to string
