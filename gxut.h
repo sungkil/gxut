@@ -784,7 +784,7 @@ __noinline path_t serial_path( path_t dir, string prefix, string postfix, int nu
 {
 	dir = dir.append_slash(); if(!dir.exists()) dir.mkdir();
 	int nMaxFiles=1; for(int k=0;k<numzero;k++) nMaxFiles*=10;
-	char fmt[PATH_MAX+1]={}; snprintf(fmt,PATH_MAX,"%s%s%%0%dd%s%s",dir.c_str(),prefix.c_str(),numzero,postfix.empty()?"":".",postfix.c_str());
+	char fmt[PATH_MAX+1]={}; snprintf(fmt,PATH_MAX,"%s%s%%0%dd%s%s",dir.c_str(),prefix.c_str(),numzero,postfix.empty()||strchr(postfix.c_str(),'.')?"":".", postfix.c_str());
 	path_t f; for(int k=0;k<nMaxFiles;k++){snprintf(f.data(),PATH_MAX,fmt,k); if(!f.exists()) break; }
 	return f;
 }
@@ -927,6 +927,7 @@ __noinline string read_process( string cmd )
 
 // general dynamic linking wrapper with DLL
 #ifdef __msvc__
+template <class F> F get_proc_address( const char* name, HMODULE h_module=nullptr ){ static HMODULE h0=GetModuleHandleW(nullptr); return (F) GetProcAddress(h_module?h_module:h0,name); }
 struct dll_t
 {
 	HMODULE hdll = nullptr;
@@ -935,8 +936,8 @@ struct dll_t
 	void release(){ if(hdll){ FreeLibrary(hdll); hdll=nullptr; } }
 	const char* file_path(){ static char f[_MAX_PATH]={}; wchar_t w[_MAX_PATH]; if(hdll) GetModuleFileNameW(hdll,w,_MAX_PATH); return strcpy(f,wtoa(w)); }
 	bool load( const char* dll_path ){ return nullptr!=(hdll=LoadLibraryW(atow(dll_path))); }
-	template <class T> T get_proc_address( const char* name ) const { return hdll==nullptr?nullptr:(T)GetProcAddress(hdll,name); }
-	template <class T> T* get_proc_address( const char* name, T*& p ) const { return hdll==nullptr?p=nullptr:p=(T*)GetProcAddress(hdll,name); }
+	template <class F> F get_proc_address( const char* name ) const { return hdll==nullptr?nullptr:(F)GetProcAddress(hdll,name); }
+	template <class F> F* get_proc_address( const char* name, F*& p ) const { return hdll==nullptr?p=nullptr:p=(F*)GetProcAddress(hdll,name); }
 	operator bool() const { return hdll!=nullptr; }
 };
 #endif

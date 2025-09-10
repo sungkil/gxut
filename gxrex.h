@@ -31,11 +31,11 @@ namespace rex {
 //*************************************
 
 // image functions that can be linked from the factory
-inline image* load_image( const char* file_path, bool vflip=true, bool force_rgb=true, bool use_cache=false ){ static decltype(&load_image) rex_load_image = (decltype(&load_image)) GetProcAddress(GetModuleHandleW(nullptr),"rex_load_image"); return rex_load_image( file_path, vflip, force_rgb, use_cache ); }
-inline image* load_image_header( const char* file_path ){ static decltype(&load_image_header) rex_load_image_header = (decltype(&load_image_header)) GetProcAddress(GetModuleHandleW(nullptr),"rex_load_image_header"); return rex_load_image_header( file_path ); }
-inline image* load_image_from_memory( void* ptr, size_t size, bool vflip=true, bool force_rgb=true ){ static decltype(&load_image_from_memory) rex_load_image_from_memory = (decltype(&load_image_from_memory)) GetProcAddress(GetModuleHandleW(nullptr),"rex_load_image_from_memory"); return rex_load_image_from_memory( ptr, size, vflip, force_rgb ); }
-inline void   save_image( const char* file_path, image* pimage, bool vflip=true, bool force_rgb=false, int quality=95 ){ static decltype(&save_image) rex_save_image = (decltype(&save_image)) GetProcAddress(GetModuleHandleW(nullptr),"rex_save_image"); if(pimage) rex_save_image( file_path, pimage, vflip, force_rgb, quality ); }
-inline void   resize_image( image* src, image* dst ){ static decltype(&resize_image) rex_resize_image = (decltype(&resize_image)) GetProcAddress(GetModuleHandleW(nullptr),"rex_resize_image"); if(src&&dst) rex_resize_image(src,dst); }
+inline image* load_image( const char* file_path, bool vflip=true, bool force_rgb=true, bool use_cache=false ){ static auto rex_load_image = get_proc_address<decltype(&load_image)>("rex_load_image"); return rex_load_image( file_path, vflip, force_rgb, use_cache ); }
+inline image* load_image_header( const char* file_path ){ static auto rex_load_image_header = get_proc_address<decltype(&load_image_header)>("rex_load_image_header"); return rex_load_image_header( file_path ); }
+inline image* load_image_from_memory( void* ptr, size_t size, bool vflip=true, bool force_rgb=true ){ static auto rex_load_image_from_memory = get_proc_address<decltype(&load_image_from_memory)>("rex_load_image_from_memory"); return rex_load_image_from_memory( ptr, size, vflip, force_rgb ); }
+inline void   save_image( const char* file_path, image* pimage, bool vflip=true, bool force_rgb=false, int quality=95 ){ static auto rex_save_image = get_proc_address<decltype(&save_image)>("rex_save_image"); if(pimage) rex_save_image( file_path, pimage, vflip, force_rgb, quality ); }
+inline void   resize_image( image* src, image* dst ){ static auto rex_resize_image = get_proc_address<decltype(&resize_image)>("rex_resize_image"); if(src&&dst) rex_resize_image(src,dst); }
 
 // progressive rendering plugin helper
 struct progressive_t
@@ -58,9 +58,25 @@ struct progressive_t
 inline progressive_t& get_progressive()
 {
 	static progressive_t* ptr=nullptr; if(ptr) return *ptr;
-	auto pf=(progressive_t*(*)()) GetProcAddress(GetModuleHandleW(nullptr),"rex_get_progressive"); if(!pf) printf( "unable to get rex_get_progressive()\n" );
+	auto pf = get_proc_address<progressive_t*(*)()>("rex_get_progressive"); if(!pf) printf( "unable to get rex_get_progressive()\n" );
 	if(pf) ptr=pf();
 	return *ptr;
+}
+
+// shell/path related
+inline path capture_path( const char* extension, const char* postfix )
+{
+	static auto rex_capture_path=get_proc_address<const char*(*)(const char*,const char*)>("rex_capture_path");
+	if(!rex_capture_path){ printf( "%s(): rex_capture_path==nullptr\n", __func__ ); return ""; }
+	return rex_capture_path(extension,postfix);
+}
+
+// open directory in explorer with reusing the pre-open window
+inline void open_folder( path folder_path )
+{
+	if(!folder_path.exists()) return;
+	static auto rex_open_folder = get_proc_address<void(*)(const char*)>("rex_open_folder");
+	if(rex_open_folder)	rex_open_folder( folder_path.c_str() );
 }
 
 //*************************************
@@ -73,9 +89,9 @@ inline progressive_t& get_progressive()
 namespace animation {
 //*************************************
 // animation related
-inline float  index(){	static decltype(&index) rex_animation_index = (decltype(&index)) GetProcAddress(GetModuleHandleW(nullptr),"rex_animation_index"); return rex_animation_index(); }
-inline void   play(){	static decltype(&play) rex_animation_play	= (decltype(&play)) GetProcAddress(GetModuleHandleW(nullptr),"rex_animation_play"); return rex_animation_play(); }
-inline void   stop(){	static decltype(&stop) rex_animation_stop	= (decltype(&stop)) GetProcAddress(GetModuleHandleW(nullptr),"rex_animation_stop"); return rex_animation_stop(); }
+inline float  index(){	static auto rex_animation_index = get_proc_address<decltype(&index)>("rex_animation_index"); return rex_animation_index(); }
+inline void   play(){	static auto rex_animation_play	= get_proc_address<decltype(&play)>("rex_animation_play"); return rex_animation_play(); }
+inline void   stop(){	static auto rex_animation_stop	= get_proc_address<decltype(&stop)>("rex_animation_stop"); return rex_animation_stop(); }
 //*************************************
 } // end namespace animation
 //*************************************
