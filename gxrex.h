@@ -79,6 +79,24 @@ inline void open_folder( path folder_path )
 	if(rex_open_folder)	rex_open_folder( folder_path.c_str() );
 }
 
+// capture info
+struct capture_t
+{
+	// input attributes
+	int frame=0, width=0, height=0, channels=0;
+	struct{ bool video,vflip,bgr; } b={};
+	const char* default_path=nullptr;
+
+	// output attributes
+	mutable image*		buffer=nullptr;				// if nullptr given, filled with temporary buffer
+	mutable const char*	user_image_path=nullptr;	// overriden image path
+
+	capture_t(){ memset(this,0,sizeof(*this)); }
+	capture_t( const capture_t& c ){ memcpy(this,&c,sizeof(*this)); }
+	capture_t& operator=( const capture_t& c ){ memcpy(this,&c,sizeof(*this)); return *this; }
+	capture_t& clear(){ memset(this,0,sizeof(*this)); return *this; }
+};
+
 //*************************************
 } // end namespace rex
 //*************************************
