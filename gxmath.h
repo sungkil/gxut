@@ -470,8 +470,10 @@ template <class T> struct tmat4
 	__forceinline static tmat4 rotate( const V3& from, const V3& to ){ return tmat3<T>::rotate(from,to); }
 	__forceinline static tmat4 rotate( const V3& axis, T angle ){ return tmat3<T>::rotate(axis,angle); }
 	
-	__forceinline static tmat4 look_at( const V3& eye, const V3& center, const V3& up ){ V3 n=(eye-center).normalize(), u=(up.cross(n)).normalize(), v=n.cross(u); tmat4 m; m._00=u.x;m._01=u.y;m._02=u.z; m._03=-u.dot(eye); m._10=v.x;m._11=v.y;m._12=v.z; m._13=-v.dot(eye); m._20=n.x;m._21=n.y;m._22=n.z; m._23=-n.dot(eye); return m; }
-	__forceinline static tmat4 look_at_inverse( const V3& eye, const V3& center, const V3& up ){ V3 n=(eye-center).normalize(), u=(up.cross(n)).normalize(), v=n.cross(u); return tmat4(u,v,n,eye); }
+	__forceinline static tmat4 look_at( const V3& eye, const V3& center, const V3& up ){ return look_to(eye,center-eye,up); }
+	__forceinline static tmat4 look_at_inverse( const V3& eye, const V3& center, const V3& up ){ look_to_inverse(eye,center-eye,up); }
+	__forceinline static tmat4 look_to( const V3& eye, const V3& dir, const V3& up ){ V3 n=-dir.normalize(), u=(up.cross(n)).normalize(), v=n.cross(u); tmat4 m; m._00=u.x;m._01=u.y;m._02=u.z; m._03=-u.dot(eye); m._10=v.x;m._11=v.y;m._12=v.z; m._13=-v.dot(eye); m._20=n.x;m._21=n.y;m._22=n.z; m._23=-n.dot(eye); return m; }
+	__forceinline static tmat4 look_to_inverse( const V3& eye, const V3& dir, const V3& up ){ V3 n=-dir.normalize(), u=(up.cross(n)).normalize(), v=n.cross(u); return tmat4(u,v,n,eye); }
 	__forceinline static tmat4 perspective( T fovy, T aspect, T dn, T df ){ if(fovy>pi_v<T>) fovy*=pi_v<T>/T(180.0); /* autofix for fov in degrees */ tmat4 m; m._11=T(1.0/tanf(fovy*0.5)); m._00=m._11/aspect; m._22=(dn+df)/(dn-df); m._23=2.0f*dn*df/(dn-df); m._32=T(-1.0); m._33=0; return m; }
 	__forceinline static tmat4 perspective_off_center( T left, T right, T top, T bottom, T dn, T df ){ tmat4 m; m._00=T(2.0)*dn/(right-left); m._11=T(2.0)*dn/(top-bottom); m._02=(right+left)/(right-left); m._12=(top+bottom)/(top-bottom); m._22=(dn+df)/(dn-df); m._23=T(2.0)*dn*df/(dn-df); m._32=T(-1.0); m._33=0; return m; }
 	__forceinline static tmat4 ortho( T width, T height, T dn, T df ){ tmat4 m; m._00=T(2.0)/width; m._11=T(2.0)/height; m._22=2.0f/(dn-df); m._23=(dn+df)/(dn-df); return m; }
