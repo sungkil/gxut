@@ -82,13 +82,12 @@ inline void open_folder( path folder_path )
 // capture info
 struct capture_t
 {
-	// input attributes
+	// const input attributes
+	const char* default_path=nullptr; // image dir or video path
 	int frame=0, width=0, height=0, channels=0;
-	struct{ bool video,vflip,bgr; } b={};
-	const char* default_path=nullptr;
+	struct { bool video=false, bgr=false; } b={};
 
-	// output attributes
-	mutable image*		buffer=nullptr;				// if nullptr given, filled with temporary buffer
+	// mutable output attributes
 	mutable const char*	user_image_path=nullptr;	// overriden image path
 
 	capture_t(){ memset(this,0,sizeof(*this)); }

@@ -163,6 +163,8 @@ using std::array;
 using std::string;
 using std::string_view;
 using std::vector;
+using std::type_info;
+using std::type_index;
 
 // MSVC define not __cplusplus but _MSVC_LANG
 // add /Zc:__cplusplus to get updated __cplusplus value
