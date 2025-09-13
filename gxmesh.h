@@ -449,7 +449,7 @@ struct mesh
 	uint	instance_count=1;	// instances are physically added into objects
 
 	// proxy mesh
-	mesh*	proxy=nullptr;		// created and released in GLMesh 
+	mesh*	proxy=nullptr;		// created and released in GL_Mesh 
 
 	// auxiliary information
 	char	file_path[_MAX_PATH]={};	// mesh file path (e.g., *.obj, *.obj.7z)
