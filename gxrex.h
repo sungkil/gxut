@@ -106,7 +106,6 @@ struct capture_t
 namespace animation {
 //*************************************
 // animation related
-inline float  index(){	static auto rex_animation_index = get_proc_address<decltype(&index)>("rex_animation_index"); return rex_animation_index(); }
 inline void   play(){	static auto rex_animation_play	= get_proc_address<decltype(&play)>("rex_animation_play"); return rex_animation_play(); }
 inline void   stop(){	static auto rex_animation_stop	= get_proc_address<decltype(&stop)>("rex_animation_stop"); return rex_animation_stop(); }
 //*************************************
