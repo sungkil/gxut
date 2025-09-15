@@ -294,8 +294,7 @@ using bool2		= tarray2<bool>;		using bool3		= tarray3<bool>;		using bool4		= tar
 #ifndef __cuda__ // type definitions in CUDA/vector_types.h
 using float2	= tarray2<float>;		using float3	= tarray3<float>;		using float4	= tarray4<float>;
 using double2	= tarray2<double>;		using double3	= tarray3<double>;		using double4	= tarray4<double>;
-using char2		= tarray2<char>;		using char3		= tarray3<char>;		using char4		= tarray4<char>;
-using uchar2	= tarray2<uchar>;		using uchar3	= tarray3<uchar>;		using uchar4	= tarray4<uchar>;
+using uchar2	= tarray2<uchar>;		using uchar3	= tarray3<uchar>;		using uchar4	= tarray4<uchar>; // do not define char2, char3, char4 to avoid confustion in char or int8_t
 using short2	= tarray2<short>;		using short3	= tarray3<short>;		using short4	= tarray4<short>;
 using ushort2	= tarray2<ushort>;		using ushort3	= tarray3<ushort>;		using ushort4	= tarray4<ushort>;
 using int2		= tarray2<int>;			using int3		= tarray3<int>;			using int4		= tarray4<int>;

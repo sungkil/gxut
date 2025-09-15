@@ -749,7 +749,7 @@ __forceinline vec4 smootherstep( const vec4& t ){ return vec4(smootherstep(t.x),
 __forceinline uint packUnorm2x16( vec2 v ){ ushort2 u={}; for(int k=0;k<2;k++) (&u.x)[k]=ushort(round(clamp(v[k],0.0f,1.0f)*65535.0f)); return reinterpret_cast<uint&>(u); }
 __forceinline uint packSnorm2x16( vec2 v ){ short2 s={}; for(int k=0;k<2;k++) (&s.x)[k]=short(round(clamp(v[k],-1.0f,1.0f)*32767.0f)); return reinterpret_cast<uint&>(s); }
 __forceinline uint packUnorm4x8( vec4 v ){ uchar4 u={}; for(int k=0;k<4;k++) (&u.x)[k]=uchar(round(clamp(v[k],0.0f,1.0f)*255.0f)); return reinterpret_cast<uint&>(u); }
-__forceinline uint packSnorm4x8( vec4 v ){ char4 s={}; for(int k=0;k<4;k++) (&s.x)[k]=char(round(clamp(v[k],-1.0f,1.0f)*127.0f)); return reinterpret_cast<uint&>(s); }
+__forceinline uint packSnorm4x8( vec4 v ){ int8_t s[4]={}; for(int k=0; k<4; k++) s[k]=char(round(clamp(v[k], -1.0f, 1.0f)*127.0f)); return reinterpret_cast<uint&>(s); }
 #ifndef __GXMATH_NO_HALF__
 __forceinline uint packHalf2x16( vec2 v ){ half2 h=ftoh(v); return reinterpret_cast<uint&>(h); }
 #endif

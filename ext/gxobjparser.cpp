@@ -568,7 +568,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 	p_mesh->update_bound(true);
 
 	// flush the counts
-	if(flush_messages) flush_messages( format("%s/%s objects/geometries loaded\n", itoasep(int(p_mesh->objects.size())), itoasep(int(p_mesh->geometries.size()))) );
+	if(flush_messages) flush_messages( format("%s/%s objects/geometries loaded\n", tocomma(p_mesh->objects.size()), tocomma(p_mesh->geometries.size())) );
 
 	// scale vertices by 1000 times for meter-unit scenes
 	if(p_mesh->box.radius()<100.0f)

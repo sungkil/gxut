@@ -59,15 +59,22 @@ namespace logical
 // conversion for POD and POD-like types
 inline const char* btoa( bool b ){ return b?"true":"false"; }
 inline const char* itoa( int i ){ return format("%d",i); }
+inline const char* itoa( short i ){ return format("%d",i); }
+inline const char* itoa( int8_t i ){ return format("%d",i); }
+inline const char* itoa( int64_t i ){ return format("%lld",i); }
 inline const char* utoa( uint u ){ return format("%u",u); }
+inline const char* utoa( ushort u ){ return format("%u",u); }
+inline const char* utoa( uchar u ){ return format("%u",u); }
+inline const char* utoa( uint64_t u ){ return format("%llu",u); }
 inline const char* ftoa( float f ){ if(fabs(f)<0.00000001f) return "0"; return format("%g",f); }
 inline const char* ftoa( double d ){ if(fabs(d)<0.00000001) return "0"; return format("%g",d); }
-inline const char* illtoa( int64_t i ){ return format("%lld",i); }
-inline const char* ulltoa( uint64_t u ){ return format("%llu",u); }
-inline bool		atob( const char* a ){ return a&&*a&&(stricmp(a,"true")==0||atoi(a)!=0); }
-inline uint		atou( const char* a ){ char* e=nullptr;uint v=(uint)strtoul(a,&e,10); return v; }
-inline int64_t	atoill( const char* a ){ char* e=nullptr;int64_t v=strtoll(a,&e,10); return v; }
-inline uint64_t	atoull( const char* a ){ char* e=nullptr;uint64_t v=strtoull(a,&e,10); return v; }
+inline bool		   atob( const char* a ){ return a&&*a&&(stricmp(a,"true")==0||atoi(a)!=0); }
+inline uint		   atou( const char* a ){ char* e=nullptr;uint v=(uint)strtoul(a,&e,10); return v; }
+inline int64_t	   atoill( const char* a ){ char* e=nullptr;int64_t v=strtoll(a,&e,10); return v; }
+inline uint64_t	   atoull( const char* a ){ char* e=nullptr;uint64_t v=strtoull(a,&e,10); return v; }
+  
+// comma separation for size_t
+inline const char* tocomma( uint64_t u ){ const char* a=format("%llu",u); if(u<1000) return a; size_t l=strlen(a); vector<char> v; v.resize(l+1); memcpy(&v[0],a,l+1); for( uint k=((l%3)?(l%3):3); k<l; k+=4,l++ ) v.emplace(v.begin()+k,','); return format("%s",&v[0]); }
 
 // user types to string
 inline const char* itoa( const int2& v ){ return format("%d %d",v.x,v.y); }
@@ -88,12 +95,16 @@ template <class T> T		atoi( const char* a );
 template <class T> T		atou( const char* a );
 template <class T> T		atof( const char* a );
 template<> inline int		atoi<int>( const char* a ){ return atoi(a); }
+template<> inline short		atoi<short>( const char* a ){ return short(atoi(a)); }
+template<> inline int8_t	atoi<int8_t>( const char* a ){ return int8_t(atoi(a)); }
 template<> inline uint		atou<uint>( const char* a ){ return atou(a); }
+template<> inline ushort	atou<ushort>( const char* a ){ return ushort(atou(a)); }
+template<> inline uint8_t	atou<uint8_t>( const char* a ){ return uint8_t(atou(a)); }
 template<> inline float		atof<float>( const char* a ){ return float(atof(a)); }
 template<> inline double	atof<double>( const char* a ){ return double(atof(a)); }
-template<> inline int2		atoi<int2>( const char* a ){ int2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) (&v.x)[k]=(int)strtol(a,&e,10); return v; }
-template<> inline int3		atoi<int3>( const char* a ){ int3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) (&v.x)[k]=(int)strtol(a,&e,10); return v; }
-template<> inline int4		atoi<int4>( const char* a ){ int4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) (&v.x)[k]=(int)strtol(a,&e,10); return v; }
+template<> inline int2		atoi<int2>( const char* a ){ int2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) (&v.x)[k]=int(strtol(a,&e,10)); return v; }
+template<> inline int3		atoi<int3>( const char* a ){ int3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) (&v.x)[k]=int(strtol(a,&e,10)); return v; }
+template<> inline int4		atoi<int4>( const char* a ){ int4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) (&v.x)[k]=int(strtol(a,&e,10)); return v; }
 template<> inline uint2		atou<uint2>( const char* a ){ uint2 v={};char* e=nullptr;for(int k=0;k<2;k++,a=e) (&v.x)[k]=strtoul(a,&e,10); return v; }
 template<> inline uint3		atou<uint3>( const char* a ){ uint3 v={};char* e=nullptr;for(int k=0;k<3;k++,a=e) (&v.x)[k]=strtoul(a,&e,10); return v; }
 template<> inline uint4		atou<uint4>( const char* a ){ uint4 v={};char* e=nullptr;for(int k=0;k<4;k++,a=e) (&v.x)[k]=strtoul(a,&e,10); return v; }
@@ -111,8 +122,8 @@ template<> inline const char* ntoa<int>( int v ){ return itoa(v); }
 template<> inline const char* ntoa<uint>( uint v ){ return utoa(v); }
 template<> inline const char* ntoa<float>( float v ){ return ftoa(v); }
 template<> inline const char* ntoa<double>( double v ){ return ftoa(v); }
-template<> inline const char* ntoa<int64_t>( int64_t v ){ return illtoa(v); }
-template<> inline const char* ntoa<uint64_t>( uint64_t v ){ return ulltoa(v); }
+template<> inline const char* ntoa<int64_t>( int64_t v ){ return itoa(v); }
+template<> inline const char* ntoa<uint64_t>( uint64_t v ){ return utoa(v); }
 template<> inline const char* ntoa<int2>( int2 v ){ return itoa(v); }
 template<> inline const char* ntoa<int3>( int3 v ){ return itoa(v); }
 template<> inline const char* ntoa<int4>( int4 v ){ return itoa(v); }
@@ -205,25 +216,6 @@ template <class T> const char* unpack_bits( const T& v )
 	char* buff=__strbuf(sizeof(T)*8); buff[sizeof(T)*8]=0;
 	for(int k=0,B=int(sizeof(T))-1;B>=0;B--){ for(int b=7;b>=0;b--) buff[k++]=(((const char*)&v)[B]&(1<<b))?'1':'0'; }
 	return buff;
-}
-
-// conversion int to string with commas
-__noinline const char* itoasep( int n )
-{
-	if(n<1000&&n>-1000) return itoa(n);
-	const char* s=itoa(n>0?n:-n); size_t len=strlen(s);
-	vector<char> v; v.resize(len+1); memcpy(&v[0],s,len+1);
-	for( uint idx=((len%3)?(len%3):3); idx<len; idx+=4,len++ ) v.emplace(v.begin()+idx,',');
-	return format("%s%s",n>0?"":"-",&v[0]);
-}
-
-__noinline const char* illtoasep( int64_t n )
-{
-	if(n<1000&&n>-1000) return illtoa(n);
-	const char* s=illtoa(n>0?n:-n); size_t len=strlen(s);
-	vector<char> v; v.resize(len+1); memcpy(&v[0],s,len+1);
-	for( uint idx=((len%3)?(len%3):3); idx<len; idx+=4,len++ ) v.emplace(v.begin()+idx,',');
-	return format("%s%s",n>0?"":"-",&v[0]);
 }
 
 // fast manual conversion from string to int/float (3x--4x faster than CRT atoi/atof)

@@ -322,6 +322,7 @@ __noinline const char* __decoding_table()
 
 __noinline string encode( const void* ptr, size_t size )
 {
+	struct char4 { char x, y, z, w; }; // local temporary type
 	static const char* table = __encoding_table();
 	static const auto encode3 = []( const char* t, uchar a, uchar b, uchar c )->char4
 	{
