@@ -58,16 +58,15 @@ struct progressive_t
 inline progressive_t& get_progressive()
 {
 	static progressive_t* ptr=nullptr; if(ptr) return *ptr;
-	auto pf = get_proc_address<progressive_t*(*)()>("rex_get_progressive"); if(!pf) printf( "unable to get rex_get_progressive()\n" );
-	if(pf) ptr=pf();
-	return *ptr;
+	auto pf = get_proc_address<progressive_t*(*)()>("rex_get_progressive"); if(pf) ptr=pf(); return *ptr;
 }
+
+#define progress (rex::get_progressive())
 
 // shell/path related
 inline path capture_path( const char* extension, const char* postfix )
 {
-	static auto rex_capture_path=get_proc_address<const char*(*)(const char*,const char*)>("rex_capture_path");
-	if(!rex_capture_path){ printf( "%s(): rex_capture_path==nullptr\n", __func__ ); return ""; }
+	static auto rex_capture_path=get_proc_address<const char*(*)(const char*,const char*)>("rex_capture_path"); if(!rex_capture_path) return "";
 	return rex_capture_path(extension,postfix);
 }
 
@@ -75,8 +74,7 @@ inline path capture_path( const char* extension, const char* postfix )
 inline void open_folder( path folder_path )
 {
 	if(!folder_path.exists()) return;
-	static auto rex_open_folder = get_proc_address<void(*)(const char*)>("rex_open_folder");
-	if(rex_open_folder)	rex_open_folder( folder_path.c_str() );
+	static auto rex_open_folder = get_proc_address<void(*)(const char*)>("rex_open_folder"); if(rex_open_folder) rex_open_folder( folder_path.c_str() );
 }
 
 // capture info
@@ -95,26 +93,6 @@ struct capture_t
 	capture_t& operator=( const capture_t& c ){ memcpy(this,&c,sizeof(*this)); return *this; }
 	capture_t& clear(){ memset(this,0,sizeof(*this)); return *this; }
 };
-
-//*************************************
-} // end namespace rex
-//*************************************
-
-#define progress (rex::get_progressive())
-
-//*************************************
-namespace animation {
-//*************************************
-// animation related
-inline void   play(){	static auto rex_animation_play	= get_proc_address<decltype(&play)>("rex_animation_play"); return rex_animation_play(); }
-inline void   stop(){	static auto rex_animation_stop	= get_proc_address<decltype(&stop)>("rex_animation_stop"); return rex_animation_stop(); }
-//*************************************
-} // end namespace animation
-//*************************************
-
-//*************************************
-namespace rex {
-//*************************************
 
 // globally shared data; registerd or allocated in factory
 struct shared_t
@@ -158,6 +136,36 @@ __noinline rex::shared_t& rex::shared_t::instance(){ if(!__rex_shared) __rex_sha
 #else
 __noinline rex::shared_t& rex::shared_t::instance(){ static shared_t** i=(shared_t**)GetProcAddress(nullptr,"__rex_shared"); if(i&&*i) return **i; if(!i) printf( "shared_t::instance() not found\n"); else if(!*i) printf( "shared_t::instance()==nullptr\n"); static shared_t nil; return nil; }
 #endif
+
+//*************************************
+namespace animation {
+//*************************************
+// context for user-defined animation; not related to the project-builtin animation
+
+struct context_t
+{
+	virtual void play()=0; // run current animation seleted in Animation plugin
+	virtual void stop()=0; // stop current animation seleted in Animation plugin
+	virtual bool load_xml( const char* file_path )=0; // load from camera.xml or *.rex
+	
+	virtual bool empty() const=0;
+	virtual size_t size() const=0;
+	virtual void clear()=0;
+	virtual void resize( size_t size )=0;
+	virtual void push_back( const char* keyframe_name )=0;
+	virtual void add_param( const char* param_name, const char* param_value, const char* plug_name=nullptr, float duration=1.0f )=0;
+	virtual void add_param( uint keyframe_index, const char* param_name, const char* param_value, const char* plug_name=nullptr, float duration=1.0f )=0;
+};
+
+#ifndef REX_FACTORY_IMPL
+	inline context_t* get_context(){ static context_t* c=nullptr; if(c) return c; auto f=get_proc_address<context_t*(*)()>("rex_get_animation_context"); if(!f) printf("failed to get_proc_address(rex_get_animation_context)\n"); c=f(); return c; }
+#else
+	context_t* get_context();
+#endif
+
+//*************************************
+} // end namespace animation
+//*************************************
 
 
 #endif // __GX_REX_H__

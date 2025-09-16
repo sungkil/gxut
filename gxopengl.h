@@ -2022,7 +2022,7 @@ struct IParser
 inline glfx::IParser* glfxCreateParser()
 {
 #ifdef __msvc__
-	static auto f=get_proc_address<glfx::IParser*(*)()>("__glfxCreateParser");
+	static auto f=get_proc_address<decltype(&glfxCreateParser)>("__glfxCreateParser");
 	if(!f){ printf( "unable to link to %s()\n", __func__ ); return nullptr; } return f();
 #else
 	printf( "unable to link to %s(). include <glfx.h>\n", __func__ ); return nullptr;
@@ -2031,7 +2031,7 @@ inline glfx::IParser* glfxCreateParser()
 inline void glfxDeleteParser( glfx::IParser** pp_parser )
 {
 #ifdef __msvc__
-	static auto f=get_proc_address<void(*)(glfx::IParser**)>("__glfxDeleteParser");
+	static auto f=get_proc_address<decltype(&glfxDeleteParser)>("__glfxDeleteParser");
 	if(!f){ printf( "unable to link to %s()\n", __func__ ); return; } f(pp_parser);
 #else
 	printf( "unable to link to %s(). include <glfx.h>\n", __func__ );

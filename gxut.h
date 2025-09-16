@@ -928,7 +928,15 @@ __noinline string read_process( string cmd )
 
 // general dynamic linking wrapper with DLL
 #ifdef __msvc__
-template <class F> F get_proc_address( const char* name, HMODULE h_module=nullptr ){ static HMODULE h0=GetModuleHandleW(nullptr); return (F) GetProcAddress(h_module?h_module:h0,name); }
+template <class F> F get_proc_address( const char* name, HMODULE h_module=nullptr )
+{
+	static HMODULE h0=GetModuleHandleW(nullptr);
+	void* ptr = GetProcAddress(h_module?h_module:h0,name); if(ptr) return (F)ptr;
+	auto* __get_proc_address = (void*(*)(const char*))GetProcAddress(h_module?h_module:h0,"get_proc_address"); if(__get_proc_address){ ptr=__get_proc_address(name); if(ptr) return (F) ptr; }
+	auto* __GetProcAddress = (void*(*)(const char*))GetProcAddress(h_module?h_module:h0,"GetProcAddress"); if(__GetProcAddress){ ptr=__GetProcAddress(name); if(ptr) return (F) ptr; }
+	return nullptr;
+}
+
 struct dll_t
 {
 	HMODULE hdll = nullptr;
