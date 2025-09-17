@@ -272,7 +272,7 @@ struct explorer_t
 
 	static void open_folder( const char* dir )
 	{
-		if(!path_t(dir).exists()) return;
+		if(!dir||!*dir||!path_t(dir).exists()) return;
 		HWND foreground_window = GetForegroundWindow(); // retrieve current foreground window
 		explorer_t e;
 		for( HWND hChild=::GetWindow(::GetWindow(::GetDesktopWindow(), GW_CHILD),GW_HWNDFIRST); hChild!=nullptr; hChild=::GetWindow(hChild, GW_HWNDNEXT) )

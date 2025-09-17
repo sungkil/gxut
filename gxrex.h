@@ -30,6 +30,15 @@
 namespace rex {
 //*************************************
 
+// general query to factory
+inline const char* env( const char* query ){ static auto f=get_proc_address<const char*(*)(const char*)>("rex_get_env"); return f(query); } // rex environment variables (e.g., paths/directories)
+inline bool is_logging(){ static bool* b=get_proc_address<bool*>("rex_is_logging"); return b?*b:false; } // project is using logging on the console?
+inline bool is_animation(){ static bool* b=get_proc_address<bool*>("rex_is_animation"); return b?*b:false; }
+inline path get_data_directory(){ return env("REX_DATA_DIR"); }
+inline path get_project_data_directory( bool b_mkdir=true ){ path d=env("REX_PROJECT_DATA_DIR"); if(b_mkdir) d.mkdir(); return d; }
+inline path get_script_directory(){ return env("REX_SCRIPT_DIR"); }
+inline path get_capture_directory(){ return env("REX_CAPTURE_DIR"); }
+
 // image functions that can be linked from the factory
 inline image* load_image( const char* file_path, bool vflip=true, bool force_rgb=true, bool use_cache=false ){ static auto rex_load_image = get_proc_address<decltype(&load_image)>("rex_load_image"); return rex_load_image( file_path, vflip, force_rgb, use_cache ); }
 inline image* load_image_header( const char* file_path ){ static auto rex_load_image_header = get_proc_address<decltype(&load_image_header)>("rex_load_image_header"); return rex_load_image_header( file_path ); }
@@ -57,13 +66,11 @@ struct progressive_t
 
 inline progressive_t& get_progressive()
 {
-	static progressive_t* ptr=nullptr; if(ptr) return *ptr;
-	auto pf = get_proc_address<progressive_t*(*)()>("rex_get_progressive"); if(pf) ptr=pf(); return *ptr;
+	static progressive_t* ptr=get_proc_address<progressive_t*>("rex_get_progressive"); return *ptr;
 }
 
 #define progress (rex::get_progressive())
 
-// shell/path related
 inline path capture_path( const char* extension, const char* postfix )
 {
 	static auto rex_capture_path=get_proc_address<const char*(*)(const char*,const char*)>("rex_capture_path"); if(!rex_capture_path) return "";
