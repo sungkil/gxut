@@ -1898,7 +1898,7 @@ struct effect_source_t : public vector<named_string_t>
 
 	effect_source_t() = default;
 	effect_source_t( const vector<value_type>& v ){ reinterpret_cast<vector<value_type>&>(*this)=v; }
-	effect_source_t( const std::initializer_list<value_type>& v ){ reinterpret_cast<vector<value_type>&>(*this)=v; }
+	effect_source_t( const initializer_list<value_type>& v ){ reinterpret_cast<vector<value_type>&>(*this)=v; }
 
 	// override and extend members
 	void clear() noexcept { vector<named_string_t>::clear(); macro.clear(); }
