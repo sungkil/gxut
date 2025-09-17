@@ -188,12 +188,16 @@ struct module_t
 	PROC(*__wglGetProcAddress)(LPCSTR)=nullptr;
 	~module_t(){ if(!handle) return; FreeLibrary(handle); handle=nullptr; }
 	module_t(){ handle=LoadLibraryA("opengl32.dll"); if(!handle){ printf("gl::module: unable to load opengl32.dll\n"); return; } if(handle) __wglGetProcAddress=(decltype(__wglGetProcAddress))GetProcAddress(handle,"wglGetProcAddress"); if(!__wglGetProcAddress) printf("gl::module_t(): wglGetProcAddress==nullptr\n"); }
-	static void* get_proc_address( const char* name ){ if(!name||!*name) return nullptr; static module_t m; void* f=nullptr; if(m.__wglGetProcAddress&&(f=m.__wglGetProcAddress(name))!=nullptr) return f; f=(void*)GetProcAddress(m.handle,name); if(!f) printf("gl::get_proc_address(%s)==nullptr\n",name); return f; }
+	static void* get_proc_address( const char* name ){ if(!name||!*name) return nullptr; static module_t m; void* f=nullptr; if(m.__wglGetProcAddress&&(f=m.__wglGetProcAddress(name))!=nullptr) return f; return GetProcAddress(m.handle,name); }
 };
 
 template <class T=void*> __forceinline T get_proc_address( const char* name )
 {
-	return T(module_t::get_proc_address(name));
+	if(!name||!*name) return nullptr;
+	auto f=T(module_t::get_proc_address(name)); if(f) return f;
+	f=::get_proc_address<T>(name); if(f) return f;
+	printf("gl::%s(%s)==nullptr\n",__func__,name);
+	return nullptr;
 }
 
 //*************************************
@@ -2022,7 +2026,7 @@ struct IParser
 inline glfx::IParser* glfxCreateParser()
 {
 #ifdef __msvc__
-	static auto f=get_proc_address<decltype(&glfxCreateParser)>("__glfxCreateParser");
+	static auto f=gl::get_proc_address<decltype(&glfxCreateParser)>("glfxCreateParser");
 	if(!f){ printf( "unable to link to %s()\n", __func__ ); return nullptr; } return f();
 #else
 	printf( "unable to link to %s(). include <glfx.h>\n", __func__ ); return nullptr;
@@ -2031,7 +2035,7 @@ inline glfx::IParser* glfxCreateParser()
 inline void glfxDeleteParser( glfx::IParser** pp_parser )
 {
 #ifdef __msvc__
-	static auto f=get_proc_address<decltype(&glfxDeleteParser)>("__glfxDeleteParser");
+	static auto f=gl::get_proc_address<decltype(&glfxDeleteParser)>("glfxDeleteParser");
 	if(!f){ printf( "unable to link to %s()\n", __func__ ); return; } f(pp_parser);
 #else
 	printf( "unable to link to %s(). include <glfx.h>\n", __func__ );
