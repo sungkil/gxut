@@ -122,21 +122,20 @@ struct zip_t : public izip_t
 	HZIP hzip=nullptr;
 
 	~zip_t(){ release(); }
-	zip_t( const path_t& _file_path ){ hzip=OpenZip( atow((file_path=_file_path.absolute()).c_str()), nullptr); if(!hzip) file_path.clear(); else _zipmtime=TimeToFileTime(file_path.mtime()); }
+	zip_t( const path& _file_path ){ hzip=OpenZip( atow((file_path=_file_path.absolute()).c_str()), nullptr); if(!hzip) file_path.clear(); else _zipmtime=TimeToFileTime(file_path.mtime()); }
 	zip_t( void* ptr, size_t size ){ hzip=OpenZip( ptr, uint(size), nullptr ); }
 
 	virtual void release() override { for( auto& e : entries ){ if(e.ptr){ free(e.ptr); e.ptr=nullptr; }} entries.clear(); if(hzip){ CloseZipU(hzip); hzip=nullptr; } }
 	virtual bool load() override { if(!hzip) return false; zipentry_t e;GetZipItem(hzip,-1,&e); for(int k=0,kn=e.index;k<kn;k++){ GetZipItem( hzip, k, (ZIPENTRY*) &e); e.size=size_t(e.unc_size); e.ptr=nullptr; e.mtime=_fix_dostime(e.mtime); if(!e.is_dir()) entries.emplace_back(e); } return true; }
-	virtual bool extract_to_files( path_t dir, const char* name=nullptr ) override { bool b=false; if(!hzip) return b; for(size_t k=0;k<entries.size();k++){ auto& e=entries[k]; if(e.is_dir()||(name&&stricmp(name,wtoa(e.name))!=0)) continue; path_t p=dir+wtoa(e.name); if(!p.dir().exists()) p.dir().mkdir(); UnzipItem( hzip, e.index, atow(p.c_str())); _fix_dostime(e.mtime, p); b=true; } return b; }
+	virtual bool extract_to_files( path dir, const char* name=nullptr ) override { bool b=false; if(!hzip) return b; for(auto& e:entries){ if(e.is_dir()||(name&&stricmp(name,wtoa(e.name))!=0)) continue; path p=dir+wtoa(e.name); if(!p.dir().exists()) p.dir().mkdir(); bool x=p.exists(),r=x&&p.is_readonly(),h=x&&p.is_hidden(); if(r) p.set_readonly(false); if(h) p.set_hidden(false); UnzipItem( hzip, e.index, atow(p.c_str())); _fix_dostime(e.mtime, p); if(r) p.set_readonly(true); if(h) p.set_hidden(true); b=true; } return b; }
 	virtual zipentry_t* extract_to_memory( const char* name=nullptr ) override { if(!hzip||entries.empty()) return nullptr; for(size_t k=0;k<entries.size();k++){ auto& e=entries[k]; if(e.is_dir()||e.ptr||(name&&stricmp(name,wtoa(e.name))!=0)) continue; UnzipItem( hzip, e.index, e.ptr=malloc(e.unc_size), uint(e.unc_size) ); } return name?find(name):&entries.front(); }
 
-protected:
-
+private:
 	FILETIME	_zipmtime={};	// to fix dostime error
-	FILETIME	_fix_dostime( FILETIME t, path_t f="" );
+	FILETIME	_fix_dostime( FILETIME t, path f="" );
 };
 
-inline FILETIME zip_t::_fix_dostime( FILETIME t, path_t f )
+inline FILETIME zip_t::_fix_dostime( FILETIME t, path f )
 {
 	time_t t0 = (_zipmtime.dwLowDateTime||_zipmtime.dwHighDateTime)?FileTimeToTime(_zipmtime):0;
 	if(!t0||abs(FileTimeToTime(t)-t0)>2) return t;
@@ -146,39 +145,64 @@ inline FILETIME zip_t::_fix_dostime( FILETIME t, path_t f )
 #ifdef __7ZIP_H__
 struct szip_t : public izip_t
 {
+	~szip_t(){ release(); }
+	szip_t( const path& _file_path ){file_path=_file_path;file_stream=new CFileInStream();if(InFile_OpenW(&file_stream->file,atow(file_path.absolute().c_str()))!=0){printf("unable to InFile_OpenW(%s)\n",file_path.c_str());return;} FileInStream_CreateVTable(file_stream);LookToRead2_CreateVTable(look_stream=new CLookToRead2(),0);look_stream->buf=(Byte*)alloc_impl.Alloc(&alloc_impl,1ull<<18);look_stream->bufSize=1ull<<18;look_stream->pos=look_stream->size=0;look_stream->realStream=&file_stream->vt;crc_generate_table();}
+	szip_t( void* ptr, size_t size ){ if(!ptr||!size) return; crc_generate_table(); MemInStream_Init(mem_stream = new CMemInStream(),ptr,size); }
+
+	virtual void release() override {for(auto& e:entries){if(e.ptr){free(e.ptr);e.ptr=nullptr;}}entries.clear();SzArEx_Free(&db,&alloc_impl);if(look_stream){delete look_stream;look_stream=nullptr;} if(file_stream){File_Close(&file_stream->file);delete file_stream;file_stream=nullptr;} if(mem_stream){delete mem_stream;mem_stream=nullptr;} }
+	virtual bool load() override {if(!look_in_stream()) return false; SzArEx_Init(&db);if(SzArEx_Open(&db,look_in_stream(),&alloc_impl,&alloc_temp)!=SZ_OK){printf("unable to SzArEx_Open(%s)\n",file_path.c_str());release();return false;}for( uint k=0, kn=db.NumFiles; k<kn; k++ ){if(SzArEx_IsDir(&db,k)) continue;zipentry_t e;memset(&e,0,sizeof(e));e.index=k;SzArEx_GetFileNameUtf16(&db,k,(ushort*)e.name);e.attr=SzBitWithVals_Check(&db.Attribs,k)?db.Attribs.Vals[k]:0;if(SzBitWithVals_Check(&db.MTime,k)) memcpy(&e.mtime,db.MTime.Vals+k,sizeof(FILETIME));e.size=SzArEx_GetFileSize(&db,k);e.unc_size=long(e.size);entries.emplace_back(e);}return true;}
+	virtual bool extract_to_files( path dir, const char* name=nullptr ) override {uchar* ob=nullptr;uint bl=-1;for(size_t k=0,kn=entries.size(),of=0,obs=0,os=0;k<kn;k++){auto& e=entries[k];if(e.is_dir()||(name&&stricmp(name,wtoa(e.name))!=0)) continue; path p=dir+wtoa(e.name); if(!p.dir().exists()) p.dir().mkdir(); if(SZ_OK!=SzArEx_Extract(&db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){printf("unable to SzArEx_Extract(%s)\n",wtoa(e.name));return false;} bool x=p.exists(),r=x&&p.is_readonly(),h=x&&p.is_hidden(); if(r) p.set_readonly(false); if(h) p.set_hidden(false); FILE* fp=fopen(p.c_str(),"wb"); if(!fp){ printf("unable to fopen(%s)\n", p.c_str()); return false; } fwrite(ob+of, os, 1, fp); fclose(fp); if(e.attr) SetFileAttributesW(atow(p.c_str()), e.attr); p.utime(FileTimeToTime(e.mtime)); if(r) p.set_readonly(true); if(h) p.set_hidden(true); } if(ob) alloc_impl.Free(&alloc_impl, ob); return true; }
+	virtual zipentry_t* extract_to_memory( const char* name=nullptr ) override { if(!look_in_stream()||entries.empty())return nullptr; uchar* ob=nullptr;uint bl=-1;for(size_t k=0,kn=entries.size(),of=0,obs=0,os=0;k<kn;k++){auto& e=entries[k];if(e.is_dir()||e.ptr||(name&&stricmp(name,wtoa(e.name))!=0)) continue;if(SZ_OK!=SzArEx_Extract(&db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){printf("unable to SzArEx_Extract(%s)\n",wtoa(e.name));return nullptr;} e.ptr=malloc(os); if(e.ptr) memcpy(e.ptr,ob+of,e.size=os); if(ob) alloc_impl.Free(&alloc_impl,ob); } return name?find(name):&entries.front(); }
+
+	static void crc_generate_table(){ static bool b=false; if(b) return; CrcGenerateTable(); b=true; }
+	ILookInStream* look_in_stream(){ return mem_stream?&mem_stream->s:(file_stream&&look_stream)?&look_stream->vt:nullptr; }
+
+private:
 	CSzArEx			db;
 	CFileInStream*	file_stream = nullptr;
 	CMemInStream*	mem_stream = nullptr;
 	CLookToRead2*	look_stream = nullptr;
 	ISzAlloc		alloc_impl = {SzAlloc,SzFree};
-	ISzAlloc		alloc_temp = {SzAllocTemp,SzFreeTemp};
-
-	~szip_t(){ release(); }
-	szip_t( const path_t& _file_path ){file_path=_file_path;file_stream=new CFileInStream();if(InFile_OpenW(&file_stream->file,atow(file_path.absolute().c_str()))!=0){printf("unable to InFile_OpenW(%s)\n",file_path.c_str());return;} FileInStream_CreateVTable(file_stream);LookToRead2_CreateVTable(look_stream=new CLookToRead2(),0);look_stream->buf=(Byte*)alloc_impl.Alloc(&alloc_impl,1ull<<18);look_stream->bufSize=1ull<<18;look_stream->pos=look_stream->size=0;look_stream->realStream=&file_stream->vt;crc_generate_table();}
-	szip_t( void* ptr, size_t size ){ if(!ptr||!size) return; crc_generate_table(); MemInStream_Init(mem_stream = new CMemInStream(),ptr,size); }
-
-	virtual void release() override {for(auto& e:entries){if(e.ptr){free(e.ptr);e.ptr=nullptr;}}entries.clear();SzArEx_Free(&db,&alloc_impl);if(look_stream){delete look_stream;look_stream=nullptr;} if(file_stream){File_Close(&file_stream->file);delete file_stream;file_stream=nullptr;} if(mem_stream){delete mem_stream;mem_stream=nullptr;} }
-	virtual bool load() override {if(!look_in_stream()) return false; SzArEx_Init(&db);if(SzArEx_Open(&db,look_in_stream(),&alloc_impl,&alloc_temp)!=SZ_OK){printf("unable to SzArEx_Open(%s)\n",file_path.c_str());release();return false;}for( uint k=0, kn=db.NumFiles; k<kn; k++ ){if(SzArEx_IsDir(&db,k)) continue;zipentry_t e;memset(&e,0,sizeof(e));e.index=k;SzArEx_GetFileNameUtf16(&db,k,(ushort*)e.name);e.attr=SzBitWithVals_Check(&db.Attribs,k)?db.Attribs.Vals[k]:0;if(SzBitWithVals_Check(&db.MTime,k)) memcpy(&e.mtime,db.MTime.Vals+k,sizeof(FILETIME));e.size=SzArEx_GetFileSize(&db,k);e.unc_size=long(e.size);entries.emplace_back(e);}return true;}
-	virtual bool extract_to_files( path_t dir, const char* name=nullptr ) override {uchar* ob=nullptr;uint bl=-1;for(size_t k=0,kn=entries.size(),of=0,obs=0,os=0;k<kn;k++){auto& e=entries[k];if(e.is_dir()||(name&&stricmp(name,wtoa(e.name))!=0)) continue; path_t p=dir+wtoa(e.name); if(!p.dir().exists()) p.dir().mkdir(); if(SZ_OK!=SzArEx_Extract(&db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){printf("unable to SzArEx_Extract(%s)\n",wtoa(e.name));return false;} FILE* fp=fopen(p.c_str(),"wb"); if(!fp){ printf("unable to fopen(%s)\n", p.c_str()); return false; } fwrite(ob+of, os, 1, fp); fclose(fp); if(e.attr) SetFileAttributesW(atow(p.c_str()), e.attr); p.utime(FileTimeToTime(e.mtime)); } if(ob) alloc_impl.Free(&alloc_impl, ob); return true; }
-	virtual zipentry_t* extract_to_memory( const char* name=nullptr ) override { if(!look_in_stream()||entries.empty())return nullptr; uchar* ob=nullptr;uint bl=-1;for(size_t k=0,kn=entries.size(),of=0,obs=0,os=0;k<kn;k++){auto& e=entries[k];if(e.is_dir()||e.ptr||(name&&stricmp(name,wtoa(e.name))!=0)) continue;if(SZ_OK!=SzArEx_Extract(&db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){printf("unable to SzArEx_Extract(%s)\n",wtoa(e.name));return nullptr;} e.ptr=malloc(os); if(e.ptr) memcpy(e.ptr,ob+of,e.size=os); if(ob) alloc_impl.Free(&alloc_impl,ob); } return name?find(name):&entries.front(); }
-
-	static void crc_generate_table(){ static bool b=false; if(b) return; CrcGenerateTable(); b=true; }
-	ILookInStream* look_in_stream(){ return mem_stream?&mem_stream->s:(file_stream&&look_stream)?&look_stream->vt:nullptr; }
+	ISzAlloc		alloc_temp = {SzAllocTemp,SzFreeTemp};	
 };
 #endif
 
-//***********************************************
+// unified loaders for zip and 7zip
+inline izip_t* load_zip( const path& file_path )
+{
+	izip_t* z=nullptr; path x=file_path.extension();
+	if(x=="zip") z=new zip_t(file_path);
+#ifdef __7ZIP_H__
+	else if(x=="7z") z=new szip_t(file_path);
+#else
+	else if(x=="7z") printf("%s(%s): 7zip implementation not found\n",__func__,file_path.c_str());
+#endif
+	if(!z) return nullptr; if(!z->load()||z->entries.empty()) safe_delete(z); return z;
+}
+
+inline izip_t* load_zip( void* ptr, size_t size )
+{
+	izip_t* z=nullptr;
+	if(is_zip_signature(ptr,size)) z=new zip_t(ptr,size); // is_zip_signature in gxmemory.h
+#ifdef __7ZIP_H__
+	else if(is_7zip_signature(ptr,size)) z=new szip_t(ptr,size); // is_7zip_signature in gxmemory.h
+#else
+	else if(is_7zip_signature(ptr,size)) printf("%s(%s): 7zip implementation not found\n",__func__,file_path.c_str());
+#endif
+	if(!z) return nullptr; if(!z->load()||z->entries.empty()) safe_delete(z); return z;
+}
+
 // lazy implementation of resource_t::load_zip
 #ifdef MAKEINTRESOURCEW
 inline izip_t* resource_t::load_zip()
 {
 	if(!load()||!ptr||size<6) return nullptr;
 	zip=nullptr;
-	if(!zip&&is_zip_signature(ptr,size))	zip=new zip_t(ptr,size);	// is_zip_signature in gxmemory.h
+	if(is_zip_signature(ptr,size)) zip=new zip_t(ptr,size); // is_zip_signature in gxmemory.h
 #ifdef __7ZIP_H__
-	if(!zip&&is_7zip_signature(ptr,size))	zip=new szip_t(ptr,size);	// is_7zip_signature in gxmemory.h
+	if(!zip&&is_7zip_signature(ptr,size)) zip=new szip_t(ptr,size); // is_7zip_signature in gxmemory.h
 #endif
-	if(zip&&!zip->load()){delete zip;zip=nullptr;} return zip;
+	if(!zip) return nullptr; if(!zip->load()||zip->entries.empty()) safe_delete(zip); return zip;
 }
 #endif
 
@@ -298,8 +322,8 @@ struct binary_cache
 
 	~binary_cache(){ if(fp) fclose(fp); fp=nullptr; }
 
-	virtual path_t cache_path() = 0;
-	virtual path_t zip_path(){ return cache_path()+".zip"; }
+	virtual path cache_path() = 0;
+	virtual path zip_path(){ return cache_path()+".zip"; }
 	virtual string signature() = 0;
 
 	int writef( __printf_format_string__ const char* fmt, ... ){ if(!fp) return EOF; va_list a; va_start(a,fmt); int r=vfprintf(fp,fmt,a); va_end(a); return r; }
@@ -316,7 +340,7 @@ struct binary_cache
 	{
 		b_read = read;
 		uint sig = crc32c(string(__TIMESTAMP__)+signature());
-		path_t cpath=cache_path(), zpath=zip_path();
+		path cpath=cache_path(), zpath=zip_path();
 		if(b_read)
 		{
 			if(zpath.exists()&&!decompress()) return false;

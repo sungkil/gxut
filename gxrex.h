@@ -106,19 +106,18 @@ struct shared_t
 {
 	struct var // shared variable type
 	{
-		std::type_index type=typeid(void*); void* ptr=nullptr; size_t size=0; string name; bool allocated=false; var()=default;
+		std::type_index type=typeid(void*); void* ptr=nullptr; size_t size=0; string name; var()=default;
 		template <class T> var(T& v,const char* _name):type(typeid(T)),ptr((void*)&v),size(sizeof(T)),name(_name&&*_name?_name:""){}
-		var( std::type_index t, void* p, size_t z, const char* n, bool a=false ):type(t),ptr(p),size(z),name(n&&*n?n:""),allocated(a){}
+		var( std::type_index t, void* p, size_t z, const char* n ):type(t),ptr(p),size(z),name(n&&*n?n:""){}
 	};
 
 	static shared_t& instance();
 	~shared_t(){ clear(); }
-	void clear(){ for(auto& [n,t]:data) if(t.allocated){ if(t.ptr){delete t.ptr;t.ptr=nullptr;} t.size=0; t.name.clear(); t.allocated=false; } data.clear(); }
-	template <class T> void set( const char* name, T& v ){ data.emplace(std::pair{name,var(v,name)}); }
-	template <class T> void set_function( const char* name, T func ){ data.emplace(std::pair{name,var{typeid(T),func,sizeof(void*),name}}); } // for functions
+	void clear(){ data.clear(); }
+	template <class T> T&	set( const char* name, T& v ){ data.emplace(std::pair{name,var(v,name)}); return v; }
 	template <class T> T*	get( const char* name ){ return (T*)get_impl(name,typeid(T),sizeof(T),false).ptr; }
-	template <class T> T	get_function( const char* name ){ return (T)get_impl(name,typeid(T),sizeof(void*),false).ptr; } // for functions
-	template <class T> T*	get_or_create( const char* name ){ T* p=(T*)get_impl(name,typeid(T),sizeof(T),true).ptr; if(p) return p; var t{typeid(T),new T(),sizeof(T),name,true}; data.emplace(std::pair{name,t}); return (T*)t.ptr; }
+	template <class T> void set_function( const char* name, T func ){ data.emplace(std::pair{name,var{typeid(T),func,sizeof(void*),name}}); }
+	template <class T> T	get_function( const char* name ){ return (T)get_impl(name,typeid(T),sizeof(void*),false).ptr; }
 
 protected:
 	var& get_impl( const char* name, std::type_index type, size_t size, bool b_alloc ){ static var nil; auto it=data.find(name); if(it==data.end()){ if(!b_alloc) printf("shared_t::get(%s): unable to find\n",name); return nil; } auto& t=it->second; if(t.type==type) return t; printf("shared_t::get(%s): type is different from found\nquery: %s\nfound: %s\n", name, type.name(), t.type.name()); return nil; }
