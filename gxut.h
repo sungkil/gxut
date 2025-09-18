@@ -194,6 +194,10 @@ namespace fs = std::filesystem;
 	#include <span>
 	using std::span;
 #endif
+// C++23
+#if (__cplusplus>=202302L)||(defined(_MSVC_LANG)&&_MSVC_LANG>=202302L)||(defined(_HAS_CXX23)&&_HAS_CXX23)
+	#include <stdfloat> // float16_t; but not implemented yet
+#endif
 
 // platform-independent posix headers
 #include <sys/types.h>
