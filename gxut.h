@@ -548,7 +548,7 @@ struct path_t
 	path_t( path_t&& p ) noexcept { _data=p._data; p._data=nullptr; } // cache moves as well
 	path_t( const value_type* s ) noexcept : path_t() { if(s&&*s) strcpy(_data,s); }
 	path_t( const string_type& s ) noexcept : path_t() { strcpy(_data,s.c_str()); }
-	path_t( string_view_type s ) noexcept : path_t() { strcpy(_data,s.data()); }
+	path_t( string_view_type s ) noexcept : path_t() { size_t l=s.size(); if(l) memcpy(_data,s.data(),l*sizeof(value_type)); _data[l]=0; }
 
 	// operator overloading: casting and conversion
 	value_type* data(){ return _data; }
@@ -557,8 +557,8 @@ struct path_t
 	operator string_view_type () const { return string_view_type{_data,size()}; }
 
 	// operator overloading: assignment
-	path_t& operator=( path_t&& p ) noexcept { if(_data) free(_data); _data=p._data; p._data=nullptr; return *this; }
 	path_t& operator=( const path_t& p ) noexcept { strcpy(_data,p._data); memcpy(_data+capacity,p._data+capacity,sizeof(attrib_t)); return *this; }
+	path_t& operator=( path_t&& p ) noexcept { if(_data) free(_data); _data=p._data; p._data=nullptr; return *this; }
 	path_t& operator=( const value_type* s ) noexcept { if(s&&*s) strcpy(_data,s); return *this; }
 	path_t& operator=( const string_type& s ) noexcept { strcpy(_data,s.c_str()); return *this; }
 	path_t& operator=( string_view_type s ) noexcept{ strcpy(_data,s.data()); return *this; }

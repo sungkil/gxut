@@ -93,7 +93,7 @@ template <class T> struct tvec2
 	template <class X,class Y> __forceinline tvec2( X a, Y b ){x=T(a);y=T(b);}
 
 	// assignment operators
-	__forceinline tvec2& operator=( A&& v ){ memmove(this,&v,sizeof(v)); return *this; }
+	__forceinline tvec2& operator=( A&& v ){ memcpy(this,&v,sizeof(v)); return *this; }
 	__forceinline tvec2& operator=( const A& v ){ memcpy(this,&v,sizeof(v)); return *this; }
 
 	// casting operators
@@ -161,7 +161,7 @@ template <class T> struct tvec3
 	template <class X,class Y> __forceinline tvec3( X a, tvec2<Y> v ){x=a;y=T(v.x);z=T(v.y);}
 
 	// assignment operators
-	__forceinline tvec3& operator=( A&& v ){ memmove(this,&v,sizeof(v)); return *this; }
+	__forceinline tvec3& operator=( A&& v ){ memcpy(this,&v,sizeof(v)); return *this; }
 	__forceinline tvec3& operator=( const A& v ){ memcpy(this,&v,sizeof(v)); return *this; }
 
 	// casting operators
@@ -241,7 +241,7 @@ template <class T> struct tvec4
 	template <class X,class W> __forceinline tvec4( tvec3<X> v, W d ){x=T(v.x);y=T(v.y);z=T(v.z);w=T(d);}
 
 	// assignment operators
-	__forceinline tvec4& operator=( A&& v ){ memmove(this,&v,sizeof(v)); return *this; }
+	__forceinline tvec4& operator=( A&& v ){ memcpy(this,&v,sizeof(v)); return *this; }
 	__forceinline tvec4& operator=( const A& v ){ memcpy(this,&v,sizeof(v)); return *this; }
 
 	// casting operators
