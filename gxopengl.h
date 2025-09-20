@@ -20,7 +20,6 @@
 
 #include "gxmath.h"
 #include "gxstring.h"
-#include <malloc.h> // _get_heap_handle()
 #include <chrono> // for timer
 
 #if defined(GX_OPENGL_GLEW)
@@ -72,11 +71,6 @@
 	#pragma warning( disable: 4819 )	// disable waring on the foreign codepage
 	#include <cuda_gl_interop.h>		// this should be located after glew/glad/gxcorearb.h
 	#pragma warning( default: 4819 )
-#endif
-
-// GCC compatibility
-#ifdef __gcc__
-	uint64_t _get_heap_handle(){ return 0; }
 #endif
 
 //*************************************
@@ -473,15 +467,11 @@ namespace gl {
 //*************************************
 struct Texture : public Object
 {
-	Texture( GLuint ID, const char* name, GLenum target, GLenum InternalFormat, GLenum Format, GLenum Type, uint64_t heap=_get_heap_handle() ):Object(ID,name,target),_internal_format(InternalFormat),_type(Type),_format(Format),_channels(gxGetTextureChannels(InternalFormat)),_bpp(gxGetTextureBPP(InternalFormat)),_crtheap(heap){}
+	Texture( GLuint ID, const char* name, GLenum target, GLenum InternalFormat, GLenum Format, GLenum Type ):Object(ID,name,target),_internal_format(InternalFormat),_type(Type),_format(Format),_channels(gxGetTextureChannels(InternalFormat)),_bpp(gxGetTextureBPP(InternalFormat)){}
 	~Texture() override { delete_views(_next); make_resident(false); glDeleteTextures(1,(GLuint*)&ID); invalidated()=true; }
 
 	// delete texture views and query to check whether dirty/deleted textures exist
-	static void delete_views( Texture*& v ){ if(!v) return; delete_views(v->_next); v->make_resident(false); glDeleteTextures(1,(GLuint*)&v->ID);
-#ifdef __msvc__
-	HeapFree((void*)v->_crtheap,0,(Texture*)v);
-#endif
-	v=nullptr; invalidated()=true; } // use HeapFree() for views
+	static void delete_views( Texture*& v ){ if(!v) return; delete_views(v->_next); v->make_resident(false); glDeleteTextures(1,(GLuint*)&v->ID); delete v; v=nullptr; invalidated()=true; }
 	static bool& invalidated(){ static bool b=true; return b; }
 
 	GLuint bind( bool b_bind=true ){ GLuint b0=gxGetIntegerv(_target_binding); if(!b_bind||ID!=b0) glBindTexture( target, b_bind?ID:0 ); return b0; }
@@ -600,7 +590,6 @@ protected: // protected data members
 	// view-related
 	uint			_key=0;			// key of the current view
 	Texture*		_next=nullptr;	// next view node: a node of linked list, starting from the parent node
-	const uint64_t	_crtheap=0;		// heap handle to the parent, require to allocate view across DLL boundaries
 };
 
 inline void Texture::set_image( GLvoid* pixels, GLint level, GLsizei width, GLsizei height, GLsizei depth, GLint x, GLint y, GLint z )
@@ -939,12 +928,7 @@ __noinline gl::Texture* gxCreateTextureView( gl::Texture* src, GLuint min_level,
 	GLint min_filter		= src->get_texture_parameteriv( GL_TEXTURE_MIN_FILTER );
 	GLint mag_filter		= src->get_texture_parameteriv( GL_TEXTURE_MAG_FILTER );
 
-	// allocate a new texture using the heap of the parent
-#ifdef __msvc__
-	gl::Texture* t1=new(HeapAlloc((void*)src->_crtheap,0,sizeof(gl::Texture))) gl::Texture(ID1,name1,target,internal_format,src->format(),src->type(),src->_crtheap);
-#else
-	gl::Texture* t1=new gl::Texture(ID1,name1,target,internal_format,src->format(),src->type(),src->_crtheap);
-#endif
+	gl::Texture* t1=new gl::Texture(ID1,name1,target,internal_format,src->format(),src->type());
 	t1->_key = key;
 
 	// correct min_filter, mag_filter
