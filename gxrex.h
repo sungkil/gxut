@@ -106,17 +106,17 @@ struct shared_t
 {
 	struct var // shared variable type
 	{
-		std::type_index type=typeid(void*); void* ptr=nullptr; size_t size=0; string name; var()=default;
-		template <class T> var(T& v,const char* _name):type(typeid(T)),ptr((void*)&v),size(sizeof(T)),name(_name&&*_name?_name:""){}
-		var( std::type_index t, void* p, size_t z, const char* n ):type(t),ptr(p),size(z),name(n&&*n?n:""){}
+		std::type_index type=typeid(void*); void* ptr=nullptr; size_t size=0; string name; bool persistent; var()=default;
+		template <class T> var(T& v,const char* _name,bool _persistent):type(typeid(T)),ptr((void*)&v),size(sizeof(T)),name(_name&&*_name?_name:""),persistent(_persistent){}
+		var( std::type_index t, void* p, size_t z, const char* n, bool _persistent ):type(t),ptr(p),size(z),name(n&&*n?n:""),persistent(_persistent){}
 	};
 
 	static shared_t& instance();
-	~shared_t(){ clear(); }
-	void clear(){ data.clear(); }
-	template <class T> T&	set( const char* name, T& v ){ data.emplace(std::pair{name,var(v,name)}); return v; }
+	~shared_t(){ data.clear(); }
+	void clear(){ for(auto it=data.begin();it!=data.end();){ if(it->second.persistent) it++; it=data.erase(it); } }
+	template <class T> T&	set( const char* name, T& v, bool persistent=true ){ data.emplace(std::pair{name,var(v,name,persistent)}); return v; }
 	template <class T> T*	get( const char* name ){ return (T*)get_impl(name,typeid(T),sizeof(T),false).ptr; }
-	template <class T> void set_function( const char* name, T func ){ data.emplace(std::pair{name,var{typeid(T),func,sizeof(void*),name}}); }
+	template <class T> void set_function( const char* name, T func, bool persistent=true ){ data.emplace(std::pair{name,var{typeid(T),func,sizeof(void*),name,persistent}}); }
 	template <class T> T	get_function( const char* name ){ return (T)get_impl(name,typeid(T),sizeof(void*),false).ptr; }
 
 protected:
