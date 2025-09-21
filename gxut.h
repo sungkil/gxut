@@ -112,37 +112,31 @@
 #include <inttypes.h> // int64_t, uint64_t, ...
 #include <math.h>
 #include <stdarg.h>
-#if defined(GX_PRINTF_REDIR)||defined(_REXDLL) // printf redirection with custom printf
-	#if (!defined(printf)&&!defined(__GX_PRINTF_REDIR__))&&(defined(_INC_STDIO)||defined(_INC_WCHAR)||defined(_CSTDIO_)||defined(_CWCHAR_))
-		#error do not include <stdio.h> before gxut headers, when defining GX_PRINTF_REDIR
-	#endif
-	#ifndef __GX_PRINTF_REDIR__
-		#define __GX_PRINTF_REDIR__
-	#endif
-	#ifndef printf
-		#define	printf	__printf	// rename default printf
-		#define	wprintf	__wprintf	// rename default printf	
-	#endif
-#endif
 #include <stdio.h>
+#include <cstdio>
 #include <wchar.h>
 #include <wctype.h>
-#include <cstdio>
 #include <cwchar>
 #include <stdlib.h>
 #include <string.h>
 
+// early as-is implementation of selected stdio functions
+#ifdef _NO_CRT_STDIO_INLINE
+inline int __cdecl vfprintf( FILE* const _Stream, char const* const _Format, va_list _ArgList ){ return _vfprintf_l(_Stream, _Format, NULL, _ArgList); }
+inline int __cdecl fprintf( FILE* const _Stream, char const* const _Format, ... ){ int _Result; va_list _ArgList; __crt_va_start(_ArgList, _Format); _Result = _vfprintf_l(_Stream, _Format, NULL, _ArgList); __crt_va_end(_ArgList); return _Result; }
+inline int __cdecl sprintf( char* const _Buffer, char const* const _Format, ... ){ va_list _ArgList; __crt_va_start(_ArgList, _Format); int const _Result = __stdio_common_vsprintf( _CRT_INTERNAL_LOCAL_PRINTF_OPTIONS | _CRT_INTERNAL_PRINTF_LEGACY_VSPRINTF_NULL_TERMINATION, _Buffer, (size_t)-1, _Format, NULL, _ArgList); __crt_va_end(_ArgList); return _Result < 0 ? -1 : _Result; }
+inline int __cdecl vswprintf( wchar_t* const _Buffer, size_t const _BufferCount, wchar_t const* const _Format, va_list _ArgList ){ int const _Result = __stdio_common_vswprintf( _CRT_INTERNAL_LOCAL_PRINTF_OPTIONS, _Buffer, _BufferCount, _Format, NULL, _ArgList); return _Result < 0 ? -1 : _Result; }
+inline int __cdecl vfscanf( FILE* const _Stream, char const* const _Format, va_list _ArgList ){ return __stdio_common_vfscanf( _CRT_INTERNAL_LOCAL_SCANF_OPTIONS, _Stream, _Format, NULL, _ArgList); }
+inline int __cdecl fscanf( FILE* const _Stream, char const* const _Format, ... ){ int _Result; va_list _ArgList; __crt_va_start(_ArgList, _Format); _Result = __stdio_common_vfscanf( _CRT_INTERNAL_LOCAL_SCANF_OPTIONS, _Stream, _Format, NULL, _ArgList); __crt_va_end(_ArgList); return _Result; }
+inline int __cdecl sscanf( char const* const _Buffer, char const* const _Format, ... ){ int _Result; va_list _ArgList; __crt_va_start(_ArgList, _Format); _Result = __stdio_common_vsscanf( _CRT_INTERNAL_LOCAL_SCANF_OPTIONS, _Buffer, (size_t)-1, _Format, NULL, _ArgList); return _Result; }
+inline int __cdecl puts( char const* _Buffer ){ return fputs(_Buffer,stdout); }
+#endif
+
 // compile-time test of printf-style format string
 #ifdef __msvc__
-	#define __printf_format_string__	_Printf_format_string_
+	#define __printf_format_string__ _Printf_format_string_
 #elif defined(__gcc__)
 	#define __printf_format_string__
-#endif
-// drop-in replacement of printf, where console applications fallbacks to stdout
-#if defined(GX_PRINTF_REDIR)||defined(_REXDLL)
-	#undef	printf
-	#undef	wprintf // disable wprintf entirely
-	int printf( __printf_format_string__ const char* fmt, ... );
 #endif
 
 // STL
@@ -941,6 +935,7 @@ template <class F> F get_proc_address( const char* name, HMODULE h_module=nullpt
 	auto* __GetProcAddress = (void*(*)(const char*))GetProcAddress(h_module?h_module:h0,"GetProcAddress"); if(__GetProcAddress){ ptr=__GetProcAddress(name); if(ptr) return (F) ptr; }
 	return nullptr;
 }
+template <class F> F get_proc_address( const char* name, const char* module_name ){ return get_proc_address<F>(name,GetModuleHandleA(module_name)); }
 
 struct dll_t
 {

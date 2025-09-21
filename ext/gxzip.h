@@ -326,7 +326,7 @@ struct binary_cache
 	virtual path zip_path(){ return cache_path()+".zip"; }
 	virtual string signature() = 0;
 
-	int writef( __printf_format_string__ const char* fmt, ... ){ if(!fp) return EOF; va_list a; va_start(a,fmt); int r=vfprintf(fp,fmt,a); va_end(a); return r; }
+	int writef( __printf_format_string__ const char* fmt, ... ){ if(!fp) return EOF; va_list a; va_start(a,fmt); int r=_vfprintf_l(fp,fmt,NULL,a); va_end(a); return r; }
 	int readf( const char* fmt, ... ){ if(!fp) return EOF; va_list a; va_start(a,fmt); int r=vfscanf(fp,fmt,a); va_end(a); return r; }
 	size_t write( void* ptr, size_t size ){ if(!fp) return 0; return fwrite( ptr, size, 1, fp ); }
 	size_t read( void* ptr, size_t size ){ if(!fp) return 0; return fread(ptr,size,1,fp); }
