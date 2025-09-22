@@ -59,10 +59,12 @@ namespace logical
 // conversion for POD and POD-like types
 inline const char* btoa( bool b ){ return b?"true":"false"; }
 inline const char* itoa( int i ){ return format("%d",i); }
+inline const char* itoa( long i ){ return format("%d",i); }
 inline const char* itoa( short i ){ return format("%d",i); }
 inline const char* itoa( int8_t i ){ return format("%d",i); }
 inline const char* itoa( int64_t i ){ return format("%lld",i); }
 inline const char* utoa( uint u ){ return format("%u",u); }
+inline const char* utoa( ulong u ){ return format("%u",u); }
 inline const char* utoa( ushort u ){ return format("%u",u); }
 inline const char* utoa( uchar u ){ return format("%u",u); }
 inline const char* utoa( uint64_t u ){ return format("%llu",u); }
@@ -95,9 +97,11 @@ template <class T> T		atoi( const char* a );
 template <class T> T		atou( const char* a );
 template <class T> T		atof( const char* a );
 template<> inline int		atoi<int>( const char* a ){ return atoi(a); }
+template<> inline long		atoi<long>( const char* a ){ return long(atoi(a)); }
 template<> inline short		atoi<short>( const char* a ){ return short(atoi(a)); }
 template<> inline int8_t	atoi<int8_t>( const char* a ){ return int8_t(atoi(a)); }
 template<> inline uint		atou<uint>( const char* a ){ return atou(a); }
+template<> inline ulong		atou<ulong>( const char* a ){ return atou(a); }
 template<> inline ushort	atou<ushort>( const char* a ){ return ushort(atou(a)); }
 template<> inline uint8_t	atou<uint8_t>( const char* a ){ return uint8_t(atou(a)); }
 template<> inline float		atof<float>( const char* a ){ return float(atof(a)); }

@@ -187,7 +187,7 @@ inline izip_t* load_zip( void* ptr, size_t size )
 #ifdef __7ZIP_H__
 	else if(is_7zip_signature(ptr,size)) z=new szip_t(ptr,size); // is_7zip_signature in gxmemory.h
 #else
-	else if(is_7zip_signature(ptr,size)) printf("%s(%s): 7zip implementation not found\n",__func__,file_path.c_str());
+	else if(is_7zip_signature(ptr,size)) printf("%s(): 7zip implementation not found\n",__func__);
 #endif
 	if(!z) return nullptr; if(!z->load()||z->entries.empty()) safe_delete(z); return z;
 }
