@@ -81,7 +81,7 @@ __noinline gl::MemoryObject* gxCreateMemoryObject( const char* name, void* handl
 __noinline gl::Texture* gxCreateTexture2DFromMemory( const char* name, GLsizei width, GLsizei height, GLuint memory_object, GLint internal_format=GL_RGBA8 )
 {
 	typedef void(*PFNGLTEXTURESTORAGEMEM2DEXTPROC)(GLuint texture,GLsizei levels,GLenum internalFormat,GLsizei width,GLsizei height,GLuint memory,GLuint64 offset);
-	static auto glTextureStorageMem2DEXT=gl::get_proc_address<PFNGLTEXTURESTORAGEMEM2DEXTPROC>("glTextureStorageMem2DEXT"); if(!glTextureStorageMem2DEXT){ ::printf("%s(): glTextureStorageMem2DEXT==nullptr\n",__func__); return nullptr; }
+	static auto glTextureStorageMem2DEXT=gl::get_proc_address<PFNGLTEXTURESTORAGEMEM2DEXTPROC>("glTextureStorageMem2DEXT"); if(!glTextureStorageMem2DEXT){ printf("%s(): glTextureStorageMem2DEXT==nullptr\n",__func__); return nullptr; }
 
 	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
 
