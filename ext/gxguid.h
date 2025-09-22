@@ -37,7 +37,7 @@ struct guid_t : public GUID
 
 	guid_t& operator=( const GUID& other ) noexcept { memcpy(this,&other,sizeof(GUID)); return *this; }
 	guid_t& operator=( GUID&& other ) noexcept { auto t=*this; memcpy(this,&other,sizeof(GUID)); memcpy(&other,&t,sizeof(GUID)); return *this; }
-	guid_t& operator=( const char other[39] ) noexcept { auto* h=__to_hex(other); if(!h||!*h||!is_guid(other,h)){printf("guid_t(%s): not a guid\n",other); return clear(); } auto* d=Data4; int read_fields=sscanf_s(h,"%08lX%04hX%04hX%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX",&Data1,&Data2,&Data3,d,d+1,d+2,d+3,d+4,d+5,d+6,d+7); if(read_fields!=11) return clear(); return *this; }
+	guid_t& operator=( const char other[39] ) noexcept { auto* h=__to_hex(other); if(!h||!*h||!is_guid(other,h)){printf("guid_t(%s): not a guid\n",other); return clear(); } auto* d=Data4; int read_fields=sscanf(h,"%08lX%04hX%04hX%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX",&Data1,&Data2,&Data3,d,d+1,d+2,d+3,d+4,d+5,d+6,d+7); if(read_fields!=11) return clear(); return *this; }
 
 	operator GUID (){ return *this; }
 	operator const GUID () const { return *this; }

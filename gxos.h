@@ -176,7 +176,7 @@ inline void set_message_box_owner( HWND hwnd ){ __message_box_owner_hwnd()=hwnd;
 inline int message_box( const char* msg, const char* title, HWND hwnd=nullptr ){ return MessageBoxA(hwnd?hwnd:__message_box_owner_hwnd(),msg,title,MB_OKCANCEL|MB_ICONWARNING|MB_SYSTEMMODAL); }
 
 // win32 utilities
-__noinline const char* get_last_error( DWORD error=0 ){ static wchar_t buff[4096]={};if(!error)error=GetLastError();wchar_t *s=nullptr;FormatMessageW( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,error,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPWSTR)&s,0,nullptr);swprintf(buff,4096,L"%s (code=%x)",s,uint(error));LocalFree(s);return wtoa(buff); }
+__noinline const char* get_last_error( DWORD error=0 ){ static char buff[4096]={};if(!error)error=GetLastError();char *s=nullptr;FormatMessageA( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,error,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPSTR)&s,0,nullptr);snprintf(buff,4096,"%s (code=%x)",s,uint(error));LocalFree(s);return buff; }
 __noinline void flush_message( int sleepTime=1 ){MSG m;for(int k=0;k<100&&PeekMessageW(&m,nullptr,0,0,PM_REMOVE);k++)SendMessageW(m.hwnd,m.message,m.wParam,m.lParam);if(sleepTime>=0) Sleep(sleepTime);}
 
 inline const char* module_path( HMODULE h_module ){ static char buff[_MAX_PATH]={}; wchar_t w[_MAX_PATH]; GetModuleFileNameW(h_module,w,_MAX_PATH); w[0]=::toupper(w[0]); return strcpy(buff,wtoa(w)); }
@@ -466,7 +466,7 @@ struct key_t
 	// template specialization
 	template <class T=string> T get( const char* name=nullptr );
 	template <> inline string get<string>( const char* name ){ return wtoa(get<std::wstring>(name).c_str()); }
-	template <> inline std::wstring get<std::wstring>( const char* name ){ vector<BYTE> v; DWORD t; if(!query( name, &v, &t )) return L""; if(t==REG_SZ) return std::wstring((wchar_t*)v.data()); else if(t==REG_DWORD){ wchar_t b[256]; swprintf(b,256,L"%u",*((DWORD*)v.data())); return b; } return L""; }
+	template <> inline std::wstring get<std::wstring>( const char* name ){ vector<BYTE> v; DWORD t; if(!query( name, &v, &t )) return L""; if(t==REG_SZ) return std::wstring((wchar_t*)v.data()); else if(t==REG_DWORD){ return atow(utoa(*((DWORD*)v.data()))); } return L""; }
 	template <> inline DWORD get<DWORD>( const char* name ){ vector<BYTE> v; DWORD t; if(!query( name, &v, &t )) return 0; if(t==REG_DWORD) return *((DWORD*)v.data()); else if(t==REG_SZ) return DWORD(atoi((char*)v.data())); return 0; }
 #ifdef __GX_FILESYSTEM_H__
 	template <> inline path get<path>( const char* name ){ return path(get<std::wstring>(name)); }
