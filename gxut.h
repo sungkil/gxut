@@ -868,6 +868,14 @@ __noinline void add_path( path_t d ){ add_paths({d}); }
 namespace os { // minimal process definitions and message boxes
 //*************************************
 
+__noinline string read_process( string cmd )
+{
+	FILE* pp = popen(cmd.c_str(),"rb"); if(!pp) return "";
+	vector<char> v; v.reserve(1024); char buff[64]={}; size_t n=0; while( (n=fread(buff,1,sizeof(buff),pp)) ) v.insert(v.end(),buff,buff+n); v.emplace_back(0);
+	bool b_eof= feof(pp); pclose(pp); if(!b_eof) printf("%s(%s): broken pipe\n", __func__, cmd.c_str() );
+	return v.data();
+}
+
 #ifdef __msvc__
 __noinline wchar_t* build_cmdline( const char* app, const char* args )
 {
@@ -927,14 +935,6 @@ __noinline bool create_process( const char* app, const char* args=nullptr, bool 
 	return true;
 }
 #endif
-
-__noinline string read_process( string cmd )
-{
-	FILE* pp = popen(cmd.c_str(),"rb"); if(!pp) return "";
-	vector<char> v; v.reserve(1024); char buff[64]={}; size_t n=0; while( (n=fread(buff,1,sizeof(buff),pp)) ) v.insert(v.end(),buff,buff+n); v.emplace_back(0);
-	bool b_eof= feof(pp); pclose(pp); if(!b_eof) printf("%s(%s): broken pipe\n", __func__, cmd.c_str() );
-	return v.data();
-}
 
 //*************************************
 } // end namespace os
