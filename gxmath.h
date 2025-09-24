@@ -692,6 +692,9 @@ template <class T,class N,class X> T clamp( T v, N vmin, X vmax ){ return v<T(vm
 template <class T> __forceinline T distance( const tvec2<T>& a, const tvec2<T>& b ){ return (a-b).length(); }
 template <class T> __forceinline T distance( const tvec3<T>& a, const tvec3<T>& b ){ return (a-b).length(); }
 template <class T> __forceinline T distance( const tvec4<T>& a, const tvec4<T>& b ){ return (a-b).length(); }
+__forceinline vec2 exp( vec2 v ){ return vec2(exp(v.x),exp(v.y)); }
+__forceinline vec3 exp( vec3 v ){ return vec3(exp(v.x),exp(v.y),exp(v.z)); }
+__forceinline vec4 exp( vec4 v ){ return vec4(exp(v.x),exp(v.y),exp(v.z),exp(v.w)); }
 __forceinline vec2 fma( vec2 a, vec2 b, vec2 c ){ return vec2(fma(a.x,b.x,c.x),fma(a.y,b.y,c.y)); }
 __forceinline vec3 fma( vec3 a, vec3 b, vec3 c ){ return vec3(fma(a.x,b.x,c.x),fma(a.y,b.y,c.y),fma(a.z,b.z,c.z)); }
 __forceinline vec4 fma( vec4 a, vec4 b, vec4 c ){ return vec4(fma(a.x,b.x,c.x),fma(a.y,b.y,c.y),fma(a.z,b.z,c.z),fma(a.w,b.w,c.w)); }
