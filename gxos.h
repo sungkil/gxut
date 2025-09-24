@@ -160,21 +160,9 @@ inline const char* windir(){ return append_slash(env::get("WINDIR")); }
 } // end namespace env
 //*************************************
 
-// forward decl.
-namespace os { int message_box( const char* msg, const char* title, HWND hwnd ); }
-#define __gxos_va__() va_list a;va_start(a,fmt);size_t l=size_t(vsnprintf(0,0,fmt,a));vector<char> v(l+1,0); char* b=v.data();vsnprintf(b,l+1,fmt,a);va_end(a)
-__noinline bool confirm( HWND hwnd, __printf_format_string__ const char* fmt, ... ){ __gxos_va__(); return IDOK==os::message_box(b,"Warning",hwnd); }
-__noinline bool confirm( __printf_format_string__ const char* fmt, ... ){ __gxos_va__(); return IDOK==os::message_box(b,"Warning",nullptr); }
-__noinline bool mbox( __printf_format_string__ const char* fmt, ... ){ __gxos_va__(); return IDOK==os::message_box(b,"Message",nullptr); }
-
 //*************************************
 namespace os { 
 //*************************************
-
-inline HWND& __message_box_owner_hwnd(){ static HWND h=nullptr; return h; }
-inline void set_message_box_owner( HWND hwnd ){ __message_box_owner_hwnd()=hwnd; }
-inline int message_box( const char* msg, const char* title, HWND hwnd=nullptr ){ return MessageBoxA(hwnd?hwnd:__message_box_owner_hwnd(),msg,title,MB_OKCANCEL|MB_ICONWARNING|MB_SYSTEMMODAL); }
-
 // win32 utilities
 __noinline const char* get_last_error( DWORD error=0 ){ static char buff[4096]={};if(!error)error=GetLastError();char *s=nullptr;FormatMessageA( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,error,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPSTR)&s,0,nullptr);snprintf(buff,4096,"%s (code=%x)",s,uint(error));LocalFree(s);return buff; }
 __noinline void flush_message( int sleepTime=1 ){MSG m;for(int k=0;k<100&&PeekMessageW(&m,nullptr,0,0,PM_REMOVE);k++)SendMessageW(m.hwnd,m.message,m.wParam,m.lParam);if(sleepTime>=0) Sleep(sleepTime);}
