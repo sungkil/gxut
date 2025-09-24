@@ -86,6 +86,11 @@ struct quat
 };
 
 //*************************************
+// quat-matrix multiplications
+__forceinline mat3 operator*( const quat& q, const mat3& m ){ return mat3(q)*m; }
+__forceinline mat4 operator*( const quat& q, const mat4& m ){ return mat4(q)*m; }
+
+//*************************************
 // scalar/quaternion products
 __forceinline float dot( const quat& p, const quat& q ){ return p.dot(q); }
 
