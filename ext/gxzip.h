@@ -318,7 +318,7 @@ namespace gx {
 struct binary_cache
 {
 	binary_cache( bool compress ){ b.compress=compress; }
-	virtual ~binary_cache(){ close(); }
+	virtual ~binary_cache(){ if(fp){ fclose(fp); fp=nullptr; } }
 
 	virtual path cache_path()=0;
 	virtual path zip_path(){ return cache_path()+".zip"; }
