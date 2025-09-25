@@ -28,6 +28,9 @@
 	#include <gxut/gxstring.h>
 #endif
 
+// timestamp to indicate struct changes in other files
+static const char* __GX_PLYLOADER_H_TIMESTAMP__ = strdup(__TIMESTAMP__);
+
 //*************************************
 namespace ply {
 //*************************************

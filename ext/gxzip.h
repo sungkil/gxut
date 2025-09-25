@@ -317,53 +317,54 @@ namespace gx {
 
 struct binary_cache
 {
-	FILE* fp = nullptr;
-	bool b_read;
+	binary_cache( bool compress ){ b.compress=compress; }
+	virtual ~binary_cache(){ close(); }
 
-	~binary_cache(){ if(fp) fclose(fp); fp=nullptr; }
-
-	virtual path cache_path() = 0;
+	virtual path cache_path()=0;
 	virtual path zip_path(){ return cache_path()+".zip"; }
-	virtual string signature() = 0;
+	virtual uint crc()=0; // custom crc for signature detection
+	virtual void close();
+	virtual bool open( bool read=true );
 
 	int writef( __printf_format_string__ const char* fmt, ... ){ if(!fp) return EOF; va_list a; va_start(a,fmt); int r=_vfprintf_l(fp,fmt,NULL,a); va_end(a); return r; }
 	int readf( const char* fmt, ... ){ if(!fp) return EOF; va_list a; va_start(a,fmt); int r=vfscanf(fp,fmt,a); va_end(a); return r; }
-	size_t write( void* ptr, size_t size ){ if(!fp) return 0; return fwrite( ptr, size, 1, fp ); }
-	size_t read( void* ptr, size_t size ){ if(!fp) return 0; return fread(ptr,size,1,fp); }
-	void close()
-	{
-		if(fp){ fclose(fp); fp=nullptr; }
-		if(!b_read) compress();
-		else { if(zip_path().exists()) unlink(cache_path().c_str()); }
-	}
-	__noinline bool open( bool read=true )
-	{
-		b_read = read;
-		uint sig = crc32c(string(__TIMESTAMP__)+signature());
-		path cpath=cache_path(), zpath=zip_path();
-		if(b_read)
-		{
-			if(zpath.exists()&&!decompress()) return false;
-			if(!cpath.exists()) return false;
-			fp = fopen(cpath.c_str(),"rb");
-			uint s=0; fscanf( fp, "%*s = %u\n", &s );
-			if(!fp||sig!=s){ if(fp) fclose(fp); if(zpath.exists()) unlink(cpath.c_str()); return false; }
-		}
-		else
-		{
-			if(!cpath.dir().exists()) cpath.dir().mkdir();
-			fp = fopen(cpath.c_str(),"wb"); if(!fp) return false;
-			fprintf( fp, "signature = %u\n", sig );
-		}
-		return true;
-	}
-
-	vector<uchar> pack_bits( vector<bool>& v ){ vector<uchar> b((v.size()+7)>>3,0); for(size_t k=0,kn=v.size();k<kn;k++) if(v[k]) b[k>>3] |= (1<<uchar(7-(k&7))); return b; }
-	vector<bool> unpack_bits( vector<uchar>& b, size_t max_count=0xffffffff ){ vector<bool> v(min(b.size()*8,max_count),false); for(size_t k=0,kn=v.size();k<kn;k++) if(b[k>>3]&(1<<uchar(7-(k&7)))) v[k]=true; return v; }
-
+	bool write( void* ptr, size_t size ){ if(!fp) return 0; return size==fwrite(ptr,1,size,fp); }
+	bool read( void* ptr, size_t size ){ if(!fp) return 0; return size==fread(ptr,1,size,fp); }
 	bool compress( bool rm_src=true );
 	bool decompress();
+
+private:
+	FILE* fp = nullptr;
+	struct { bool read=false, compress=false; } b;
 };
+
+__noinline void binary_cache::close()
+{
+	if(fp){ fclose(fp); fp=nullptr; }
+	if(b.compress){ if(!b.read) compress(); else if(zip_path().exists()) unlink(cache_path().c_str()); }
+}
+
+__noinline bool binary_cache::open( bool read )
+{
+	b.read = read;
+	uint sig = crc32c(crc(),string(__TIMESTAMP__));
+	path cpath=cache_path(), zpath=zip_path();
+	if(b.read)
+	{
+		if(b.compress&&zpath.exists()&&!decompress()) return false;
+		if(!cpath.exists()) return false;
+		fp = fopen(cpath.c_str(),"rb");
+		uint s=0; fread(&s,sizeof(s),1,fp);
+		if(!fp||sig!=s){ if(fp) fclose(fp); if(zpath.exists()) unlink(cpath.c_str()); return false; }
+	}
+	else
+	{
+		if(!cpath.dir().exists()) cpath.dir().mkdir();
+		fp = fopen(cpath.c_str(),"wb"); if(!fp) return false;
+		fwrite(&sig,sizeof(sig),1,fp);
+	}
+	return true;
+}
 
 __noinline bool binary_cache::compress( bool rm_src )
 {
