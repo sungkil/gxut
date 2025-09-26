@@ -339,6 +339,20 @@ template <class T> __noinline const T* join( vector<std::basic_string<T>> v, con
 	return __strdup(s.c_str());
 }
 
+template <class T> __noinline const T* join( std::set<std::basic_string<T>> v, const T* delims=__strdup<T,char>(" ") )
+{
+	std::basic_string<T> s; if(v.empty()) return (const T*)L"";
+	for( const auto& k : v ){ if(k.empty()) continue; if(!s.empty()) s+=decltype(s)(delims); s+=k; }
+	return __strdup(s.c_str());
+}
+
+template <class T> __noinline const T* join( nocase::set<std::basic_string<T>> v, const T* delims=__strdup<T,char>(" ") )
+{
+	std::basic_string<T> s; if(v.empty()) return (const T*)L"";
+	for( const auto& k : v ){ if(k.empty()) continue; if(!s.empty()) s+=decltype(s)(delims); s+=k; }
+	return __strdup(s.c_str());
+}
+
 template <class T> __noinline vector<std::basic_string<T>>
 explode( const T* src, const T* delims=__whitespaces<T>() )
 {
@@ -410,6 +424,15 @@ template <class T> __noinline const T* str_escape( const T* _Src )
 	t = str_replace( t, __strdup<T,char>("\'"), __strdup<T,char>("\\\'") );
 	t = str_replace( t, __strdup<T,char>("\t"), __strdup<T,char>("\\\t") );
 	return t;
+}
+
+template <class T> __noinline const T* str_remove_tokens( const T* _Src, const T* _Tokens )
+{
+	if(!_Src||!_Tokens) return (const T*)L"";
+	int l=int(strlen(_Src)), m=int(strlen(_Tokens)); if(!l||!m) return (const T*)L"";
+	T *dst=__strbuf(l), *d=dst; const T *s=_Src;
+	for(int k=0;k<l;k++,s++){ bool t=false; for(int j=0;j<m;j++)if(*s==_Tokens[j]){t=true;break;} if(t) continue; *(d++)=*s; }
+	*d=0; return dst;
 }
 
 // common unnecesary unicode symbols to common ansi

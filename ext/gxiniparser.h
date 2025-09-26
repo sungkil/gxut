@@ -66,9 +66,9 @@ public:
 	vector<entry_t*> entries( const char* sec=nullptr ){ vector<entry_t*> el; for(auto& it:dic) if(sec==nullptr||stricmp(it.second->section.c_str(),sec)==0) el.emplace_back(it.second); std::sort(el.begin(),el.end(),entry_t::compare_by_index); return el; } // return all entries if no section is given
 
 	// clear
-	void clear( const char* seckey ){ auto it=dic.find(seckey);if(it==dic.end())return; delete it->second; dic.erase(it); save(); }
-	void clear( const char* sec, const char* key ){ char sk[4096]; snprintf(sk,4096,"%s:%s",sec,key); clear(sk); save(); }
-	void clear_section( const string& sec ){ bool b_save=false; for(auto it=dic.begin();it!=dic.end();){if(stricmp(it->second->section.c_str(),sec.c_str())==0){delete it->second;it=dic.erase(it);b_save=true; }else it++;} save(); }
+	void clear( const char* seckey ){ auto it=dic.find(seckey);if(it==dic.end()) return; delete it->second; dic.erase(it); save(); }
+	void clear( const char* sec, const char* key ){ char sk[4096]; snprintf(sk,4096,"%s:%s",sec,key); clear(sk); }
+	void clear_section( const string& sec ){ bool b_save=false; for(auto it=dic.begin();it!=dic.end();){if(stricmp(it->second->section.c_str(),sec.c_str())==0){delete it->second;it=dic.erase(it);b_save=true; }else it++;} if(b_save) save(); }
 
 	// load/save
 	void begin_update(){ b_batch=true; }
@@ -147,12 +147,8 @@ __noinline bool parser_t::save_as( const path_t& file_path )
 
 	auto_lock_t lock(cs);
 
-	bool b_hidden_file=false;if(access(file_path.c_str(),0)==0&&(GetFileAttributesW(::atow(file_path.c_str()))&FILE_ATTRIBUTE_HIDDEN)){b_hidden_file=true;SetFileAttributesW(atow(file_path.c_str()),GetFileAttributesW(atow(file_path.c_str()))&(~FILE_ATTRIBUTE_HIDDEN) );} // save and remove hidden attribute
-	FILE* fp=nullptr; for(uint k=0;fp==nullptr&&k<20;k++){ fp=fopen(file_path.c_str(), "w,ccs=UTF-8"); Sleep(5); } // wait 100ms for busy writing
-	if(fp==nullptr){ printf( "%s(): Unable to open %s to write", __func__, file_path.c_str() ); return false; }
-	_fseeki64( fp, 0, SEEK_SET ); // remove BOM
-	
 	string sec; bool bLine0=true;
+	std::wstring buff;
 	for( auto it=dic.begin(); it!=dic.end(); )
 	{
 		entry_t* e=it->second;
@@ -160,11 +156,17 @@ __noinline bool parser_t::save_as( const path_t& file_path )
 		e->value = trim(e->value.c_str());
 		if(e->section.empty()||e->value.empty()){ it=dic.erase(it); continue; }
 
-		if(sec!=e->section){fwprintf(fp,L"%s[%s]\n",bLine0?L"":L"\n",atow(e->section.c_str()));sec=e->section;}
-		fwprintf(fp,L"%s = %s\n",atow(e->key.c_str()),atow(e->value.c_str()));bLine0=false;
-
+		if(sec!=e->section){buff+=format(L"%s[%s]\n",bLine0?L"":L"\n",atow(e->section.c_str()));sec=e->section;}
+		buff+=format(L"%s = %s\n",atow(e->key.c_str()),atow(e->value.c_str()));bLine0=false;
 		it++;
 	}
+	
+	bool file_exists = access(file_path.c_str(),0)==0;
+	bool b_hidden_file=false;if(file_exists&&(GetFileAttributesW(::atow(file_path.c_str()))&FILE_ATTRIBUTE_HIDDEN)){b_hidden_file=true;SetFileAttributesW(atow(file_path.c_str()),GetFileAttributesW(atow(file_path.c_str()))&(~FILE_ATTRIBUTE_HIDDEN) );} // save and remove hidden attribute
+	FILE* fp=nullptr; for(uint k=0;fp==nullptr&&k<20;k++){ fp=fopen(file_path.c_str(), "w,ccs=UTF-8"); Sleep(5); } // wait 100ms for busy writing
+	if(fp==nullptr){ printf( "%s(): Unable to open %s to write", __func__, file_path.c_str() ); return false; }
+	_fseeki64( fp, 0, SEEK_SET ); // remove BOM
+	fputws(buff.c_str(),fp);
 	fclose(fp);
 	if(b_hidden_file) SetFileAttributesW(atow(file_path.c_str()),GetFileAttributesW(atow(file_path.c_str()))|FILE_ATTRIBUTE_HIDDEN ); // restore hidden attribute
 	
