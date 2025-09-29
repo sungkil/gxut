@@ -41,6 +41,7 @@ __noinline bool wget( string url, path local_path, bool use_index=true )
 		{
 			index_maps[index_dir]={}; j=index_maps.find(index_dir);
 			path index_path = inet::CACHE_DIR+"index.txt";
+			DeleteUrlCacheEntryA(index_url.c_str());
 			if(S_OK==URLDownloadToFileA(0,index_url.c_str(),index_path.c_str(),0,0)&&index_path.exists())
 			{
 				auto findex = index_path.read_file();
@@ -57,6 +58,7 @@ __noinline bool wget( string url, path local_path, bool use_index=true )
 	}
 	
 	if(t&&local_path.mtime()>=t) return true;
+	DeleteUrlCacheEntryA(url.c_str());
 	if(S_OK!=URLDownloadToFileA(0,url.c_str(), local_path.c_str(), 0, 0)) return false;
 	if(t&&local_path.exists()) local_path.utime(t);
 	return local_path.exists();
