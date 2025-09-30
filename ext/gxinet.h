@@ -14,8 +14,10 @@
 #include <windns.h>
 #include <wininet.h>
 #include <urlmon.h>
+#pragma comment( lib, "ws2_32" )
 #pragma comment( lib, "wininet" )
-#pragma comment( lib, "urlmon.lib" )
+#pragma comment( lib, "urlmon" )
+#pragma comment( lib, "dnsapi" )
 
 struct inet
 {

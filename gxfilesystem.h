@@ -157,10 +157,6 @@ struct path : public path_t
 	vector<path> ancestors(path root="") const { auto a=__super::ancestors(root); vector<path> v;for(const auto& p:a) v.emplace_back(p); return v; }
 	vector<path> explode() const { vector<path> v; v.reserve(16); for( char *ctx=nullptr, *t=strtok_s(__strdup(_data),"\\/", &ctx); t; t=strtok_s(0,"\\/", &ctx)) v.emplace_back(t); return v; }
 	path drive() const	{ if(empty()) return ""; if(is_unc()) return unc_root(); char r[_MAX_DRIVE]={}; _splitpath_s(_data,r,_MAX_DRIVE,0,0,0,0,0,0); if(r&&*r) *r=toupper(*r); return r; }
-	// decompostion: extensions for remote
-	int port() const { if(!is_remote()) return 0; char* s=_data; const char* d=strstr(s,"://"); const char* c=strstr(d?d+3:s+2,":"); if(!c||!++c) return 0; const char* h=strstr(c,"/"); return atoi(h?__strdup(c,h-c):c); }
-	path remove_port() const { int port=this->port(); if(!port) return *this; path t=*this; char* s=t._data; char p[17]; snprintf(p,16,":%d",port); const char* d=strstr(s+2,"://"); const char* h=strstr(d?d+3:s+2,p); if(!h) return t; char* b=__strdup(s); strcpy(b+(h-s)+(d?0:1),h+strlen(p)); return b; }
-	path add_port( int port ) const { if(!is_remote()) return *this; path t=remove_port(); char* s=t._data; char p[17]; snprintf(p,16,":%d/",port); const char* d=strstr(s+2,"://"); const char* h=strstr(d?d+3:s+2,d?"/":":/"); if(!h) return t; char* b=__strdup(s); strcpy(strcpy(b+(h-s),p)+strlen(p),h+(d?1:2)); return b; }
 
 	// simpler alias to decompositions
 	const char* name( bool with_ext=true ) const { return __strdup((with_ext?filename():stem()).c_str()); }
@@ -422,6 +418,36 @@ __noinline void path::__canonicalize() const
 	for(size_t k=0,kn=L.size();k<kn;k++){ value_type* t=L[k];size_t l=strlen(t);memcpy(d,t,l*sizeof(value_type));d+=l;(d++)[0]=preferred_separator;d[0]=0; }
 	if(!b_trailing_backslash&&d>_data)(d-1)[0]=0;
 }
+
+// parser for ssh/http/ftp urls
+struct url
+{
+	string protocol, user, host, path, query, fragment; int port=0;
+	url( string url )
+	{
+		const char *t=__strdup(url.c_str()), *j=t; while(*j++) if(*j=='\\')*((char*)j)='/';
+		j=stristr(t,"://"); if(j){ protocol=tolower(string(t,j-t).c_str()); t=j+3; }
+		j=strpbrk(t,"@"); if(j){ user=string(t,j-t); t=j+1; }
+		j=strpbrk(t,":/"); if(!j){host=t;return;}
+		host=string(t,j-t); t=j;
+		if(*j==':'){t=j+1;j=strpbrk(t,"/");if(j){port=atoi(string(t,j-t).c_str());t=j;}}
+		j=strpbrk(t,"?=&#"); if(!j){path=t;return;}
+		path=string(t,j-t); t=j;
+		j=strpbrk(t,"#"); if(j){fragment=j;*((char*)j)=0;}
+		query=t;
+	}
+	operator string() const 
+	{
+		string u;
+		if(!protocol.empty()) u=protocol+"://";
+		if(!user.empty()) u+=user+"@"; u+=host;
+		if(port||protocol.empty()) u+=":";
+		if(port) u+=format("%d",port);
+		return u+path+query+fragment;
+	}
+	url& remove_port(){ port=0; return *this; }
+	url& add_port( int port ){ this->port=port; return *this; }
+};
 
 // Win32 filetime utilities: FILETIME in 100 ns scale
 inline SYSTEMTIME	FileTimeToSystemTime( FILETIME f ){ SYSTEMTIME s; FileTimeToSystemTime(&f,&s); return s; }
