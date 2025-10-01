@@ -80,16 +80,14 @@ public:
 	bool save_as( const path_t& file_path );
 
 	// get
-	__forceinline const char* operator()( const char* key ){	return get(key); }
-	__forceinline const char* operator[]( const char* key ){	return get(key); }
-	__forceinline const char* get( const char* key ){ auto it=dic.find(key); return it==dic.end()?"":it->second->value.c_str();}
-	__forceinline const char* get( const char* sec, const char* key ){ char sk[257]; snprintf(sk,256,"%s:%s",sec,key); return get(sk); }
-	template<class T> T get( const char* key );
+	__forceinline const char* get( const char* key ){ if(!key||!*key) return ""; auto it=dic.find(key); return it==dic.end()?"":it->second->value.c_str(); }
+	__forceinline const char* get( const char* sec, const char* key ){ if(!sec||!*sec||!key||!*key) return ""; char sk[257]; snprintf(sk,256,"%s:%s",sec,key); return get(sk); }
 	template<class T> T get( const char* sec, const char* key ){ char sk[257]; snprintf(sk,256,"%s:%s",sec,key); return get<T>(sk); }
+	template<class T> T get( const char* key );
 
 	// set
 	template<class T> void set( const char* key, T value );
-	template<class T> void set( const char* sec, const char* key, T value ){ char sk[257]; snprintf(sk,256,"%s:%s",sec,key); set<T>(sk,value); }
+	template<class T> void set( const char* sec, const char* key, T value ){ if(!sec||!*sec||!key||!*key) return; char sk[257]; snprintf(sk,256,"%s:%s",sec,key); set<T>(sk,value); }
 };
 
 __noinline void parser_t::read_line( wchar_t* line, wchar_t* sec )
@@ -192,7 +190,7 @@ template<> __noinline float3 parser_t::get<float3>( const char* key ){		auto* v=
 template<> __noinline float4 parser_t::get<float4>( const char* key ){		auto* v=get(key); return *v==0?float4{}:atof<float4>(v); }
 
 // template specializations for set()
-template<> __noinline void parser_t::set<const char*>( const char* key, const char* value ){ bool b=key_exists(key); entry_t* e=get_or_create_entry(key); if(b&&e->value==value) return; e->value=value; save(); }
+template<> __noinline void parser_t::set<const char*>( const char* key, const char* value ){ if(!key||!*key) return; bool b=key_exists(key); entry_t* e=get_or_create_entry(key); if(b&&e->value==value) return; e->value=value; save(); }
 template<> __noinline void parser_t::set<char*>( const char* key, char* value ){		set<const char*>(key,value); }
 #ifdef __GX_FILESYSTEM_H__
 template<> __noinline void parser_t::set<path>( const char* key, path value ){			set<const char*>(key,value.c_str()); }

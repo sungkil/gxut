@@ -2,21 +2,21 @@
 #ifndef __GX_INET_H__
 #define __GX_INET_H__
 
-#if __has_include("gxut.h")
-	#include "gxut.h"
-#elif __has_include("../gxut.h")
-	#include "../gxut.h"
-#elif __has_include(<gxut/gxut.h>)
-	#include <gxut/gxut.h>
+#if __has_include("gxfilesystem.h")
+	#include "gxfilesystem.h"
+#elif __has_include("../gxfilesystem.h")
+	#include "../gxfilesystem.h"	
+#elif __has_include(<gxut/gxfilesystem.h>)
+	#include <gxut/gxfilesystem.h>
 #endif
 
+#include <winhttp.h>
 #include <ws2tcpip.h>
-#include <windns.h>
 #include <wininet.h>
-#include <urlmon.h>
+#include <windns.h>
+#pragma comment( lib, "winhttp.lib" )
 #pragma comment( lib, "ws2_32" )
 #pragma comment( lib, "wininet" )
-#pragma comment( lib, "urlmon" )
 #pragma comment( lib, "dnsapi" )
 
 struct inet
@@ -26,45 +26,80 @@ struct inet
 	static const char* get_registered_ip_address();
 };
 
-// raw download primitive
-__noinline bool wget( string url, path local_path, bool use_index=true )
+// raw download primitive: return true only when a new file is downloaded or up-to-date cache exists
+__noinline bool wget( string remote_url, path local_path )
 {
-	if(inet::is_offline()||url.empty()) return false;
-	local_path.dir().mkdir();
-	time_t t=0;
+	struct handle { handle(HINTERNET h):ptr(h){} ~handle(){ if(!ptr) return; WinHttpCloseHandle(ptr); ptr=nullptr; } operator HINTERNET(){ return ptr; } HINTERNET ptr=nullptr; };
+	if(inet::is_offline()){ fprintf(stdout,"%s(): offline\n",__func__); return false; }
+	url u=remote_url; if(remote_url.empty()) return false;
+	bool https=u.protocol=="https";
+	int port=u.port?u.port:https?443:u.protocol=="http"?80:0; if(!port){ fprintf(stdout,"%s(): no valid port\n",__func__); return false; }
 
-	// download index and update mtime by the index if available
-	string index_dir = path(url).dir();
-	string index_url = index_dir+"index.txt";
-	if(use_index&&index_url!=url)
-	{
-		static std::map<string,nocase::map<string,time_t>> index_maps;
-		auto j=index_maps.find(index_dir); if(j==index_maps.end())
-		{
-			index_maps[index_dir]={}; j=index_maps.find(index_dir);
-			path index_path = inet::CACHE_DIR+"index.txt";
-			DeleteUrlCacheEntryA(index_url.c_str());
-			if(S_OK==URLDownloadToFileA(0,index_url.c_str(),index_path.c_str(),0,0)&&index_path.exists())
-			{
-				auto findex = index_path.read_file();
-				for(auto line:explode(findex.c_str(),"\r\n"))
-				{
-					if(line.empty()) continue; auto v=explode( line.c_str() ); if(v.empty()||v.front().empty()) continue;
-					time_t u=0; if(v.size()>=2){ time_t u1=0; sscanf( v[1].c_str(), "%llx", &u1 ); if(u1) u=u1; }
-					j->second.emplace(v.front(),u);
-				}
-			}
-		}
-		auto k=j->second.find(path(url).name());
-		if(k!=j->second.end()) t=k->second;
-	}
+	handle s=WinHttpOpen(L"gxinet/1.0",WINHTTP_ACCESS_TYPE_NO_PROXY,WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0); if(!s){ fprintf(stdout,"%s(%s): unable to open http\n",__func__,remote_url.c_str()); return false; }
+	handle c=WinHttpConnect(s,atow(u.host.c_str()),port,0); if(!c){ printf("%s(%s): unable to connect to %s\n",__func__,remote_url.c_str(),u.host.c_str()); return false; }
+	handle r=WinHttpOpenRequest(c,L"GET",atow(u.path.c_str()),nullptr,0,0,WINHTTP_FLAG_REFRESH|(https?WINHTTP_FLAG_SECURE:0)); if(!r){ printf("%s(%s): unable to open request\n", __func__, remote_url.c_str() ); return false; }
+	if(!WinHttpSendRequest(r,0,0,0,0,0,0)){ printf("%s(%s): unable to send request\n",__func__,remote_url.c_str()); return false; }
+	if(!WinHttpReceiveResponse(r,0)){ printf("%s(%s): unable to receive response\n",__func__,remote_url.c_str()); return false; }
+
+	SYSTEMTIME st={}; DWORD z=sizeof(SYSTEMTIME);
+	BOOL q=WinHttpQueryHeaders(r,WINHTTP_QUERY_LAST_MODIFIED|WINHTTP_QUERY_FLAG_SYSTEMTIME,0,&st,&z,0); if(!q){ printf("%s(%s): unable to query headers\n",__func__,remote_url.c_str()); return false; }
+	if(st.wYear==0){ printf("%s(%s): last modified time not exists\n",__func__,remote_url.c_str()); return false; }
+	time_t t=SystemTimeToTime(st); if(local_path.exists()&&local_path.mtime()>=(t-2)) return true;
 	
-	if(t&&local_path.mtime()>=t) return true;
-	DeleteUrlCacheEntryA(url.c_str());
-	if(S_OK!=URLDownloadToFileA(0,url.c_str(), local_path.c_str(), 0, 0)) return false;
-	if(t&&local_path.exists()) local_path.utime(t);
-	return local_path.exists();
+	if(!local_path.dir().exists()) local_path.dir().mkdir();
+	FILE* fp=fopen(local_path.c_str(),"wb"); if(!fp){ printf("%s(%s): unable to open %s\n",__func__,remote_url.c_str(), local_path.to_slash().c_str()); return false; }
+	const size_t capacity=1<<16; static void* buffer = malloc(capacity);
+	DWORD bytes_read=0;
+	while(WinHttpQueryDataAvailable(r,&z)&&z>0)
+	{
+		if(!WinHttpReadData(r,buffer,z<capacity?z:capacity,&bytes_read)){ printf("%s(%s): unable to read data\n",__func__,remote_url.c_str()); break; }
+		if(bytes_read==0) break; fwrite(buffer,1,bytes_read,fp);
+	}
+	fclose(fp);
+	if(!local_path.exists()) return false; // write failed
+	local_path.utime(t);
+	return true;
 }
+
+// raw download primitive
+//__noinline bool wget( string url, path local_path, bool use_index=true )
+//{
+//	if(inet::is_offline()||url.empty()) return false;
+//	local_path.dir().mkdir();
+//	time_t t=0;
+//
+//	// download index and update mtime by the index if available
+//	string index_dir = path(url).dir();
+//	string index_url = index_dir+"index.txt";
+//	if(use_index&&index_url!=url)
+//	{
+//		static std::map<string,nocase::map<string,time_t>> index_maps;
+//		auto j=index_maps.find(index_dir); if(j==index_maps.end())
+//		{
+//			index_maps[index_dir]={}; j=index_maps.find(index_dir);
+//			path index_path = inet::CACHE_DIR+"index.txt";
+//			DeleteUrlCacheEntryA(index_url.c_str());
+//			if(S_OK==URLDownloadToFileA(0,index_url.c_str(),index_path.c_str(),0,0)&&index_path.exists())
+//			{
+//				auto findex = index_path.read_file();
+//				for(auto line:explode(findex.c_str(),"\r\n"))
+//				{
+//					if(line.empty()) continue; auto v=explode( line.c_str() ); if(v.empty()||v.front().empty()) continue;
+//					time_t u=0; if(v.size()>=2){ time_t u1=0; sscanf( v[1].c_str(), "%llx", &u1 ); if(u1) u=u1; }
+//					j->second.emplace(v.front(),u);
+//				}
+//			}
+//		}
+//		auto k=j->second.find(path(url).name());
+//		if(k!=j->second.end()) t=k->second;
+//	}
+//	
+//	if(t&&local_path.mtime()>=t) return true;
+//	DeleteUrlCacheEntryA(url.c_str());
+//	if(S_OK!=URLDownloadToFileA(0,url.c_str(), local_path.c_str(), 0, 0)) return false;
+//	if(t&&local_path.exists()) local_path.utime(t);
+//	return local_path.exists();
+//}
 
 // registered ip can be retrieved using cmdline:
 // >> nslookup myip.opendns.com resolver1.opendns.com
