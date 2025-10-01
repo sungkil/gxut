@@ -466,7 +466,7 @@ __noinline const char* cwd(){ static char c[_MAX_PATH]={}; getcwd(c, _MAX_PATH);
 // time helper functions
 __forceinline time_t now(){ return time(0); }
 __forceinline time_t time_offset( int days, int hours=0, int mins=0, int secs=0 ){ return 1ll*secs + 60ll*mins + 3600ll*hours + 86400ll*days; } // time_t in second scale: 1 is one second
-__forceinline bool	 time_greater( time_t t0, time_t t1, time_t offset=30 ){ return t0>t1+offset; } // server-local difference can be up to several seconds; do not make time_less(), which causes confusion in use cases
+__forceinline bool	 time_greater( time_t t0, time_t t1, time_t offset=2 ){ return t0>t1+offset; } // server-local difference can be up to several seconds; do not make time_less(), which causes confusion in use cases
 __forceinline const char* asctime( time_t t ){ return __strdup(::asctime(gmtime(&t))); }
 
 // file pointer helpers

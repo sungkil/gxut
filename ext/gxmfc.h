@@ -47,7 +47,7 @@ inline CWinThread* begin_thread( AFX_THREADPROC proc, void* pUserData=nullptr, i
 	if(wait)
 	{
 		pThread->m_bAutoDelete=FALSE; pThread->ResumeThread();
-		while(pThread&&WaitForSingleObject(pThread->m_hThread,0)!=WAIT_OBJECT_0){MSG m;for(int k=0;k<100&&PeekMessageW(&m,nullptr,0,0,PM_REMOVE);k++)SendMessage(m.hwnd,m.message,m.wParam,m.lParam);Sleep(1);}
+		while(pThread&&WaitForSingleObject(pThread->m_hThread,0)!=WAIT_OBJECT_0){MSG m;for(int k=0;k<100&&PeekMessageW(&m,nullptr,0,0,PM_REMOVE);k++)SendMessageW(m.hwnd,m.message,m.wParam,m.lParam);Sleep(1);}
 		safe_delete(pThread); // have to manually delete thread
 	}
 	return pThread;
