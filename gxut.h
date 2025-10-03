@@ -447,8 +447,8 @@ inline bool eprintf( const char* err=nullptr ){ error(err); printf(error()); ret
 // case conversion
 template <class T> const T* tolower( const T* src ){ return strlwr(__strdup(src)); }
 template <class T> const T* toupper( const T* src ){ return strupr(__strdup(src)); }
-inline const char* tovarname( const char* src, bool to_upper=false ){ if(!src||!*src) return ""; char *s=(char*)src,*dst=__strbuf(strlen(src)+2),*d=dst; if(!isalpha(*s)&&(*s)!='_') *(d++)='_'; for(;*s;s++,d++) *d=isalnum(*s)?(to_upper?char(toupper(*s)):(*s)):'_'; *d='\0'; return dst; }
-inline const char* tovarname( const wchar_t* src, bool to_upper=false ){ return tovarname(wtoa(src),to_upper); }
+inline const char* tovarname( const char* src, bool to_upper=false, bool allow_first_numeric=false ){ if(!src||!*src) return ""; char *s=(char*)src,*dst=__strbuf(strlen(src)+2),*d=dst; if(!allow_first_numeric&&!isalpha(*s)&&(*s)!='_') *(d++)='_'; for(;*s;s++,d++) *d=isalnum(*s)?(to_upper?char(toupper(*s)):(*s)):'_'; *d='\0'; return dst; }
+inline const char* tovarname( const wchar_t* src, bool to_upper=false, bool allow_first_numeric=false ){ return tovarname(wtoa(src),to_upper,allow_first_numeric); }
 
 // string function for path
 #define __add_separator(src,sep) size_t l=src.size(); if(l==0)return __strdup(src.data()); char* s=strcpy(__strbuf(l+1),src.data()); if(src[l-1]!='/'&&src[l-1]!='\\'){s[l]=sep;s[l+1]=0;} return s
