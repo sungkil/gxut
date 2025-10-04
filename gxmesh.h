@@ -210,7 +210,7 @@ struct camera_t
 	mat4 view_matrix, projection_matrix;
 	float fovy, aspect, dnear, dfar; // fov in radians; height for orthographic projection
 	vec3 eye; float width=0; vec3 at; float fn;
-	vec3 up;  alignas(16) vec3 dir; // 16-bytes aligned for std140 layout; eye.a=width, center.a=fn, dir=at-eye
+	vec3 up; float fovy_degrees=30.0f; alignas(16) vec3 dir; // 16-bytes aligned for std140 layout; eye.a=width, center.a=fn, dir=at-eye
 	alignas(16) float focal=0; float height=0, E=0, df=0; // focal length (in mm or pixels), lens radius, focusing depth (in object distance), f-number (or image height)
 
 	camera_t() = default;
