@@ -240,7 +240,7 @@ struct camera : public camera_t
 	camera*		next=nullptr;		// last to current
 	int			frame = RAND_MAX;	// frame used for this camera; used in a motion tracer
 	frustum_t	frustum;			// view frustum for culling
-	string		name;				// identifies preset name if any
+	char		name[PATH_MAX]={};	// identifies preset name if any
 };
 
 struct stereo_t
