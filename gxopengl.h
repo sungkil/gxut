@@ -1000,6 +1000,8 @@ struct Framebuffer : public Object
 
 	static void set_blend_func( GLenum sfactor, GLenum dfactor ){ glBlendFunc( sfactor, dfactor ); }
 	static void set_blend_func_separate( GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha ){ glBlendFuncSeparate( sfactorRGB, dfactorRGB, sfactorAlpha, dfactorAlpha ); }
+	static void set_blend_equation_separate( GLenum modeRGB, GLenum modeAlpha ){ glBlendEquationSeparate( modeRGB, modeAlpha ); }
+
 	static void set_multisample( bool b_multisample ){ b_multisample ? glEnable(GL_MULTISAMPLE):glDisable(GL_MULTISAMPLE); }
 	static const GLenum* draw_buffers( uint index=0 ){ static GLenum d[MAX_COLOR_ATTACHMENTS]={GL_COLOR_ATTACHMENT0,GL_COLOR_ATTACHMENT1,GL_COLOR_ATTACHMENT2,GL_COLOR_ATTACHMENT3,GL_COLOR_ATTACHMENT4,GL_COLOR_ATTACHMENT5,GL_COLOR_ATTACHMENT6,GL_COLOR_ATTACHMENT7}; return &d[index]; }
 	void clear( const vec4& color=0 ){ for( uint k=0;k<MAX_COLOR_ATTACHMENTS;k++) if(_active_targets[k]) clear_color_buffer( k, color, false ); clear_depth_buffer(); }

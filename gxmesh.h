@@ -428,6 +428,7 @@ struct object
 // a set of vertices, indices, objects, geometries, materials
 struct mesh
 {
+	uint					crc=0;		// crc hash to trigger on_dirty_mesh() callbacks
 	vector<vertex>			vertices;
 	vector<uint>			indices;
 	vector<object>			objects;
@@ -453,11 +454,8 @@ struct mesh
 	mesh*	proxy=nullptr;		// created and released in GL_Mesh 
 
 	// auxiliary information
-	char	file_path[_MAX_PATH]={};	// mesh file path (e.g., *.obj, *.obj.7z)
-	char	mtl_path[_MAX_PATH]={};		// material file path (e.g., *.mtl)
-
-	// crc hash to trigger on_dirty_mesh() callbacks
-	uint	crc = 0;
+	char	file_path[PATH_MAX]={};	// mesh file path (e.g., *.obj, *.obj.7z)
+	char	mtl_path[PATH_MAX]={};		// material file path (e.g., *.mtl)
 
 	// constructor
 	mesh(){ vertices.reserve(size_t(1<<20)); indices.reserve(size_t(1<<20)); objects.reserve(size_t(1<<16)); geometries.reserve(size_t(1<<16)); }
@@ -709,5 +707,42 @@ inline void mesh::multi_draw_elements_indirect( GLsizei draw_count, GLsizei stri
 inline void mesh::multi_draw_elements_indirect_count( GLsizei max_draw_count, GLsizei stride, const void* indirect, GLintptr draw_count, GLenum mode, bool b_bind ){ buffer.vertex->multi_draw_elements_indirect_count( max_draw_count, stride, indirect, draw_count, mode, b_bind ); }
 inline gl::VertexArray* gxCreateVertexArray( const char* name, mesh* p_mesh, GLenum usage=GL_STATIC_DRAW ){ return p_mesh?gxCreateVertexArray(name,&p_mesh->vertices[0],p_mesh->vertices.size(),&p_mesh->indices[0],p_mesh->indices.size(),usage):nullptr; }
 #endif
+
+//*************************************
+namespace gs { // extension to Gaussian Splatting
+//*************************************
+struct vertex
+{
+	vec3	pos;	float opacity;
+	vec3	norm;
+	alignas(16) vec3	dc;			// f_dc: (feature) diffuse color; dc.a: padding
+	alignas(16) vec4	cov[2];		// cov.a: padding
+	alignas(16) float	sh[45];		// f_rest: (feature) spherical harmonics coefficients
+private:
+	float	_2[3];
+};
+static_assert(sizeof(gs::vertex)%16==0,"sizeof(gs::vertex)%16!=0");
+
+struct mesh
+{
+	uint			crc=0;			// crc hash to trigger on_dirty_mesh() callbacks
+	path			file_path;		// file path (e.g., *.ply)
+	vector<vertex>	vertices;		// vertices
+	vector<uint>	indices;		// sorted vertex indices
+	bbox			box;			// scene bound
+
+	// volitile variables
+	uint			sh_degrees=4;	// degrees of spherical harmonics
+	struct { gl::Buffer *vertex, *index; } buffer = {};
+
+	mesh(){ vertices.reserve(size_t(1<<20)); indices.reserve(size_t(1<<20)); }
+	virtual ~mesh(){ release(); }
+	void release(){ vertices.clear(); indices.clear(); }
+	size_t size() const { return vertices.size(); }
+};
+
+//*************************************
+} // end namespace gs
+//*************************************
 
 #endif // __GX_MESH_H__
