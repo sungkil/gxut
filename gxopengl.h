@@ -118,7 +118,7 @@ inline GLenum gxGetTargetBinding( GLenum target )
 		{GL_TIME_ELAPSED,0},
 	};
 	auto it=t.find(target); if(it!=t.end()) return it->second;
-	if(target) printf( "%s(): unable to find target binding for 0x%04X\n",__func__,target);
+	if(target) oncef( "%s(): unable to find target binding for 0x%04X\n",__func__,target);
 	return 0;
 }
 
@@ -272,7 +272,7 @@ struct Buffer : public Object
 	template <class T> void set_data( const vector<T>& data ){ set_sub_data(data.data(),GLsizeiptr(sizeof(T)*data.size()),0); }
 	template <class T, size_t N> void set_data( const array<T,N>& data ){ set_sub_data(data.data(),GLsizeiptr(sizeof(T)*N),0); }
 	void copy_data( Buffer* write_buffer, GLsizeiptr size=0 ){ copy_sub_data( write_buffer, size?size:this->size() ); }
-	void copy_sub_data( Buffer* write_buffer, GLsizeiptr size, GLintptr read_offset=0, GLintptr write_offset=0 ){ if(glCopyNamedBufferSubData) glCopyNamedBufferSubData(ID,write_buffer->ID,read_offset,write_offset,size); else printf("Buffer::copySubData(): glCopyNamedBufferSubData==nullptr (only supports named mode)\n" ); }
+	void copy_sub_data( Buffer* write_buffer, GLsizeiptr size, GLintptr read_offset=0, GLintptr write_offset=0 ){ if(glCopyNamedBufferSubData) glCopyNamedBufferSubData(ID,write_buffer->ID,read_offset,write_offset,size); else oncef("Buffer::%s(): glCopyNamedBufferSubData==nullptr (only supports named mode)\n",__func__ ); }
 	template <class T> void clear( const T value ){ constexpr GLenum iformat=gxTypeToInternalFormat<T>(); static GLenum format=gxGetTextureFormat(iformat), type=gxGetTextureType(iformat); if(glClearNamedBufferData) glClearNamedBufferData(ID,iformat,format,type,&value); else if(glClearBufferData){ GLuint b0=bind(); glClearBufferData(target,iformat,format,type,&value); bind(b0); } }
 	void get_sub_data( GLvoid* data, GLsizeiptr size, GLintptr offset=0 ){ if(glGetNamedBufferSubData) glGetNamedBufferSubData(ID,offset,size?size:this->size(),data); else if(glGetBufferSubData){ GLuint b0=bind(); glGetBufferSubData(target,offset,size?size:this->size(),data); glBindBuffer(target,b0); } }
 	template <class T> T get_data(){ T v={}; get_sub_data(&v,sizeof(T),0); return v; }
@@ -536,15 +536,15 @@ struct Texture : public Object
 	void set_border_color( const vec4& color ){ texture_parameterfv(GL_TEXTURE_BORDER_COLOR, &color.x ); }
 
 	// clear colors
-	void clear( const vec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_HALF_FLOAT){ half4 h={}; ftoh(color,h,channels()); glClearTexImage(ID,level,f,t,h); } else if(t==GL_FLOAT) glClearTexImage(ID,level,format(),t,&color); else printf( "%s->clear(): texture is not one of float/half types\n", _name ); }
-	void cleari( const ivec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_INT) glClearTexImage(ID,level,f,t,color); else if(t==GL_SHORT){ short4 i={short(color.x),short(color.y),short(color.z),short(color.w)}; glClearTexImage(ID,level,f,t,&i); } else if(t==GL_BYTE){ int8_t i[4]={char(color.x), char(color.y), char(color.z), char(color.w)}; glClearTexImage(ID, level, f, t, i); } else printf("%s->cleari(): texture is not one of byte/short/int types\n", _name); }
-	void clearui( const uvec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_UNSIGNED_INT) glClearTexImage(ID,level,f,t,color); else if(t==GL_UNSIGNED_SHORT){ ushort4 i={ushort(color.x),ushort(color.y),ushort(color.z),ushort(color.w)}; glClearTexImage(ID,level,f,t,&i); } else if(t==GL_UNSIGNED_BYTE){ uchar4 i={uchar(color.x),uchar(color.y),uchar(color.z),uchar(color.w)}; glClearTexImage(ID,level,f,t,&i); } else printf( "%s->clearui(): texture is not one of unsigned byte/short/int types\n", _name ); }
+	void clear( const vec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_HALF_FLOAT){ half4 h={}; ftoh(color,h,channels()); glClearTexImage(ID,level,f,t,h); } else if(t==GL_FLOAT) glClearTexImage(ID,level,format(),t,&color); else oncef( "%s->clear(): texture is not one of float/half types\n", _name ); }
+	void cleari( const ivec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_INT) glClearTexImage(ID,level,f,t,color); else if(t==GL_SHORT){ short4 i={short(color.x),short(color.y),short(color.z),short(color.w)}; glClearTexImage(ID,level,f,t,&i); } else if(t==GL_BYTE){ int8_t i[4]={char(color.x), char(color.y), char(color.z), char(color.w)}; glClearTexImage(ID, level, f, t, i); } else oncef("%s->cleari(): texture is not one of byte/short/int types\n", _name); }
+	void clearui( const uvec4& color, GLint level=0 ){ GLenum t=type(),f=format(); if(t==GL_UNSIGNED_INT) glClearTexImage(ID,level,f,t,color); else if(t==GL_UNSIGNED_SHORT){ ushort4 i={ushort(color.x),ushort(color.y),ushort(color.z),ushort(color.w)}; glClearTexImage(ID,level,f,t,&i); } else if(t==GL_UNSIGNED_BYTE){ uchar4 i={uchar(color.x),uchar(color.y),uchar(color.z),uchar(color.w)}; glClearTexImage(ID,level,f,t,&i); } else oncef( "%s->clearui(): texture is not one of unsigned byte/short/int types\n", _name ); }
 
 	// mipmap
-	void generate_mipmap(){ if(get_texture_parameteriv(GL_TEXTURE_IMMUTABLE_FORMAT)&&get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)<1){ printf( "Texture::generate_mipmap(%s): no mipmap generated for 1 level.\n", _name ); return; } int w=get_texture_level_parameteriv(GL_TEXTURE_WIDTH,0), h=get_texture_level_parameteriv(GL_TEXTURE_HEIGHT,0), d=get_texture_level_parameteriv(GL_TEXTURE_DEPTH,0); texture_parameteri(GL_TEXTURE_BASE_LEVEL,0); texture_parameteri(GL_TEXTURE_MAX_LEVEL,0+gxGetMipLevels(w,h,d)-1); if(glGenerateTextureMipmap) glGenerateTextureMipmap(ID); else { GLuint b0=gxGetIntegerv(_target_binding); glBindTexture(target,ID); glGenerateMipmap(target); glBindTexture(target,b0); }if(get_texture_parameteriv(GL_TEXTURE_MIN_FILTER)==GL_LINEAR) texture_parameteri( GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR ); else if(get_texture_parameteriv(GL_TEXTURE_MIN_FILTER)==GL_NEAREST) texture_parameteri(GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST ); }
+	void generate_mipmap(){ if(get_texture_parameteriv(GL_TEXTURE_IMMUTABLE_FORMAT)&&get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)<1){ oncef( "Texture::generate_mipmap(%s): no mipmap generated for 1 level.\n", _name ); return; } int w=get_texture_level_parameteriv(GL_TEXTURE_WIDTH,0), h=get_texture_level_parameteriv(GL_TEXTURE_HEIGHT,0), d=get_texture_level_parameteriv(GL_TEXTURE_DEPTH,0); texture_parameteri(GL_TEXTURE_BASE_LEVEL,0); texture_parameteri(GL_TEXTURE_MAX_LEVEL,0+gxGetMipLevels(w,h,d)-1); if(glGenerateTextureMipmap) glGenerateTextureMipmap(ID); else { GLuint b0=gxGetIntegerv(_target_binding); glBindTexture(target,ID); glGenerateMipmap(target); glBindTexture(target,b0); }if(get_texture_parameteriv(GL_TEXTURE_MIN_FILTER)==GL_LINEAR) texture_parameteri( GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR ); else if(get_texture_parameteriv(GL_TEXTURE_MIN_FILTER)==GL_NEAREST) texture_parameteri(GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST ); }
 
 	// get_image/set_image
-	void get_image( GLvoid* pixels, GLint level=0 ){ if(target==GL_TEXTURE_BUFFER){ printf("[%s] read_pixels() not supports GL_TEXTURE_BUFFER\n", _name ); return; } else if(glGetTextureImage){ glGetTextureImage( ID, level, format(), type(), GLsizei(mem_size()), pixels ); return; } GLuint b0=bind(); glGetTexImage( target, level, format(), type(), pixels ); glBindTexture( target, b0 ); }
+	void get_image( GLvoid* pixels, GLint level=0 ){ if(target==GL_TEXTURE_BUFFER){ oncef("[%s] read_pixels() not supports GL_TEXTURE_BUFFER\n", _name ); return; } else if(glGetTextureImage){ glGetTextureImage( ID, level, format(), type(), GLsizei(mem_size()), pixels ); return; } GLuint b0=bind(); glGetTexImage( target, level, format(), type(), pixels ); glBindTexture( target, b0 ); }
 	void set_image( GLvoid* pixels, GLint level=0, GLsizei width=0, GLsizei height=0, GLsizei depth=0, GLint x=0, GLint y=0, GLint z=0 );
 
 	// instance-related
@@ -619,7 +619,7 @@ inline Texture* Texture::clone( const char* name )
 		(target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY) ? gxCreateTextureCube( name, m, w, h, l, f, nullptr, false ):
 		(target==GL_TEXTURE_RECTANGLE) ? gxCreateTextureRectangle( name, w, h, f, nullptr ):nullptr;
 
-	if(t==nullptr){ printf( "Texture[\"%s\"]::clone() == nullptr\n", name ); return nullptr; }
+	if(t==nullptr){ printf( "Texture[\"%s\"]::%s()==nullptr\n", name, __func__ ); return nullptr; }
 
 	t->texture_parameteri( GL_TEXTURE_WRAP_S, wrap );
 	if(t->height()>1)	t->texture_parameteri( GL_TEXTURE_WRAP_T, wrap );
@@ -636,8 +636,8 @@ inline Texture* Texture::clone( const char* name )
 inline bool Texture::copy( Texture* dst, GLint level )
 {
 	if(dst==nullptr) return false; GLint w0=width(level),h0=height(level),d0=depth(level),w1=dst->width(level),h1=dst->height(level),d1=dst->depth(level);
-	if(w0!=w1||h0!=h1||d0!=d1){ printf("%s::copy(): Dimension (%dx%dx%d) is different from %s (%dx%dx%d)\n", _name, w0, h0, d0, dst->_name, w1, h1, d1 ); return false; }
-	if(mem_size()!=dst->mem_size()){ printf("%s::copy(): %s.mem_size(=%d) != %s.mem_size(=%d)\n", _name, _name, int(mem_size()), dst->_name, int(dst->mem_size()) ); return false; }
+	if(w0!=w1||h0!=h1||d0!=d1){ oncef("%s::copy(): Dimension (%dx%dx%d) is different from %s (%dx%dx%d)\n", _name, w0, h0, d0, dst->_name, w1, h1, d1 ); return false; }
+	if(mem_size()!=dst->mem_size()){ oncef("%s::copy(): %s.mem_size(=%d) != %s.mem_size(=%d)\n", _name, _name, int(mem_size()), dst->_name, int(dst->mem_size()) ); return false; }
 	glCopyImageSubData( ID, target, level, 0, 0, 0, dst->ID, dst->target, level, 0, 0, 0, w0, h0, d0 ); return true;
 }
 
@@ -651,7 +651,7 @@ __noinline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsiz
 	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
 
 	GLenum target = layers>1||force_array?GL_TEXTURE_1D_ARRAY:GL_TEXTURE_1D;
-	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
+	GLuint ID = gxCreateTexture(target); if(ID==0){ printf("%s(): failed in gxCreateTexture(%s)",__func__,name); return nullptr; }
 	GLenum format = gxGetTextureFormat( internal_format );
 	GLenum type = gxGetTextureType( internal_format );
 
@@ -689,7 +689,7 @@ __noinline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsiz
 	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
 
 	GLenum target = layers>1||force_array?(multisample?GL_TEXTURE_2D_MULTISAMPLE_ARRAY:GL_TEXTURE_2D_ARRAY):(multisample?GL_TEXTURE_2D_MULTISAMPLE:GL_TEXTURE_2D);
-	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
+	GLuint ID = gxCreateTexture(target); if(ID==0){ printf("%s(): failed in gxCreateTexture(%s)",__func__,name); return nullptr; }
 	GLenum format = gxGetTextureFormat( internal_format );
 	GLenum type = gxGetTextureType( internal_format );
 
@@ -709,7 +709,7 @@ __noinline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsiz
 	else if(target==GL_TEXTURE_2D_MULTISAMPLE){			glTexStorage2DMultisample(target, multisamples, internal_format, width, height, GL_TRUE ); }
 	else if(target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY){	glTexStorage3DMultisample(target, multisamples, internal_format, width, height, layers, GL_TRUE ); }
 	GLenum e1 = glGetError(); // texture error 
-	if(e1!=GL_NO_ERROR&&e1!=e0){ printf( "%s(%s): error %s\n", __func__, name, 	gxGetErrorString(e1) ); delete texture; return nullptr; }
+	if(e1!=GL_NO_ERROR&&e1!=e0){ printf( "%s(%s): %s\n", __func__, name, 	gxGetErrorString(e1) ); delete texture; return nullptr; }
 
 	// test if the format is immutable
 	GLint b_immutable; glGetTexParameteriv( target, GL_TEXTURE_IMMUTABLE_FORMAT, &b_immutable );
@@ -741,7 +741,7 @@ __noinline gl::Texture* gxCreateTexture3D( const char* name, GLint levels, GLsiz
 	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
 
 	GLenum target = GL_TEXTURE_3D;
-	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
+	GLuint ID = gxCreateTexture(target); if(ID==0){ printf("%s(): failed in gxCreateTexture(%s)",__func__,name); return nullptr; }
 	GLenum format = gxGetTextureFormat( internal_format );
 	GLenum type = gxGetTextureType( internal_format );
 
@@ -781,7 +781,7 @@ __noinline gl::Texture* gxCreateTextureCube( const char* name, GLint levels, GLs
 	if(width==0||height==0){ printf( "%s(%s): width==0 or height==0", __func__, name ); return nullptr; }
 
 	GLenum target = count>1||force_array?GL_TEXTURE_CUBE_MAP_ARRAY:GL_TEXTURE_CUBE_MAP;
-	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
+	GLuint ID = gxCreateTexture(target); if(ID==0){ printf("%s(): failed in gxCreateTexture(%s)",__func__,name); return nullptr; }
 	GLenum format = gxGetTextureFormat( internal_format );
 	GLenum type = gxGetTextureType( internal_format );
 
@@ -830,7 +830,7 @@ __noinline gl::Texture* gxCreateTextureBuffer( const char* name, gl::Buffer* buf
 	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
 
 	GLenum target = GL_TEXTURE_BUFFER;
-	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
+	GLuint ID = gxCreateTexture(target); if(ID==0){ printf("%s(): failed in gxCreateTexture(%s)",__func__,name); return nullptr; }
 	GLenum format = gxGetTextureFormat( internal_format );
 	GLenum type = gxGetTextureType( internal_format );
 
@@ -859,7 +859,7 @@ __noinline gl::Texture* gxCreateTextureRectangle( const char* name, GLsizei widt
 	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
 
 	GLenum target = GL_TEXTURE_RECTANGLE;
-	GLuint ID = gxCreateTexture(target); if(ID==0) return nullptr;
+	GLuint ID = gxCreateTexture(target); if(ID==0){ printf("%s(): failed in gxCreateTexture(%s)",__func__,name); return nullptr; }
 	GLenum format = gxGetTextureFormat( internal_format );
 	GLenum type = gxGetTextureType( internal_format );
 
@@ -980,7 +980,7 @@ struct Framebuffer : public Object
 	void bind_depth_buffer( GLint width, GLint height, GLint layers=1, bool multisample=false, GLsizei multisamples=1 );
 	static void unbind(){ glBindFramebuffer( GL_FRAMEBUFFER, 0 ); }
 	void unbind_depth_buffer();
-	void check_status(){ GLenum s=glCheckNamedFramebufferStatus?glCheckNamedFramebufferStatus(ID,GL_FRAMEBUFFER):glCheckFramebufferStatus(GL_FRAMEBUFFER); if(s==GL_FRAMEBUFFER_COMPLETE) return; if(s==GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT\n", _name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT\n", _name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER\n", _name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER) printf( "[%s] GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER\n", _name ); else if(s==GL_FRAMEBUFFER_UNSUPPORTED) printf( "[%s] GL_FRAMEBUFFER_UNSUPPORTED\n", _name ); }
+	void check_status(){ GLenum s=glCheckNamedFramebufferStatus?glCheckNamedFramebufferStatus(ID,GL_FRAMEBUFFER):glCheckFramebufferStatus(GL_FRAMEBUFFER); if(s==GL_FRAMEBUFFER_COMPLETE) return; if(s==GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT) oncef( "[%s] GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT\n", _name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT) oncef( "[%s] GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT\n", _name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER) oncef( "[%s] GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER\n", _name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER) oncef( "[%s] GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER\n", _name ); else if(s==GL_FRAMEBUFFER_UNSUPPORTED) oncef( "[%s] GL_FRAMEBUFFER_UNSUPPORTED\n", _name ); }
 	void read_pixels( GLenum attachment, GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLvoid* img ){ if(ID) glNamedFramebufferReadBuffer(ID,GL_COLOR_ATTACHMENT0+attachment); else glReadBuffer(GL_BACK); glReadPixels( x, y, width, height, format, type, img ); }
 	void set_viewport( GLint x, GLint y, GLsizei width, GLsizei height ){ glViewport( x, y, width, height ); }
 	void set_viewport( ivec4 origin_size ){ glViewport( origin_size.x, origin_size.y, origin_size.z, origin_size.w ); }
@@ -1060,7 +1060,7 @@ inline void Framebuffer::bind_layers( Texture* t0, GLint mipLevel0, Texture* t1,
 {
 	if(ID==0||t0==nullptr){ bind(false); return; }
 
-	if(t0->target!=GL_TEXTURE_1D_ARRAY&&t0->target!=GL_TEXTURE_2D_ARRAY&&t0->target!=GL_TEXTURE_2D_MULTISAMPLE_ARRAY&&t0->target!=GL_TEXTURE_3D&&t0->target!=GL_TEXTURE_CUBE_MAP&&t0->target!=GL_TEXTURE_CUBE_MAP_ARRAY){ printf("[%s] Framebuffer::bind_layers() supports only array textures\n", _name ); return; }
+	if(t0->target!=GL_TEXTURE_1D_ARRAY&&t0->target!=GL_TEXTURE_2D_ARRAY&&t0->target!=GL_TEXTURE_2D_MULTISAMPLE_ARRAY&&t0->target!=GL_TEXTURE_3D&&t0->target!=GL_TEXTURE_CUBE_MAP&&t0->target!=GL_TEXTURE_CUBE_MAP_ARRAY){ oncef("[%s] Framebuffer::bind_layers() supports only array textures\n", _name ); return; }
 
 	// regardless of direct_state_access, it is still necessary, because draw functions are not aware where they are drawn.
 	glBindFramebuffer( GL_FRAMEBUFFER, ID );
@@ -1187,6 +1187,7 @@ struct Uniform
 	GLint		textureID=-1;
 	Texture*	texture=nullptr;
 	GLint		image_texture_binding=-1;	// only for image texture unit
+	bool		row_major=false;
 	struct
 	{
 		Buffer*	buffer=nullptr;	// assigned buffer; nullptr means not assign yet
@@ -1242,7 +1243,7 @@ struct Uniform
 	bool is_matrix(){ return (type>=GL_FLOAT_MAT2&&type<=GL_FLOAT_MAT4)||(type>=GL_FLOAT_MAT2x3&&type<=GL_FLOAT_MAT4x3); }
 
 protected:
-	void __set_log( const char* func, void* ptr, GLsizei count ){ printf( "Uniform[%s].%s(%p,%d): unsupported type\n", name, func, ptr, count ); }
+	void __set_log( const char* func, void* ptr, GLsizei count ){ oncef( "Uniform[%s].%s(%p,%d): unsupported type\n", name, func, ptr, count ); }
 };
 
 template<> inline void Uniform::set<int>( GLuint prog, const int* ptr, GLsizei count )
@@ -1420,17 +1421,23 @@ struct Program : public Object
 		if(u->block.index==-1) return u->set(ID,v,count);
 		if(!u->block.buffer)
 		{
-			if(!u->block.name[0]){ printf("%s(%s): uniform block name is empty\n",__func__,name); return; }
-			auto it=_uniform_block_map.find(u->block.name); if(it==_uniform_block_map.end()){ printf("%s(%s): unable to find uniform buffer '%s'\n",__func__,name,u->block.name); return; }
-			u->block.buffer=it->second.buffer; if(!u->block.buffer){ printf("%s(%s): block.buffer==nullptr\n",__func__,name); return; }
+			if(!u->block.name[0]){ oncef("%s(%s): uniform block name is empty\n",__func__,name); return; }
+			auto it=_uniform_block_map.find(u->block.name); if(it==_uniform_block_map.end()){ oncef("%s(%s): unable to find uniform buffer '%s'\n",__func__,name,u->block.name); return; }
+			u->block.buffer=it->second.buffer; if(!u->block.buffer){ oncef("%s(%s): block.buffer==nullptr\n",__func__,name); return; }
 		}
-		u->block.buffer->set_sub_data(v,sizeof(T)*count,u->block.offset);
+		if(!u->is_matrix()||u->row_major){ u->block.buffer->set_sub_data(v,sizeof(T)*count,u->block.offset); }
+		for(GLsizei k=0;k<count;k++)
+		{
+			if(u->type==GL_FLOAT_MAT2){ mat2 t=((mat2*)v)[k].transpose(); u->block.buffer->set_sub_data(&t,sizeof(T)*count,u->block.offset); }
+			else if(u->type==GL_FLOAT_MAT3){ mat3 t=((mat3*)v)[k].transpose(); u->block.buffer->set_sub_data(&t,sizeof(T)*count,u->block.offset); }
+			else if(u->type==GL_FLOAT_MAT4){ mat4 t=((mat4*)v)[k].transpose(); u->block.buffer->set_sub_data(&t,sizeof(T)*count,u->block.offset); }
+		}
 	}
 
 	// bind image texture
 	void bind_image_texture( const char* name, Texture* t, GLenum access=GL_READ_WRITE /* or GL_WRITE_ONLY or GL_READ_ONLY */, GLint level=0, GLenum format=0, bool bLayered=false, GLint layer=0 )
 	{
-		Uniform* u=get_uniform(name); if(!u||u->ID<0||u->image_texture_binding<0){ printf( "%s(): %s not found\n", __func__, name ); return; }
+		Uniform* u=get_uniform(name); if(!u||u->ID<0||u->image_texture_binding<0){ oncef( "%s(): %s not found\n", __func__, name ); return; }
 		u->texture=t; glBindImageTexture( u->image_texture_binding, t->ID, level, bLayered?GL_TRUE:GL_FALSE, layer, access, format?format:t->internal_format() );
 	}
 
@@ -1455,7 +1462,7 @@ struct Program : public Object
 	GLuint get_shader_storage_block_binding( const char* name ){ auto it=_shader_storage_block_binding_map.find(name); if(it!=_shader_storage_block_binding_map.end()) return it->second; const GLenum prop=GL_BUFFER_BINDING; GLint binding;glGetProgramResourceiv(ID,GL_SHADER_STORAGE_BLOCK,glGetProgramResourceIndex(ID,GL_SHADER_STORAGE_BLOCK,name),1,&prop,1,nullptr,&binding); return _shader_storage_block_binding_map[name]=binding; }
 	GLuint get_atomic_counter_buffer_binding( const char* name ){ auto it=_atomic_counter_buffer_binding_map.find(name); return it==_atomic_counter_buffer_binding_map.end()?-1:it->second; }
 	ivec3 get_compute_work_group_size(){ return _compute_work_group_size.x?_compute_work_group_size:(_compute_work_group_size=gxGetProgramiv3(ID,GL_COMPUTE_WORK_GROUP_SIZE)); }
-	bool assert_compute_work_group_size( int work_group_size_x, int work_group_size_y, int work_group_size_z=1 ){ auto d=get_compute_work_group_size(); if(work_group_size_x==d.x&&work_group_size_y==d.y&&work_group_size_z==d.z) return true; printf( "program[%s]: work_group_size (%d,%d,%d) != (%d,%d,%d)\n", name(), d.x, d.y, d.z, work_group_size_x, work_group_size_y, work_group_size_z ); return false; }
+	bool assert_compute_work_group_size( int work_group_size_x, int work_group_size_y, int work_group_size_z=1 ){ auto d=get_compute_work_group_size(); if(work_group_size_x==d.x&&work_group_size_y==d.y&&work_group_size_z==d.z) return true; oncef( "program[%s]: work_group_size (%d,%d,%d) != (%d,%d,%d)\n", name(), d.x, d.y, d.z, work_group_size_x, work_group_size_y, work_group_size_z ); return false; }
 
 	// instances
 	static std::set<Program*>& get_instances(){ static std::set<Program*> i; return i; }
@@ -1466,7 +1473,7 @@ struct Program : public Object
 	// public member variables
 	program_source_t				source;
 
-protected:
+private:
 	std::map<string,Uniform>		_uniform_cache;
 	std::map<string,UniformBlock>	_uniform_block_map; // do not use ID as key, because uniform block ID varies across programs
 	std::set<string>				_invalid_uniform_cache;
@@ -1524,8 +1531,9 @@ inline vector<Uniform> Program::get_active_uniforms( bool b_bind )
 		prop.clear(); for(int j=0,jn=int(values.size());j<jn;j++) prop[pnames[j]]=values[j];
 		Uniform u; glGetProgramResourceName(ID,GL_UNIFORM,k,prop[GL_NAME_LENGTH],nullptr,u.name); if(strstr(u.name,"gl_")) continue; // and skip for built-in gl variables
 		u.ID=prop[GL_LOCATION]; u.block.index=prop[GL_BLOCK_INDEX]; if(u.ID<0&&u.block.index<0) continue; // invalid variables
-		u.type=prop[GL_TYPE]; u.block.offset=prop[GL_OFFSET]; u.array_size=prop[GL_ARRAY_SIZE]; u.image_texture_binding=-1;
-		if(prop[GL_ATOMIC_COUNTER_BUFFER_INDEX]!=-1){ int b; glGetActiveAtomicCounterBufferiv(ID,prop[GL_ATOMIC_COUNTER_BUFFER_INDEX],GL_ATOMIC_COUNTER_BUFFER_BINDING,&b); _atomic_counter_buffer_binding_map[u.name]=b; }
+		u.type=prop[GL_TYPE]; u.block.offset=prop[GL_OFFSET]; u.array_size=prop[GL_ARRAY_SIZE];
+		u.row_major=prop[GL_IS_ROW_MAJOR]!=GL_FALSE; if(u.block.index>=0&&u.is_matrix()&&!u.row_major){ oncef("[warning] %s: column-major layout\n",u.name); }
+		u.image_texture_binding=-1; if(prop[GL_ATOMIC_COUNTER_BUFFER_INDEX]!=-1){ int b; glGetActiveAtomicCounterBufferiv(ID,prop[GL_ATOMIC_COUNTER_BUFFER_INDEX],GL_ATOMIC_COUNTER_BUFFER_BINDING,&b); _atomic_counter_buffer_binding_map[u.name]=b; }
 		v.emplace_back(u);
 	}
 	if(program0>=0) glUseProgram(program0); // restore the original program
@@ -1541,7 +1549,7 @@ inline void Program::update_uniform_block()
 	for(int k=0,kn=gxGetProgramiv(ID,GL_ACTIVE_UNIFORM_BLOCKS);k<kn;k++)
 	{
 		UniformBlock ub; ub.ID=k; ub.program=this; ub.size=gxGetActiveUniformBlockiv(ID,k,GL_UNIFORM_BLOCK_DATA_SIZE);
-		GLsizei l=gxGetActiveUniformBlockiv(ID,k,GL_UNIFORM_BLOCK_NAME_LENGTH); /* length includes NULL */ if(l>GLsizei(std::extent<decltype(UniformBlock::name)>::value)) printf("[%s] uniform block name is too long\n",_name);
+		GLsizei l=gxGetActiveUniformBlockiv(ID,k,GL_UNIFORM_BLOCK_NAME_LENGTH); /* length includes NULL */ if(l>GLsizei(std::extent<decltype(UniformBlock::name)>::value)) oncef("[%s] uniform block name is too long\n",_name);
 		glGetActiveUniformBlockName(ID,k,l,&l,ub.name);
 		_uniform_block_map[ub.name] = ub;
 	}
@@ -1568,7 +1576,7 @@ inline void Program::update_uniform_cache()
 		if(u.block.index==-1||u.block.name[0]) continue;
 		if(_atomic_counter_buffer_binding_map.find(u.name)!=_atomic_counter_buffer_binding_map.end()) continue; // bypass atomic counter buffer
 		UniformBlock* ub=nullptr; for(auto [un,j]:_uniform_block_map){ if(j.ID==u.block.index){ ub=&j; break; } }
-		if(!ub){ printf( "%s(%s): unable to find uniform block for uniform '%s'\n", __func__, name(), u.name ); continue; }
+		if(!ub){ oncef( "%s(%s): unable to find uniform block for uniform '%s'\n", __func__, name(), u.name ); continue; }
 		strcpy(u.block.name,ub->name);
 	}
 
@@ -1921,13 +1929,13 @@ struct Effect : public Object
 	bool append( gl::effect_source_t source );
 	template <class... Ts> bool append( Ts... args ){ gl::effect_source_t source; source.append_r(args...); return append(source); }
 
-	Program* get_program( const char* name ) const { for(auto* p:programs)if(stricmp(p->name(),name)==0) return p; printf("Unable to find program \"%s\" in effect \"%s\"\n", name, this->_name ); return nullptr; }
-	Program* get_program_by_index( uint index ) const { if(index<programs.size()) return programs[index]; else { printf("[%s] Out-of-bound program index\n", _name ); return nullptr; } }
-	Program* get_program_by_id( uint program_ID ) const { for(auto* p:programs)if(p->ID==program_ID) return p; printf("Unable to find program \"%u\" in effect \"%s\"\n", program_ID, this->_name ); return nullptr; }
+	Program* get_program( const char* name ) const { for(auto* p:programs)if(stricmp(p->name(),name)==0) return p; oncef("Unable to find program \"%s\" in effect \"%s\"\n", name, this->_name ); return nullptr; }
+	Program* get_program_by_index( uint index ) const { if(index<programs.size()) return programs[index]; else { oncef("[%s] out-of-bound program index\n", _name ); return nullptr; } }
+	Program* get_program_by_id( uint program_ID ) const { for(auto* p:programs)if(p->ID==program_ID) return p; oncef("Unable to find program \"%u\" in effect \"%s\"\n", program_ID, this->_name ); return nullptr; }
 	Program* append_program( Program* program ){ if(!program) return nullptr; programs.emplace_back(program); for(auto& [ubname,ub] : program->_uniform_block_map) ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size); return program; }
 	Program* create_program( const char* name, const program_source_t& source ){ return append_program(gxCreateProgram(this->name(),name,source)); }
 
-	Uniform* get_uniform( const char* name ){ if(active_program) return active_program->get_uniform(name); printf("%s.%s(%s): no program is bound.",this->name(),__func__,name); return nullptr; }
+	Uniform* get_uniform( const char* name ){ if(active_program) return active_program->get_uniform(name); oncef("%s.%s(%s): no program is bound.",this->name(),__func__,name); return nullptr; }
 	void set_uniform( const char* name, Texture* t ){ auto* p=active_program; if(!p) p=find_program_from_uniform(name,__func__); if(p) p->set_uniform(name,t); }
 	void set_uniform( const char* name, bool b ){ int i=b?1:0; return set_uniform(name, &i ); }
 	template <class T> void set_uniform( const char* name, const vector<T>& v ){ GLsizei count=GLsizei(v.size()); set_uniform(name,v.data(),count); }
@@ -1936,16 +1944,16 @@ struct Effect : public Object
 	template <class T> void set_uniform( const char* name, T* v, GLsizei count=1 ){ auto* p=active_program; if(!p) p=find_program_from_uniform(name,__func__); if(p) p->set_uniform(name,v,count); }
 
 	// uniform buffer/block
-	gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name,false); if(b&&b->size()!=size){ static std::set<string> warns; auto it=warns.find(name); if(it==warns.end()){ warns.insert(name); printf("[%s] %s(): uniform_buffer(%s).size(=%d)!=%d\n",this->_name,__func__,name,int(b->size()),int(size));} } if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr,GL_MAP_WRITE_BIT|GL_DYNAMIC_STORAGE_BIT,false); if(!b){ printf("[%s] unable to create uniform buffer [%s]\n", this->_name, name); return nullptr; } return uniform_buffer_map[name]=b; }
-	gl::Buffer* get_uniform_buffer( const char* name, bool log=true ){ auto it=uniform_buffer_map.find(name); if(it!=uniform_buffer_map.end()) return it->second; if(log){static std::set<string> e; if(e.find(name)==e.end()){ printf( "[%s] %s(): unable to find %s\n", this->_name, __func__, name ); e.emplace(name); }} return nullptr; }
+	gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name,false); if(b&&b->size()!=size) oncef("[%s] %s(): uniform_buffer(%s).size(=%d)!=%d\n",this->_name,__func__,name,int(b->size()),int(size)); if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr,GL_MAP_WRITE_BIT|GL_DYNAMIC_STORAGE_BIT,false); if(!b){ printf("[%s] unable to create uniform buffer [%s]\n", this->_name, name); return nullptr; } return uniform_buffer_map[name]=b; }
+	gl::Buffer* get_uniform_buffer( const char* name, bool log=true ){ auto it=uniform_buffer_map.find(name); if(it!=uniform_buffer_map.end()) return it->second; if(log) oncef( "[%s] %s(): unable to find %s\n", this->_name, __func__, name ); return nullptr; }
 	GLint get_uniform_block_binding( const char* name ){ GLint binding=active_program?active_program->get_uniform_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_uniform_block_binding(name); if(b!=-1) return b; } return -1; }
-	gl::Buffer* bind_uniform_buffer( const char* name, gl::Buffer* ub=nullptr /* if nullptr, use default buffer */ ){ gl::Buffer* b=ub?ub:get_uniform_buffer(name); if(!b) return nullptr; GLuint binding=get_uniform_block_binding(name); if(binding!=GLuint(-1)){ if(b->target==GL_UNIFORM_BUFFER) b->bind_base(binding); else b->bind_base_as(GL_UNIFORM_BUFFER, binding); return b; } printf("[%s] %s(): unable to find uniform buffer binding %s\n", this->_name, __func__, name); return nullptr; }
+	gl::Buffer* bind_uniform_buffer( const char* name, gl::Buffer* ub=nullptr /* if nullptr, use default buffer */ ){ gl::Buffer* b=ub?ub:get_uniform_buffer(name); if(!b) return nullptr; GLuint binding=get_uniform_block_binding(name); if(binding!=GLuint(-1)){ if(b->target==GL_UNIFORM_BUFFER) b->bind_base(binding); else b->bind_base_as(GL_UNIFORM_BUFFER, binding); return b; } oncef("[%s] %s(): unable to find uniform buffer binding %s\n", this->_name, __func__, name); return nullptr; }
 
 	// bind image texture, shader storage, atomic counter, ...
-	void bind_image_texture( const char* name, Texture* t, GLenum access=GL_READ_WRITE /* or GL_WRITE_ONLY or GL_READ_ONLY */, GLint level=0, GLenum format=0, bool bLayered=false, GLint layer=0 ){ if(!active_program) return void(printf("%s.%s(%s): no program is bound.\n",this->name(),__func__,name)); active_program->bind_image_texture(name,t,access,level,format,bLayered,layer); }
-	GLint get_shader_storage_block_binding( const char* name ){ GLint binding=active_program?active_program->get_shader_storage_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_shader_storage_block_binding(name); if(b!=-1) return b; } printf( "[%s] %s(): unable to find shader storage block binding %s\n", this->_name, __func__, name ); return -1; }
+	void bind_image_texture( const char* name, Texture* t, GLenum access=GL_READ_WRITE /* or GL_WRITE_ONLY or GL_READ_ONLY */, GLint level=0, GLenum format=0, bool bLayered=false, GLint layer=0 ){ if(!active_program) return void(oncef("%s.%s(%s): no program is bound.\n",this->name(),__func__,name)); active_program->bind_image_texture(name,t,access,level,format,bLayered,layer); }
+	GLint get_shader_storage_block_binding( const char* name ){ GLint binding=active_program?active_program->get_shader_storage_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_shader_storage_block_binding(name); if(b!=-1) return b; } oncef( "[%s] %s(): unable to find shader storage block binding %s\n", this->_name, __func__, name ); return -1; }
 	gl::Buffer* bind_shader_storage_buffer( const char* name, Buffer* buffer ){ GLint binding=get_shader_storage_block_binding(name); if(binding<0) return nullptr; if(buffer->target==GL_SHADER_STORAGE_BUFFER) buffer->bind_base(binding); else buffer->bind_base_as(GL_SHADER_STORAGE_BUFFER,binding); return buffer; }
-	GLint get_atomic_counter_buffer_binding( const char* name ){ GLint binding=active_program?active_program->get_atomic_counter_buffer_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_atomic_counter_buffer_binding(name); if(b!=-1) return b; } printf( "[%s] %s(): unable to find atomic counter buffer binding %s\n", this->_name, __func__, name ); return -1; }
+	GLint get_atomic_counter_buffer_binding( const char* name ){ GLint binding=active_program?active_program->get_atomic_counter_buffer_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_atomic_counter_buffer_binding(name); if(b!=-1) return b; } oncef( "[%s] %s(): unable to find atomic counter buffer binding %s\n", this->_name, __func__, name ); return -1; }
 	gl::Buffer* bind_atomic_counter_buffer( const char* name, Buffer* buffer ){ GLint binding=get_atomic_counter_buffer_binding(name); if(binding<0) return nullptr; if(buffer->target==GL_ATOMIC_COUNTER_BUFFER) buffer->bind_base(binding); else buffer->bind_base_as(GL_ATOMIC_COUNTER_BUFFER,binding); return buffer; }
 
 	// draw or compute
@@ -1954,7 +1962,7 @@ struct Effect : public Object
 	inline void draw_points_no_attrib( GLsizei count ){ GLuint v=0; if(context::is_core_profile()){ auto it=pts.find(0);VertexArray* va=it!=pts.end()?it->second:(pts[0]=gxCreatePointVertexArray(0,0)); if(va)v=va->ID; } glBindVertexArray(v); glDrawArrays( GL_POINTS, 0, count ); } // core profile should bind non-empty VAO; attribute-less rendering without binding any vertex array: simply using gl_VertexID in vertex shaders
 	inline void dispatch_compute_indirect( GLintptr indirect ){ glDispatchComputeIndirect( indirect ); }
 	inline void dispatch_compute_groups( GLuint gx, GLuint gy=1, GLuint gz=1 ){ glDispatchCompute( gx,gy,gz ); }
-	inline void dispatch_compute_threads( GLuint tx, GLuint ty=1, GLuint tz=1 ){ auto* p=get_program_by_id(gxGetIntegerv(GL_CURRENT_PROGRAM)); if(!p){ printf("%s(): no program is bound\n",__func__); return; } ivec3 s=p->get_compute_work_group_size(); glDispatchCompute(max((tx+s.x-1)/s.x,1u),max((ty+s.y-1)/s.y,1u),max((tz+s.z-1)/s.z,1u)); }
+	inline void dispatch_compute_threads( GLuint tx, GLuint ty=1, GLuint tz=1 ){ auto* p=get_program_by_id(gxGetIntegerv(GL_CURRENT_PROGRAM)); if(!p){ oncef("%s(): no program is bound\n",__func__); return; } ivec3 s=p->get_compute_work_group_size(); glDispatchCompute(max((tx+s.x-1)/s.x,1u),max((ty+s.y-1)/s.y,1u),max((tz+s.z-1)/s.z,1u)); }
 
 	// shader source files
 	void export_shader_sources( const char* dir, const char* fxname="" )
@@ -1978,9 +1986,9 @@ protected:
 	Program* find_program_from_uniform( const char* name, const char* func=nullptr )
 	{
 		if(active_program) return active_program;
-		printf("%s.%s(%s): no program is bound; ",this->name(),func?func:__func__,name);
-		for(auto* p:programs){ auto* u=p->get_uniform(name); if(!u||u->block.index==-1) continue; printf( "using \"%s\" for the buffer-backed uniform.\n",p->name() ); return p; }
-		printf( "search ends up with no associated program.\n");
+		oncef("%s.%s(%s): no program is bound; ",this->name(),func?func:__func__,name);
+		for(auto* p:programs){ auto* u=p->get_uniform(name); if(!u||u->block.index==-1) continue; oncef( "using \"%s\" for the buffer-backed uniform.\n",p->name() ); return p; }
+		oncef( "search ends up with no associated program.\n");
 		return nullptr;
 	}
 };

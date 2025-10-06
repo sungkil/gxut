@@ -724,9 +724,9 @@ private:
 };
 static_assert(sizeof(gs::vertex)%16==0,"sizeof(gs::vertex)%16!=0");
 
-struct mesh
+struct cloud
 {
-	uint			crc=0;			// crc hash to trigger on_dirty_mesh() callbacks
+	uint			crc=0;			// crc hash to trigger on_dirty callbacks
 	path			file_path;		// file path (e.g., *.ply)
 	vector<vertex>	vertices;		// vertices
 	vector<uint>	indices;		// sorted vertex indices
@@ -736,8 +736,8 @@ struct mesh
 	uint			sh_degrees=4;	// degrees of spherical harmonics
 	struct { gl::Buffer *vertex, *index; } buffer = {};
 
-	mesh(){ vertices.reserve(size_t(1<<20)); indices.reserve(size_t(1<<20)); }
-	virtual ~mesh(){ release(); }
+	cloud(){ vertices.reserve(size_t(1<<20)); indices.reserve(size_t(1<<20)); }
+	virtual ~cloud(){ release(); }
 	void release(){ vertices.clear(); indices.clear(); }
 	size_t size() const { return vertices.size(); }
 };
