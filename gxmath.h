@@ -596,6 +596,12 @@ inline const char* ftoa( const dmat3&m ){ const auto* f=&m._00;static const char
 inline const char* ftoa( const dmat4&m ){ const auto* f=&m._00;static const char* fmt="%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]);return buff;}
 
 //*************************************
+// global matrix functions
+inline mat2 transpose( const mat2& m ){ return m.transpose(); }
+inline mat3 transpose( const mat3& m ){ return m.transpose(); }
+inline mat4 transpose( const mat4& m ){ return m.transpose(); }
+
+//*************************************
 // vertor-matrix multiplications
 __forceinline vec2 operator*( const vec2& v, const mat2& m ){ return m.transpose()*v; }
 __forceinline vec3 operator*( const vec3& v, const mat3& m ){ return m.transpose()*v; }

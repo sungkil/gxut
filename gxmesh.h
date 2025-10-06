@@ -253,8 +253,8 @@ struct stereo_t
 };
 
 // utilities for camera
-inline float focal_to_fovy( float focal, float height ){ return focal==0?0:atan2(height*0.5f,focal)*2.0f; }
-inline float fovy_to_focal( float fovy, float height ){ return fovy==0?0:height*0.5f/tan(fovy*0.5f); }
+inline float focal_to_fov( float focal, float image_size ){ return focal==0?0:atan2(image_size*0.5f,focal)*2.0f; }
+inline float fov_to_focal( float fov, float image_size ){ return fov==0?0:image_size*0.5f/tan(fov*0.5f); }
 
 //*************************************
 // material definition (std140 layout, aligned at 16-byte/vec4 boundaries)
