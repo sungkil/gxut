@@ -83,11 +83,35 @@ struct path : public path_t
 
 	// operator overloading: concatenations
 	path operator+( const path& p ) const { return path(this)+=p; }
+	path operator+( const value_type* s ) const { return path(this)+=s; }
+	path operator+( const string_type& s ) const { return path(this)+=s; }
+	path operator+( string_view_type s ) const { return path(this)+=s; }
+	path operator+( value_type c ) const { return path(this)+=c; }
 	path operator/( const path& p ) const { return append_slash()+p; }
+	path operator/( const value_type* s ) const { return append_slash()+s; }
+	path operator/( const string_type& s ) const { return append_slash()+s; }
+	path operator/( string_view_type s ) const { return append_slash()+s; }
+	path operator/( value_type c ) const { return append_slash()+c; }
 	path& operator+=( const path& p ){ return reinterpret_cast<path&>(operator+=(reinterpret_cast<const path_t&>(p))); }
+	path& operator+=( const value_type* s ){ strcpy(end(),s+((s[0]=='.'&&s[2]&&__is_separator(s[1]))?2:0)); return *this; }
+	path& operator+=( const string_type& s ){ return operator+=(s.c_str()); }
+	path& operator+=( string_view_type s ){ return operator+=(s.data()); }
+	path& operator+=( value_type c ){ size_t l=strlen(_data); _data[l]=c; _data[l+1]=0; return *this; }
 	path& operator/=( const path& p ){ return reinterpret_cast<path&>(operator/=(reinterpret_cast<const path_t&>(p))); }
+	path& operator/=( const value_type* s ){ return *this=operator/(s); }
+	path& operator/=( const string_type& s ){ return *this=operator/(s); }
+	path& operator/=( string_view_type s ){ return *this=operator/(s); }
+	path& operator/=( value_type c ){ return *this=operator/(c); }
 	bool operator==( const path& p ) const { return stricmp(_data,p._data)==0; }
 	bool operator!=( const path& p ) const { return stricmp(_data,p._data)!=0; }
+
+	// operator overloading: assignment
+	path& operator=( const path_t& p ) noexcept { strcpy(_data,p._data); memcpy(_data+capacity,p._data+capacity,sizeof(attrib_t)); return *this; }
+	path& operator=( path_t&& p ) noexcept { if(_data) free(_data); _data=p._data; p._data=nullptr; return *this; }
+	path& operator=( const value_type* s ) noexcept { if(s&&*s) strcpy(_data,s); return *this; }
+	path& operator=( const string_type& s ) noexcept { strcpy(_data,s.c_str()); return *this; }
+	path& operator=( string_view_type s ) noexcept{ strcpy(_data,s.data()); return *this; }
+	path& operator=( value_type c ){ _data[0]=c; _data[1]=0; return *this; }
 
 	bool operator<( const path& p ) const { return strcmplogical(_data,p._data)<0; }
 	bool operator<( const value_type* s ) const { return strcmplogical(_data,s)<0; }
