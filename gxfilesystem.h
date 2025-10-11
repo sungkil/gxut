@@ -161,6 +161,7 @@ struct path : public path_t
 	bool is_synology() const {	return is_ssh()&&strstr(_data,":\\volume")!=nullptr||strstr(_data,":/volume")!=nullptr; }
 	bool is_subdir( const path& ancestor ) const { return strnicmp(_data,ancestor._data,ancestor.size())==0; } // do not check existence
 	path canonical() const { if(is_pipe()) return *this; if(is_remote()) return to_slash(); path p(*this); p.__canonicalize(); return p; } // not necessarily absolute: return relative path as well
+	path reparse() const; // get normalized path of files in junction directories
 
 	// decomposition
 	path dir()		const { return __super::dir(); }
@@ -236,10 +237,9 @@ protected:
 	void __scan_recursive( const wchar_t* dir, __scan_t& si ) const;
 	void __subdirs_recursive( const wchar_t* dir, __scan_t& si ) const;
 	void __canonicalize() const; // remove redundancies in directories (e.g., "../some/..", "./" )
-	path __normalize_final() const; // normalize path by GetFinalPathNameByHandleW(FILE_NAME_NORMALIZED)
 };
 
-__noinline path path::__normalize_final() const
+__noinline path path::reparse() const
 {
 	if(!*_data) return ""; auto a=wattrib(); if(a==INVALID_FILE_ATTRIBUTES) return "";
 	HANDLE h=CreateFileW(atow(_data),GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,FILE_FLAG_BACKUP_SEMANTICS,0); if(h==INVALID_HANDLE_VALUE) return "";
@@ -254,7 +254,7 @@ __noinline bool path::is_junction() const
 	// a cloud service (e.g., Dropbox) often reports FILE_ATTRIBUTE_REPARSE_POINT for a regular directory but its junction path is actually identical
 	if(!*_data||is_drive()) return false;
 	auto a=wattrib(); if(a==INVALID_FILE_ATTRIBUTES||(a&FILE_ATTRIBUTE_REPARSE_POINT)==0) return false;
-	return (a&FILE_ATTRIBUTE_DIRECTORY)==0?false:canonical().append_slash()!=__normalize_final();
+	return (a&FILE_ATTRIBUTE_DIRECTORY)==0?false:canonical().append_slash()!=reparse();
 } 
 
 __noinline path path::junction() const
@@ -262,11 +262,11 @@ __noinline path path::junction() const
 	if(!*_data||is_drive()) return "";
 	auto a=wattrib(); if(a==INVALID_FILE_ATTRIBUTES) return "";
 	if((a&FILE_ATTRIBUTE_DIRECTORY)==0) a=dir().wattrib();
-	if((a&FILE_ATTRIBUTE_REPARSE_POINT)!=0) return __normalize_final();
+	if((a&FILE_ATTRIBUTE_REPARSE_POINT)!=0) return reparse();
 	for( const auto& k : ancestors() )
 	{
 		if(k.is_drive()) break; auto b=k.wattrib(); if(b==INVALID_FILE_ATTRIBUTES) break;
-		if((b&FILE_ATTRIBUTE_REPARSE_POINT)!=0&&(b&FILE_ATTRIBUTE_DIRECTORY)!=0) return __normalize_final();
+		if((b&FILE_ATTRIBUTE_REPARSE_POINT)!=0&&(b&FILE_ATTRIBUTE_DIRECTORY)!=0) return reparse();
 	}
 	return "";
 }
