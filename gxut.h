@@ -112,11 +112,14 @@
 #include <inttypes.h> // int64_t, uint64_t, ...
 #include <math.h>
 #include <stdarg.h>
+// disable fscanf, which is dangerous with newlines; use instead fgetsf()
+#define fscanf __fscanf__
 #include <stdio.h>
 #include <cstdio>
 #include <wchar.h>
 #include <wctype.h>
 #include <cwchar>
+#undef fscanf
 #include <stdlib.h>
 #include <string.h>
 
@@ -127,11 +130,12 @@ inline int __cdecl fprintf( FILE* const _Stream, char const* const _Format, ... 
 inline int __cdecl sprintf( char* const _Buffer, char const* const _Format, ... ){ va_list _ArgList; __crt_va_start(_ArgList, _Format); int const _Result = __stdio_common_vsprintf( _CRT_INTERNAL_LOCAL_PRINTF_OPTIONS | _CRT_INTERNAL_PRINTF_LEGACY_VSPRINTF_NULL_TERMINATION, _Buffer, (size_t)-1, _Format, NULL, _ArgList); __crt_va_end(_ArgList); return _Result < 0 ? -1 : _Result; }
 inline int __cdecl vsnprintf( char* const _Buffer, size_t const _BufferCount, char const* const _Format, va_list _ArgList ){ int const _Result = __stdio_common_vsprintf( _CRT_INTERNAL_LOCAL_PRINTF_OPTIONS | _CRT_INTERNAL_PRINTF_STANDARD_SNPRINTF_BEHAVIOR, _Buffer, _BufferCount, _Format, NULL, _ArgList); return _Result < 0 ? -1 : _Result; }
 inline int __cdecl vswprintf( wchar_t* const _Buffer, size_t const _BufferCount, wchar_t const* const _Format, va_list _ArgList ){ int const _Result = __stdio_common_vswprintf( _CRT_INTERNAL_LOCAL_PRINTF_OPTIONS, _Buffer, _BufferCount, _Format, NULL, _ArgList); return _Result < 0 ? -1 : _Result; }
-inline int __cdecl vfscanf( FILE* const _Stream, char const* const _Format, va_list _ArgList ){ return __stdio_common_vfscanf( _CRT_INTERNAL_LOCAL_SCANF_OPTIONS, _Stream, _Format, NULL, _ArgList); }
-inline int __cdecl fscanf( FILE* const _Stream, char const* const _Format, ... ){ int _Result; va_list _ArgList; __crt_va_start(_ArgList, _Format); _Result = __stdio_common_vfscanf( _CRT_INTERNAL_LOCAL_SCANF_OPTIONS, _Stream, _Format, NULL, _ArgList); __crt_va_end(_ArgList); return _Result; }
+inline int __cdecl vsscanf( char const* const _Buffer, char const* const _Format, va_list _ArgList ){ return __stdio_common_vsscanf( _CRT_INTERNAL_LOCAL_SCANF_OPTIONS|_CRT_INTERNAL_SCANF_SECURECRT, _Buffer, (size_t)-1, _Format, NULL, _ArgList); }
 inline int __cdecl sscanf( char const* const _Buffer, char const* const _Format, ... ){ int _Result; va_list _ArgList; __crt_va_start(_ArgList, _Format); _Result = __stdio_common_vsscanf( _CRT_INTERNAL_LOCAL_SCANF_OPTIONS, _Buffer, (size_t)-1, _Format, NULL, _ArgList); return _Result; }
 inline int __cdecl puts( char const* _Buffer ){ return fputs(_Buffer,stdout); }
 #endif
+// a safer alternative to fscanf (dangerous with newliens): sscanf() after fgets()
+inline const char* __cdecl fgetsf( FILE* const _Stream, const char* fmt, ... ){ if(!_Stream) return nullptr; static char* buff=(char*)malloc((1<<14)+1); if(!fgets(buff,(1<<14),_Stream)) return nullptr; if(!*buff) return buff; va_list a; va_start(a, fmt); int r=vsscanf(buff, fmt, a); va_end(a); return buff; }
 
 // compile-time test of printf-style format string
 #ifdef __msvc__

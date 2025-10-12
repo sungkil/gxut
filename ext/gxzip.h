@@ -319,6 +319,7 @@ struct binary_cache
 {
 	binary_cache( bool compress ){ b.compress=compress; }
 	virtual ~binary_cache(){ if(fp){ fclose(fp); fp=nullptr; } }
+	operator FILE* () const { return fp; }
 
 	virtual path cache_path()=0;
 	virtual path zip_path(){ return cache_path()+".zip"; }
@@ -327,7 +328,7 @@ struct binary_cache
 	virtual bool open( bool read=true );
 
 	int writef( __printf_format_string__ const char* fmt, ... ){ if(!fp) return EOF; va_list a; va_start(a,fmt); int r=_vfprintf_l(fp,fmt,NULL,a); va_end(a); return r; }
-	int readf( const char* fmt, ... ){ if(!fp) return EOF; va_list a; va_start(a,fmt); int r=vfscanf(fp,fmt,a); va_end(a); return r; }
+	int getsf( const char* fmt, ... ){ if(!fp) return EOF; static char* buff=(char*)malloc((1<<14)+1); fgets(buff,(1<<14),fp); va_list a; va_start(a,fmt); int r=vsscanf(buff,fmt,a); va_end(a); return r; }
 	bool write( void* ptr, size_t size ){ if(!fp) return 0; return size==fwrite(ptr,1,size,fp); }
 	bool read( void* ptr, size_t size ){ if(!fp) return 0; return size==fread(ptr,1,size,fp); }
 	bool compress( bool rm_src=true );

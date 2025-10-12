@@ -184,7 +184,7 @@ inline bool is_dos_cmd( const char* cmd )
 {
 	static std::set<string> dos_cmd_map = 
 	{
-		"append", "attrib",
+		"append", "assoc", "attrib",
 		"batch",
 		"call", "cd", "chdir", "cls", "cmd", "comp", "copy",
 		"date", "de", "delete", "deltree", "dir",

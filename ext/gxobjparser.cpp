@@ -171,8 +171,8 @@ namespace obj::cache
 		FILE* fp = cache_path.fopen("rb"); if(!fp) return nullptr;
 
 		// get parser id
-		uint parserid;
-		char buff[8192]; fgets(buff,8192,fp); sscanf( buff, "parserid = %u\n", &parserid );
+		char buff[8192];
+		uint parserid; fgets(buff,8192,fp); sscanf( buff, "parserid = %u\n", &parserid );
 		if(parserid!=get_parser_id(file_path)){ fclose(fp); return nullptr; }
 
 		// get the mtl name
@@ -212,7 +212,7 @@ namespace obj::cache
 		{
 			object* obj = p_mesh->create_object("");
 			vec3 &bm=obj->box.m, &bM=obj->box.M;
-			fgets(buff,8192,fp);sscanf(buff,"o[%u] %s %f %f %f %f %f %f\n", &obj->ID,obj->name,&bm[0],&bm[1],&bm[2],&bM[0],&bM[1],&bM[2]);
+			fgets(buff,8192,fp); sscanf(buff,"o[%u] %s %f %f %f %f %f %f\n", &obj->ID,obj->name,&bm[0],&bm[1],&bm[2],&bM[0],&bM[1],&bM[2]);
 		}
 
 		// load geometries

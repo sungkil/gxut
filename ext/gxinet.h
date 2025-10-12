@@ -61,46 +61,6 @@ __noinline bool wget( string remote_url, path local_path )
 	return true;
 }
 
-// raw download primitive
-//__noinline bool wget( string url, path local_path, bool use_index=true )
-//{
-//	if(inet::is_offline()||url.empty()) return false;
-//	local_path.dir().mkdir();
-//	time_t t=0;
-//
-//	// download index and update mtime by the index if available
-//	string index_dir = path(url).dir();
-//	string index_url = index_dir+"index.txt";
-//	if(use_index&&index_url!=url)
-//	{
-//		static std::map<string,nocase::map<string,time_t>> index_maps;
-//		auto j=index_maps.find(index_dir); if(j==index_maps.end())
-//		{
-//			index_maps[index_dir]={}; j=index_maps.find(index_dir);
-//			path index_path = inet::CACHE_DIR+"index.txt";
-//			DeleteUrlCacheEntryA(index_url.c_str());
-//			if(S_OK==URLDownloadToFileA(0,index_url.c_str(),index_path.c_str(),0,0)&&index_path.exists())
-//			{
-//				auto findex = index_path.read_file();
-//				for(auto line:explode(findex.c_str(),"\r\n"))
-//				{
-//					if(line.empty()) continue; auto v=explode( line.c_str() ); if(v.empty()||v.front().empty()) continue;
-//					time_t u=0; if(v.size()>=2){ time_t u1=0; sscanf( v[1].c_str(), "%llx", &u1 ); if(u1) u=u1; }
-//					j->second.emplace(v.front(),u);
-//				}
-//			}
-//		}
-//		auto k=j->second.find(path(url).name());
-//		if(k!=j->second.end()) t=k->second;
-//	}
-//	
-//	if(t&&local_path.mtime()>=t) return true;
-//	DeleteUrlCacheEntryA(url.c_str());
-//	if(S_OK!=URLDownloadToFileA(0,url.c_str(), local_path.c_str(), 0, 0)) return false;
-//	if(t&&local_path.exists()) local_path.utime(t);
-//	return local_path.exists();
-//}
-
 // registered ip can be retrieved using cmdline:
 // >> nslookup myip.opendns.com resolver1.opendns.com
 __noinline const char* inet::get_registered_ip_address()
