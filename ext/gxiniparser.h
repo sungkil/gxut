@@ -195,7 +195,7 @@ template<> __noinline void parser_t::set<char*>( const char* key, char* value ){
 #ifdef __GX_FILESYSTEM_H__
 template<> __noinline void parser_t::set<path>( const char* key, path value ){			set<const char*>(key,value.c_str()); }
 #endif
-template<> __noinline void parser_t::set<bool>( const char* key, bool value ){			set(key,value?"1":"0"); }
+template<> __noinline void parser_t::set<bool>( const char* key, bool value ){			set(key,value?"true":"false"); }
 template<> __noinline void parser_t::set<int>( const char* key, int value ){			snprintf(buffer,buffer_capacity,"%d",value); set(key,buffer); }
 template<> __noinline void parser_t::set<uint>( const char* key, uint value ){			snprintf(buffer,buffer_capacity,"%u",value); set(key,buffer); }
 template<> __noinline void parser_t::set<int64_t>( const char* key, int64_t value ){	snprintf(buffer,buffer_capacity,"%lld",value); set(key,buffer); }
