@@ -1464,6 +1464,20 @@ struct Program : public Object
 	ivec3 get_compute_work_group_size(){ return _compute_work_group_size.x?_compute_work_group_size:(_compute_work_group_size=gxGetProgramiv3(ID,GL_COMPUTE_WORK_GROUP_SIZE)); }
 	bool assert_compute_work_group_size( int work_group_size_x, int work_group_size_y, int work_group_size_z=1 ){ auto d=get_compute_work_group_size(); if(work_group_size_x==d.x&&work_group_size_y==d.y&&work_group_size_z==d.z) return true; oncef( "program[%s]: work_group_size (%d,%d,%d) != (%d,%d,%d)\n", name(), d.x, d.y, d.z, work_group_size_x, work_group_size_y, work_group_size_z ); return false; }
 
+	// subroutines: must be bound after glUseProgram(); pre-binding is invalidated for every glUseProgram()
+	GLuint get_subroutine_index( const char* name, GLenum shader_type=GL_FRAGMENT_SHADER ){ return glGetSubroutineIndex(ID,shader_type,name); }
+	GLuint get_subroutine_uniform_location( const char* name, GLenum shader_type=GL_FRAGMENT_SHADER ){ return glGetSubroutineUniformLocation(ID,shader_type,name); }
+	bool set_subroutine_uniform( const char* name, GLenum shader_type=GL_FRAGMENT_SHADER ){ return set_subroutine_uniforms({name},shader_type); }
+	bool set_subroutine_uniforms( const vector<string>& names, GLenum shader_type=GL_FRAGMENT_SHADER )
+	{
+		GLint active_subroutine_uniform_count=0; glGetProgramStageiv(ID,shader_type,GL_ACTIVE_SUBROUTINE_UNIFORM_LOCATIONS,&active_subroutine_uniform_count);
+		if(GLint(names.size())!=active_subroutine_uniform_count){ oncef("%s(): names.size(%zd)!=active_subroutine_uniform_count(%d)\n",__func__,names.size(),active_subroutine_uniform_count); return false; }
+		vector<GLuint> indices; indices.reserve(4); for( size_t k=0; k<names.size(); k++ ){ auto i=get_subroutine_index(names[k].c_str(),shader_type); if(i==-1){ oncef("%s(): subroutine %s not exists\n",__func__,names[k].c_str()); return false; } indices.emplace_back(i); }
+		if(GLint(indices.size())!=active_subroutine_uniform_count){ oncef("%s(): indices.size(%zd)!=active_subroutine_uniform_count(%d)\n",__func__,names.size(),active_subroutine_uniform_count); return false; }
+		glUniformSubroutinesuiv(shader_type,GLsizei(indices.size()),indices.data()); // 1 shoud be the number of all active subroutines
+		return true;
+	}
+
 	// instances
 	static std::set<Program*>& get_instances(){ static std::set<Program*> i; return i; }
 
@@ -1955,6 +1969,10 @@ struct Effect : public Object
 	gl::Buffer* bind_shader_storage_buffer( const char* name, Buffer* buffer ){ GLint binding=get_shader_storage_block_binding(name); if(binding<0) return nullptr; if(buffer->target==GL_SHADER_STORAGE_BUFFER) buffer->bind_base(binding); else buffer->bind_base_as(GL_SHADER_STORAGE_BUFFER,binding); return buffer; }
 	GLint get_atomic_counter_buffer_binding( const char* name ){ GLint binding=active_program?active_program->get_atomic_counter_buffer_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_atomic_counter_buffer_binding(name); if(b!=-1) return b; } oncef( "[%s] %s(): unable to find atomic counter buffer binding %s\n", this->_name, __func__, name ); return -1; }
 	gl::Buffer* bind_atomic_counter_buffer( const char* name, Buffer* buffer ){ GLint binding=get_atomic_counter_buffer_binding(name); if(binding<0) return nullptr; if(buffer->target==GL_ATOMIC_COUNTER_BUFFER) buffer->bind_base(binding); else buffer->bind_base_as(GL_ATOMIC_COUNTER_BUFFER,binding); return buffer; }
+
+	// subroutines: must be bound after glUseProgram(); pre-binding is invalidated for every glUseProgram()
+	bool set_subroutine_uniform( const char* name, GLenum shader_type=GL_FRAGMENT_SHADER ){ return active_program?active_program->set_subroutine_uniform(name,shader_type):false; }
+	bool set_subroutine_uniforms( const vector<string>& names, GLenum shader_type=GL_FRAGMENT_SHADER ){ return active_program?active_program->set_subroutine_uniforms(names,shader_type):false; }
 
 	// draw or compute
 	inline void draw_quads(){ if(!quad) return; if(quad->index_buffer) quad->draw_elements(0,4,GL_TRIANGLE_STRIP); else quad->draw_arrays(0,4,GL_TRIANGLE_STRIP); }
