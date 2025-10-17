@@ -435,6 +435,22 @@ template <class T> __noinline const T* str_remove_tokens( const T* _Src, const T
 	*d=0; return dst;
 }
 
+// Unicode file name normalization
+inline bool is_normalized_string( const wchar_t* s )
+{
+	return 0!=IsNormalizedString(NormalizationC,s,int(wcslen(s)) );
+}
+
+__noinline const wchar_t* normalize_string( const wchar_t* s )
+{
+	if(is_normalized_string(s)) return __strdup(s);
+	int sl=int(wcslen(s)); int dl=NormalizeString(NormalizationC,s,sl+1,nullptr,0);
+	wchar_t* d=__strbuf<wchar_t>(dl+1);
+	NormalizeString(NormalizationC,s,sl+1,d,dl+1);
+	d[dl]=0; // make sure null-terminated for dst
+	return d;
+}
+
 // common unnecesary unicode symbols to common ansi
 __noinline const wchar_t* unicode_symbols_to_ansi( const wchar_t* str )
 {

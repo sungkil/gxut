@@ -87,10 +87,10 @@ struct path : public path_t
 	path operator+( const string_type& s ) const { return path(this)+=s; }
 	path operator+( string_view_type s ) const { return path(this)+=s; }
 	path operator+( value_type c ) const { return path(this)+=c; }
-	path operator/( const path& p ) const { return append_slash()+p; }
-	path operator/( const value_type* s ) const { return append_slash()+s; }
-	path operator/( const string_type& s ) const { return append_slash()+s; }
-	path operator/( string_view_type s ) const { return append_slash()+s; }
+	path operator/( const path& p ) const { return append_slash()+p.ltrim_slash(); }
+	path operator/( const value_type* s ) const { return append_slash()+path(s).ltrim_slash(); }
+	path operator/( const string_type& s ) const { return append_slash()+path(s).ltrim_slash(); }
+	path operator/( string_view_type s ) const { return append_slash()+path(s).ltrim_slash(); }
 	path operator/( value_type c ) const { return append_slash()+c; }
 	path& operator+=( const path& p ){ return reinterpret_cast<path&>(operator+=(reinterpret_cast<const path_t&>(p))); }
 	path& operator+=( const value_type* s ){ strcpy(end(),s+((s[0]=='.'&&s[2]&&__is_separator(s[1]))?2:0)); return *this; }
@@ -136,8 +136,9 @@ struct path : public path_t
 	path to_preferred()		const { return __super::to_preferred(); }
 	path append_slash()		const { return __super::append_slash(); }
 	path prepend_dot()		const { return __super::prepend_dot(); }
-	path trim_slash()		const { return __super::trim_slash(); }
-	path trim_dot()			const { return __super::trim_dot(); }
+	path rtrim_slash()		const { return __super::rtrim_slash(); }
+	path ltrim_slash()		const { return __super::ltrim_slash(); }
+	path ltrim_dot()		const { return __super::ltrim_dot(); }
 
 	// additional separator opertions
 	path unix()		const {	path p(*this); p.__canonicalize(); p=p.to_slash(); if(p.size()<2||p.is_relative()||p.is_unc()||p.is_remote()) return p; if(p._data[1]==':'){ p._data[1]=value_type(tolower(p._data[0])); p._data[0]='/'; } return p; }

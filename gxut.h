@@ -449,7 +449,8 @@ inline string& __get_global_error_buffer__(){ static string buffer; return buffe
 inline const char* error(){ return __get_global_error_buffer__().c_str(); }
 inline bool error( const char* fmt, ... ){ auto& e=__get_global_error_buffer__(); va_list a; va_start(a,fmt); e=vformat(fmt,a); va_end(a); if(e.back()!='\n') e+='\n'; return false; }
 inline bool eprintf( const char* err=nullptr ){ error(err); printf(error()); return false; }
-inline int oncef( const char* fmt, ... ){ va_list a; va_start(a,fmt); const char* m=vformat(fmt,a); va_end(a); static std::set<string> s; if(s.find(m)!=s.end()) return 0; s.emplace(m); return printf(m); }
+inline std::set<string>& __get_global_oncef_buffer__(){ static std::set<string> s; return s; }
+inline int oncef( const char* fmt, ... ){ va_list a; va_start(a,fmt); const char* m=vformat(fmt,a); va_end(a); auto& s=__get_global_oncef_buffer__(); if(s.find(m)!=s.end()) return 0; s.emplace(m); return printf(m); }
 
 // case conversion
 template <class T> const T* tolower( const T* src ){ return strlwr(__strdup(src)); }
@@ -578,10 +579,10 @@ struct path_t
 	path_t operator+( const string_type& s ) const { return path_t(this)+=s; }
 	path_t operator+( string_view_type s ) const { return path_t(this)+=s; }
 	path_t operator+( value_type c ) const { return path_t(this)+=c; }
-	path_t operator/( const path_t& p ) const { return append_slash()+p; }
-	path_t operator/( const value_type* s ) const { return append_slash()+s; }
-	path_t operator/( const string_type& s ) const { return append_slash()+s; }
-	path_t operator/( string_view_type s ) const { return append_slash()+s; }
+	path_t operator/( const path_t& p ) const { return append_slash()+p.ltrim_slash(); }
+	path_t operator/( const value_type* s ) const { return append_slash()+path_t(s).ltrim_slash(); }
+	path_t operator/( const string_type& s ) const { return append_slash()+path_t(s).ltrim_slash(); }
+	path_t operator/( string_view_type s ) const { return append_slash()+path_t(s).ltrim_slash(); }
 	path_t operator/( value_type c ) const { return append_slash()+c; }
 	path_t& operator+=( const path_t& p ){ return operator+=(p._data); }
 	path_t& operator+=( const value_type* s ){ strcpy(end(),s+((s[0]=='.'&&s[2]&&__is_separator(s[1]))?2:0)); return *this; }
@@ -629,8 +630,9 @@ struct path_t
 	path_t to_preferred()	const { return __to_separator(*this,preferred_separator); }
 	path_t append_slash()	const { return __append_separator(*this,preferred_separator); }
 	path_t prepend_dot()	const { return *_data=='.'?*this:path_t(".")+preferred_separator+_data; }
-	path_t trim_slash()		const { path_t p(*this); if(!*_data) return p; size_t l=p.size(); if(__is_separator(p._data[l-1])) p._data[l-1]=0; return p; }
-	path_t trim_dot()		const { return (strlen(_data)>2&&_data[0]=='.'&&__is_separator(_data[1])) ? _data+2 : _data; }
+	path_t rtrim_slash()	const { path_t p(*this); if(!*_data) return p; size_t l=p.size(); if(__is_separator(p._data[l-1])) p._data[l-1]=0; return p; }
+	path_t ltrim_slash()	const { if(!*_data) return *this; return (__is_separator(_data[0]))?_data+1:_data; }
+	path_t ltrim_dot()		const { return (strlen(_data)>2&&_data[0]=='.'&&__is_separator(_data[1])) ? _data+2 : _data; }
 
 	// query on non-local urls
 	bool is_pipe() const {		return strcmp(_data,"-")==0||strncmp(_data,"pipe:",5)==0; }
@@ -658,11 +660,11 @@ struct path_t
 	path_t absolute( path_t base="" ) const;
 #ifdef __msvc__
 	path_t dir()		const { if(empty()) return ""; if(is_unc()){ path_t r=unc_root(); size_t rl=r.size(); if(size()<=rl+1){ if(!__is_separator(r._data[rl-1])){ r._data[rl]=preferred_separator; r._data[rl+1]=0; } return r; } } const char* d=__split_path(_data,true,false,false).dir; return (d&&*d)?d:string(".")+preferred_separator; }
-	path_t dirname()	const { return strpbrk(_data,"/\\")?dir().trim_slash().filename():""; }
+	path_t dirname()	const { return strpbrk(_data,"/\\")?dir().rtrim_slash().filename():""; }
 	path_t filename()	const { auto s=__split_path(_data,false,true,true); if(!s.x||!*s.x) return s.stem; return strcat(strcpy(__strbuf(capacity),s.stem),s.x); }
 	path_t stem()		const { return __split_path(_data,false,true,false).stem; } // filename without extension
 	path_t extension()	const { auto s=__split_path(_data,false,false,true); return *s.x=='.'?s.x+1:""; } // alias to extension
-	path_t parent()		const { return dir().trim_slash().dir(); }
+	path_t parent()		const { return dir().rtrim_slash().dir(); }
 	path_t remove_extension() const { auto s=__split_path(_data,true,true,false); return s.dir?strcat(strcpy(__strbuf(capacity),s.dir),s.stem):s.stem; }
 	path_t replace_extension( path_t x ) const { if(x.empty()) return *this; return remove_extension()+(x[0]=='.'?x._data:"."s+x._data); }
 #elif defined(__gcc__)
