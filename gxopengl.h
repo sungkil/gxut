@@ -2059,6 +2059,7 @@ inline vector<string> gl::effect_source_t::explode_parsed( const char* parsed ) 
 	if(!parsed||!*parsed) return vector<string>();
 	auto ss=sources(); if(ss.empty()) return vector<string>();
 	vector<int> n; int c0=0; for(auto& e:ss){ int c=1; for(const char* p=e.c_str();*p;p++){if(*p=='\n')c++;} n.push_back(c0+=c); }
+	if(ss.back().back()!='\n') n.back()++; // add one for no-newline end of the last file, because fx can define relocation after the last line
 
 	vector<string> v; v.resize(ss.size());
 	int page_index=0; for( auto& l : gxExplodeShaderSource(parsed) )
