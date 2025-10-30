@@ -1320,14 +1320,14 @@ struct shader_macro_t : public vector<string>
 {
 	using vector<string>::vector;		// inherit ctors
 	using vector<string>::operator=;	// inherit operator=
-	void append( __printf_format_string__ const char* m, ... ){ char b[4096];va_list a;va_start(a,m);size_t len=size_t(vsnprintf(0,0,m,a));vsnprintf(b,len+1,m,a);va_end(a); for(auto& s:*this) if(strcmp(s.c_str(),b)==0) return; emplace_back(b); }
-	string merge() const { string m; for(auto& s:*this){ m+=s; if(s.back()!='\n') m+='\n'; } if(!m.empty()) m+='\n'; return m; }
+	void append( __printf_format_string__ const char* m, ... ){ char b[4096];va_list a;va_start(a,m);size_t l=size_t(vsnprintf(0,0,m,a));vsnprintf(b,l+1,m,a);va_end(a); if(l>0&&b[l-1]!='\n'){b[l++]='\n';b[l]=0;} for(auto& s:*this) if(strcmp(s.c_str(),b)==0) return; emplace_back(b); }
+	string merge() const { string m; for(auto& s:*this){ if(s.empty()) continue; if(s.back()!='\n') const_cast<string&>(s)+='\n'; m+=s; } return m; }
 };
 struct shader_include_t : public vector<named_string_t>
 {
 	using vector<named_string_t>::vector;		// inherit ctors
 	using vector<named_string_t>::operator=;	// inherit operator=
-	void append( string name, string source ){ if(!name.empty()){for(auto& s:*this) if(stricmp(s.name.c_str(),name.c_str())==0){ s.value=source; return; }} emplace_back( named_string_t{name,source} ); }
+	void append( string name, string source ){ if(source.back()!='\n') source+='\n'; if(!name.empty()){ for(auto& s:*this) if(stricmp(s.name.c_str(), name.c_str())==0){ s.value=source; return; } } emplace_back(named_string_t{name, source}); }
 	static inline vector<named_string_t> global; // global instances for auto inclusion
 };
 struct shader_source_t : public vector<named_string_t> // a list of source strings
@@ -1902,20 +1902,20 @@ struct effect_source_t : public vector<named_string_t>
 	shader_include_t	include;
 
 	effect_source_t() = default;
-	effect_source_t( const vector<value_type>& v ){ reinterpret_cast<vector<value_type>&>(*this)=v; }
-	effect_source_t( const initializer_list<value_type>& v ){ reinterpret_cast<vector<value_type>&>(*this)=v; }
+	effect_source_t( const vector<value_type>& v ){ reinterpret_cast<vector<value_type>&>(*this)=v; for(auto& [n,s]:*this){ if(!s.empty()&&s.back()!='\n') s+='\n'; } }
+	effect_source_t( const initializer_list<value_type>& v ){ reinterpret_cast<vector<value_type>&>(*this)=v; for(auto& [n,s]:*this){ if(!s.empty()&&s.back()!='\n') s+='\n'; } }
 
 	// override and extend members
 	void clear() noexcept { vector<named_string_t>::clear(); macro.clear(); }
 	iterator find( string name ){ for( auto it=begin(); it!=end(); it++ ) if(stricmp(it->name.c_str(),name.c_str())==0) return it; return end(); }
-	void append( string name, string source ){ if(!name.empty()){for(auto& s:*this) if(stricmp(s.name.c_str(),name.c_str())==0){ s.value=source; return; }} emplace_back( value_type{name,source} ); }
-	bool replace( string _where, string name, string source ){ auto it=find(_where); if(it==end()) return false; it->name=name; it->value=source; return true; }
-	bool replace( iterator _where, string name, string source ){ if(_where==end()) return false; _where->name = name; _where->value = source; return true; }
+	void append( string name, string source ){ if(!source.empty()&&source.back()!='\n') source+='\n'; if(!name.empty()){for(auto& s:*this) if(stricmp(s.name.c_str(),name.c_str())==0){ s.value=source; return; }} emplace_back( value_type{name,source} ); }
+	bool replace( string _where, string name, string source ){ auto it=find(_where); if(it==end()) return false; it->name=name; if(!source.empty()&&source.back()!='\n') source+='\n'; it->value=source; return true; }
+	bool replace( iterator _where, string name, string source ){ if(_where==end()) return false; _where->name = name; if(!source.empty()&&source.back()!='\n') source+='\n'; _where->value = source; return true; }
 		
 	string get_name( int index ) const { if(!macro.empty()){ if(index==0) return "macro.fx"; index--; } return this->at(index).name; }
-	vector<string> names() const { vector<string> vs; if(!macro.empty()) vs.emplace_back("macro.fx"); for( auto& s:*this) vs.emplace_back(s.name); return vs; }
-	vector<string> sources() const { vector<string> vs; if(!macro.empty()) vs.emplace_back(macro.merge()); for( auto& s:*this) vs.emplace_back(s.value); return vs; }
-	string merge() const { string m=macro.merge(); for(auto& s:*this) m+=s.value+'\n'; return m; }
+	vector<string> names() const { vector<string> v; if(!macro.empty()) v.emplace_back("macro.fx"); for( auto& s:*this) v.emplace_back(s.name); return v; }
+	vector<string> sources() const { vector<string> v; if(!macro.empty()) v.emplace_back(macro.merge()); for( auto& s:*this) v.emplace_back(s.value); return v; }
+	string merge() const { string m=macro.merge(); for(auto& s:*this){ if(s.value.back()!='\n') const_cast<string&>(s.value)+='\n'; m+=s.value; } return m; } // add newline at the end of the last file, because relocation can follow the last line
 	vector<string> explode_parsed( const char* parsed ) const;
 
 	// recursive append with template parameter pack
@@ -2059,7 +2059,6 @@ inline vector<string> gl::effect_source_t::explode_parsed( const char* parsed ) 
 	if(!parsed||!*parsed) return vector<string>();
 	auto ss=sources(); if(ss.empty()) return vector<string>();
 	vector<int> n; int c0=0; for(auto& e:ss){ int c=1; for(const char* p=e.c_str();*p;p++){if(*p=='\n')c++;} n.push_back(c0+=c); }
-	if(ss.back().back()!='\n') n.back()++; // add one for no-newline end of the last file, because fx can define relocation after the last line
 
 	vector<string> v; v.resize(ss.size());
 	int page_index=0; for( auto& l : gxExplodeShaderSource(parsed) )
