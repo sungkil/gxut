@@ -1186,7 +1186,7 @@ struct Uniform
 	GLchar		name[256]={};
 	GLint		array_size=1;
 	GLenum		type=0;
-	GLint		textureID=-1;
+	GLint		texture_binding=-1;
 	Texture*	texture=nullptr;
 	GLint		image_texture_binding=-1;	// only for image texture unit
 	bool		row_major=false;
@@ -1211,38 +1211,39 @@ struct Uniform
 		return "unknown";
 	}
 
-	const char* get_value( GLuint prog )
+	const char* get_value( GLuint program )
 	{
 		if(ID==-1) return "";
 		static float4 f; static int4 i; static uint4 u; static float m[16];
 			
 		switch(type)
 		{
-		case GL_FLOAT:				glGetUniformfv(prog,ID,&f.x); return format("%g",f.x);
-		case GL_FLOAT_VEC2:			glGetUniformfv(prog,ID,&f.x); return format("%g %g",f.x,f.y);
-		case GL_FLOAT_VEC3:			glGetUniformfv(prog,ID,&f.x); return format("%g %g %g",f.x,f.y,f.z);
-		case GL_FLOAT_VEC4:			glGetUniformfv(prog,ID,&f.x); return format("%g %g %g %g",f.x,f.y,f.z,f.w);
-		case GL_INT:				glGetUniformiv(prog,ID,&i.x); return format("%d",i.x);
-		case GL_INT_VEC2:			glGetUniformiv(prog,ID,&i.x); return format("%d %d",i.x,i.y);
-		case GL_INT_VEC3:			glGetUniformiv(prog,ID,&i.x); return format("%d %d %d",i.x,i.y,i.z);
-		case GL_INT_VEC4:			glGetUniformiv(prog,ID,&i.x); return format("%d %d %d %d",i.x,i.y,i.z,i.w);
-		case GL_UNSIGNED_INT:		glGetUniformuiv(prog,ID,&u.x); return format("%u",u.x);
-		case GL_UNSIGNED_INT_VEC2:	glGetUniformuiv(prog,ID,&u.x); return format("%u %u",u.x,u.y);
-		case GL_UNSIGNED_INT_VEC3:	glGetUniformuiv(prog,ID,&u.x); return format("%u %u %u",u.x,u.y,u.z);
-		case GL_UNSIGNED_INT_VEC4:	glGetUniformuiv(prog,ID,&u.x); return format("%u %u %u %u",u.x,u.y,u.z,u.w);
-		case GL_BOOL:				glGetUniformiv(prog,ID,&i.x); return format("%d",i.x);
-		case GL_BOOL_VEC2:			glGetUniformiv(prog,ID,&i.x); return format("%d %d",i.x,i.y);
-		case GL_BOOL_VEC3:			glGetUniformiv(prog,ID,&i.x); return format("%d %d %d",i.x,i.y,i.z);
-		case GL_BOOL_VEC4:			glGetUniformiv(prog,ID,&i.x); return format("%d %d %d %d",i.x,i.y,i.z,i.w);
-		case GL_FLOAT_MAT2:			glGetUniformfv(prog,ID,m); return format("%g %g %g %g",m[0],m[2],m[1],m[3]);
-		case GL_FLOAT_MAT3:			glGetUniformfv(prog,ID,m); return format("%g %g %g %g %g %g %g %g %g",m[0],m[3],m[6],m[1],m[4],m[7],m[2],m[5],m[8]);
-		case GL_FLOAT_MAT4:			glGetUniformfv(prog,ID,m); return format("%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g", m[0],m[4],m[8],m[12],m[1],m[5],m[9],m[13],m[2],m[6],m[10],m[14],m[3],m[7],m[11],m[15]);
+		case GL_FLOAT:				glGetUniformfv(program,ID,&f.x); return format("%g",f.x);
+		case GL_FLOAT_VEC2:			glGetUniformfv(program,ID,&f.x); return format("%g %g",f.x,f.y);
+		case GL_FLOAT_VEC3:			glGetUniformfv(program,ID,&f.x); return format("%g %g %g",f.x,f.y,f.z);
+		case GL_FLOAT_VEC4:			glGetUniformfv(program,ID,&f.x); return format("%g %g %g %g",f.x,f.y,f.z,f.w);
+		case GL_INT:				glGetUniformiv(program,ID,&i.x); return format("%d",i.x);
+		case GL_INT_VEC2:			glGetUniformiv(program,ID,&i.x); return format("%d %d",i.x,i.y);
+		case GL_INT_VEC3:			glGetUniformiv(program,ID,&i.x); return format("%d %d %d",i.x,i.y,i.z);
+		case GL_INT_VEC4:			glGetUniformiv(program,ID,&i.x); return format("%d %d %d %d",i.x,i.y,i.z,i.w);
+		case GL_UNSIGNED_INT:		glGetUniformuiv(program,ID,&u.x); return format("%u",u.x);
+		case GL_UNSIGNED_INT_VEC2:	glGetUniformuiv(program,ID,&u.x); return format("%u %u",u.x,u.y);
+		case GL_UNSIGNED_INT_VEC3:	glGetUniformuiv(program,ID,&u.x); return format("%u %u %u",u.x,u.y,u.z);
+		case GL_UNSIGNED_INT_VEC4:	glGetUniformuiv(program,ID,&u.x); return format("%u %u %u %u",u.x,u.y,u.z,u.w);
+		case GL_BOOL:				glGetUniformiv(program,ID,&i.x); return format("%d",i.x);
+		case GL_BOOL_VEC2:			glGetUniformiv(program,ID,&i.x); return format("%d %d",i.x,i.y);
+		case GL_BOOL_VEC3:			glGetUniformiv(program,ID,&i.x); return format("%d %d %d",i.x,i.y,i.z);
+		case GL_BOOL_VEC4:			glGetUniformiv(program,ID,&i.x); return format("%d %d %d %d",i.x,i.y,i.z,i.w);
+		case GL_FLOAT_MAT2:			glGetUniformfv(program,ID,m); return format("%g %g %g %g",m[0],m[2],m[1],m[3]);
+		case GL_FLOAT_MAT3:			glGetUniformfv(program,ID,m); return format("%g %g %g %g %g %g %g %g %g",m[0],m[3],m[6],m[1],m[4],m[7],m[2],m[5],m[8]);
+		case GL_FLOAT_MAT4:			glGetUniformfv(program,ID,m); return format("%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g", m[0],m[4],m[8],m[12],m[1],m[5],m[9],m[13],m[2],m[6],m[10],m[14],m[3],m[7],m[11],m[15]);
 		}
 		return "unknown value";
 	}
 
 	template <class T> void set( GLuint prog, const T* ptr, GLsizei count );
 	bool is_matrix(){ return (type>=GL_FLOAT_MAT2&&type<=GL_FLOAT_MAT4)||(type>=GL_FLOAT_MAT2x3&&type<=GL_FLOAT_MAT4x3); }
+	void bind_texture(){ if(!texture||texture_binding<0) return; if(glBindTextureUnit) glBindTextureUnit(texture_binding,texture->ID); else { glActiveTexture(GL_TEXTURE0+texture_binding);glBindTexture(texture->target,texture->ID); }}
 
 protected:
 	void __set_log( const char* func, void* ptr, GLsizei count ){ oncef( "Uniform[%s].%s(%p,%d): unsupported type\n", name, func, ptr, count ); }
@@ -1399,9 +1400,10 @@ struct program_source_t : public std::map<GLuint,shader_source_t> // <shader_typ
 struct Program : public Object
 {
 	Program( GLuint ID, const char* name ) : Object(ID,name,GL_PROGRAM){ get_instances().emplace(this); }
-	~Program() override { if(!ID) return; glDeleteProgram(ID); _uniform_cache.clear(); _invalid_uniform_cache.clear(); get_instances().erase(this); }
+	~Program() override { if(!ID) return; glDeleteProgram(ID); _uniform_cache.clear(); _invalid_uniform_cache.clear(); get_instances().erase(this); safe_delete(_validated); }
 	static void unbind(){ glUseProgram(0); }
 	GLuint bind( bool b_bind=true );
+	bool validate( bool b_log=true ); // check if the program can run in the current state
 
 	// in-program uniform variables
 	Uniform* get_uniform( const char* name )
@@ -1416,7 +1418,7 @@ struct Program : public Object
 	}
 
 	// special set_uniform functions: vector, texture, and bool
-	void set_uniform( const char* name, Texture* t ){ if(!t) return; Uniform* u=get_uniform(name); if(!u) return; if(u->ID<0||u->textureID<0) return; if(binding()!=ID) glUseProgram(ID); u->texture=t; glProgramUniform1i(ID,u->ID,u->textureID); if(glBindTextureUnit) glBindTextureUnit(u->textureID,u->texture->ID); else { glActiveTexture(GL_TEXTURE0+u->textureID); u->texture->bind();} }
+	void set_uniform(const char* name, Texture* t){ if(!t) return; Uniform* u=get_uniform(name); if(!u) return; if(u->ID<0||u->texture_binding<0) return; if(binding()!=ID) glUseProgram(ID); u->texture=t; glProgramUniform1i(ID, u->ID, u->texture_binding); u->bind_texture(); }
 	void set_uniform( const char* name, bool b ){ int v=b?1:0; set_uniform( name, &v ); }
 	template <class T> void set_uniform( const char* name, const T& v ){ set_uniform( name, &v ); }
 	template <class T> void set_uniform( const char* name, const vector<T>& v ){ set_uniform( name, v.data(), GLsizei(v.size()) ); }
@@ -1499,6 +1501,7 @@ private:
 	std::map<string,GLint>			_shader_storage_block_binding_map;
 	std::map<string,GLint>			_atomic_counter_buffer_binding_map;
 	ivec3							_compute_work_group_size={}; // cache for get_compute_work_group_size()
+	bool*							_validated=nullptr;
 };
 
 // string with index in a source
@@ -1532,8 +1535,8 @@ inline GLuint Program::bind( bool b_bind )
 	for(auto& it:_uniform_cache)
 	{
 		auto& n=it.first; auto& u=it.second;
-		if(u.ID<0||!u.texture||u.textureID<0) continue;
-		if(glBindTextureUnit) glBindTextureUnit(u.textureID,u.texture->ID); else { glActiveTexture(GL_TEXTURE0+u.textureID);glBindTexture(u.texture->target,u.texture->ID); }
+		if(u.ID<0||!u.texture||u.texture_binding<0) continue;
+		u.bind_texture();
 	}
 	return b0;
 }
@@ -1580,13 +1583,13 @@ inline void Program::update_uniform_cache()
 	GLuint program0=-1; if(glProgramUniform1i) glGetIntegerv(GL_CURRENT_PROGRAM,(GLint*)&program0); if(program0!=ID) glUseProgram(ID);
 
 	// update uniform variables
-	int texture_id=0; for( auto& u : get_active_uniforms(false) )
+	int texture_binding=0; for( auto& u : get_active_uniforms(false) )
 	{
 		if(gxIsImageType(u.type)) glGetUniformiv(ID,u.ID,&u.image_texture_binding);
-		bool b_texture = gxIsSamplerType(u.type); if(b_texture){ u.textureID=texture_id++; if(glProgramUniform1i)glProgramUniform1i(ID,u.ID,u.textureID);else glUniform1i(u.ID,u.textureID); } // setting sampler locations avoids validation error in Intel Compiler
+		bool b_texture = gxIsSamplerType(u.type); if(b_texture){ u.texture_binding=texture_binding++; if(glProgramUniform1i)glProgramUniform1i(ID,u.ID,u.texture_binding);else glUniform1i(u.ID,u.texture_binding); } // setting sampler locations avoids validation error in Intel Compiler
 		_uniform_cache[u.name]=u; if(u.array_size==1) continue;
 		GLchar name[256]; strcpy(name,u.name); GLchar* bracket=strchr(name,'['); if(bracket) bracket[0]='\0';
-		for( GLint loc=bracket?1:0;loc<u.array_size;loc++){ Uniform u1=u;sprintf(u1.name,"%s[%d]",name,loc);u1.ID=glGetUniformLocation(ID,u1.name);if(u1.ID==-1)continue;u1.array_size=u.array_size-loc;if(b_texture)u1.textureID=texture_id++;_uniform_cache[u1.name]=u1; }
+		for( GLint loc=bracket?1:0;loc<u.array_size;loc++){ Uniform u1=u;sprintf(u1.name,"%s[%d]",name,loc);u1.ID=glGetUniformLocation(ID,u1.name);if(u1.ID==-1)continue;u1.array_size=u.array_size-loc;if(b_texture)u1.texture_binding=texture_binding++;_uniform_cache[u1.name]=u1; }
 	}
 
 	// copy uniform block name to each uniform
@@ -1748,14 +1751,6 @@ inline bool gxCheckProgramLink( const char* name, GLuint ID, bool bLog=true )
 	return true;
 }
 
-inline bool gxValidateProgram( const char* name, GLuint ID, bool bLog=true ) // check if the program can run in the current state
-{
-	if(ID==0) return false;
-	static const int MAX_LOG_LENGTH=4096; static char msg[MAX_LOG_LENGTH] = {}; GLint L; bool bLogExists;
-	glValidateProgram(ID); glGetProgramInfoLog(ID,MAX_LOG_LENGTH,&L,msg); bLogExists=L>1&&L<=MAX_LOG_LENGTH; if(bLogExists&&bLog) gxInfoLog(name,msg); if(gxGetProgramiv(ID,GL_VALIDATE_STATUS)!=GL_TRUE){ glDeleteProgram(ID); return false; }
-	return true;
-}
-
 inline gl::directive_t gxPreprocessShaderDirectives( uint shader_type, string& src, bool keep_blank=true )
 {
 	static const char v[]="#version", e[]="#extension", p[]="#pragma", l[]="layout", h[]="shared", i[]="#include";
@@ -1884,17 +1879,21 @@ inline gl::Program* gxCreateProgram( string prefix, string name, const gl::progr
 	program->update_uniform_block();
 	program->update_uniform_cache(); // to avoid validation errors in Intel compilers
 
-	// 10. validation: test if the program can run in the current state
-	if(!gxValidateProgram( pname, program->ID )){ if(program){ delete program; program=nullptr; } return nullptr; }
-
-	// 11. save cache
+	// 10. save cache
 	glProgramParameteri( program->ID, GL_PROGRAM_BINARY_RETRIEVABLE_HINT, GL_TRUE );
 	gxSaveProgramBinary( pname, program->ID, crc );
 
-	// 12. detach/delete shaders
+	// 11. detach/delete shaders
 	GLsizei shader_count; GLuint shaders[256];
 	glGetAttachedShaders( program->ID,256,&shader_count,shaders);
 	for(GLsizei k=0;k<shader_count;k++){ glDetachShader(program->ID,shaders[k]); glDeleteShader(shaders[k]); }
+
+	// 12. unbind all textures: Intel compilers validation may report "Samplers of different types point to the same texture unit"
+	for( auto& u : program->get_active_uniforms(false) )
+	{
+		if(gxIsImageType(u.type))	glBindImageTexture(u.image_texture_binding,0,0,GL_FALSE,0,GL_READ_WRITE,GL_RGBA8); // ignore all after texture
+		if(gxIsSamplerType(u.type)) glBindTextureUnit(u.texture_binding,-1);
+	}
 
 	// 13. logging
 	std::chrono::high_resolution_clock::time_point tend=std::chrono::high_resolution_clock::now();
@@ -1907,6 +1906,14 @@ inline gl::Program* gxCreateProgram( string prefix, string name, const gl::progr
 //*************************************
 namespace gl {
 //*************************************
+
+__noinline bool Program::validate( bool b_log )
+{
+	if(ID==0) return false; if(_validated) return *_validated;
+	static const int MAX_LOG_LENGTH=4096; static char msg[MAX_LOG_LENGTH] = {}; GLint L; bool bLogExists;
+	glValidateProgram(ID); glGetProgramInfoLog(ID,MAX_LOG_LENGTH,&L,msg); bLogExists=L>1&&L<=MAX_LOG_LENGTH; if(bLogExists&&b_log) gxInfoLog(name(),msg);
+	return *(_validated=new bool())=gxGetProgramiv(ID, GL_VALIDATE_STATUS)==GL_TRUE;
+}
 
 struct effect_source_t : public vector<named_string_t>
 {
@@ -1961,8 +1968,8 @@ struct Effect : public Object
 	~Effect() override { active_program=nullptr; if(quad){ delete quad; quad=nullptr; } if(!pts.empty()){ for(auto& it:pts) safe_delete(it.second); pts.clear(); } for(auto& it:uniform_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} uniform_buffer_map.clear(); for(auto* p:programs) delete p; programs.clear(); if(glDeleteNamedStringARB&&!include_names.empty()){for(auto& i:include_names) glDeleteNamedStringARB(-1,i.c_str());} }
 	
 	static void unbind(){ glUseProgram(0); }
-	Program* bind( __printf_format_string__ const char* program_name, ... ){ char buff[1024]; va_list a;va_start(a,program_name);vsnprintf(buff,1024,program_name,a);va_end(a); active_program=get_program(buff); if(active_program) active_program->bind(); else{ active_program=nullptr; glUseProgram(0); } return active_program; }
-	Program* bind( uint index ){ active_program=get_program_by_index(index); if(active_program) active_program->bind(); else { active_program=nullptr; glUseProgram(0); } return active_program; }
+	Program* bind( __printf_format_string__ const char* program_name, ... ){ char buff[1024]; va_list a;va_start(a,program_name);vsnprintf(buff,1024,program_name,a);va_end(a); active_program=get_program(buff); if(active_program){ active_program->bind(); } else{ active_program=nullptr; glUseProgram(0); } return active_program; }
+	Program* bind( uint index ){ active_program=get_program_by_index(index); if(active_program){ active_program->bind(); } else { active_program=nullptr; glUseProgram(0); } return active_program; }
 
 	bool empty() const { return programs.empty(); }
 	size_t size() const { return programs.size(); }
@@ -2116,6 +2123,7 @@ inline gl::Effect* __gxCreateEffectImpl( gl::Effect* parent, const char* fxname,
 	}}
 	
 	uint crc0 = source.include.crc();
+	crc0 = crc32(crc0,__TIMESTAMP__,strlen(__TIMESTAMP__));
 	for( int k=0, kn=parser->program_count(); k<kn; k++ )
 	{
 		gl::program_source_t ss;
@@ -2132,6 +2140,14 @@ inline gl::Effect* __gxCreateEffectImpl( gl::Effect* parent, const char* fxname,
 	}
 
 	glfxDeleteParser(&parser);
+
+	// validate programs in the end
+	for( auto j=e->programs.begin(); j!=e->programs.end(); )
+	{
+		if(!(*j)->validate()){ safe_delete(*j); j=e->programs.erase(j); }
+		else j++;
+	}
+
 	return e;
 }
 
