@@ -150,7 +150,12 @@ inline GLuint	gxCreateTexture( GLenum target ){ GLuint idx; if(glCreateTextures)
 inline GLuint	gxCreateRenderBuffer(){ GLuint idx; if(glCreateRenderbuffers) glCreateRenderbuffers(1,&idx); else { GLuint b0=gxGetBinding(GL_RENDERBUFFER); glGenRenderbuffers(1,&idx); glBindRenderbuffer(GL_RENDERBUFFER,idx); glBindRenderbuffer(GL_RENDERBUFFER,b0); } return idx; }
 inline GLuint	gxCreateVertexArray(){ GLuint idx; if(glCreateVertexArrays) glCreateVertexArrays(1, &idx); else glGenVertexArrays(1,&idx); return idx; }
 inline const char* gxGetErrorString( GLenum e ){ if(e==GL_NO_ERROR) return ""; if(e==GL_INVALID_ENUM) return "GL_INVALID_ENUM"; if(e==GL_INVALID_VALUE) return "GL_INVALID_VALUE"; if(e==GL_INVALID_OPERATION) return "GL_INVALID_OPERATION"; if(e==GL_INVALID_FRAMEBUFFER_OPERATION) return "GL_INVALID_FRAMEBUFFER_OPERATION"; if(e==GL_OUT_OF_MEMORY) return "GL_OUT_OF_MEMORY"; if(e==GL_STACK_UNDERFLOW) return "GL_STACK_UNDERFLOW"; if(e==GL_STACK_OVERFLOW) return "GL_STACK_OVERFLOW"; return "UNKNOWN"; }
-inline bool		gxHasMultidraw(){ return gxHasExtension(bindless_texture)&&gxHasExtension(shader_draw_parameters); }
+inline bool		gxHasMultidraw(){ static bool b=gxHasExtension(bindless_texture)&&gxHasExtension(shader_draw_parameters); return b;  }
+#ifdef GL_ARB_shading_language_include
+inline bool		gxHasShaderInclude(){ static bool b=gxHasExtension(shading_language_include)&&glNamedStringARB&&glDeleteNamedStringARB&&glCompileShaderIncludeARB&&glIsNamedStringARB&&glGetNamedStringARB&&glGetNamedStringivARB; return b;  }
+#else
+inline bool		gxHasShaderInclude(){ return false; }
+#endif
 
 //*************************************
 // type-to-internalformat mapper
@@ -1325,10 +1330,13 @@ struct shader_macro_t : public vector<string>
 };
 struct shader_include_t : public vector<named_string_t>
 {
+	static inline vector<named_string_t> global; // global instances for auto inclusion
 	using vector<named_string_t>::vector;		// inherit ctors
 	using vector<named_string_t>::operator=;	// inherit operator=
+	shader_include_t( const vector<named_string_t>& other ){ *this=other; }
 	void append( string name, string source ){ if(source.back()!='\n') source+='\n'; if(!name.empty()){ for(auto& s:*this) if(stricmp(s.name.c_str(), name.c_str())==0){ s.value=source; return; } } emplace_back(named_string_t{name, source}); }
-	static inline vector<named_string_t> global; // global instances for auto inclusion
+	uint crc() const { uint c=0; for(auto& i:*this) c=crc32(c,(const void*)i.name.c_str(),i.name.size()); return c; }
+	shader_include_t merge() const { bool b_global_included=!empty()&&size()>=global.size(); for(size_t k=0; k<global.size()&&b_global_included; k++){ const auto &t=at(k), &g=global[k]; if(t.name!=g.name||t.value!=g.value) b_global_included=false; } if(b_global_included) return *this; shader_include_t v=global; v.insert(v.end(),begin(),end()); return v; }
 };
 struct shader_source_t : public vector<named_string_t> // a list of source strings
 {
@@ -1505,7 +1513,7 @@ struct directive_t
 {
 	string version, extension, pragma, layout;
 	struct { bool include=false; } b;
-	string merge() const { string i=b.include?"#extension GL_ARB_shading_language_include : require\n":""; return version+extension+i+pragma+layout; }
+	string merge() const { string i=b.include?"#extension GL_ARB_shading_language_include: require\n":""; return version+extension+i+pragma+layout; }
 	directive_t& operator+=( const directive_t& other )
 	{
 		if(!other.version.empty())		version+=other.version;
@@ -1750,8 +1758,8 @@ inline bool gxValidateProgram( const char* name, GLuint ID, bool bLog=true ) // 
 
 inline gl::directive_t gxPreprocessShaderDirectives( uint shader_type, string& src, bool keep_blank=true )
 {
-	static const char v[]="#version", e[]="#extension", p[]="#pragma", l[]="layout", h[]="shared";
-	constexpr size_t le=sizeof(e)-1, lp=sizeof(p)-1, lv=sizeof(v)-1, ll=sizeof(l)-1, lh=sizeof(l)-1; // exclude trailing zeros
+	static const char v[]="#version", e[]="#extension", p[]="#pragma", l[]="layout", h[]="shared", i[]="#include";
+	constexpr size_t le=sizeof(e)-1, lp=sizeof(p)-1, lv=sizeof(v)-1, ll=sizeof(l)-1, lh=sizeof(l)-1, li=sizeof(i)-1; // exclude trailing zeros
 
 	gl::directive_t d; string src0=src; src.clear();
 	for( auto& j : gxExplodeShaderSource(src0.c_str()) )
@@ -1763,12 +1771,17 @@ inline gl::directive_t gxPreprocessShaderDirectives( uint shader_type, string& s
 			else if(strncmp(s,e,le)==0){ pd=&d.extension; }
 			else if(strncmp(s,p,lp)==0){ pd=&d.pragma; }
 			else if(strncmp(s,l,ll)==0){ pd=&d.layout; }
+			else if(strncmp(s,i,li)==0){ d.b.include=true; }
 		}
 
 		// remove erroneous per-shader directives
 		if(shader_type!=GL_COMPUTE_SHADER)
 		{
 			if(strncmp(s,h,lh)==0) j.clear(); // remove shared in non-compute shaders, while keeping index
+		}
+		if(d.b.include&&!gxHasShaderInclude())
+		{
+			d.b.include=false; j.clear();
 		}
 
 		if(pd){	*pd+=j+'\n'; if(keep_blank) src+='\n'; }
@@ -1793,7 +1806,6 @@ inline gl::Program* gxCreateProgram( string prefix, string name, const gl::progr
 		{
 			auto& s = const_cast<string&>(f.value); // source element
 			directives += gxPreprocessShaderDirectives(it.first,s);
-			if(stristr(s.c_str(),"#include")) directives.b.include=true;
 		}
 		auto& first = const_cast<string&>(it.second.front().value); // first source element
 		first = directives.merge()+first; // merge all together
@@ -1915,8 +1927,9 @@ struct effect_source_t : public vector<named_string_t>
 	string get_name( int index ) const { if(!macro.empty()){ if(index==0) return "macro.fx"; index--; } return this->at(index).name; }
 	vector<string> names() const { vector<string> v; if(!macro.empty()) v.emplace_back("macro.fx"); for( auto& s:*this) v.emplace_back(s.name); return v; }
 	vector<string> sources() const { vector<string> v; if(!macro.empty()) v.emplace_back(macro.merge()); for( auto& s:*this) v.emplace_back(s.value); return v; }
-	string merge() const { string m=macro.merge(); for(auto& s:*this){ if(s.value.back()!='\n') const_cast<string&>(s.value)+='\n'; m+=s.value; } return m; } // add newline at the end of the last file, because relocation can follow the last line
+	string merge(){ preprocess_include(); string m=macro.merge(); for(auto& s:*this){ if(s.value.back()!='\n') const_cast<string&>(s.value)+='\n'; m+=s.value; } return m; } // add newline at the end of the last file, because relocation can follow the last line
 	vector<string> explode_parsed( const char* parsed ) const;
+	void preprocess_include();
 
 	// recursive append with template parameter pack
 	template <typename T, class... Ts> void append_r( T arg, Ts... args ){ append("",arg); append_r(args...); }
@@ -1924,11 +1937,28 @@ struct effect_source_t : public vector<named_string_t>
 	void append_r( const char* arg ){ if(arg&&*arg) append("",arg); }
 };
 
+__noinline void effect_source_t::preprocess_include()
+{
+	include = include.merge(); // merge with global
+	if(gxHasShaderInclude()) return;
+	
+	// fallback to hard include when ARB_shading_language_include is not supported
+	for( auto& [cn,cs] : include )
+	{
+		string h=format("#include <%s>",cn.c_str());
+		for( auto& [sn,ss] : *this)
+		{
+			if(!stristr(ss.c_str(),h.c_str())) continue;
+			ss=str_replace(ss.c_str(),h.c_str(),rtrim(cs.c_str(),"\r\n"));
+		}
+	}
+}
+
 // effect: a list of programs
 struct Effect : public Object
 {
 	Effect( GLuint ID, const char* name ) : Object(ID,name,0){ if(!(quad=gxCreateQuadVertexArray())) printf("[%s] unable to create quad buffer\n",name); }
-	~Effect() override { active_program=nullptr; if(quad){ delete quad; quad=nullptr; } if(!pts.empty()){ for(auto& it:pts) safe_delete(it.second); pts.clear(); } for(auto& it:uniform_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} uniform_buffer_map.clear(); for(auto* p:programs) delete p; programs.clear(); if(glDeleteNamedStringARB){for(auto& i:include_names) glDeleteNamedStringARB(-1,i.c_str());} }
+	~Effect() override { active_program=nullptr; if(quad){ delete quad; quad=nullptr; } if(!pts.empty()){ for(auto& it:pts) safe_delete(it.second); pts.clear(); } for(auto& it:uniform_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} uniform_buffer_map.clear(); for(auto* p:programs) delete p; programs.clear(); if(glDeleteNamedStringARB&&!include_names.empty()){for(auto& i:include_names) glDeleteNamedStringARB(-1,i.c_str());} }
 	
 	static void unbind(){ glUseProgram(0); }
 	Program* bind( __printf_format_string__ const char* program_name, ... ){ char buff[1024]; va_list a;va_start(a,program_name);vsnprintf(buff,1024,program_name,a);va_end(a); active_program=get_program(buff); if(active_program) active_program->bind(); else{ active_program=nullptr; glUseProgram(0); } return active_program; }
@@ -2075,27 +2105,17 @@ inline gl::Effect* __gxCreateEffectImpl( gl::Effect* parent, const char* fxname,
 {
 	glfx::IParser* parser = glfxCreateParser(); if(!parser){ printf( "%s(): unable to create parser\n", __func__ ); return nullptr; }
 	if(!parser->parse(source.merge().c_str())){ printf( "%s(): failed to parse %s\n%s\n", __func__, fxname, parser->parse_log() ); return nullptr; }
-
 	gl::Effect* e = parent?parent:new gl::Effect(0, fxname);
 
-	// define includes
-	if(!glNamedStringARB&&!source.include.empty()){ printf( "%s(): glNamedStringARB==nullptr\n",__func__); return nullptr; }
-	uint crc0=0;
-	for( auto& i : gl::shader_include_t::global )
+	if(gxHasShaderInclude()){ for( auto& i : source.include ) // this should be called after source.merge()
 	{
+		GLint type; glGetNamedStringivARB(GLint(i.name.size()),i.name.c_str(),GL_NAMED_STRING_TYPE_ARB,&type);
+		if(type==GL_SHADER_INCLUDE_ARB) continue; // already registered
 		glNamedStringARB(GL_SHADER_INCLUDE_ARB,-1,i.name.c_str(),-1,i.value.c_str() );
 		e->include_names.emplace(i.name);
-		crc0 = crc32(crc0,(const void*)i.name.c_str(),i.name.size());
-		crc0 = crc32(crc0,(const void*)i.value.c_str(),i.value.size());
-	}
-	for( auto& i : source.include )
-	{
-		glNamedStringARB(GL_SHADER_INCLUDE_ARB,-1,i.name.c_str(),-1,i.value.c_str() );
-		e->include_names.emplace(i.name);
-		crc0 = crc32(crc0,(const void*)i.name.c_str(),i.name.size());
-		crc0 = crc32(crc0,(const void*)i.value.c_str(),i.value.size());
-	}
+	}}
 	
+	uint crc0 = source.include.crc();
 	for( int k=0, kn=parser->program_count(); k<kn; k++ )
 	{
 		gl::program_source_t ss;
