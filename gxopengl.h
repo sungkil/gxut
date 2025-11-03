@@ -1400,7 +1400,7 @@ struct program_source_t : public std::map<GLuint,shader_source_t> // <shader_typ
 struct Program : public Object
 {
 	Program( GLuint ID, const char* name ) : Object(ID,name,GL_PROGRAM){ get_instances().emplace(this); }
-	~Program() override { if(!ID) return; glDeleteProgram(ID); _uniform_cache.clear(); _invalid_uniform_cache.clear(); get_instances().erase(this); safe_delete(_validated); }
+	~Program() override { if(!ID) return; glDeleteProgram(ID); _uniform_cache.clear(); _invalid_uniform_cache.clear(); get_instances().erase(this); }
 	static void unbind(){ glUseProgram(0); }
 	GLuint bind( bool b_bind=true );
 	bool validate( bool b_log=true ); // check if the program can run in the current state
@@ -1501,7 +1501,6 @@ private:
 	std::map<string,GLint>			_shader_storage_block_binding_map;
 	std::map<string,GLint>			_atomic_counter_buffer_binding_map;
 	ivec3							_compute_work_group_size={}; // cache for get_compute_work_group_size()
-	bool*							_validated=nullptr;
 };
 
 // string with index in a source
@@ -1753,27 +1752,34 @@ inline bool gxCheckProgramLink( const char* name, GLuint ID, bool bLog=true )
 
 inline gl::directive_t gxPreprocessShaderDirectives( uint shader_type, string& src, bool keep_blank=true )
 {
-	static const char v[]="#version", e[]="#extension", p[]="#pragma", l[]="layout", h[]="shared", i[]="#include";
+	static const char v[]="#version", e[]="#extension", p[]="#pragma", i[]="#include", l[]="layout", h[]="shared";
 	constexpr size_t le=sizeof(e)-1, lp=sizeof(p)-1, lv=sizeof(v)-1, ll=sizeof(l)-1, lh=sizeof(l)-1, li=sizeof(i)-1; // exclude trailing zeros
 
 	gl::directive_t d; string src0=src; src.clear();
 	for( auto& j : gxExplodeShaderSource(src0.c_str()) )
 	{
+		const char* s=str_replace(trim(j.c_str()),"\t"," ");
+
+		// early filter
+		if(shader_type!=GL_COMPUTE_SHADER)
+		{
+			if(strncmp(j.c_str(),h,lh)==0) j.clear(); // remove shared in non-compute shaders, while keeping index
+		}
+		if(shader_type!=GL_FRAGMENT_SHADER)
+		{
+			if(stristr(s,"early_fragment_tests")) j.clear(); // allow early_fragment_tests only in fragment shader
+		}
+
 		string* pd=nullptr;
-		const char* s=str_replace(trim(j.c_str()),"\t"," "); if(s[0]=='#')
+		if(s[0]=='#')
 		{
 			if(strncmp(s,v,lv)==0){ pd=&d.version; if(gl::context::is_core_profile()&&!strstr(s,"core")) j+=" core"; } // add "core" to core profile version
 			else if(strncmp(s,e,le)==0){ pd=&d.extension; }
 			else if(strncmp(s,p,lp)==0){ pd=&d.pragma; }
-			else if(strncmp(s,l,ll)==0){ pd=&d.layout; }
 			else if(strncmp(s,i,li)==0){ d.b.include=true; }
 		}
 
-		// remove erroneous per-shader directives
-		if(shader_type!=GL_COMPUTE_SHADER)
-		{
-			if(strncmp(s,h,lh)==0) j.clear(); // remove shared in non-compute shaders, while keeping index
-		}
+		// late filter
 		if(d.b.include&&!gxHasShaderInclude())
 		{
 			d.b.include=false; j.clear();
@@ -1909,10 +1915,10 @@ namespace gl {
 
 __noinline bool Program::validate( bool b_log )
 {
-	if(ID==0) return false; if(_validated) return *_validated;
-	static const int MAX_LOG_LENGTH=4096; static char msg[MAX_LOG_LENGTH] = {}; GLint L; bool bLogExists;
-	glValidateProgram(ID); glGetProgramInfoLog(ID,MAX_LOG_LENGTH,&L,msg); bLogExists=L>1&&L<=MAX_LOG_LENGTH; if(bLogExists&&b_log) gxInfoLog(name(),msg);
-	return *(_validated=new bool())=gxGetProgramiv(ID, GL_VALIDATE_STATUS)==GL_TRUE;
+	if(ID==0) return false;
+	static char s[4096]={}; GLint l; bool log_exists;
+	glValidateProgram(ID); glGetProgramInfoLog(ID,4096,&l,s); log_exists=l>1&&l<4096; if(log_exists&&b_log) printf("%s: %s",name(),s);
+	return gxGetProgramiv(ID, GL_VALIDATE_STATUS)==GL_TRUE;
 }
 
 struct effect_source_t : public vector<named_string_t>
