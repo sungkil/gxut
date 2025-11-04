@@ -1552,10 +1552,11 @@ inline vector<Uniform> Program::get_active_uniforms( bool b_bind )
 		glGetProgramResourceiv(ID,GL_UNIFORM,k,GLsizei(values.size()),pnames,GLsizei(values.size()),nullptr,&values[0]);
 		prop.clear(); for(int j=0,jn=int(values.size());j<jn;j++) prop[pnames[j]]=values[j];
 		Uniform u; glGetProgramResourceName(ID,GL_UNIFORM,k,prop[GL_NAME_LENGTH],nullptr,u.name); if(strstr(u.name,"gl_")) continue; // and skip for built-in gl variables
-		u.ID=prop[GL_LOCATION]; u.block.index=prop[GL_BLOCK_INDEX]; if(u.ID<0&&u.block.index<0) continue; // invalid variables
+		u.ID=prop[GL_LOCATION]; u.block.index=prop[GL_BLOCK_INDEX];
+		if(prop[GL_ATOMIC_COUNTER_BUFFER_INDEX]!=-1){ int b; glGetActiveAtomicCounterBufferiv(ID,prop[GL_ATOMIC_COUNTER_BUFFER_INDEX],GL_ATOMIC_COUNTER_BUFFER_BINDING,&b); _atomic_counter_buffer_binding_map[u.name]=b; } // Intel compilers do not define block for atomic counter
+		else if(u.ID<0&&u.block.index<0) continue; // invalid variables (except for atomic counter)
 		u.type=prop[GL_TYPE]; u.block.offset=prop[GL_OFFSET]; u.array_size=prop[GL_ARRAY_SIZE];
 		u.row_major=prop[GL_IS_ROW_MAJOR]!=GL_FALSE; if(u.block.index>=0&&u.is_matrix()&&!u.row_major){ oncef("[warning] %s: column-major layout\n",u.name); }
-		u.image_texture_binding=-1; if(prop[GL_ATOMIC_COUNTER_BUFFER_INDEX]!=-1){ int b; glGetActiveAtomicCounterBufferiv(ID,prop[GL_ATOMIC_COUNTER_BUFFER_INDEX],GL_ATOMIC_COUNTER_BUFFER_BINDING,&b); _atomic_counter_buffer_binding_map[u.name]=b; }
 		v.emplace_back(u);
 	}
 	if(program0>=0) glUseProgram(program0); // restore the original program
@@ -1713,12 +1714,17 @@ inline void gxInfoLog( const char* name, const char* msg, const vector<gl::named
 
 		for( auto& m : explode(msg,"\n") )
 		{
-			const char *l=strchr(m.c_str(),'('), *r=strchr(m.c_str(),')');
-			if(l&&r&&l<r)
+			// prefiltering message
+			m=str_replace(m.c_str(),"syntax error syntax error","syntax error");
+			int idx=-1; const char* l=strchr(m.c_str(), '('); if(l) l++;
+			if(const char* r=l?strchr(l, ')'):nullptr;r){ idx=atoi(__strdup(l,r-l))-1; if(idx<0) idx=0; } // -1: correct one-based index
+			else
 			{
-				char s[4096]={}; memcpy(s,l+1,r-l-1); s[r-l-1]=0; int idx=atoi(s);
-				m += extract(m,idx-1) + extract(m,idx,true);
+				const char* pattern=stristr(m.c_str(),"WARNING: ")?"WARNING: ":	stristr(m.c_str(),"ERROR: ")?"ERROR: ":nullptr;
+				l=strstr(m.c_str(),pattern); if(l) l+=strlen(pattern); if(const char* r=l?strstr(l, ": "):nullptr;r){ auto plv=explode(__strdup(l,r-l), " \t:"); if(plv.size()>1){ idx=atoi(plv[1].c_str()); }} // zero-based index in Intel Compilers
 			}
+
+			if(idx>=0) m += extract(m,idx-1) + extract(m,idx,true);
 			printf("%s: %s\n", name, m.c_str() );
 		}
 	}
@@ -2008,7 +2014,7 @@ struct Effect : public Object
 	void bind_image_texture( const char* name, Texture* t, GLenum access=GL_READ_WRITE /* or GL_WRITE_ONLY or GL_READ_ONLY */, GLint level=0, GLenum format=0, bool bLayered=false, GLint layer=0 ){ if(!active_program) return void(oncef("%s.%s(%s): no program is bound.\n",this->name(),__func__,name)); active_program->bind_image_texture(name,t,access,level,format,bLayered,layer); }
 	GLint get_shader_storage_block_binding( const char* name ){ GLint binding=active_program?active_program->get_shader_storage_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_shader_storage_block_binding(name); if(b!=-1) return b; } oncef( "[%s] %s(): unable to find shader storage block binding %s\n", this->_name, __func__, name ); return -1; }
 	gl::Buffer* bind_shader_storage_buffer( const char* name, Buffer* buffer ){ GLint binding=get_shader_storage_block_binding(name); if(binding<0) return nullptr; if(buffer->target==GL_SHADER_STORAGE_BUFFER) buffer->bind_base(binding); else buffer->bind_base_as(GL_SHADER_STORAGE_BUFFER,binding); return buffer; }
-	GLint get_atomic_counter_buffer_binding( const char* name ){ GLint binding=active_program?active_program->get_atomic_counter_buffer_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_atomic_counter_buffer_binding(name); if(b!=-1) return b; } oncef( "[%s] %s(): unable to find atomic counter buffer binding %s\n", this->_name, __func__, name ); return -1; }
+	GLint get_atomic_counter_buffer_binding( const char* name ){ GLint binding=active_program?active_program->get_atomic_counter_buffer_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_atomic_counter_buffer_binding(name); if(b!=-1) return b; } oncef( "[%s] %s(%s): unable to find atomic counter buffer binding\n", this->_name, __func__, name ); return -1; }
 	gl::Buffer* bind_atomic_counter_buffer( const char* name, Buffer* buffer ){ GLint binding=get_atomic_counter_buffer_binding(name); if(binding<0) return nullptr; if(buffer->target==GL_ATOMIC_COUNTER_BUFFER) buffer->bind_base(binding); else buffer->bind_base_as(GL_ATOMIC_COUNTER_BUFFER,binding); return buffer; }
 
 	// subroutines: must be bound after glUseProgram(); pre-binding is invalidated for every glUseProgram()
