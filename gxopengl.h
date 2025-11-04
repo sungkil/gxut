@@ -141,7 +141,8 @@ inline GLint	gxGetTextureChannels( GLint internal_format ){ switch(gxGetTextureF
 inline GLint	gxGetTextureBPC( GLint internal_format ){ GLint s=0; switch(gxGetTextureType(internal_format)){ case GL_HALF_FLOAT: case GL_SHORT: case GL_UNSIGNED_SHORT: s=GLint(sizeof(short)); break; case GL_BYTE: case GL_UNSIGNED_BYTE: s=GLint(sizeof(char)); break; case GL_FLOAT: case GL_INT: case GL_UNSIGNED_INT: s=GLint(sizeof(int)); break; }; return s*8; }
 inline GLint	gxGetTextureBPP( GLint internal_format ){ return gxGetTextureBPC(internal_format)*gxGetTextureChannels(internal_format); }
 inline GLenum	gxGetImageTextureInternalFormat( int depth, int channels ){ if(depth==8) return channels==1?GL_R8:channels==2?GL_RG8:channels==3?GL_RGB8:channels==4?GL_RGBA8:0; else if(depth==16)	return channels==1?GL_R16F:channels==2?GL_RG16F:channels==3?GL_RGB16F:channels==4?GL_RGBA16F:0; else if(depth==32)	return channels==1?GL_R32F:channels==2?GL_RG32F:channels==3?GL_RGB32F:channels==4?GL_RGBA32F:0; return 0; }
-inline bool		gxIsSamplerType( GLenum uniformType ){ GLenum t=uniformType; if(t>=GL_SAMPLER_1D && t<=GL_SAMPLER_2D_SHADOW) return true; if(t>=GL_SAMPLER_1D_ARRAY && t<=GL_SAMPLER_CUBE_SHADOW) return true; if(t>=GL_INT_SAMPLER_1D && t<=GL_UNSIGNED_INT_SAMPLER_2D_ARRAY) return true; if(t>=GL_SAMPLER_2D_RECT && t<=GL_SAMPLER_2D_RECT_SHADOW ) return true; if(t>=GL_SAMPLER_BUFFER && t<=GL_UNSIGNED_INT_SAMPLER_BUFFER ) return true; if(t>=GL_SAMPLER_CUBE_MAP_ARRAY && t<=GL_UNSIGNED_INT_SAMPLER_CUBE_MAP_ARRAY ) return true; if(t>=GL_SAMPLER_2D_MULTISAMPLE && t<=GL_UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE_ARRAY ) return true; /* TODO: if(t>=GL_SAMPLER_RENDERBUFFER_NV && t<=GL_UNSIGNED_INT_SAMPLER_RENDERBUFFER_NV ) return true;*/ return false; }
+__noinline std::set<GLenum> gxGetSamplerTypes(){ std::set<GLenum> s; for(GLenum t=GL_SAMPLER_1D;t<=GL_SAMPLER_2D_RECT_SHADOW;t++) s.emplace(t); for(GLenum t=GL_SAMPLER_1D_ARRAY;t<=GL_SAMPLER_CUBE_SHADOW;t++) s.emplace(t); for(GLenum t=GL_INT_SAMPLER_1D;t<=GL_UNSIGNED_INT_SAMPLER_BUFFER;t++) s.emplace(t); for(GLenum t=GL_SAMPLER_2D_MULTISAMPLE;t<=GL_UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE_ARRAY;t++) s.emplace(t); for(GLenum t=GL_SAMPLER_CUBE_MAP_ARRAY;t<=GL_UNSIGNED_INT_SAMPLER_CUBE_MAP_ARRAY;t++) s.emplace(t); for(GLenum t=0x8E56;t<=0x8E58;t++) s.emplace(t); /*GL_SAMPLER_RENDERBUFFER_NV*/ for(GLenum t=0x9001;t<=0x9003;t++) s.emplace(t); /*GL_SAMPLER_BUFFER_AMD*/ return s; } // pay attention to ranges that may not be ordered as expected
+inline bool		gxIsSamplerType( GLenum uniform_type ){ static std::set<GLenum> s=gxGetSamplerTypes(); return s.find(uniform_type)!=s.end(); }
 inline bool		gxIsImageType( GLenum uniformType ){ GLenum t=uniformType; if(t>=GL_IMAGE_1D && t<=GL_UNSIGNED_INT_IMAGE_2D_MULTISAMPLE_ARRAY) return true; return false; }
 inline uint		gxGetMipLevels( uint width, uint height=1, uint depth=1 ){ uint l=0,s=uint(max(max(width,height),depth)); while(s){s=s>>1;l++;} return l; }
 inline int		gxGetMipLevels( int width, int height=1, int depth=1 ){ return int(gxGetMipLevels(uint(width),uint(height),uint(depth))); }
@@ -1418,7 +1419,7 @@ struct Program : public Object
 	}
 
 	// special set_uniform functions: vector, texture, and bool
-	void set_uniform(const char* name, Texture* t){ if(!t) return; Uniform* u=get_uniform(name); if(!u) return; if(u->ID<0||u->texture_binding<0) return; if(binding()!=ID) glUseProgram(ID); u->texture=t; glProgramUniform1i(ID, u->ID, u->texture_binding); u->bind_texture(); }
+	void set_uniform(const char* name, Texture* t){ if(!t) return; Uniform* u=get_uniform(name); if(!u) return; if(u->ID<0||u->texture_binding<0) return; u->texture=t; if(glProgramUniform1i)glProgramUniform1i(ID,u->ID,u->texture_binding); else { if(binding()!=ID) glUseProgram(ID); glUniform1i(u->ID,u->texture_binding); } u->bind_texture(); }
 	void set_uniform( const char* name, bool b ){ int v=b?1:0; set_uniform( name, &v ); }
 	template <class T> void set_uniform( const char* name, const T& v ){ set_uniform( name, &v ); }
 	template <class T> void set_uniform( const char* name, const vector<T>& v ){ set_uniform( name, v.data(), GLsizei(v.size()) ); }
@@ -1585,7 +1586,7 @@ inline void Program::update_uniform_cache()
 	int texture_binding=0; for( auto& u : get_active_uniforms(false) )
 	{
 		if(gxIsImageType(u.type)) glGetUniformiv(ID,u.ID,&u.image_texture_binding);
-		bool b_texture = gxIsSamplerType(u.type); if(b_texture){ u.texture_binding=texture_binding++; if(glProgramUniform1i)glProgramUniform1i(ID,u.ID,u.texture_binding);else glUniform1i(u.ID,u.texture_binding); } // setting sampler locations avoids validation error in Intel Compiler
+		bool b_texture = gxIsSamplerType(u.type); if(b_texture){ u.texture_binding=texture_binding++; if(glProgramUniform1i)glProgramUniform1i(ID,u.ID,u.texture_binding); else glUniform1i(u.ID,u.texture_binding); } // setting different sampler locations avoids validation error in Intel GLSL Compilers
 		_uniform_cache[u.name]=u; if(u.array_size==1) continue;
 		GLchar name[256]; strcpy(name,u.name); GLchar* bracket=strchr(name,'['); if(bracket) bracket[0]='\0';
 		for( GLint loc=bracket?1:0;loc<u.array_size;loc++){ Uniform u1=u;sprintf(u1.name,"%s[%d]",name,loc);u1.ID=glGetUniformLocation(ID,u1.name);if(u1.ID==-1)continue;u1.array_size=u.array_size-loc;if(b_texture)u1.texture_binding=texture_binding++;_uniform_cache[u1.name]=u1; }
@@ -1917,7 +1918,7 @@ __noinline bool Program::validate( bool b_log )
 {
 	if(ID==0) return false;
 	static char s[4096]={}; GLint l; bool log_exists;
-	glValidateProgram(ID); glGetProgramInfoLog(ID,4096,&l,s); log_exists=l>1&&l<4096; if(log_exists&&b_log) printf("%s: %s",name(),s);
+	glValidateProgram(ID); glGetProgramInfoLog(ID,4096,&l,s); log_exists=l>1&&l<4096; if(log_exists&&b_log) printf("[%s] %s",name(),s);
 	return gxGetProgramiv(ID, GL_VALIDATE_STATUS)==GL_TRUE;
 }
 
