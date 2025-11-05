@@ -1553,7 +1553,7 @@ inline vector<Uniform> Program::get_active_uniforms( bool b_bind )
 		prop.clear(); for(int j=0,jn=int(values.size());j<jn;j++) prop[pnames[j]]=values[j];
 		Uniform u; glGetProgramResourceName(ID,GL_UNIFORM,k,prop[GL_NAME_LENGTH],nullptr,u.name); if(strstr(u.name,"gl_")) continue; // and skip for built-in gl variables
 		u.ID=prop[GL_LOCATION]; u.block.index=prop[GL_BLOCK_INDEX];
-		if(prop[GL_ATOMIC_COUNTER_BUFFER_INDEX]!=-1){ int b; glGetActiveAtomicCounterBufferiv(ID,prop[GL_ATOMIC_COUNTER_BUFFER_INDEX],GL_ATOMIC_COUNTER_BUFFER_BINDING,&b); _atomic_counter_buffer_binding_map[u.name]=b; } // Intel compilers do not define block for atomic counter
+		if(prop[GL_ATOMIC_COUNTER_BUFFER_INDEX]!=-1){ int b; glGetActiveAtomicCounterBufferiv(ID,prop[GL_ATOMIC_COUNTER_BUFFER_INDEX],GL_ATOMIC_COUNTER_BUFFER_BINDING,&b); _atomic_counter_buffer_binding_map[u.name]=b; continue; } // Intel compilers do not define block for atomic counter
 		else if(u.ID<0&&u.block.index<0) continue; // invalid variables (except for atomic counter)
 		u.type=prop[GL_TYPE]; u.block.offset=prop[GL_OFFSET]; u.array_size=prop[GL_ARRAY_SIZE];
 		u.row_major=prop[GL_IS_ROW_MAJOR]!=GL_FALSE; if(u.block.index>=0&&u.is_matrix()&&!u.row_major){ oncef("[warning] %s: column-major layout\n",u.name); }
@@ -1978,7 +1978,7 @@ __noinline void effect_source_t::preprocess_include()
 struct Effect : public Object
 {
 	Effect( GLuint ID, const char* name ) : Object(ID,name,0){ if(!(quad=gxCreateQuadVertexArray())) printf("[%s] unable to create quad buffer\n",name); }
-	~Effect() override { active_program=nullptr; if(quad){ delete quad; quad=nullptr; } if(!pts.empty()){ for(auto& it:pts) safe_delete(it.second); pts.clear(); } for(auto& it:uniform_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} uniform_buffer_map.clear(); for(auto* p:programs) delete p; programs.clear(); if(glDeleteNamedStringARB&&!include_names.empty()){for(auto& i:include_names) glDeleteNamedStringARB(-1,i.c_str());} }
+	~Effect() override { active_program=nullptr; if(quad){ delete quad; quad=nullptr; } if(!pts.empty()){ for(auto& it:pts) safe_delete(it.second); pts.clear(); } for(auto& it:uniform_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} uniform_buffer_map.clear(); for(auto& it:atomic_counter_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} atomic_counter_buffer_map.clear(); for(auto* p:programs) delete p; programs.clear(); if(glDeleteNamedStringARB&&!include_names.empty()){for(auto& i:include_names) glDeleteNamedStringARB(-1,i.c_str());} }
 	
 	static void unbind(){ glUseProgram(0); }
 	Program* bind( __printf_format_string__ const char* program_name, ... ){ char buff[1024]; va_list a;va_start(a,program_name);vsnprintf(buff,1024,program_name,a);va_end(a); active_program=get_program(buff); if(active_program){ active_program->bind(); } else{ active_program=nullptr; glUseProgram(0); } return active_program; }
@@ -1993,7 +1993,7 @@ struct Effect : public Object
 	Program* get_program( const char* name ) const { for(auto* p:programs)if(stricmp(p->name(),name)==0) return p; oncef("Unable to find program \"%s\" in effect \"%s\"\n", name, this->_name ); return nullptr; }
 	Program* get_program_by_index( uint index ) const { if(index<programs.size()) return programs[index]; else { oncef("[%s] out-of-bound program index\n", _name ); return nullptr; } }
 	Program* get_program_by_id( uint program_ID ) const { for(auto* p:programs)if(p->ID==program_ID) return p; oncef("Unable to find program \"%u\" in effect \"%s\"\n", program_ID, this->_name ); return nullptr; }
-	Program* append_program( Program* program ){ if(!program) return nullptr; programs.emplace_back(program); for(auto& [ubname,ub] : program->_uniform_block_map) ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size); return program; }
+	Program* append_program( Program* program ){ if(!program) return nullptr; programs.emplace_back(program); for(auto& [ubname,ub] : program->_uniform_block_map) ub.buffer=get_or_create_uniform_buffer(ub.name,ub.size); for(auto& [aname,ab] : program->_atomic_counter_buffer_binding_map) get_or_create_atomic_counter_buffer(aname.c_str()); return program; }
 	Program* create_program( const char* name, const program_source_t& source ){ return append_program(gxCreateProgram(this->name(),name,source)); }
 
 	Uniform* get_uniform( const char* name ){ if(active_program) return active_program->get_uniform(name); oncef("%s.%s(%s): no program is bound.",this->name(),__func__,name); return nullptr; }
@@ -2004,18 +2004,22 @@ struct Effect : public Object
 	// [NOTE] do not make const T*; this causes some template instances go wrong
 	template <class T> void set_uniform( const char* name, T* v, GLsizei count=1 ){ auto* p=active_program; if(!p) p=find_program_from_uniform(name,__func__); if(p) p->set_uniform(name,v,count); }
 
-	// uniform buffer/block
+	// effect-builtin uniform buffer/block
 	gl::Buffer* get_or_create_uniform_buffer( const char* name, size_t size ){ gl::Buffer* b=get_uniform_buffer(name,false); if(b&&b->size()!=size) oncef("[%s] %s(): uniform_buffer(%s).size(=%d)!=%d\n",this->_name,__func__,name,int(b->size()),int(size)); if(b) return b; b=gxCreateBuffer(name,GL_UNIFORM_BUFFER,size,GL_STATIC_DRAW,nullptr,GL_MAP_WRITE_BIT|GL_DYNAMIC_STORAGE_BIT,false); if(!b){ printf("[%s] unable to create uniform buffer [%s]\n", this->_name, name); return nullptr; } return uniform_buffer_map[name]=b; }
 	gl::Buffer* get_uniform_buffer( const char* name, bool log=true ){ auto it=uniform_buffer_map.find(name); if(it!=uniform_buffer_map.end()) return it->second; if(log) oncef( "[%s] %s(): unable to find %s\n", this->_name, __func__, name ); return nullptr; }
 	GLint get_uniform_block_binding( const char* name ){ GLint binding=active_program?active_program->get_uniform_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_uniform_block_binding(name); if(b!=-1) return b; } return -1; }
 	gl::Buffer* bind_uniform_buffer( const char* name, gl::Buffer* ub=nullptr /* if nullptr, use default buffer */ ){ gl::Buffer* b=ub?ub:get_uniform_buffer(name); if(!b) return nullptr; GLuint binding=get_uniform_block_binding(name); if(binding!=GLuint(-1)){ if(b->target==GL_UNIFORM_BUFFER) b->bind_base(binding); else b->bind_base_as(GL_UNIFORM_BUFFER, binding); return b; } oncef("[%s] %s(): unable to find uniform buffer binding %s\n", this->_name, __func__, name); return nullptr; }
+	
+	// effect-builtin atomic counter buffer
+	gl::Buffer* get_or_create_atomic_counter_buffer( const char* name ){ gl::Buffer* b=get_atomic_counter_buffer(name,false); if(b) return b; b=gxCreateBuffer(name,GL_ATOMIC_COUNTER_BUFFER,sizeof(uint),GL_DYNAMIC_DRAW,nullptr); if(!b){ printf("[%s] unable to create atomic_counter buffer [%s]\n", this->_name, name); return nullptr; } return atomic_counter_buffer_map[name]=b; }
+	gl::Buffer* get_atomic_counter_buffer( const char* name, bool log=true ){ auto it=atomic_counter_buffer_map.find(name); if(it!=atomic_counter_buffer_map.end()) return it->second; if(log) oncef( "[%s] %s(): unable to find %s\n", this->_name, __func__, name ); return nullptr; }
+	GLint get_atomic_counter_buffer_binding( const char* name ){ GLint binding=active_program?active_program->get_atomic_counter_buffer_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_atomic_counter_buffer_binding(name); if(b!=-1) return b; } oncef( "[%s] %s(%s): unable to find atomic counter buffer binding\n", this->_name, __func__, name ); return -1; }
+	gl::Buffer* bind_atomic_counter_buffer( const char* name, Buffer* buffer=nullptr ){ gl::Buffer* b=buffer?buffer:get_atomic_counter_buffer(name); if(!b) return nullptr; GLint binding=get_atomic_counter_buffer_binding(name); if(binding<0) return nullptr; if(b->target==GL_ATOMIC_COUNTER_BUFFER) b->bind_base(binding); else b->bind_base_as(GL_ATOMIC_COUNTER_BUFFER,binding); return b; }
 
-	// bind image texture, shader storage, atomic counter, ...
+	// bind image texture, shader storage
 	void bind_image_texture( const char* name, Texture* t, GLenum access=GL_READ_WRITE /* or GL_WRITE_ONLY or GL_READ_ONLY */, GLint level=0, GLenum format=0, bool bLayered=false, GLint layer=0 ){ if(!active_program) return void(oncef("%s.%s(%s): no program is bound.\n",this->name(),__func__,name)); active_program->bind_image_texture(name,t,access,level,format,bLayered,layer); }
 	GLint get_shader_storage_block_binding( const char* name ){ GLint binding=active_program?active_program->get_shader_storage_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_shader_storage_block_binding(name); if(b!=-1) return b; } oncef( "[%s] %s(): unable to find shader storage block binding %s\n", this->_name, __func__, name ); return -1; }
 	gl::Buffer* bind_shader_storage_buffer( const char* name, Buffer* buffer ){ GLint binding=get_shader_storage_block_binding(name); if(binding<0) return nullptr; if(buffer->target==GL_SHADER_STORAGE_BUFFER) buffer->bind_base(binding); else buffer->bind_base_as(GL_SHADER_STORAGE_BUFFER,binding); return buffer; }
-	GLint get_atomic_counter_buffer_binding( const char* name ){ GLint binding=active_program?active_program->get_atomic_counter_buffer_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_atomic_counter_buffer_binding(name); if(b!=-1) return b; } oncef( "[%s] %s(%s): unable to find atomic counter buffer binding\n", this->_name, __func__, name ); return -1; }
-	gl::Buffer* bind_atomic_counter_buffer( const char* name, Buffer* buffer ){ GLint binding=get_atomic_counter_buffer_binding(name); if(binding<0) return nullptr; if(buffer->target==GL_ATOMIC_COUNTER_BUFFER) buffer->bind_base(binding); else buffer->bind_base_as(GL_ATOMIC_COUNTER_BUFFER,binding); return buffer; }
 
 	// subroutines: must be bound after glUseProgram(); pre-binding is invalidated for every glUseProgram()
 	bool set_subroutine_uniform( const char* name, GLenum shader_type=GL_FRAGMENT_SHADER ){ return active_program?active_program->set_subroutine_uniform(name,shader_type):false; }
@@ -2042,7 +2046,8 @@ struct Effect : public Object
 	Program*						active_program=nullptr;
 	vector<Program*>				programs;
 	std::set<string>				include_names;		// in order to delete them
-	std::map<string,Buffer*>		uniform_buffer_map;	// do not define uniform buffers in each program, since they are shared across programs.
+	std::map<string,Buffer*>		uniform_buffer_map;	// do not define uniform buffers in each program, since they are shared across programs
+	std::map<string, Buffer*>		atomic_counter_buffer_map; // effect-create instance of atomic counter buffer
 	std::map<uint64_t,VertexArray*>	pts;				// point vertex array
 	VertexArray*					quad=nullptr;
 	
