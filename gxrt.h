@@ -179,13 +179,13 @@ __noinline void bvh_t::update_proxy()
 // late implementations
 
 // primary ray
-__noinline ray gen_primary_ray( camera* cam, float x, float y )	// (x,y) in [0,1]
+__noinline ray gen_primary_ray( camera_t* cam, float x, float y )	// (x,y) in [0,1]
 {
 	const vec3& eye=cam->eye, dir=cam->dir, up=cam->up;
 	float fh=tan(cam->fovy*0.5f)*2.0f, fw=fh*cam->aspect;		// frustum height/width in NDC
 	vec3 dst=normalize(vec3(fw*(x-0.5f),fh*(y-0.5f),-1.0f));	// target pixel position at d=-1: make sure to have negative depth
 	mat4 I = mat4::look_to_inverse(eye,dir,up);					// inverse view matrix
-	ray r; r.t=0.0f; r.tfar=FLT_MAX; r.o=eye; r.d=mat3(I)*dst;  return r;
+	ray r; r.t=0.0f; r.tfar=FLT_MAX; r.o=eye; r.d=mat3(I)*dst; return r;
 }
 
 // triangle intersection: isect=(pos,t), bc=(s,t)
