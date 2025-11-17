@@ -354,17 +354,22 @@ __noinline unsigned int crc32( unsigned int crc0, const void* ptr, size_t size )
 }
 
 #ifdef __msvc__
-inline bool is_utf8( const char * s ) // https://stackoverflow.com/questions/28270310/how-to-easily-detect-utf8-encoding-in-the-string
+inline bool is_utf8( const char* s )
 {
 	if(!s||!*s) return true; const unsigned char* b=(const unsigned char*)s;
-	int n; while(*b!=0x00)
+	const unsigned char* end=b+strlen(s); while(b<end)
 	{
-		if((*b&0x80)==0x00) n=1;		// U+0000 to U+007F
-		else if((*b&0xE0)==0xC0) n=2;	// U+0080 to U+07FF
-		else if((*b&0xF0)==0xE0) n=3;	// U+0800 to U+FFFF
-		else if((*b&0xF8)==0xF0) n=4;	// U+10000 to U+10FFFF
+		unsigned char c=*b;
+		if(c<=0x7F){b++;continue;} // single byte
+		if(c>=0xC2&&c<=0xDF){ if(b+1>=end) return false; if((b[1]&0xC0)!=0x80) return false; b+=2; } // 2nd byte: U+0080 ~ U+07FF
+		else if(c==0xE0){ if(b+2>=end) return false; if(b[1]<0xA0||b[1]>0xBF) return false; if((b[2]&0xC0)!=0x80) return false; b+=3; }
+		else if(c>=0xE1&&c<=0xEC){ if(b+2>=end) return false; if((b[1]&0xC0)!=0x80) return false; if((b[2]&0xC0)!=0x80) return false; b+=3; }
+		else if(c==0xED){ if(b+2>=end) return false; if(b[1]<0x80||b[1]>0x9F) return false; if((b[2]&0xC0)!=0x80) return false; b+=3; }
+		else if(c>=0xEE && c<=0xEF){ if(b+2>=end) return false; if((b[1]&0xC0)!=0x80) return false; if((b[2]&0xC0)!=0x80) return false; b+=3; }
+		else if(c==0xF0){ if(b+3>=end) return false; if(b[1]<0x90||b[1]>0xBF) return false; if((b[2]&0xC0)!=0x80) return false; if((b[3]&0xC0)!=0x80) return false; b+=4; }
+		else if(c>=0xF1 && c<=0xF3){ if(b+3>=end) return false; if((b[1]&0xC0)!=0x80) return false; if((b[2]&0xC0)!=0x80) return false; if((b[3]&0xC0)!=0x80) return false; b+=4; }
+		else if(c==0xF4){ if(b+3>=end) return false; if(b[1]<0x80||b[1]>0x8F) return false; if((b[2]&0xC0)!=0x80) return false; if((b[3]&0xC0)!=0x80) return false; b+=4; }
 		else return false;
-		b++; for(int k=1;k<n;k++){ if((*b&0xC0)!=0x80) return false; b++; }
 	}
 	return true;
 }
