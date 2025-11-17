@@ -274,13 +274,14 @@ template <class T> T* realloc( void* ptr, size_t size ){ return (T*) ::realloc(p
 template <class T> T*& safe_free( T*& p ){if(p) free((void*)p); return p=nullptr; }
 template <class T> T*& safe_delete( T*& p ){if(p) delete p; return p=nullptr; }
 
+// pointer type with size: waiting for a C++ standard for proposal P0901R3 (std::sized_ptr_t)
+template <class T=void> struct sized_ptr_t { T* ptr=nullptr; size_t size=0; operator T* (){return ptr;} operator const T* () const {return ptr;} T* operator->(){return ptr;} const T* operator->() const {return ptr;} };
+template <class T> struct auto_sized_ptr_t : public sized_ptr_t<T> { using sized_ptr_t<T>::sized_ptr_t; auto_sized_ptr_t()=default; auto_sized_ptr_t( sized_ptr_t<T>& t ){this->ptr=t.ptr;this->size=t.size;} ~auto_sized_ptr_t(){safe_free(this->ptr);} };
+
 // shared circular string buffers
 template <class T=char> __forceinline T* __strbuf( size_t len ){ static T* C[1<<14]={}; static unsigned int cid=0; cid=cid%(sizeof(C)/sizeof(C[0])); C[cid]=(T*)(C[cid]?realloc(C[cid],sizeof(T)*(len+2)):malloc(sizeof(T)*(len+2))); if(C[cid]){ C[cid][0]=C[cid][len]=C[cid][len+1]=0; } return C[cid++]; } // add one more char for convenience
 template <class T=char> __forceinline T* __strdup( const T* s, size_t len ){ T* d=__strbuf<T>(size_t(len)); size_t k=0; while(k<len&&*s) d[k++]=*(s++); d[k]=d[k+1]=0; return d; }
 template <class T=char> __forceinline T* __strdup( const T* s ){ const T* t=s; while(*t) t++; return __strdup<T>(s,t-s); }
-
-// pointer type with size: waiting for a C++ standard for proposal P0901R3 (std::sized_ptr_t)
-template <class T=void> struct sized_ptr_t { T* ptr; size_t size; operator T* (){ return ptr; }	operator const T* () const { return ptr; } T* operator->(){ return ptr; } const T* operator->() const { return ptr; } }; 
 
 // nocase/logical base template
 namespace nocase { template <class T> struct less {}; template <class T> struct equal_to {}; template <class T> struct hash {}; };
