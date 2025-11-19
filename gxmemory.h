@@ -147,13 +147,14 @@ struct resource_t : public mem_t
 	void release(){ if(hmem){ /*UnlockResource(hmem);*/ FreeResource(hmem); hmem=nullptr; } if(zip){ zip->release(); delete zip; zip=nullptr; } }
 	bool find( LPCWSTR lpName ){ return (hres=FindResourceW( hModule, lpName, type ))!=nullptr; }
 	bool find( int res_id ){ return find(MAKEINTRESOURCEW(res_id)); }
-
-	bool load(){ if(!hres||!(hmem=LoadResource(hModule,hres))) return false; size=SizeofResource(hModule,hres); ptr=LockResource(hmem); return size!=0; }
+	bool load(){ if(!hres){ printf("resource_t::%s(): hres==nullptr\n",__func__); return false; } if(!(hmem=LoadResource(hModule,hres))) return false; size=SizeofResource(hModule,hres); ptr=LockResource(hmem); return size!=0; }
 	bool load( LPCWSTR lpName ){ return find(lpName)&&load(); }
 	bool load( int res_id ){ return find(res_id)&&load(); }
 
 	// loading for specific types
 	string load_string(){ if(type!=MAKEINTRESOURCEW(6/*string 6*/)||!load()) return ""; std::wstring w; w.resize(size/sizeof(decltype(w)::value_type)); memcpy((void*)w.c_str(),ptr,size); return wtoa(w.c_str()); }
+	izip_t* load_zip( LPCWSTR lpName ){ if(!find(lpName)) return nullptr; return load_zip(); }
+	izip_t* load_zip( int res_id ){ if(!find(res_id)) return nullptr; return load_zip(); }
 	izip_t* load_zip();
 };
 #endif // MAKEINTRESOURCEW
