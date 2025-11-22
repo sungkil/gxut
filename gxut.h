@@ -669,7 +669,9 @@ struct path_t
 	path_t dirname()	const { return strpbrk(_data,"/\\")?dir().rtrim_slash().filename():""; }
 	path_t filename()	const { auto s=__split_path(_data,false,true,true); if(!s.x||!*s.x) return s.stem; return strcat(strcpy(__strbuf(capacity),s.stem),s.x); }
 	path_t stem()		const { return __split_path(_data,false,true,false).stem; } // filename without extension
-	path_t extension()	const { auto s=__split_path(_data,false,false,true); return *s.x=='.'?s.x+1:""; } // alias to extension
+	path_t stem2()		const { auto s=__split_path(_data,false,true,false); return !strchr(s.stem,'.')?s.stem:__split_path(s.stem,false,true,false).stem; } // stem without double extension; i.e., equivalent to stem().stem()
+	path_t extension()	const { auto s=__split_path(_data,false,false,true); return *s.x=='.'?s.x+1:""; }
+	path_t extension2()	const { auto s=__split_path(_data,false,true,true); if(*s.x!='.') return ""; if(!strchr(s.stem,'.')) return s.x+1; auto t=__split_path(s.stem,false,false,true); if(t.x[1]==0) return s.x+1; return strcat(strcpy(__strbuf(capacity),t.x+1),s.x); } // double extension (e.g., .{ext}.{ext})
 	path_t parent()		const { return dir().rtrim_slash().dir(); }
 	path_t remove_extension() const { auto s=__split_path(_data,true,true,false); return s.dir?strcat(strcpy(__strbuf(capacity),s.dir),s.stem):s.stem; }
 	path_t replace_extension( path_t x ) const { if(x.empty()) return *this; return remove_extension()+(x[0]=='.'?x._data:"."s+x._data); }
@@ -677,6 +679,7 @@ struct path_t
 	path_t dir()		const { if(empty()) return ""; return fs::path(_data).remove_filename().c_str(); }
 	path_t filename()	const { if(empty()) return ""; return fs::path(_data).filename().c_str(); }
 	path_t stem()		const { if(empty()) return ""; return fs::path(_data).stem().c_str(); } // filename without extension
+	path_t stem2()		const { if(empty()) return ""; return fs::path(fs::path(_data).stem().c_str()).stem().c_str(); } // stem without double extension; i.e., equivalent to stem().stem()
 	path_t extension()	const { if(empty()) return ""; path_t x=fs::path(_data).extension().c_str(); return !x.empty()&&x.front()=='.'?x._data+1:x; }
 #endif
 

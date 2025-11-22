@@ -165,13 +165,15 @@ struct path : public path_t
 	path reparse() const; // get normalized path of files in junction directories
 
 	// decomposition
-	path dir()		const { return __super::dir(); }
-	path unc_root()	const { return __super::unc_root(); }
-	path dirname()	const { return __super::dirname(); }
-	path filename()	const { return __super::filename(); }
-	path stem()		const { return __super::stem(); }
-	path extension()const { return __super::extension(); }
-	path parent()	const { return __super::parent(); }
+	path dir()				const { return __super::dir(); }
+	path unc_root()			const { return __super::unc_root(); }
+	path dirname()			const { return __super::dirname(); }
+	path filename()			const { return __super::filename(); }
+	path stem()				const { return __super::stem(); }
+	path stem2()			const { return __super::stem2(); }		// stem without double extension; i.e., equivalent to stem().stem()
+	path extension()		const { return __super::extension(); }
+	path extension2()		const { return __super::extension2(); } // double extension (e.g., .{ext}.{ext})
+	path parent()			const { return __super::parent(); }
 	path remove_extension() const { return __super::remove_extension(); }
 	path replace_extension( path x ) const { return __super::replace_extension(x); }
 	path absolute( path base="" ) const { return __super::absolute(base); }
