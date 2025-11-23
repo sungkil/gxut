@@ -201,13 +201,14 @@ struct path : public path_t
 	bool delete_dir() const { if(!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); rmdir(_data); return true; }
 	bool rmdir() const { return delete_dir(); }
 #else
-	bool delete_file( bool b_undo=false ) const { if(!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=FOF_FILESONLY|FOF_SILENT|FOF_NOCONFIRMATION|(b_undo?FOF_ALLOWUNDO:0); fop.pFrom=atow(to_preferred().c_str()); return SHFileOperationW(&fop)==0;}
+	bool delete_file( bool b_undo=false ) const { if(!*_data||!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=FOF_FILESONLY|FOF_SILENT|FOF_NOCONFIRMATION|(b_undo?FOF_ALLOWUNDO:0); fop.pFrom=atow(to_preferred().c_str()); return SHFileOperationW(&fop)==0;}
 	bool rmfile( bool b_undo=false ) const { return delete_file(b_undo); }
-	bool delete_dir( bool b_undo=true ) const { if(!exists()||!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=FOF_SILENT|FOF_NOCONFIRMATION|(b_undo?FOF_ALLOWUNDO:0); fop.pFrom=atow(to_preferred().c_str()); return SHFileOperationW(&fop)==0;}
+	bool delete_dir( bool b_undo=true ) const { if(!*_data||!exists()||!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=FOF_SILENT|FOF_NOCONFIRMATION|(b_undo?FOF_ALLOWUNDO:0); fop.pFrom=atow(to_preferred().c_str()); return SHFileOperationW(&fop)==0;}
 	bool rmdir( bool b_undo=true ) const { return delete_dir(b_undo); }
-	bool copy_dir( path dst, bool overwrite=true ) const { if(!is_dir()) return false; value_type* from=__strbuf(capacity);snprintf(from,capacity,"%s\\*\0",_data);dst[dst.size()+1]=0; SHFILEOPSTRUCTW fop={};fop.wFunc=FO_COPY;fop.fFlags=FOF_ALLOWUNDO|FOF_SILENT|(overwrite?FOF_NOCONFIRMATION:0); fop.pFrom=atow(path(from).to_preferred().c_str()); fop.pTo=atow(dst.to_preferred().c_str()); return SHFileOperationW(&fop)==0; }
-	bool move_dir( path dst ) const { return !exists()||!is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(atow(_data),atow(dst._data))!=0 : !copy_dir(dst,true) ? false: rmdir(); }
-	bool open( const char* args=nullptr, bool b_show_window=true ) const { if(!*_data) return false; auto r=ShellExecuteW(GetDesktopWindow(),L"Open",atow(auto_quote()), args?atow(args):nullptr, nullptr, b_show_window?SW_SHOWNORMAL:SW_HIDE); return ((INT_PTR)r)>32; }
+	bool copy_dir( path dst, bool overwrite=true ) const { if(!*_data||!exists()||!is_dir()) return false; value_type* from=__strbuf(capacity);snprintf(from,capacity,"%s\\*\0",_data);dst[dst.size()+1]=0; SHFILEOPSTRUCTW fop={};fop.wFunc=FO_COPY;fop.fFlags=FOF_ALLOWUNDO|FOF_SILENT|(overwrite?FOF_NOCONFIRMATION:0); fop.pFrom=atow(path(from).to_preferred().c_str()); fop.pTo=atow(dst.to_preferred().c_str()); return SHFileOperationW(&fop)==0; }
+	bool move_dir( path dst ) const { return !*_data||!exists()||!is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(atow(_data),atow(dst._data))!=0 : !copy_dir(dst,true) ? false: rmdir(); }
+	bool open( const char* args=nullptr, bool b_show_window=true ) const { if(!*_data||!exists()) return false; auto r=ShellExecuteW(GetDesktopWindow(),L"Open",atow(auto_quote()), args?atow(args):nullptr, nullptr, b_show_window?SW_SHOWNORMAL:SW_HIDE); return ((INT_PTR)r)>32; }
+	bool open_dir() const { if(!*_data||!exists()) return false; auto r=ShellExecuteW(GetDesktopWindow(),L"Open",L"explorer.exe",is_dir()?atow(auto_quote()):(L"/select,"s+atow(auto_quote())).c_str(),nullptr,SW_SHOWNORMAL);return ((INT_PTR)r)>32; }
 #endif
 
 	// additional time functions
