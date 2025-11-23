@@ -46,13 +46,13 @@ protected:
 	char				buffer[4096+1]={};
 	static const size_t	buffer_capacity = std::extent<decltype(buffer)>::value-1;
 
-	entry_t* get_or_create_entry( const char* seckey ){ if(seckey==nullptr||seckey[0]==L'\0') return nullptr; auto it=dic.find(seckey); if(it!=dic.end())return it->second; auto ss=split_section_key(seckey); return dic[seckey]=new entry_t(dic.size(),ss.first,ss.second); }
+	entry_t* get_or_create_entry( const char* seckey ){ if(seckey==nullptr||!*seckey) return nullptr; auto it=dic.find(seckey); if(it!=dic.end())return it->second; auto ss=split_section_key(seckey); return dic[seckey]=new entry_t(dic.size(),ss.first,ss.second); }
 	std::pair<const char*,const char*> split_section_key( const char* seckey ){ char *sk=__strdup(seckey),*colon=(char*)strchr(&sk[0],':');if(colon==nullptr)return std::make_pair("",sk);else{colon[0]=0;return std::make_pair(sk,colon+1);} }
 	void read_line( wchar_t* line, wchar_t* sec );
 
 public:
 	virtual ~parser_t(){ for(auto& it:dic)if(it.second!=nullptr){delete it.second;} dic.clear(); DeleteCriticalSection(&cs); }
-	parser_t(){ InitializeCriticalSectionAndSpinCount(&cs,2000); }
+	parser_t(){ InitializeCriticalSectionAndSpinCount(&cs,4000); }
 	parser_t( path_t file_path ):parser_t(){ set_path(file_path); }
 
 	// query and retrieval
@@ -75,19 +75,19 @@ public:
 	void end_update(){ b_batch=false; }
 	bool load();
 	bool load( const wchar_t* source );
-	bool load( const char* source ){ return load(atow(source)); }
+	bool load( const char* source ){ return source?load(atow(source)):false; }
 	bool save(){ return save_as(file_path); }
 	bool save_as( const path_t& file_path );
 
 	// get
 	__forceinline const char* get( const char* key ){ if(!key||!*key) return ""; auto it=dic.find(key); return it==dic.end()?"":it->second->value.c_str(); }
 	__forceinline const char* get( const char* sec, const char* key ){ if(!sec||!*sec||!key||!*key) return ""; char sk[257]; snprintf(sk,256,"%s:%s",sec,key); return get(sk); }
-	template<class T> T get( const char* sec, const char* key ){ char sk[257]; snprintf(sk,256,"%s:%s",sec,key); return get<T>(sk); }
+	template<class T> T get( const char* sec, const char* key ){ if(!sec||!*sec||!key||!*key) return get<T>(""); if(!sec||!*sec) return get<T>(key); if(!key||!*key) return get<T>(sec); char sk[257]; snprintf(sk,256,"%s:%s",sec,key); return get<T>(sk); }
 	template<class T> T get( const char* key );
 
 	// set
 	template<class T> void set( const char* key, T value );
-	template<class T> void set( const char* sec, const char* key, T value ){ if(!sec||!*sec||!key||!*key) return; char sk[257]; snprintf(sk,256,"%s:%s",sec,key); set<T>(sk,value); }
+	template<class T> void set( const char* sec, const char* key, T value ){ if(!sec||!*sec||!key||!*key) return; if(!sec||!*sec) return set<T>(key,value); if(!key||!*key) return set<T>(sec,value); char sk[257]; snprintf(sk,256,"%s:%s",sec,key); set<T>(sk,value); }
 };
 
 __noinline void parser_t::read_line( wchar_t* line, wchar_t* sec )
@@ -108,6 +108,7 @@ __noinline void parser_t::read_line( wchar_t* line, wchar_t* sec )
 
 __noinline bool parser_t::load( const wchar_t* source )
 {
+	if(!source) return false;
 	auto_lock_t lock(cs);
 	for(auto& it:dic){if(it.second!=nullptr){delete it.second;}} dic.clear(); // clear dictionary and buffer
 	wchar_t sec[512]; for( auto& buff: explode( source, L"\r\n" ) ) read_line( (wchar_t*)buff.c_str(), sec ); // read lines
