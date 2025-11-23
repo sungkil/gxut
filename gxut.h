@@ -437,11 +437,11 @@ inline const wchar_t* stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ ret
 // natural-order and case-insensitive comparison for std::sort, std::map/set, std::unordered_map/set
 #if defined __msvc__
 	#ifdef _INC_SHLWAPI
-		inline int strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ return (!_Str1||!_Str2)?0:StrCmpLogicalW(_Str1,_Str2); }
+		inline int strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ return !_Str1?(-1):!_Str2?1:StrCmpLogicalW(_Str1,_Str2); }
 	#else
-		inline int strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ static dll_function_t<int(const wchar_t*,const wchar_t*)> f("shlwapi.dll","StrCmpLogicalW"); return !f?wcsicmp(_Str1,_Str2):(!_Str1||!_Str2)?0:f(_Str1,_Str2); } // load StrCmpLogicalW(): when unavailable, fallback to wcsicmp
+		inline int strcmplogical( const wchar_t* _Str1, const wchar_t* _Str2 ){ static dll_function_t<int(const wchar_t*,const wchar_t*)> StrCmpLogicalW("shlwapi.dll","StrCmpLogicalW"); return !_Str1?(-1):!_Str2?1:StrCmpLogicalW?StrCmpLogicalW(_Str1,_Str2):wcsicmp(_Str1,_Str2); } // load StrCmpLogicalW(): when unavailable, fallback to wcsicmp
 	#endif
-	inline int strcmplogical( const char* _Str1, const char* _Str2 ){ return strcmplogical(atow(_Str1),atow(_Str2)); }
+	inline int strcmplogical( const char* _Str1, const char* _Str2 ){ static dll_function_t<int(const wchar_t*,const wchar_t*)> StrCmpLogicalW("shlwapi.dll","StrCmpLogicalW"); return !_Str1?(-1):!_Str2?1:StrCmpLogicalW?StrCmpLogicalW(atow(_Str1),atow(_Str2)):stricmp(_Str1,_Str2); }
 #endif
 
 // format and printf replacement
