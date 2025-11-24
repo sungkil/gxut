@@ -227,7 +227,7 @@ struct camera_t
 	void extend_frustum( double scale ){ projection_matrix=mat4::perspective(fovy=float(atan2(tan(fovy*0.5)*scale,1.0)*2.0),aspect,dnear,dfar); }
 
 	// lens attributes
-	float	coc_norm_scale() const { float E=focal/fn*0.5f; return E/df/tan(fovy*0.5f); } // normalized coc scale in the screen space; E: lens_radius
+	float	coc_norm_scale() const { float E=focal/(fn==0?4.0f:fn)*0.5f; return E/df/tan(fovy*0.5f); } // normalized coc scale in the screen space; E: lens_radius; when fn==0, use default for 4
 	float	coc_scale( int height ) const { return coc_norm_scale()*float(height)*0.5f; } // screen-space coc scale; so called "K" so far
 };
 static_assert(sizeof(camera_t)%16==0, "size of struct camera_t should be aligned at 16-byte boundary");

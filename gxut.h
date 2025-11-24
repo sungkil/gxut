@@ -990,16 +990,17 @@ struct image
 	unsigned char*	data=nullptr;
 	unsigned int	width=0;
 	unsigned int	height=0;
-	unsigned int	depth=0;	// should be one of 8=IPL_DEPTH_8U, and 32=IPL_DEPTH_32F
-	unsigned int	channels=0;	// should be one of 1, 2, 3, and 4
-	unsigned int	fcc=0;		// color space fourcc: accepts only RGB, YUY2, YV12
-	unsigned int	crc=0;		// image data crc
-	int				index=-1;	// signed image index
-	const unsigned	align=4;	// byte alignment for rows; can be overriden for YUV (e.g., 64)
+	unsigned int	depth=0;			// should be one of 8=IPL_DEPTH_8U, and 32=IPL_DEPTH_32F
+	unsigned int	channels=0;			// should be one of 1, 2, 3, and 4
+	unsigned int	fcc=0;				// color space fourcc: accepts only RGB, YUY2, YV12
+	unsigned int	crc=0;				// image data crc
+	int				index=-1;			// signed image index
+	const unsigned	align=4;			// byte alignment for rows; can be overriden for YUV (e.g., 64)
+	const char*		file_path=nullptr;	// can be filled when loaded from a file
 
 	image() = default;
 	image( int width, int height, int depth=8, int channels=3, unsigned align=4 ){ this->width=width; this->height=height; this->depth=depth; this->channels=channels; const_cast<unsigned&>(this->align)=align; data=(decltype(data))malloc(size()); }
-	virtual ~image(){ if(data) free(data); data=nullptr; }
+	virtual ~image(){ if(data) free(data); data=nullptr; if(file_path) free((void*)file_path); file_path=nullptr; }
 
 	inline unsigned int stride( int channel=0 ) const { bool i420=fcc==I420||fcc==YV12||fcc==IYUV; unsigned int bpp=(fcc==YUY2)?2:(i420||fcc==NV12)?1:channels; uint r=(depth>>3)*bpp*width; if(align<2) return r; return (((i420&&channel)?(r>>1):r)+align-1)&(~(align-1)); }
 	inline unsigned int size() const { bool i420=fcc==I420||fcc==YV12||fcc==IYUV; return height*(i420?(stride()+stride(1)):fcc==NV12?(stride()+stride(1)/2):stride()); }
