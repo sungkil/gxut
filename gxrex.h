@@ -129,7 +129,7 @@ template <class T> T* shared( const char* name ){ return shared_t::instance().ge
 template <class T> T shared_function( const char* name ){ return shared_t::instance().get_function<T>(name); }
 
 // window functions
-__noinline void close_window(){ HWND* h=rex::shared<HWND>("Window"); if(h&&*h) SendMessageW(*h,WM_CLOSE,0,0); }
+__noinline HWND get_window(){ HWND* h=rex::shared<HWND>("Window"); return h?*h:nullptr; }
 
 //*************************************
 } // end namespace rex
