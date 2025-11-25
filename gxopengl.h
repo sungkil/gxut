@@ -740,6 +740,13 @@ __noinline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsiz
 	return texture;
 }
 
+__noinline gl::Texture* gxCreateTexture2D( const char* name, image* p_image, GLint levels=1, GLsizei layers=1 )
+{
+	if(!p_image){ printf( "%s(%s): p_image==nullptr\n", __func__, name ); return nullptr; }
+	GLenum tf = gxGetImageTextureInternalFormat( p_image->depth,p_image->channels ); if(!tf){ printf( "%s(%s): unsupported image format for color texture\n", __func__, name ); return nullptr; }
+	return gxCreateTexture2D( name, levels, p_image->width, p_image->height, layers, tf, p_image->data );
+}
+
 __noinline gl::Texture* gxCreateTexture3D( const char* name, GLint levels, GLsizei width, GLsizei height, GLsizei depth, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr )
 {
 	if(!gxIsSizedInternalFormat(internal_format)){ printf( "%s(): internal_format must use a sized format instead of GL_RED, GL_RG, GL_RGB, GL_RGBA.\n", __func__ ); return nullptr; }
