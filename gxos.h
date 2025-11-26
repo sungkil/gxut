@@ -279,7 +279,7 @@ inline const char* system_dir()
 {
 	static char e[_MAX_PATH]={}; if(*e) return e;
 	wchar_t w[_MAX_PATH]; GetSystemDirectoryW(w,_MAX_PATH);
-	size_t l=wcslen(w); if(l&&w[l-1]!='\\'){ w[l-1]='\\'; w[l]=0; }
+	size_t l=wcslen(w); if(l&&w[l-1]!='\\'){ w[l]='\\'; w[l+1]=0; }
 	return strcpy(e,wtoa(w));
 }
 
