@@ -43,7 +43,7 @@ struct MemoryObject : public Object
 {
 	MemoryObject( GLuint ID, const char* name ):Object(ID,name,0){}
 	~MemoryObject(){ if(ID) glDeleteMemoryObjectsEXT(1,&ID); }
-	bool acquire_keyed_mutex( GLuint64 key, GLuint timeout ){ return glAcquireKeyedMutexWin32EXT(ID,1,timeout)!=0; }
+	bool acquire_keyed_mutex( GLuint64 key, GLuint timeout ){ return glAcquireKeyedMutexWin32EXT(ID,key,timeout)!=0; }
 	bool release_keyed_mutex( GLuint64 key ){ return glReleaseKeyedMutexWin32EXT(ID,key)!=0; }
 };
 
