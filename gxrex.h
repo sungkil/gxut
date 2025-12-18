@@ -173,5 +173,4 @@ struct context_t
 } // end namespace animation
 //*************************************
 
-
 #endif // __GX_REX_H__

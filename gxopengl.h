@@ -1171,7 +1171,7 @@ inline void Framebuffer::bind_no_attachments( GLint width, GLint height, GLint l
 } // end namespace gl
 //*************************************
 
-inline gl::Framebuffer* gxCreateFramebuffer( const char* name=nullptr )
+inline gl::Framebuffer* gxCreateFramebuffer( const char* name="FBO" )
 {
 	if(!name){ printf( "%s(): name==nullptr\n", __func__ ); return nullptr; }
 	GLuint ID=0; if(glCreateFramebuffers) glCreateFramebuffers( 1, &ID ); else glGenFramebuffers(1,&ID); if(ID==0){ printf( "%s(): unable to create buffer[%s]", __func__, name ); return nullptr; }
