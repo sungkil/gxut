@@ -1425,7 +1425,8 @@ struct Program : public Object
 	}
 
 	// special set_uniform functions: vector, texture, and bool
-	void set_uniform(const char* name, Texture* t){ if(!t) return; Uniform* u=get_uniform(name); if(!u) return; if(u->ID<0||u->texture_binding<0) return; u->texture=t; if(glProgramUniform1i)glProgramUniform1i(ID,u->ID,u->texture_binding); else { if(binding()!=ID) glUseProgram(ID); glUniform1i(u->ID,u->texture_binding); } u->bind_texture(); }
+	void set_uniform( const char* name, Texture* t ){ if(!t) return; Uniform* u=get_uniform(name); if(!u) return; if(u->ID<0||u->texture_binding<0) return; u->texture=t; if(glProgramUniform1i)glProgramUniform1i(ID,u->ID,u->texture_binding); else { if(binding()!=ID) glUseProgram(ID); glUniform1i(u->ID,u->texture_binding); } u->bind_texture(); }
+	void set_uniform( const char* name, Texture** t ){ if(!t||!*t) return; set_uniform( name, *t ); }
 	void set_uniform( const char* name, bool b ){ int v=b?1:0; set_uniform( name, &v ); }
 	template <class T> void set_uniform( const char* name, const T& v ){ set_uniform( name, &v ); }
 	template <class T> void set_uniform( const char* name, const vector<T>& v ){ set_uniform( name, v.data(), GLsizei(v.size()) ); }
@@ -2004,6 +2005,7 @@ struct Effect : public Object
 
 	Uniform* get_uniform( const char* name ){ if(active_program) return active_program->get_uniform(name); oncef("%s.%s(%s): no program is bound.",this->name(),__func__,name); return nullptr; }
 	void set_uniform( const char* name, Texture* t ){ auto* p=active_program; if(!p) p=find_program_from_uniform(name,__func__); if(p) p->set_uniform(name,t); }
+	void set_uniform( const char* name, Texture** t ){ if(!t||!*t) return; set_uniform( name, *t ); }
 	void set_uniform( const char* name, bool b ){ int i=b?1:0; return set_uniform(name, &i ); }
 	template <class T> void set_uniform( const char* name, const vector<T>& v ){ GLsizei count=GLsizei(v.size()); set_uniform(name,v.data(),count); }
 	template <class T> void set_uniform( const char* name, const T& v ){ set_uniform<T>(name,(T*)&v, 1); }
