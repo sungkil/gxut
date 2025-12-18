@@ -1171,11 +1171,10 @@ inline void Framebuffer::bind_no_attachments( GLint width, GLint height, GLint l
 } // end namespace gl
 //*************************************
 
-inline gl::Framebuffer* gxCreateFramebuffer( const char* name="FBO" )
+inline gl::Framebuffer* gxCreateFramebuffer( const char* name=nullptr )
 {
-	if(!name){ printf( "%s(): name==nullptr\n", __func__ ); return nullptr; }
-	GLuint ID=0; if(glCreateFramebuffers) glCreateFramebuffers( 1, &ID ); else glGenFramebuffers(1,&ID); if(ID==0){ printf( "%s(): unable to create buffer[%s]", __func__, name ); return nullptr; }
-	return new gl::Framebuffer(ID,name&&name[0]?name:"");	// if name is nullptr, return default FBO
+	GLuint ID=0; if(glCreateFramebuffers) glCreateFramebuffers( 1, &ID ); else glGenFramebuffers(1,&ID); if(ID==0){ printf( "%s(%s): unable to create framebuffer", __func__, name ); return nullptr; }
+	return new gl::Framebuffer(ID,name&&*name?name:"FBO");	// name defaulted to "FBO"
 }
 
 inline gl::Framebuffer*& gl::Framebuffer::instance()
