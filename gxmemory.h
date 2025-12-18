@@ -180,15 +180,15 @@ __noinline unsigned int crc32c_hw( unsigned int crc0, const void* ptr, size_t si
 	return uint32_t(~c);
 }
 inline bool __has_sse42(){ static bool b=false; if(!b){int r[4]={};__cpuid(r,1);b=(((r[2]>>20)&1)==1);} return b; }
-inline unsigned int crc32c( unsigned int crc0, const void* ptr, size_t size ){ static unsigned int(*pcrc32c)(unsigned int,const void*,size_t)=__has_sse42()?crc32c_hw:crc32<0x82f63b78UL>; return pcrc32c(crc0,ptr,size); }
+inline unsigned int crc32c( unsigned int crc0, const void* ptr, size_t size ){ static unsigned int(*pcrc32c)(unsigned int,const void*,size_t)=__has_sse42()?crc32c_hw:crc32<0x82f63b78UL>; return ptr&&size?pcrc32c(crc0,ptr,size):crc0; }
 #else
-inline unsigned int crc32c( unsigned int crc0, const void* ptr, size_t size ){ return crc32<0x82f63b78UL>(crc0,ptr,size); }
+inline unsigned int crc32c( unsigned int crc0, const void* ptr, size_t size ){ return ptr&&size?crc32<0x82f63b78UL>(crc0,ptr,size):crc0; }
 #endif
-inline unsigned int crc32c( unsigned int crc0, sized_ptr_t<void> p ){ return crc32c(crc0,(const void*)p.ptr,p.size); }
-inline unsigned int crc32c( unsigned int crc0, const char* s ){ return crc32c(crc0,(const void*)s,strlen(s)); }
-inline unsigned int crc32c( unsigned int crc0, const wchar_t* s ){ return crc32c(crc0,(const void*)s,wcslen(s)); }
-inline unsigned int crc32c( unsigned int crc0, const string& s ){ return crc32c(crc0,(const void*)s.c_str(),s.size()); }
-inline unsigned int crc32c( unsigned int crc0, const std::wstring& s ){ return crc32c(crc0,(const void*)s.c_str(), s.size()*sizeof(wchar_t)); }
+inline unsigned int crc32c( unsigned int crc0, sized_ptr_t<void> p ){ return p.ptr&&p.size?crc32c(crc0,(const void*)p.ptr,p.size):crc0; }
+inline unsigned int crc32c( unsigned int crc0, const char* s ){ return s&&*s?crc32c(crc0,(const void*)s,strlen(s)):crc0; }
+inline unsigned int crc32c( unsigned int crc0, const wchar_t* s ){ return s&&*s?crc32c(crc0,(const void*)s,wcslen(s)):crc0; }
+inline unsigned int crc32c( unsigned int crc0, const string& s ){ return s.empty()?crc0:crc32c(crc0,(const void*)s.c_str(),s.size()); }
+inline unsigned int crc32c( unsigned int crc0, const std::wstring& s ){ return s.empty()?crc0:crc32c(crc0,(const void*)s.c_str(), s.size()*sizeof(wchar_t)); }
 template <class T> inline unsigned int crc32c( unsigned int crc0, const vector<T>& v ){ return v.empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
 template <class T> inline unsigned int crc32c( unsigned int crc0, const vector<T>* v ){ return !v||v->empty()?crc0:crc32c(crc0,v->data(),v->size()*sizeof(T)); }
 template <class T, size_t N> inline unsigned int crc32c( unsigned int crc0, const array<T,N>& v ){ return v.empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
