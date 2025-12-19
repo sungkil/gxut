@@ -550,6 +550,7 @@ struct Texture : public Object
 
 	// get_image/set_image
 	void get_image( GLvoid* pixels, GLint level=0 ){ if(target==GL_TEXTURE_BUFFER){ oncef("[%s] read_pixels() not supports GL_TEXTURE_BUFFER\n", _name ); return; } else if(glGetTextureImage){ glGetTextureImage( ID, level, format(), type(), GLsizei(mem_size()), pixels ); return; } GLuint b0=bind(); glGetTexImage( target, level, format(), type(), pixels ); glBindTexture( target, b0 ); }
+	void get_sub_image( GLvoid* pixels, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLint level=0, GLint zoffset=0, GLsizei depth=1 ){ if(target==GL_TEXTURE_BUFFER){ oncef("[%s] read_pixels() not supports GL_TEXTURE_BUFFER\n", _name ); return; } if(!glGetTextureSubImage){ oncef("[%s] glGetTextureSubImage==nullptr\n", _name ); return; } glGetTextureSubImage( ID, level, xoffset, yoffset, zoffset, width, height, depth, format(), type(), Bpp()*width*height, pixels ); }
 	void set_image( GLvoid* pixels, GLint level=0, GLsizei width=0, GLsizei height=0, GLsizei depth=0, GLint x=0, GLint y=0, GLint z=0 );
 
 	// instance-related
