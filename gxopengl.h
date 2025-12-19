@@ -593,8 +593,8 @@ protected: // protected data members
 	GLsizei		_multisamples=1;
 
 	// view-related
-	uint			_key=0;			// key of the current view
-	Texture*		_next=nullptr;	// next view node: a node of linked list, starting from the parent node
+	uint		_key=0;			// key of the current view
+	Texture*	_next=nullptr;	// next view node: a node of linked list, starting from the parent node
 };
 
 inline void Texture::set_image( GLvoid* pixels, GLint level, GLsizei width, GLsizei height, GLsizei depth, GLint x, GLint y, GLint z )
