@@ -435,6 +435,15 @@ template <class T> __noinline const T* str_remove_tokens( const T* _Src, const T
 	*d=0; return dst;
 }
 
+// NaN detection
+__noinline bool strnan( const char* s )
+{
+	if(!stristr(s,"nan")&&!stristr(s,"inf")) return false;
+	if(strchr(s,'(')&&strchr(s,')')){ if(stristr(s,"(ind)")||stristr(s,"(snan)")||stristr(s,"(qnan)")||stristr(s,"(0x")) return true; }
+	if(stricmp(s,"nan")==0||stricmp(s,"-nan")==0||stristr(s," nan")||stristr(s," -nan")) return true;
+	return stricmp(s,"inf")==0||stricmp(s,"-inf")==0||stristr(s," inf")||stristr(s," -inf");
+}
+
 // Unicode file name normalization
 inline bool is_normalized_string( const wchar_t* s )
 {
