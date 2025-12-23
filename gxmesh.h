@@ -213,7 +213,8 @@ struct camera_t // 16-bytes aligned for std140 layout
 	vec3 at;	float height=0;
 	vec3 up;	float fovy_degrees=30.0f;
 	vec3 dir;	float fn=0;
-	alignas(16) float focal=0, fy=0, E=0, df=0; // focal length (in mm), focal length (in pixels), lens radius, focusing depth (in object distance)
+	alignas(16) float focal=0;	// focal length (in mm); alignas should apply to a SINGLE float
+	float fy=0, E=0, df=0;		// focal length (in pixels), lens radius, focusing depth (in object distance)
 
 	camera_t() = default;
 	camera_t(camera_t&& c) = default;
@@ -232,7 +233,8 @@ struct camera_t // 16-bytes aligned for std140 layout
 	float	coc_norm_scale() const { float E=focal/(fn==0?4.0f:fn)*0.5f; return E/df/tan(fovy*0.5f); } // normalized coc scale in the screen space; E: lens_radius; when fn==0, use default for 4
 	float	coc_scale( int height ) const { return coc_norm_scale()*float(height)*0.5f; } // screen-space coc scale; so called "K" so far
 };
-static_assert(sizeof(camera_t)%16==0, "size of struct camera_t should be aligned at 16-byte boundary");
+static_assert(sizeof(camera_t)%16==0, "sizeof(camera_t) should be aligned at 16-byte boundary");
+static_assert(sizeof(camera_t)==224, "sizeof(camera_t)!=224"); // manual size check
 inline string STR_GLSL_STRUCT_CAMERA = "struct camera_t { mat4 view_matrix, projection_matrix; float fovy, aspect, dnear, dfar; vec4 eye, at, up, dir; float focal, fy, E, df; };\n";
 #endif
 
