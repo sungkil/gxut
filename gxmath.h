@@ -798,6 +798,22 @@ __forceinline vec3 vec2BitsToNormVec3( vec2 v )
 	return vec3(float(u.x&cmask),float((u.y>>1)&cmask),float(((u.x&~cmask)>>(cap-hcap))|(u.y>>(cap+1))))/float(cmask);
 }
 
+// NaN detection
+__forceinline bool isnan( float* f, size_t n ){ for(size_t k=0;k<n;k++) if(isnan(f[k])) return true; return false; }
+__forceinline bool isnan( double* f, size_t n ){ for(size_t k=0;k<n;k++) if(isnan(f[k])) return true; return false; }
+__forceinline bool isnan( vec2 v ){ return isnan(&v.x,v.size()); }
+__forceinline bool isnan( vec3 v ){ return isnan(&v.x,v.size()); }
+__forceinline bool isnan( vec4 v ){ return isnan(&v.x,v.size()); }
+__forceinline bool isnan( dvec2 v ){ return isnan(&v.x,v.size()); }
+__forceinline bool isnan( dvec3 v ){ return isnan(&v.x,v.size()); }
+__forceinline bool isnan( dvec4 v ){ return isnan(&v.x,v.size()); }
+__forceinline bool isnan( mat2 m ){ return isnan(m.data(),m.size()); }
+__forceinline bool isnan( mat3 m ){ return isnan(m.data(),m.size()); }
+__forceinline bool isnan( mat4 m ){ return isnan(m.data(),m.size()); }
+__forceinline bool isnan( dmat2 m ){ return isnan(m.data(),m.size()); }
+__forceinline bool isnan( dmat3 m ){ return isnan(m.data(),m.size()); }
+__forceinline bool isnan( dmat4 m ){ return isnan(m.data(),m.size()); }
+
 //*************************************
 // spline interpolations
 template <class T> T hermite( T v0, T v1, T v2, T v3, double t, double tension=0.5, double bias=0.0, double continuity=-0.5 )
