@@ -798,9 +798,10 @@ __forceinline vec3 vec2BitsToNormVec3( vec2 v )
 	return vec3(float(u.x&cmask),float((u.y>>1)&cmask),float(((u.x&~cmask)>>(cap-hcap))|(u.y>>(cap+1))))/float(cmask);
 }
 
-// NaN detection
+// NaN/inf detection
 __forceinline bool isnan( float* f, size_t n ){ for(size_t k=0;k<n;k++) if(isnan(f[k])) return true; return false; }
 __forceinline bool isnan( double* f, size_t n ){ for(size_t k=0;k<n;k++) if(isnan(f[k])) return true; return false; }
+__forceinline bool isnan( long double* f, size_t n ){ for(size_t k=0;k<n;k++) if(isnan(f[k])) return true; return false; }
 __forceinline bool isnan( vec2 v ){ return isnan(&v.x,v.size()); }
 __forceinline bool isnan( vec3 v ){ return isnan(&v.x,v.size()); }
 __forceinline bool isnan( vec4 v ){ return isnan(&v.x,v.size()); }
@@ -813,6 +814,21 @@ __forceinline bool isnan( mat4 m ){ return isnan(m.data(),m.size()); }
 __forceinline bool isnan( dmat2 m ){ return isnan(m.data(),m.size()); }
 __forceinline bool isnan( dmat3 m ){ return isnan(m.data(),m.size()); }
 __forceinline bool isnan( dmat4 m ){ return isnan(m.data(),m.size()); }
+__forceinline bool isinf( float* f, size_t n ){ for(size_t k=0;k<n;k++) if(isinf(f[k])) return true; return false; }
+__forceinline bool isinf( double* f, size_t n ){ for(size_t k=0;k<n;k++) if(isinf(f[k])) return true; return false; }
+__forceinline bool isinf( long double* f, size_t n ){ for(size_t k=0;k<n;k++) if(isinf(f[k])) return true; return false; }
+__forceinline bool isinf( vec2 v ){ return isinf(&v.x,v.size()); }
+__forceinline bool isinf( vec3 v ){ return isinf(&v.x,v.size()); }
+__forceinline bool isinf( vec4 v ){ return isinf(&v.x,v.size()); }
+__forceinline bool isinf( dvec2 v ){ return isinf(&v.x,v.size()); }
+__forceinline bool isinf( dvec3 v ){ return isinf(&v.x,v.size()); }
+__forceinline bool isinf( dvec4 v ){ return isinf(&v.x,v.size()); }
+__forceinline bool isinf( mat2 m ){ return isinf(m.data(),m.size()); }
+__forceinline bool isinf( mat3 m ){ return isinf(m.data(),m.size()); }
+__forceinline bool isinf( mat4 m ){ return isinf(m.data(),m.size()); }
+__forceinline bool isinf( dmat2 m ){ return isinf(m.data(),m.size()); }
+__forceinline bool isinf( dmat3 m ){ return isinf(m.data(),m.size()); }
+__forceinline bool isinf( dmat4 m ){ return isinf(m.data(),m.size()); }
 
 //*************************************
 // spline interpolations
