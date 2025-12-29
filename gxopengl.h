@@ -677,7 +677,7 @@ __noinline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsiz
 	// generate mipmap
 	glTexParameteri( target, GL_TEXTURE_BASE_LEVEL, 0 );
 	glTexParameteri( target, GL_TEXTURE_MAX_LEVEL, levels-1 );
-	if( levels>1 ) glGenerateMipmap( target );
+	if(data&&levels>1) glGenerateMipmap( target );
 
 	// attributes
 	glTexParameteri( target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
@@ -729,7 +729,7 @@ __noinline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsiz
 	// generate mipmap
 	glTexParameteri( target, GL_TEXTURE_BASE_LEVEL, 0 );
 	glTexParameteri( target, GL_TEXTURE_MAX_LEVEL, levels-1 );
-	if( levels>1 ) glGenerateMipmap( target );
+	if(data&&levels>1) glGenerateMipmap( target );
 
 	// attributes
 	glTexParameteri( target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
@@ -741,11 +741,11 @@ __noinline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsiz
 	return texture;
 }
 
-__noinline gl::Texture* gxCreateTexture2D( const char* name, image* p_image, GLint levels=1, GLsizei layers=1 )
+__noinline gl::Texture* gxCreateTexture2D( const char* name, image* p_image )
 {
 	if(!p_image){ printf( "%s(%s): p_image==nullptr\n", __func__, name ); return nullptr; }
-	GLenum tf = gxGetImageTextureInternalFormat( p_image->depth,p_image->channels ); if(!tf){ printf( "%s(%s): unsupported image format for color texture\n", __func__, name ); return nullptr; }
-	return gxCreateTexture2D( name, levels, p_image->width, p_image->height, layers, tf, p_image->data );
+	GLenum tf = gxGetImageTextureInternalFormat( p_image->depth, p_image->channels ); if(!tf){ printf( "%s(%s): unsupported image format for color texture\n", __func__, name ); return nullptr; }
+	return gxCreateTexture2D( name, miplevels(p_image->width,p_image->height), p_image->width, p_image->height, 1, tf, p_image->data );
 }
 
 __noinline gl::Texture* gxCreateTexture3D( const char* name, GLint levels, GLsizei width, GLsizei height, GLsizei depth, GLint internal_format=GL_RGBA16F, GLvoid* data=nullptr )
@@ -774,7 +774,7 @@ __noinline gl::Texture* gxCreateTexture3D( const char* name, GLint levels, GLsiz
 	// generate mipmap
 	glTexParameteri( target, GL_TEXTURE_BASE_LEVEL, 0 );
 	glTexParameteri( target, GL_TEXTURE_MAX_LEVEL, levels-1 );
-	if( levels>1 ) glGenerateMipmap( target );
+	if(data&&levels>1) glGenerateMipmap( target );
 
 	// attributes
 	glTexParameteri( target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
@@ -822,7 +822,7 @@ __noinline gl::Texture* gxCreateTextureCube( const char* name, GLint levels, GLs
 	// generate mipmap
 	glTexParameteri( target, GL_TEXTURE_BASE_LEVEL, 0 );
 	glTexParameteri( target, GL_TEXTURE_MAX_LEVEL, levels-1 );
-	if( levels>1 ) glGenerateMipmap( target );
+	if(data&&levels>1) glGenerateMipmap( target );
 
 	// attributes
 	glTexParameteri( target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );	// GL_CLAMP_TO_EDGE is the best option
