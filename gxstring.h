@@ -214,6 +214,27 @@ template<> inline dmat3	aton<dmat3>( const char* a ){	return atof<dmat3>(a); }
 template<> inline dmat4	aton<dmat4>( const char* a ){	return atof<dmat4>(a); }
 #endif
 
+// typed string as a value-string holder
+template <class T> struct typed_string
+{
+	typed_string()=default;
+	typed_string( typed_string&& other ) noexcept { data=std::move(other.data); }
+	typed_string( const typed_string& other ){ data=other.data; }
+	typed_string( T&& f ){ data=ntoa(f); }
+	typed_string( const T& f ){ data=ntoa(f); }
+	typed_string& operator=( typed_string&& f ){ data=std::move(f.data); return *this; }
+	typed_string& operator=( const typed_string& f ){ data=f.data; return *this; }
+	typed_string& operator=( T&& f ){ data=ntoa(f); return *this; }
+	typed_string& operator=( const T& f ){ data=ntoa(f); return *this; }
+	operator const T() const { return aton<T>(data.c_str()); }
+	operator T() const && { return aton<T>(data.c_str()); }
+	const char* c_str() const { return data.c_str(); }
+	bool empty() const { return data.empty(); }
+	void clear(){ data.clear(); }
+protected:
+	string data;
+};
+
 // bitwise conversion
 template <class T> const char* unpack_bits( const T& v )
 {

@@ -21,6 +21,9 @@
 #if __has_include("gxmath.h")
 	#include "gxmath.h"
 #endif
+#if __has_include("gxstring.h")
+	#include "gxstring.h"
+#endif
 #if __has_include("gxfilesystem.h")
 	#include "gxfilesystem.h"
 #endif
@@ -238,6 +241,7 @@ static_assert(sizeof(camera_t)==224, "sizeof(camera_t)!=224"); // manual size ch
 inline string STR_GLSL_STRUCT_CAMERA = "struct camera_t { mat4 view_matrix, projection_matrix; float fovy, aspect, dnear, dfar; vec4 eye, at, up, dir; float focal, fy, E, df; };\n";
 #endif
 
+struct campreset; // forward decls.
 struct camera : public camera_t
 {
 	camera*		last=nullptr;		// current to last
@@ -245,7 +249,20 @@ struct camera : public camera_t
 	int			frame = RAND_MAX;	// frame used for this camera; used in a motion tracer
 	frustum_t	frustum;			// view frustum for culling
 	char		name[PATH_MAX]={};	// loaded preset name (e.g., image name) if any
-	int			preset_index=-1;	// loaded preset index; -1 indicates no preset
+	campreset*	preset=nullptr;		// a preset bound to this camera
+};
+
+struct campreset
+{
+	uint					id=-1, crc=0;
+	string					name;
+	typed_string<float>		fovy, aspect, dnear, dfar;
+	typed_string<vec3>		eye, at, up, dir;
+	typed_string<float>		width, height, fn;
+	typed_string<float>		focal, fx, fy, E, df;
+
+	__noinline void clear(){ crc=0; id=-1; name.clear(); fovy.clear(); aspect.clear(); dnear.clear(); dfar.clear(); eye.clear(); at.clear(); up.clear(); dir.clear(); width.clear(); height.clear(); fn.clear(); focal.clear(); fx.clear(); fy.clear(); E.clear(); df.clear(); }
+	bool empty() const { return crc==0; }
 };
 
 struct stereo_t
