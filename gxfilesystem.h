@@ -297,7 +297,7 @@ template<> __noinline sized_ptr_t<wchar_t> path::read_file<wchar_t>() const
 {
 	sized_ptr_t<wchar_t> p={nullptr,0};
 	FILE* fp=fopen("r",true); if(!fp) return {nullptr,0};
-	size_t size0 = ::file_size(fp); if(!size0){ fclose(fp); p.ptr=(wchar_t*)L""; return p; }
+	size_t size0 = ::file_size(fp); if(!size0){ fclose(fp); p.ptr=(wchar_t*)memset(malloc(sizeof(wchar_t)),0,sizeof(wchar_t)); return p; }
 
 	std::wstring buffer; buffer.reserve(size0*2);
 	wchar_t buff[4096]; while(fgetws(buff,4096,fp)) buffer+=buff; fclose(fp);
@@ -312,7 +312,7 @@ template<> __noinline sized_ptr_t<char> path::read_file<char>() const
 {
 	sized_ptr_t<char> p={nullptr,0};
 	FILE* fp=fopen("r"); if(!fp) return {nullptr,0};
-	size_t size0 = ::file_size(fp); if(!size0){ fclose(fp); p.ptr=(char*)""; return p; }
+	size_t size0 = ::file_size(fp); if(!size0){ fclose(fp); p.ptr=(char*)memset(malloc(sizeof(char)),0,sizeof(char)); return p; }
 
 	string buffer; buffer.reserve(size0*2);
 	char buff[4096]; while(fgets(buff,4096,fp)) buffer+=buff; fclose(fp);
