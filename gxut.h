@@ -271,8 +271,8 @@ using std::max;
 // alloc/deallocation functions
 template <class T> T* malloc( size_t size ){ return (T*) ::malloc(size); }
 template <class T> T* realloc( void* ptr, size_t size ){ return (T*) ::realloc(ptr,size); }
-template <class T> T*& safe_free( T*& p ){if(p) free((void*)p); return p=nullptr; }
-template <class T> T*& safe_delete( T*& p ){if(p) delete p; return p=nullptr; }
+template <class T> T*& safe_free( T*& p ){ if(p) free((void*)p); return p=nullptr; }
+template <class T> T*& safe_delete( T*& p ){ if(p) delete p; return p=nullptr; }
 
 // pointer type with size: waiting for a C++ standard for proposal P0901R3 (std::sized_ptr_t)
 template <class T=void> struct sized_ptr_t { T* ptr=nullptr; size_t size=0; operator T* (){return ptr;} operator const T* () const {return ptr;} T* operator->(){return ptr;} const T* operator->() const {return ptr;} };
