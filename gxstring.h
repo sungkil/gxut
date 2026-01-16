@@ -390,6 +390,14 @@ explode_set( const T* src, const T* delims=__whitespaces<T>() )
 	return v;
 }
 
+namespace nocase { template <class T> __noinline set<std::basic_string<T>>
+explode_set( const T* src, const T* delims=__whitespaces<T>() )
+{
+	set<std::basic_string<T>> v; if(!src||!*src) return v;
+	for( T *ctx=nullptr, *token = strtok_s(__strdup(src),delims,&ctx); token; token=strtok_s(nullptr,delims,&ctx) ) v.emplace(token);
+	return v;
+}}
+
 template <class T> __noinline vector<int>			explodei( const T* src, const T* delims=__whitespaces<T>() ){ vector<int> v;			if(!src||!*src) return v; auto s=explode(src,delims); if(!s.empty()) v.reserve(s.size()); for( auto& t : s ) v.emplace_back(fast::atoi(t.c_str())); return v; }
 template <class T> __noinline vector<unsigned int>	explodeu( const T* src, const T* delims=__whitespaces<T>() ){ vector<unsigned int> v;	if(!src||!*src) return v; auto s=explode(src,delims); if(!s.empty()) v.reserve(s.size()); for( auto& t : s ) v.emplace_back((unsigned int)fast::atoi(t.c_str())); return v; }
 template <class T> __noinline vector<float>			explodef( const T* src, const T* delims=__whitespaces<T>() ){ vector<float> v;			if(!src||!*src) return v; auto s=explode(src,delims); if(!s.empty()) v.reserve(s.size()); for( auto& t : s ) v.emplace_back(float(fast::atof(t.c_str()))); return v; }

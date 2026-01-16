@@ -379,6 +379,7 @@ inline bool is_utf8( const char* s )
 
 inline const wchar_t* atow( const char* a ){ if(!a) return nullptr; if(!*a) return L""; uint cp=is_utf8(a)?CP_UTF8:0; int l=MultiByteToWideChar(cp,0,a,-1,0,0); wchar_t* w=__strbuf<wchar_t>(l); MultiByteToWideChar(cp,0,a,-1,w,l); w[l+1]=0; return w; }
 inline const char* wtoa( const wchar_t* w ){ if(!w) return nullptr; if(!*w) return ""; int l=WideCharToMultiByte(0,0,w,-1,0,0,0,0); char* a=__strbuf(l); WideCharToMultiByte(0,0,w,-1,a,l,0,0); a[l+1]=0; return a; }
+inline string wtos( const wchar_t* w ){ if(!w||!*w) return ""; int l=WideCharToMultiByte(0,0,w,-1,0,0,0,0); char* a=__strbuf(l); WideCharToMultiByte(0,0,w,-1,a,l,0,0); a[l+1]=0; return a; }
 inline const char* atoa( const char* src, uint src_cp, uint dst_cp ){ if(!src) return nullptr; if(!*src) return ""; if(src_cp==dst_cp) return __strdup(src); int l=MultiByteToWideChar(src_cp,0,src,-1,0,0); wchar_t* w=__strbuf<wchar_t>(l); MultiByteToWideChar(src_cp,0,src,-1,w,l); l=WideCharToMultiByte(dst_cp,0,w,-1,0,0,0,0); char* a=__strbuf(l); WideCharToMultiByte(dst_cp,0,w,-1,a,l,0,0); a[l+1]=0; return a; }
 inline bool ismbs( const char* s ){ if(!s||!*s) return false; for(int k=0,kn=int(strlen(s));k<kn;k++,s++) if(*s<0)return true; return false; }
 #else

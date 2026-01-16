@@ -191,8 +191,9 @@ template<> __noinline float3 parser_t::get<float3>( const char* key ){		auto* v=
 template<> __noinline float4 parser_t::get<float4>( const char* key ){		auto* v=get(key); return *v==0?float4{}:atof<float4>(v); }
 
 // template specializations for set()
-template<> __noinline void parser_t::set<const char*>( const char* key, const char* value ){ if(!key||!*key) return; bool b=key_exists(key); entry_t* e=get_or_create_entry(key); if(b&&e->value==value) return; e->value=value; save(); }
+template<> __noinline void parser_t::set<const char*>( const char* key, const char* value ){ if(!key||!*key) return; if(!value||!*value) return clear(key); bool b=key_exists(key); entry_t* e=get_or_create_entry(key); if(b&&e->value==value) return; e->value=value; save(); }
 template<> __noinline void parser_t::set<char*>( const char* key, char* value ){		set<const char*>(key,value); }
+template<> __noinline void parser_t::set<string>( const char* key, string value ){		set<const char*>(key,value.c_str()); }
 #ifdef __GX_FILESYSTEM_H__
 template<> __noinline void parser_t::set<path>( const char* key, path value ){			set<const char*>(key,value.c_str()); }
 #endif
