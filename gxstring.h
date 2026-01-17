@@ -357,7 +357,7 @@ template <class T> const T* trim_comment( const T* src, const char* marker="#" )
 	return buff;
 }
 
-template <class V, class T>
+template <class V, class T=V::value_type::value_type>
 __noinline const T* join( const V& v, const T* delims=__strdup<T,char>(" ") )
 {
 	if(v.empty()) return (const T*)L"";

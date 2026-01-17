@@ -139,7 +139,7 @@ vector<mtl::section_t> parse_mtl( path file_path )
 			continue;
 		}
 
-		vector<string> vs = std::move(explode(b));
+		auto vs = std::move(explode(b));
 		if(vs.size()<2){ b_dirty=true; continue; } // cull no-value lines
 		const string& key = vs[0];
 		
