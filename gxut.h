@@ -160,7 +160,9 @@ using namespace std::literals::string_literals;
 // common unique types in std namespace; these types should hardly have the same names in user definitions
 using std::array;
 using std::initializer_list;
+using std::map;
 using std::pair;
+using std::set;
 using std::string;
 using std::string_view;
 using std::tuple;
