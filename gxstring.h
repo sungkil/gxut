@@ -253,6 +253,8 @@ namespace fast
 		int i=0;for(;;str++){uint d=static_cast<uint>(*str)-'0';if(d>9)break;i=i*10+d;} // integers
 		return neg?-i:i;
 	}
+	__forceinline int wtoi( const wchar_t* str ){ return atoi(wtoa(str)); }
+	__forceinline int atoi( const wchar_t* str ){ return atoi(wtoa(str)); }
 
 	__forceinline double atof( const char* str )
 	{
@@ -266,6 +268,8 @@ namespace fast
 		double scale=1;while(e>=8){scale*=1E8;e-=8;} while(e>0){scale*=10.0;e--;} v=eng?v/scale:v*scale; // apply exponents
 		return neg?-v:v;
 	}
+	__forceinline double wtof( const wchar_t* str ){ return atof(wtoa(str)); }
+	__forceinline double atof( const wchar_t* str ){ return atof(wtoa(str)); }
 }
 
 // hexadecimanal conversion
@@ -353,57 +357,35 @@ template <class T> const T* trim_comment( const T* src, const char* marker="#" )
 	return buff;
 }
 
-template <class T> __noinline const T* join( vector<std::basic_string<T>> v, const T* delims=__strdup<T,char>(" ") )
+template <class V, class T>
+__noinline const T* join( const V& v, const T* delims=__strdup<T,char>(" ") )
 {
-	std::basic_string<T> s; if(v.empty()) return (const T*)L"";
-	for( const auto& k : v ){ if(k.empty()) continue; if(!s.empty()) s+=decltype(s)(delims); s+=k; }
+	if(v.empty()) return (const T*)L"";
+	std::basic_string<T> s; for( const auto& k : v ){ if(k.empty()) continue; if(!s.empty()) s+=std::basic_string<T>(delims); s+=k; }
 	return __strdup(s.c_str());
 }
 
-template <class T> __noinline const T* join( std::set<std::basic_string<T>> v, const T* delims=__strdup<T,char>(" ") )
+template <template<typename...> class V=vector, class T=char>
+__noinline V<std::basic_string<T>> explode( const T* src, const T* delims=__whitespaces<T>() )
 {
-	std::basic_string<T> s; if(v.empty()) return (const T*)L"";
-	for( const auto& k : v ){ if(k.empty()) continue; if(!s.empty()) s+=decltype(s)(delims); s+=k; }
-	return __strdup(s.c_str());
+	using R = std::basic_string<T>; V<R> v; if(!src||!*src) return v;
+	if constexpr (requires{v.emplace_back(R());}){ v.reserve(32); for( T *ctx=0, *t=strtok_s(__strdup(src),delims,&ctx); t; t=strtok_s(nullptr,delims,&ctx) ) v.emplace_back(t); return v; }
+	else if constexpr (requires{v.emplace(R());}){ for( T *ctx=0, *t=strtok_s(__strdup(src),delims,&ctx); t; t=strtok_s(nullptr,delims,&ctx) ) v.emplace(t); return v; }
+	else { static_assert(std::false_type::value, "explode(): unsupported container type V"); }
 }
 
-template <class T> __noinline const T* join( nocase::set<std::basic_string<T>> v, const T* delims=__strdup<T,char>(" ") )
+template <class R, class T>
+__noinline auto explode( const T* src, const T* delims=__whitespaces<T>() )
 {
-	std::basic_string<T> s; if(v.empty()) return (const T*)L"";
-	for( const auto& k : v ){ if(k.empty()) continue; if(!s.empty()) s+=decltype(s)(delims); s+=k; }
-	return __strdup(s.c_str());
+	auto v = explode<vector,T>(src,delims);
+	// if constexpr (std::is_same_v<std::remove_cv_t<std::remove_reference_t<R>>,int>)
+	if constexpr (std::is_integral_v<R>){ vector<R> x; for(auto& t:v) x.emplace_back(R(fast::atoi(t.c_str()))); return x; }
+	else if constexpr (std::is_floating_point_v<R>){ vector<R> x; for(auto& t:v) x.emplace_back(R(fast::atof(t.c_str()))); return x; }
+	else { static_assert(std::false_type::value, "explode_t(): unsupported return type R"); }
 }
 
-template <class T> __noinline vector<std::basic_string<T>>
-explode( const T* src, const T* delims=__whitespaces<T>() )
-{
-	vector<std::basic_string<T>> v; if(!src||!*src) return v; v.reserve(32);
-	for( T *ctx=nullptr, *token = strtok_s(__strdup(src),delims,&ctx); token; token=strtok_s(nullptr,delims,&ctx) ) v.emplace_back(token);
-	return v;
-}
-
-template <class T> __noinline std::set<std::basic_string<T>>
-explode_set( const T* src, const T* delims=__whitespaces<T>() )
-{
-	std::set<std::basic_string<T>> v; if(!src||!*src) return v;
-	for( T *ctx=nullptr, *token = strtok_s(__strdup(src),delims,&ctx); token; token=strtok_s(nullptr,delims,&ctx) ) v.emplace(token);
-	return v;
-}
-
-namespace nocase { template <class T> __noinline set<std::basic_string<T>>
-explode_set( const T* src, const T* delims=__whitespaces<T>() )
-{
-	set<std::basic_string<T>> v; if(!src||!*src) return v;
-	for( T *ctx=nullptr, *token = strtok_s(__strdup(src),delims,&ctx); token; token=strtok_s(nullptr,delims,&ctx) ) v.emplace(token);
-	return v;
-}}
-
-template <class T> __noinline vector<int>			explodei( const T* src, const T* delims=__whitespaces<T>() ){ vector<int> v;			if(!src||!*src) return v; auto s=explode(src,delims); if(!s.empty()) v.reserve(s.size()); for( auto& t : s ) v.emplace_back(fast::atoi(t.c_str())); return v; }
-template <class T> __noinline vector<unsigned int>	explodeu( const T* src, const T* delims=__whitespaces<T>() ){ vector<unsigned int> v;	if(!src||!*src) return v; auto s=explode(src,delims); if(!s.empty()) v.reserve(s.size()); for( auto& t : s ) v.emplace_back((unsigned int)fast::atoi(t.c_str())); return v; }
-template <class T> __noinline vector<float>			explodef( const T* src, const T* delims=__whitespaces<T>() ){ vector<float> v;			if(!src||!*src) return v; auto s=explode(src,delims); if(!s.empty()) v.reserve(s.size()); for( auto& t : s ) v.emplace_back(float(fast::atof(t.c_str()))); return v; }
-template <class T> __noinline vector<double>		exploded( const T* src, const T* delims=__whitespaces<T>() ){ vector<double> v;			if(!src||!*src) return v; auto s=explode(src,delims); if(!s.empty()) v.reserve(s.size()); for( auto& t : s ) v.emplace_back(fast::atof(t.c_str())); return v; }
-
-template <class T> __noinline vector<std::basic_string<T>>
+template <class T>
+__noinline vector<std::basic_string<T>>
 explode_conservative( const T* src, T delim )
 {
 	vector<std::basic_string<T>> v; if(!src||!*src) return v; v.reserve(32);
