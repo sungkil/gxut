@@ -270,6 +270,12 @@ namespace fast
 	}
 	__forceinline double wtof( const wchar_t* str ){ return atof(wtoa(str)); }
 	__forceinline double atof( const wchar_t* str ){ return atof(wtoa(str)); }
+
+	template <class T> T		aton( const char* a );
+	template<> inline int		aton<int>( const char* a ){		return atoi(a); }
+	template<> inline uint		aton<uint>( const char* a ){	return uint(atoi(a)); }
+	template<> inline float		aton<float>( const char* a ){	return float(atof(a)); }
+	template<> inline double	aton<double>( const char* a ){	return double(atof(a)); }
 }
 
 // hexadecimanal conversion
@@ -365,7 +371,7 @@ __noinline const T* join( const V& v, const T* delims=__strdup<T,char>(" ") )
 	return __strdup(s.c_str());
 }
 
-template <template<typename...> class V=vector, class T=char>
+template <template<typename...>class V=vector, class T=char>
 __noinline V<std::basic_string<T>> explode( const T* src, const T* delims=__whitespaces<T>() )
 {
 	using R = std::basic_string<T>; V<R> v; if(!src||!*src) return v;
@@ -377,9 +383,8 @@ __noinline V<std::basic_string<T>> explode( const T* src, const T* delims=__whit
 template <class R, class T>
 __noinline auto explode( const T* src, const T* delims=__whitespaces<T>() )
 {
-	auto v = explode<vector,T>(src,delims);
-	if constexpr (std::integral<std::remove_cvref_t<R>>){ vector<R> x; for(auto& t:v) x.emplace_back(R(fast::atoi(t.c_str()))); return x; }
-	else if constexpr (std::floating_point<std::remove_cvref_t<R>>){ vector<R> x; for(auto& t:v) x.emplace_back(R(fast::atof(t.c_str()))); return x; }
+	using U=std::remove_cvref_t<R>;
+	if constexpr (std::integral<U>||std::floating_point<U>){ vector<U> x; for(auto&& t:explode<vector,T>(src,delims)) x.emplace_back(fast::aton<U>(t.c_str())); return x; }
 	else { static_assert(std::false_type::value, "explode_t(): unsupported return type R"); }
 }
 
