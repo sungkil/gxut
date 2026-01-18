@@ -30,44 +30,16 @@
 #include <float.h>
 #include <numeric>	// for std::iota
 #include <random>	// for std::shuffle
+#include <numbers>	// C++20
 
+using std::numbers::pi_v;
+using std::numbers::inv_pi_v;
+using std::numbers::inv_sqrtpi_v;
+using std::numbers::sqrt2_v;
+template <class T> constexpr T pi2_v = T(6.283185307179586);
 #ifdef PI
 #undef PI
 #endif
-
-#if (__cplusplus>=202002L)||(defined(_MSVC_LANG)&&_MSVC_LANG>=202002L)||(defined(_HAS_CXX20)&&_HAS_CXX20)
-	#include <numbers>
-	using std::numbers::pi_v;
-	using std::numbers::inv_pi_v;
-	using std::numbers::inv_sqrtpi_v;
-	using std::numbers::sqrt2_v;
-	template <class T> constexpr T pi2_v = T(6.283185307179586);
-	// template type_traits helpers
-	template<typename T> using floating_point_t = T;	template<typename T> concept floating_point_c = std::is_floating_point_v<T>;
-	template<typename T> using signed_t = T;			template<typename T> concept signed_c = std::is_signed_v<T>;
-	template<typename T> using integral_t = T;			template<typename T> concept integral_c = std::is_integral_v<T>;
-	#define requires_floating_point_t(T)	requires floating_point_c<T>
-	#define requires_signed_t(T)			requires signed_c<T>
-	#define requires_integral_t(T)			requires integral_c<T>
-	#define float_memfun(T)
-	#define signed_memfun(T)
-#else
-	template <class T> constexpr T pi_v = T(3.141592653589793);
-	template <class T> constexpr T inv_pi_v = T(0.3183098861837907);
-	template <class T> constexpr T inv_sqrtpi_v = T(0.5641895835477563);
-	template <class T> constexpr T sqrt2_v = T(1.4142135623730951);
-	template <class T> constexpr T pi2_v = T(6.283185307179586);
-	// template type_traits helpers
-	template <class T> using floating_point_t	= typename std::enable_if_t<std::is_floating_point<T>::value,T>;
-	template <class T> using signed_t			= typename std::enable_if_t<std::is_signed<T>::value,T>;
-	template <class T> using integral_t			= typename std::enable_if_t<std::is_integral<T>::value,T>;
-	#define requires_floating_point_t(T)
-	#define requires_signed_t(T)
-	#define requires_integral_t(T)
-	#define float_memfun(U)		template <typename U=floating_point_t<T>>
-	#define signed_memfun(U)	template <typename U=signed_t<T>>
-#endif
-
 constexpr float PI = pi_v<float>;
 constexpr float pi = pi_v<float>;
 constexpr float inv_pi = inv_pi_v<float>;
@@ -107,7 +79,7 @@ template <class T> struct tvec2
 	// unary operators
 	__forceinline tvec2& operator+(){ return *this; }
 	__forceinline const tvec2& operator+() const { return *this; }
-	signed_memfun(T) __forceinline tvec2 operator-() const requires_signed_t(T) { return tvec2(-x,-y); }
+	__forceinline tvec2 operator-() const requires std::is_signed_v<T> { return tvec2(-x,-y); }
 
 	// binary operators
 	__forceinline tvec2 operator+( T a ) const { return tvec2(x+a, y+a); }
@@ -130,12 +102,12 @@ template <class T> struct tvec2
 	__forceinline tvec2& operator/=(const tvec2& v) { x/=v.x; y/=v.y; return *this; }
 
 	// norm/length/dot: floating-point only functions
-	float_memfun(T) __forceinline T length2() const requires_floating_point_t(T) { return T(x*x+y*y); }
-	float_memfun(T) __forceinline T norm2() const requires_floating_point_t(T) { return T(x*x+y*y); }
-	float_memfun(T) __forceinline T length() const requires_floating_point_t(T) { return T(sqrt(x*x+y*y)); }
-	float_memfun(T) __forceinline T norm() const requires_floating_point_t(T) { return T(sqrt(x*x+y*y)); }
-	float_memfun(T) __forceinline T dot( const tvec2& v ) const requires_floating_point_t(T) { return x*v.x+y*v.y; }
-	float_memfun(T) __forceinline tvec2<T> normalize() const requires_floating_point_t(T) { return operator/(length()); }
+	__forceinline T length2() const requires std::floating_point<T> { return T(x*x+y*y); }
+	__forceinline T norm2() const requires std::floating_point<T> { return T(x*x+y*y); }
+	__forceinline T length() const requires std::floating_point<T> { return T(sqrt(x*x+y*y)); }
+	__forceinline T norm() const requires std::floating_point<T> { return T(sqrt(x*x+y*y)); }
+	__forceinline T dot( const tvec2& v ) const requires std::floating_point<T> { return x*v.x+y*v.y; }
+	__forceinline tvec2<T> normalize() const requires std::floating_point<T> { return operator/(length()); }
 };
 
 template <class T> struct tvec3
@@ -175,7 +147,7 @@ template <class T> struct tvec3
 	// unary operators
 	__forceinline tvec3& operator+(){ return *this; }
 	__forceinline const tvec3& operator+() const { return *this; }
-	signed_memfun(T) __forceinline tvec3 operator-() const requires_signed_t(T) { return tvec3(-x,-y,-z); }
+	__forceinline tvec3 operator-() const requires std::is_signed_v<T> { return tvec3(-x,-y,-z); }
 
 	// binary operators
 	__forceinline tvec3 operator+( T a ) const { return tvec3(x+a, y+a, z+a); }
@@ -198,15 +170,15 @@ template <class T> struct tvec3
 	__forceinline tvec3& operator/=( const tvec3& v ){ x/=v.x; y/=v.y; z/=v.z; return *this; }
 
 	// norm/length/dot: floating-point only functions
-	float_memfun(T) __forceinline T length2() const requires_floating_point_t(T) { return T(x*x+y*y+z*z); }
-	float_memfun(T) __forceinline T norm2() const requires_floating_point_t(T) { return T(x*x+y*y+z*z); }
-	float_memfun(T) __forceinline T length() const requires_floating_point_t(T) { return T(sqrt(x*x+y*y+z*z)); }
-	float_memfun(T) __forceinline T norm() const requires_floating_point_t(T) { return T(sqrt(x*x+y*y+z*z)); }
-	float_memfun(T) __forceinline T dot( const tvec3& v ) const requires_floating_point_t(T) { return x*v.x+y*v.y+z*v.z; }
-	float_memfun(T) __forceinline tvec3<T> normalize() const requires_floating_point_t(T) { return operator/(length()); }
+	__forceinline T length2() const requires std::floating_point<T> { return T(x*x+y*y+z*z); }
+	__forceinline T norm2() const requires std::floating_point<T> { return T(x*x+y*y+z*z); }
+	__forceinline T length() const requires std::floating_point<T> { return T(sqrt(x*x+y*y+z*z)); }
+	__forceinline T norm() const requires std::floating_point<T> { return T(sqrt(x*x+y*y+z*z)); }
+	__forceinline T dot( const tvec3& v ) const requires std::floating_point<T> { return x*v.x+y*v.y+z*v.z; }
+	__forceinline tvec3<T> normalize() const requires std::floating_point<T> { return operator/(length()); }
 
 	// tvec3 only: cross product (floating-point only)
-	float_memfun(T) __forceinline tvec3<T> cross( const tvec3& v ) const requires_floating_point_t(T) { return tvec3( y*v.z-z*v.y, z*v.x-x*v.z, x*v.y-y*v.x ); }
+	__forceinline tvec3<T> cross( const tvec3& v ) const requires std::floating_point<T> { return tvec3( y*v.z-z*v.y, z*v.x-x*v.z, x*v.y-y*v.x ); }
 };
 
 template <class T> struct tvec4
@@ -255,7 +227,7 @@ template <class T> struct tvec4
 	// unary operators
 	__forceinline tvec4& operator+(){ return *this; }
 	__forceinline const tvec4& operator+() const { return *this; }
-	signed_memfun(T) __forceinline tvec4 operator-() const requires_signed_t(T) { return tvec4(-x,-y,-z,-w); }
+	__forceinline tvec4 operator-() const requires std::is_signed_v<T> { return tvec4(-x,-y,-z,-w); }
 
     // binary operators
     __forceinline tvec4 operator+( T a ) const { return tvec4(x+a,y+a,z+a,w+a); }
@@ -278,16 +250,16 @@ template <class T> struct tvec4
     __forceinline tvec4& operator/=( const tvec4& v){ x/=v.x; y/=v.y; z/=v.z; w/=v.w; return *this; }
 
 	// norm/length/dot: floating-point only functions
-	float_memfun(T) __forceinline T length2() const requires_floating_point_t(T) { return T(x*x+y*y+z*z+w*w); }
-	float_memfun(T) __forceinline T norm2() const requires_floating_point_t(T) { return T(x*x+y*y+z*z+w*w); }
-	float_memfun(T) __forceinline T length() const requires_floating_point_t(T) { return T(sqrt(x*x+y*y+z*z+w*w)); }
-	float_memfun(T) __forceinline T norm() const requires_floating_point_t(T) { return T(sqrt(x*x+y*y+z*z+w*w)); }
-	float_memfun(T) __forceinline T dot( const tvec4& v ) const requires_floating_point_t(T) { return x*v.x+y*v.y+z*v.z+w*v.w; }
-	float_memfun(T) __forceinline tvec4<T> normalize() const requires_floating_point_t(T) { return operator/(length()); }
+	__forceinline T length2() const requires std::floating_point<T> { return T(x*x+y*y+z*z+w*w); }
+	__forceinline T norm2() const requires std::floating_point<T> { return T(x*x+y*y+z*z+w*w); }
+	__forceinline T length() const requires std::floating_point<T> { return T(sqrt(x*x+y*y+z*z+w*w)); }
+	__forceinline T norm() const requires std::floating_point<T> { return T(sqrt(x*x+y*y+z*z+w*w)); }
+	__forceinline T dot( const tvec4& v ) const requires std::floating_point<T> { return x*v.x+y*v.y+z*v.z+w*v.w; }
+	__forceinline tvec4<T> normalize() const requires std::floating_point<T> { return operator/(length()); }
 };
 
 // member function specialization
-template <class T> struct precision { static const T value(){ return std::numeric_limits<T>::epsilon()*20; } };	// need to be 20x for robust practical test
+template <std::floating_point T> struct precision { static const T value(){ return std::numeric_limits<T>::epsilon()*20; } };	// need to be 20x for robust practical test
 template<> __forceinline bool tvec2<float>::operator==(const tvec2& v) const { static const float p=precision<float>::value(); return std::abs(x-v.x)<=p&&std::abs(y-v.y)<=p; }
 template<> __forceinline bool tvec3<float>::operator==(const tvec3& v) const { static const float p=precision<float>::value(); return std::abs(x-v.x)<=p&&std::abs(y-v.y)<=p&&std::abs(z-v.z)<=p; }
 template<> __forceinline bool tvec4<float>::operator==(const tvec4& v) const { static const float p=precision<float>::value(); return std::abs(x-v.x)<=p&&std::abs(y-v.y)<=p&&std::abs(z-v.z)<=p&&std::abs(w-v.w)<=p; }
@@ -295,8 +267,7 @@ template<> __forceinline bool tvec2<double>::operator==(const tvec2& v) const { 
 template<> __forceinline bool tvec3<double>::operator==(const tvec3& v) const { static const double p=precision<double>::value(); return std::abs(x-v.x)<=p&&std::abs(y-v.y)<=p&&std::abs(z-v.z)<=p; }
 template<> __forceinline bool tvec4<double>::operator==(const tvec4& v) const { static const double p=precision<double>::value(); return std::abs(x-v.x)<=p&&std::abs(y-v.y)<=p&&std::abs(z-v.z)<=p&&std::abs(w-v.w)<=p; }
 
-//*************************************
-// type definitions and size check
+// alias type definitions
 using bvec2 = tvec2<bool>;			using bvec3 = tvec3<bool>;			using bvec4 = tvec4<bool>;
 using vec2	= tvec2<float>;			using vec3	= tvec3<float>;			using vec4	= tvec4<float>;
 using dvec2 = tvec2<double>;		using dvec3 = tvec3<double>;		using dvec4 = tvec4<double>;
@@ -305,11 +276,14 @@ using uvec2 = tvec2<uint>;			using uvec3 = tvec3<uint>;			using uvec4 = tvec4<ui
 using llvec2 = tvec2<int64_t>;		using llvec3 = tvec3<int64_t>;		using llvec4 = tvec4<int64_t>;
 using ullvec2 = tvec2<uint64_t>;	using ullvec3 = tvec3<uint64_t>;	using ullvec4 = tvec4<uint64_t>;
 
+// concepts for vectors
+template <template<typename...>class T> concept tvec = same_template<T,tvec2>||same_template<T,tvec3>||same_template<T,tvec4>;
+
+// validate sizes of vectors
 static_assert(sizeof(vec2)==(sizeof(float)*2),"sizeof(vec2)!=sizeof(float)*2" );
 static_assert(sizeof(vec3)==(sizeof(float)*3),"sizeof(vec3)!=sizeof(float)*3" );
 static_assert(sizeof(vec4)==(sizeof(float)*4),"sizeof(vec4)!=sizeof(float)*4" );
 
-//*************************************
 // common matrix implemenetations
 #define __default_matrix_impl(M,dim) \
 	static constexpr int D=dim; using V=tvec##dim<T>; static constexpr int N=dim*dim; static constexpr size_t size(){ return N; }\
@@ -343,8 +317,7 @@ static_assert(sizeof(vec4)==(sizeof(float)*4),"sizeof(vec4)!=sizeof(float)*4" );
 	__forceinline V diag() const { V v; for(int k=0;k<D;k++) v[k]=(&_00)[k*D+k]; return v; }\
 	__forceinline T trace() const { V d=diag(); T f=0; for(int k=0;k<D;k++) f+=d[k]; return f; }
 
-//*************************************
-template <class T> struct tmat2
+template <std::floating_point T> struct tmat2
 {
 	__default_matrix_impl(tmat2,2);
 	
@@ -368,8 +341,7 @@ template <class T> struct tmat2
 	__forceinline static tmat2 rotate( T theta ){ tmat2 m; m._00=m._11=T(cos(theta));m._10=T(sin(theta));m._01=-m._10; return m; }
 };
 
-//*************************************
-template <class T> struct tmat3
+template <std::floating_point T> struct tmat3
 {
 	__default_matrix_impl(tmat3,3);
 	using V2 = tvec2<T>;
@@ -405,7 +377,7 @@ template <class T> struct tmat3
 	__forceinline static tmat3 rotate( const V& axis, T angle );
 };
 
-template <class T>
+template <std::floating_point T>
 __noinline tmat3<T> tmat3<T>::rotate( const V& from, const V& to )
 {
 	vec3 f=from.normalize(), t=to.normalize();
@@ -414,7 +386,7 @@ __noinline tmat3<T> tmat3<T>::rotate( const V& from, const V& to )
 	return rotate(n/l, asin(l));
 }
 
-template <class T>
+template <std::floating_point T>
 __noinline tmat3<T> tmat3<T>::rotate( const V& axis, T angle )
 {
 	T c=T(cos(angle)), s=T(sin(angle)), x=axis.x, y=axis.y, z=axis.z;
@@ -425,9 +397,8 @@ __noinline tmat3<T> tmat3<T>::rotate( const V& axis, T angle )
 	return m;
 }
 
-//*************************************
 // mat4 uses only row-major and right-hand (RH) notations even for D3D
-template <class T> struct tmat4
+template <std::floating_point T> struct tmat4
 {
 	__default_matrix_impl(tmat4,4);
 	using V2 = tvec2<T>;
@@ -491,7 +462,7 @@ template <class T> struct tmat4
 	__forceinline static tmat4 ortho_off_center_dx( T left, T right, T top, T bottom, T dn, T df ){ tmat4 m=ortho_off_center( left, right, top, bottom, dn, df ); m._22*=T(0.5); m._23=dn/(dn-df); return m; }
 };
 
-template <class T>
+template <std::floating_point T>
 __noinline tvec4<T> tmat4<T>::_xdet() const
 {
 	return V((_30*_21-_20*_31)*_12+(_10*_31-_30*_11)*_22+(_20*_11-_10*_21)*_32,
@@ -500,7 +471,7 @@ __noinline tvec4<T> tmat4<T>::_xdet() const
 			 (_10*_21-_20*_11)*_02+(_20*_01-_00*_21)*_12+(_00*_11-_10*_01)*_22);
 }
 
-template <class T>
+template <std::floating_point T>
 __noinline tmat4<T> tmat4<T>::inverse() const
 {
 	auto xd=_xdet();
@@ -522,27 +493,26 @@ __noinline tmat4<T> tmat4<T>::inverse() const
 	return m*(T(1.0)/vec4(_03,_13,_23,_33).dot(xd));
 }
 
-//*************************************
 // type definitions and size check
 using mat2	= tmat2<float>;		using mat3 = tmat3<float>;		using mat4 = tmat4<float>;
 using dmat2	= tmat2<double>;	using dmat3 = tmat3<double>;	using dmat4 = tmat4<double>;
 
-//*************************************
+// concepts for matrices
+template <template<typename...>class T> concept tmat = same_template<T,tmat2>||same_template<T,tmat3>||same_template<T,tmat4>;
+
 // matrix size check
-static_assert(sizeof(mat2)%sizeof(float)*4==0,"sizeof(mat2)!=sizeof(float)*4" );
-static_assert(sizeof(mat3)%sizeof(float)*9==0,"sizeof(mat3)!=sizeof(float)*9" );
-static_assert(sizeof(mat4)%sizeof(float)*16==0,"sizeof(mat4)!=sizeof(float)*16" );
-static_assert(sizeof(dmat2)%sizeof(double)*4==0,"sizeof(dmat2)!=sizeof(double)*4" );
-static_assert(sizeof(dmat3)%sizeof(double)*9==0,"sizeof(dmat3)!=sizeof(double)*9" );
-static_assert(sizeof(dmat4)%sizeof(double)*16==0,"sizeof(dmat4)!=sizeof(double)*16" );
+static_assert(sizeof(mat2)==sizeof(float)*4,"sizeof(mat2)!=sizeof(float)*4" );
+static_assert(sizeof(mat3)==sizeof(float)*9,"sizeof(mat3)!=sizeof(float)*9" );
+static_assert(sizeof(mat4)==sizeof(float)*16,"sizeof(mat4)!=sizeof(float)*16" );
+static_assert(sizeof(dmat2)==sizeof(double)*4,"sizeof(dmat2)!=sizeof(double)*4" );
+static_assert(sizeof(dmat3)==sizeof(double)*9,"sizeof(dmat3)!=sizeof(double)*9" );
+static_assert(sizeof(dmat4)==sizeof(double)*16,"sizeof(dmat4)!=sizeof(double)*16" );
 
 // fundamental types for computer graphics
 struct vertex { vec3 pos; vec3 norm; vec2 tex; }; // default vertex layout
 struct bbox_t { vec3 m=3.402823466e+38F; uint __0; vec3 M=-3.402823466e+38F; uint __1; }; // bounding box in std140 layout; FLT_MAX = 3.402823466e+38F; __0, __1: padding
 
-//*************************************
 // std::hash support here
-
 #if defined(_M_X64)||defined(__LP64__)
 template <class T> struct bitwise_hash {size_t operator()(const T v)const{ size_t h=14695981039346656037ULL;const uchar* p=(const uchar*)&v;for(size_t k=0;k<sizeof(T);k++){h^=size_t(p[k]);h*=1099511628211ULL;}return h;}}; // FNV-1a hash function (from VC2015/2017)
 #elif defined(_M_IX86)
@@ -565,7 +535,6 @@ namespace std
 	template<> struct hash<uvec4> :	public bitwise_hash<uint4> {};
 }
 
-//*************************************
 // half-precision float and conversion
 #ifndef __GXMATH_NO_HALF__
 #define __GXMATH_HALF__
@@ -586,7 +555,6 @@ __forceinline half4 ftoh( const vec4& v ){ return half4{ftoh(v.x),ftoh(v.y),ftoh
 __forceinline half* ftoh( const float* pf, half* ph, size_t nElements, size_t half_stride=1 ){ if(pf==nullptr||ph==nullptr||nElements==0) return ph; half* ph0=ph; for( size_t k=0; k < nElements; k++, pf++, ph+=half_stride ) *ph=ftoh(*pf); return ph0; }
 #endif
 
-//*************************************
 // matrix types to string
 inline const char* ftoa( const mat2& m ){ const auto* f=&m._00;static const char* fmt="%g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3]);return buff;}
 inline const char* ftoa( const mat3& m ){ const auto* f=&m._00;static const char* fmt="%g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]);return buff;}
@@ -595,13 +563,11 @@ inline const char* ftoa( const dmat2&m ){ const auto* f=&m._00;static const char
 inline const char* ftoa( const dmat3&m ){ const auto* f=&m._00;static const char* fmt="%g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8]);return buff;}
 inline const char* ftoa( const dmat4&m ){ const auto* f=&m._00;static const char* fmt="%g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g";size_t size=size_t(snprintf(0,0,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]));char* buff=__strbuf(size); snprintf(buff,size+1,fmt,f[0],f[1],f[2],f[3],f[4],f[5],f[6],f[7],f[8],f[9],f[10],f[11],f[12],f[13],f[14],f[15]);return buff;}
 
-//*************************************
 // global matrix functions
 inline mat2 transpose( const mat2& m ){ return m.transpose(); }
 inline mat3 transpose( const mat3& m ){ return m.transpose(); }
 inline mat4 transpose( const mat4& m ){ return m.transpose(); }
 
-//*************************************
 // vertor-matrix multiplications
 __forceinline vec2 operator*( const vec2& v, const mat2& m ){ return m.transpose()*v; }
 __forceinline vec3 operator*( const vec3& v, const mat3& m ){ return m.transpose()*v; }
@@ -616,57 +582,48 @@ __forceinline vec3 mul( const mat3& m, const vec3& v ){ return m*v; }
 __forceinline vec3 mul( const mat4& m, const vec3& v ){ return m*v; }
 __forceinline vec4 mul( const mat4& m, const vec4& v ){ return m*v; }
 
-//*************************************
 // scalar-vector algebra
-template <class T> __forceinline tvec2<T> operator+( T f, const tvec2<T>& v ){ return v+f; }
-template <class T> __forceinline tvec2<T> operator*( T f, const tvec2<T>& v ){ return v*f; }
-template <class T> __forceinline tvec2<T> operator/( T f, const tvec2<T>& v ){ return tvec2<T>(f/v.x,f/v.y); }
-template <class T> __forceinline tvec3<T> operator+( T f, const tvec3<T>& v ){ return v+f; }
-template <class T> __forceinline tvec3<T> operator*( T f, const tvec3<T>& v ){ return v*f; }
-template <class T> __forceinline tvec3<T> operator/( T f, const tvec3<T>& v ){ return tvec3<T>(f/v.x,f/v.y,f/v.z); }
-template <class T> __forceinline tvec4<T> operator+( T f, const tvec4<T>& v ){ return v+f; }
-template <class T> __forceinline tvec4<T> operator*( T f, const tvec4<T>& v ){ return v*f; }
-template <class T> __forceinline tvec4<T> operator/( T f, const tvec4<T>& v ){ return tvec4<T>(f/v.x,f/v.y,f/v.z,f/v.w); }
-template <class T> __forceinline tvec2<T> operator-( T f, const tvec2<T>& v ){ return -v+f; }
-template <class T> __forceinline tvec3<T> operator-( T f, const tvec3<T>& v ){ return -v+f; }
-template <class T> __forceinline tvec4<T> operator-( T f, const tvec4<T>& v ){ return -v+f; }
+template <class X, class T> __forceinline tvec2<T> operator+( X f, const tvec2<T>& v ) requires std::convertible_to<X,T> { return v+f; }
+template <class X, class T> __forceinline tvec3<T> operator+( X f, const tvec3<T>& v ) requires std::convertible_to<X,T> { return v+f; }
+template <class X, class T> __forceinline tvec4<T> operator+( X f, const tvec4<T>& v ) requires std::convertible_to<X,T> { return v+f; }
+template <class X, class T> __forceinline tvec2<T> operator-( X f, const tvec2<T>& v ) requires std::convertible_to<X,T> { return -v+f; }
+template <class X, class T> __forceinline tvec3<T> operator-( X f, const tvec3<T>& v ) requires std::convertible_to<X,T> { return -v+f; }
+template <class X, class T> __forceinline tvec4<T> operator-( X f, const tvec4<T>& v ) requires std::convertible_to<X,T> { return -v+f; }
+template <class X, class T> __forceinline tvec2<T> operator*( X f, const tvec2<T>& v ) requires std::convertible_to<X,T> { return v*f; }
+template <class X, class T> __forceinline tvec3<T> operator*( X f, const tvec3<T>& v ) requires std::convertible_to<X,T> { return v*f; }
+template <class X, class T> __forceinline tvec4<T> operator*( X f, const tvec4<T>& v ) requires std::convertible_to<X,T> { return v*f; }
+template <class X, class T> __forceinline tvec2<T> operator/( X f, const tvec2<T>& v ) requires std::convertible_to<X,T> { return tvec2<T>(f/v.x,f/v.y); }
+template <class X, class T> __forceinline tvec3<T> operator/( X f, const tvec3<T>& v ) requires std::convertible_to<X,T> { return tvec3<T>(f/v.x,f/v.y,f/v.z); }
+template <class X, class T> __forceinline tvec4<T> operator/( X f, const tvec4<T>& v ) requires std::convertible_to<X,T> { return tvec4<T>(f/v.x,f/v.y,f/v.z,f/v.w); }
 
-//*************************************
 // global operators for vector length/normalize/dot/cross
-template <class T> __forceinline T length( const tvec2<T>& v ){ return v.length(); }
-template <class T> __forceinline T length( const tvec3<T>& v ){ return v.length(); }
-template <class T> __forceinline T length( const tvec4<T>& v ){ return v.length(); }
-template <class T> __forceinline T length2( const tvec2<T>& v ){ return v.length2(); }
-template <class T> __forceinline T length2( const tvec3<T>& v ){ return v.length2(); }
-template <class T> __forceinline T length2( const tvec4<T>& v ){ return v.length2(); }
-template <class T> __forceinline tvec2<T> normalize( const tvec2<T>& v ){ return v.normalize(); }
-template <class T> __forceinline tvec3<T> normalize( const tvec3<T>& v ){ return v.normalize(); }
-template <class T> __forceinline tvec4<T> normalize( const tvec4<T>& v ){ return v.normalize(); }
-template <class T> __forceinline T dot( const tvec2<T>& v0, const tvec2<T>& v1){ return v0.dot(v1); }
-template <class T> __forceinline T dot( const tvec3<T>& v0, const tvec3<T>& v1){ return v0.dot(v1); }
-template <class T> __forceinline T dot( const tvec4<T>& v0, const tvec4<T>& v1){ return v0.dot(v1); }
-template <class T> __forceinline tvec3<T> cross( const tvec3<T>& v0, const tvec3<T>& v1){ return v0.cross(v1); }
-template <class T> __forceinline tmat2<T> outerProduct( const tvec2<T>& v0, const tvec2<T>& v1 ){ tmat2<T> m; m._00=v0.x*v1.x; m._01=v0.x*v1.y; m._10=v0.y*v1.x; m._11=v0.y*v1.y; return m; }
-template <class T> __forceinline tmat3<T> outerProduct( const tvec3<T>& v0, const tvec3<T>& v1 ){ tmat3<T> m; m._00=v0.x*v1.x; m._01=v0.x*v1.y; m._02=v0.x*v1.z; m._10=v0.y*v1.x; m._11=v0.y*v1.y; m._12=v0.y*v1.z; m._20=v0.z*v1.x; m._21=v0.z*v1.y; m._22=v0.z*v1.z; return m; }
-template <class T> __forceinline tmat4<T> outerProduct( const tvec4<T>& v0, const tvec4<T>& v1 ){ tmat4<T> m; m._00=v0.x*v1.x; m._01=v0.x*v1.y; m._02=v0.x*v1.z; m._03=v0.x*v1.w; m._10=v0.y*v1.x; m._11=v0.y*v1.y; m._12=v0.y*v1.z; m._13=v0.y*v1.w; m._20=v0.z*v1.x; m._21=v0.z*v1.y; m._22=v0.z*v1.z; m._23=v0.z*v1.w; m._30=v0.w*v1.x; m._31=v0.w*v1.y; m._32=v0.w*v1.z; m._33=v0.w*v1.w; return m; }
+#define __tvec__ template <template<typename...> class V, std::floating_point T> requires tvec<V> __forceinline
+#define __tmat__ template <template<typename...> class V, std::floating_point T> requires tmat<V> __forceinline
+__tvec__ T length( const V<T>& v ){ return v.length(); }
+__tvec__ T length2( const V<T>& v ){ return v.length2(); }
+__tvec__ V<T> normalize( const V<T>& v ){ return v.normalize(); }
+__tvec__ T dot( const V<T>& v0, const V<T>& v1){ return v0.dot(v1); }
+__tvec__ T distance( const V<T>& a, const V<T>& b ){ return (a-b).length(); }
+template <std::floating_point T> __forceinline tvec3<T> cross( const tvec3<T>& v0, const tvec3<T>& v1){ return v0.cross(v1); }
+template <std::floating_point T> __forceinline tmat2<T> outerProduct( const tvec2<T>& v0, const tvec2<T>& v1 ){ tmat2<T> m; m._00=v0.x*v1.x; m._01=v0.x*v1.y; m._10=v0.y*v1.x; m._11=v0.y*v1.y; return m; }
+template <std::floating_point T> __forceinline tmat3<T> outerProduct( const tvec3<T>& v0, const tvec3<T>& v1 ){ tmat3<T> m; m._00=v0.x*v1.x; m._01=v0.x*v1.y; m._02=v0.x*v1.z; m._10=v0.y*v1.x; m._11=v0.y*v1.y; m._12=v0.y*v1.z; m._20=v0.z*v1.x; m._21=v0.z*v1.y; m._22=v0.z*v1.z; return m; }
+template <std::floating_point T> __forceinline tmat4<T> outerProduct( const tvec4<T>& v0, const tvec4<T>& v1 ){ tmat4<T> m; m._00=v0.x*v1.x; m._01=v0.x*v1.y; m._02=v0.x*v1.z; m._03=v0.x*v1.w; m._10=v0.y*v1.x; m._11=v0.y*v1.y; m._12=v0.y*v1.z; m._13=v0.y*v1.w; m._20=v0.z*v1.x; m._21=v0.z*v1.y; m._22=v0.z*v1.z; m._23=v0.z*v1.w; m._30=v0.w*v1.x; m._31=v0.w*v1.y; m._32=v0.w*v1.z; m._33=v0.w*v1.w; return m; }
 
-//*************************************
 // general math utility functions
 template <class X, class T=float> __forceinline T radians( X f ){ return f*pi_v<T>/T(180.0); }
 template <class X, class T=float> __forceinline T degrees( X f ){ return f*T(180.0)/pi_v<T>; }
 template <class X, class T=float> __forceinline T round( X f, int digits ){ T m=T(pow(10.0,digits)); return round(f*m)/m; }
 template <class X, class T=float> __forceinline T triangle_area( tvec2<X> a, tvec2<X> b, tvec2<X> c ){ return T(abs(a.x*b.y+b.x*c.y+c.x*a.y-a.x*c.y-c.x*b.y-b.x*a.y))*T(0.5); }
 template <class T> __forceinline tvec2<T> minmax( const tvec2<T>& a, const tvec2<T>& b ){ return tvec2<T>(a.x<b.x?a.x:b.x,a.y>b.y?a.y:b.y); }
-template <class T, class I=integral_t<T>> __forceinline bool ispot( T i ) requires_integral_t(T) { return (uint(i)&(uint(i)-1))==0; } // http://en.wikipedia.org/wiki/Power_of_two
-template <class T, class I=integral_t<T>> __forceinline uint nextpot( T n ) requires_integral_t(T) { int m=int(n)-1; for( uint k=1; k<uint(sizeof(int))*8; k<<=1 ) m=m|m>>k; return m+1; }	// closest (equal or larger) power-of-two
-template <class T, class I=integral_t<T>> __forceinline uint nextsqrt( T n ) requires_integral_t(T) { return uint(ceil(sqrt(double(n)))+0.001); } // root of closest (equal or larger) square
-template <class T, class I=integral_t<T>> __forceinline uint nextsquare( T n ) requires_integral_t(T) { uint r=nextsqrt(n); return r*r; } // closest (equal or larger) square
-template <class T, class I=integral_t<T>> __forceinline uint miplevels( T width, T height=1 ) requires_integral_t(T) { uint l=0; uint s=width>height?width:height; while(s){s=s>>1;l++;} return l; }
+template <std::integral T> __forceinline bool ispot( T i ){ return (uint(i)&(uint(i)-1))==0; } // http://en.wikipedia.org/wiki/Power_of_two
+template <std::integral T> __forceinline uint nextpot( T n ){ int m=int(n)-1; for( uint k=1; k<uint(sizeof(int))*8; k<<=1 ) m=m|m>>k; return m+1; }	// closest (equal or larger) power-of-two
+template <std::integral T> __forceinline uint nextsqrt( T n ){ return uint(ceil(sqrt(double(n)))+0.001); } // root of closest (equal or larger) square
+template <std::integral T> __forceinline uint nextsquare( T n ){ uint r=nextsqrt(n); return r*r; } // closest (equal or larger) square
+template <std::integral T> __forceinline uint miplevels( T width, T height=1 ){ uint l=0; uint s=width>height?width:height; while(s){s=s>>1;l++;} return l; }
 __forceinline uint bitswap( uint n ){ n=((n&0x55555555)<<1)|((n&0xaaaaaaaa)>>1); n=((n&0x33333333)<<2)|((n&0xcccccccc)>>2); n=((n&0x0f0f0f0f)<<4)|((n&0xf0f0f0f0)>>4); n=((n&0x00ff00ff)<<8)|((n&0xff00ff00)>>8); return (n<<16)|(n>>16); }
 __forceinline float rsqrt( float x ){ float y=0.5f*x; int i=*(int*)&x; i=0x5F375A86-(i>>1); x=*(float*)&i; x=x*(1.5f-y*x*x); x=x*(1.5f-y*x*x); return x; }						// Quake3's Fast InvSqrt(): 1/sqrt(x): magic number changed from 0x5f3759df to 0x5F375A86 for more accuracy; 2 iteration has quite good accuracy
 __forceinline double rsqrt( double x ){ double y=0.5*x; int64_t i=*(int64_t*)&x; i=0x5FE6EB50C7B537A9-(i>>1); x=*(double*)&i; x=x*(1.5-y*x*x); x=x*(1.5-y*x*x); return x; }		// Quake3's Fast InvSqrt(): 1/sqrt(x): 64-bit magic number (0x5FE6EB50C7B537A9) used; 2 iteration has quite good accuracy
 
-//*************************************
 // viewport helpers
 __forceinline ivec4 effective_viewport( int width, int height, double aspect_to_keep ){ int w=int(height*aspect_to_keep), h=int(width/aspect_to_keep); if((width*h)==(height*w)) return ivec4{0,0,width,height}; return width>w?ivec4{(width-w)/2,0,w,height}:ivec4{0,(height-h)/2,width,h}; }
 __forceinline ivec4 effective_viewport( int width, int height, int width_to_keep, int height_to_keep ){ return (width*height_to_keep)==(height*width_to_keep)?ivec4{0,0,width,height}:effective_viewport(width,height,width_to_keep/double(height_to_keep)); }
@@ -675,89 +632,47 @@ __forceinline ivec4 effective_viewport( ivec2 size, double aspect_to_keep ){ ret
 __forceinline ivec4 effective_viewport( ivec2 size, int width_to_keep, int height_to_keep ){ return effective_viewport(size.x,size.y,width_to_keep,height_to_keep); }
 __forceinline ivec4 effective_viewport( ivec2 size, ivec2 aspect_to_keep ){ return effective_viewport(size.x,size.y,aspect_to_keep.x,aspect_to_keep.y); }
 
-//*************************************
 // {GLSL|HLSL}-like shader intrinsic functions
 __forceinline float fract( float f ){ return float(f-floor(f)); }
 __forceinline float saturate( float f ){ return f<0.0f?0.0f:f>1.0f?1.0f:f; }
 __forceinline int sign( int f ){ return f>0?1:f<0?-1:0; }
 __forceinline float sign( float f ){ return f>0.0f?1.0f:f<0.0f?-1.0f:0; }
-
-#define VEC2F(f) __forceinline vec2 f( const vec2& v ){ return vec2(f(v.x),f(v.y)); }
-#define VEC3F(f) __forceinline vec3 f( const vec3& v ){ return vec3(f(v.x),f(v.y),f(v.z)); }
-#define VEC4F(f) __forceinline vec4 f( const vec4& v ){ return vec4(f(v.x),f(v.y),f(v.z),f(v.w)); }
-#define VECF(f)	VEC2F(f) VEC3F(f) VEC4F(f)
-VECF(cos)	VECF(sin)	VECF(tan)	VECF(acos)	VECF(asin)	VECF(atan)
-VECF(cosh)	VECF(sinh)	VECF(tanh)	VECF(acosh)	VECF(asinh)	VECF(atanh)
-VECF(abs)	VECF(ceil)	VECF(fabs)	VECF(floor)	VECF(fract)	VECF(saturate)	VECF(sign)
-#undef VEC2F
-#undef VEC3F
-#undef VEC4F
-#undef VECF
-
-template <class T,class N,class X> T clamp( T v, N vmin, X vmax ){ return v<T(vmin)?T(vmin):v>T(vmax)?T(vmax):v; }
-template <class T> __forceinline T distance( const tvec2<T>& a, const tvec2<T>& b ){ return (a-b).length(); }
-template <class T> __forceinline T distance( const tvec3<T>& a, const tvec3<T>& b ){ return (a-b).length(); }
-template <class T> __forceinline T distance( const tvec4<T>& a, const tvec4<T>& b ){ return (a-b).length(); }
 __forceinline float sigmoid( float x ){ return 1.0f/(1.0f+exp(-x)); }
-__forceinline vec2 sigmoid( vec2 v ){ return {sigmoid(v.x),sigmoid(v.y)}; }
-__forceinline vec3 sigmoid( vec3 v ){ return {sigmoid(v.x),sigmoid(v.y),sigmoid(v.z)}; }
-__forceinline vec4 sigmoid( vec4 v ){ return {sigmoid(v.x),sigmoid(v.y),sigmoid(v.z),sigmoid(v.w)}; }
-__forceinline vec2 exp( vec2 v ){ return vec2(exp(v.x),exp(v.y)); }
-__forceinline vec3 exp( vec3 v ){ return vec3(exp(v.x),exp(v.y),exp(v.z)); }
-__forceinline vec4 exp( vec4 v ){ return vec4(exp(v.x),exp(v.y),exp(v.z),exp(v.w)); }
+template <class T,class N,class X> T clamp( T v, N vmin, X vmax ){ return v<T(vmin)?T(vmin):v>T(vmax)?T(vmax):v; }
+__forceinline float smoothstep( float edge0, float edge1, float t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*(3-2*t); } // C1-continuity
+__forceinline float smoothstep( float t ){ t=saturate(t); return t*t*(3-2*t); } // C1-continuity
+__forceinline float smootherstep( float edge0, float edge1, float t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*t*(6.0f*t*t-15.0f*t+10.0f); } // C2-continuity (by Ken Perlin)
+__forceinline float smootherstep( float t ){ t=saturate(t); return t*t*t*(6.0f*t*t-15.0f*t+10.0f); } // C2-continuity (by Ken Perlin)
+__forceinline float lerp( float v1, float v2, float t ){ return v1*(1.0f-t)+v2*t; }
+__forceinline double lerp( double v1, double v2, double t ){ return v1*(1.0-t)+v2*t; }
+__forceinline double lerp( double v1, double v2, float t ){ return v1*(1.0-double(t))+v2*t; }
+__forceinline mat4 lerp( const mat4& v1, const mat4& v2, float t ){ return v1*(1.0f-t)+v2*t; }
+__forceinline float mix( float v1, float v2, float t ){ return v1*(1.0f-t)+v2*t; }
+__forceinline double mix( double v1, double v2, double t ){ return v1*(1.0-t)+v2*t; }
+__forceinline double mix( double v1, double v2, float t ){ return v1*(1.0-double(t))+v2*t; }
+
+// define simple vector wrappers
+#define __fvec2(f) __forceinline vec2 f( const vec2& v ){ return {f(v.x),f(v.y)}; }
+#define __fvec3(f) __forceinline vec3 f( const vec3& v ){ return {f(v.x),f(v.y),f(v.z)}; }
+#define __fvec4(f) __forceinline vec4 f( const vec4& v ){ return {f(v.x),f(v.y),f(v.z),f(v.w)}; }
+#define __fvec(f)	__fvec2(f) __fvec3(f) __fvec4(f)
+
+__fvec(cos) __fvec(sin) __fvec(tan) __fvec(cosh) __fvec(sinh) __fvec(tanh)
+__fvec(acos) __fvec(asin) __fvec(atan) __fvec(acosh) __fvec(asinh) __fvec(atanh)
+__fvec(abs) __fvec(ceil) __fvec(fabs) __fvec(floor) __fvec(fract) __fvec(saturate) __fvec(sign) __fvec(exp)
+__fvec(sigmoid) __fvec(smoothstep) __fvec(smootherstep)
+
 __forceinline vec2 fma( vec2 a, vec2 b, vec2 c ){ return vec2(fma(a.x,b.x,c.x),fma(a.y,b.y,c.y)); }
 __forceinline vec3 fma( vec3 a, vec3 b, vec3 c ){ return vec3(fma(a.x,b.x,c.x),fma(a.y,b.y,c.y),fma(a.z,b.z,c.z)); }
 __forceinline vec4 fma( vec4 a, vec4 b, vec4 c ){ return vec4(fma(a.x,b.x,c.x),fma(a.y,b.y,c.y),fma(a.z,b.z,c.z),fma(a.w,b.w,c.w)); }
-__forceinline float lerp( float v1, float v2, float t ){ return v1*(1.0f-t)+v2*t; }
-__forceinline vec2 lerp( const vec2& y1, const vec2& y2, float t ){ return y1*(-t+1.0f)+y2*t; }
-__forceinline vec3 lerp( const vec3& y1, const vec3& y2, float t ){ return y1*(-t+1.0f)+y2*t; }
-__forceinline vec4 lerp( const vec4& y1, const vec4& y2, float t ){ return y1*(-t+1.0f)+y2*t; }
-__forceinline vec2 lerp( const vec2& y1, const vec2& y2, const vec2& t ){ return y1*(1.0f-t)+y2*t; }
-__forceinline vec3 lerp( const vec3& y1, const vec3& y2, const vec3& t ){ return y1*(1.0f-t)+y2*t; }
-__forceinline vec4 lerp( const vec4& y1, const vec4& y2, const vec4& t ){ return y1*(1.0f-t)+y2*t; }
-__forceinline double lerp( double v1, double v2, double t ){ return v1*(1.0-t)+v2*t; }
-__forceinline double lerp( double v1, double v2, float t ){ return v1*(1.0-double(t))+v2*t; }
-__forceinline dvec2 lerp( const dvec2& y1, const dvec2& y2, double t ){ return y1*(-t+1.0)+y2*t; }
-__forceinline dvec3 lerp( const dvec3& y1, const dvec3& y2, double t ){ return y1*(-t+1.0)+y2*t; }
-__forceinline dvec4 lerp( const dvec4& y1, const dvec4& y2, double t ){ return y1*(-t+1.0)+y2*t; }
-__forceinline dvec2 lerp( const dvec2& y1, const dvec2& y2, float t ){ return y1*(-t+1.0)+y2*t; }
-__forceinline dvec3 lerp( const dvec3& y1, const dvec3& y2, float t ){ return y1*(-t+1.0)+y2*t; }
-__forceinline dvec4 lerp( const dvec4& y1, const dvec4& y2, float t ){ return y1*(-t+1.0)+y2*t; }
-__forceinline mat4 lerp( const mat4& v1, const mat4& v2, float t ){ return v1*(1.0f-t)+v2*t; }
-__forceinline float mix( float v1, float v2, float t ){ return v1*(1.0f-t)+v2*t; }
-__forceinline vec2 mix( const vec2& y1, const vec2& y2, float t ){ return y1*(-t+1.0f)+y2*t; }
-__forceinline vec3 mix( const vec3& y1, const vec3& y2, float t ){ return y1*(-t+1.0f)+y2*t; }
-__forceinline vec4 mix( const vec4& y1, const vec4& y2, float t ){ return y1*(-t+1.0f)+y2*t; }
-__forceinline vec2 mix( const vec2& y1, const vec2& y2, const vec2& t ){ return y1*(1.0f-t)+y2*t; }
-__forceinline vec3 mix( const vec3& y1, const vec3& y2, const vec3& t ){ return y1*(1.0f-t)+y2*t; }
-__forceinline vec4 mix( const vec4& y1, const vec4& y2, const vec4& t ){ return y1*(1.0f-t)+y2*t; }
-__forceinline double mix( double v1, double v2, double t ){ return v1*(1.0-t)+v2*t; }
-__forceinline double mix( double v1, double v2, float t ){ return v1*(1.0-double(t))+v2*t; }
-__forceinline dvec2 mix( const dvec2& y1, const dvec2& y2, double t ){ return y1*(-t+1.0)+y2*t; }
-__forceinline dvec3 mix( const dvec3& y1, const dvec3& y2, double t ){ return y1*(-t+1.0)+y2*t; }
-__forceinline dvec4 mix( const dvec4& y1, const dvec4& y2, double t ){ return y1*(-t+1.0)+y2*t; }
-__forceinline dvec2 mix( const dvec2& y1, const dvec2& y2, float t ){ return y1*(-t+1.0)+y2*t; }
-__forceinline dvec3 mix( const dvec3& y1, const dvec3& y2, float t ){ return y1*(-t+1.0)+y2*t; }
-__forceinline dvec4 mix( const dvec4& y1, const dvec4& y2, float t ){ return y1*(-t+1.0)+y2*t; }
-__forceinline mat4 mix( const mat4& v1, const mat4& v2, float t ){ return v1*(1.0f-t)+v2*t; }
+__tvec__ V<T> lerp( const V<T>& y1, const V<T>& y2, const V<T>& t ){ return y1*(-t+1.0f)+y2*t; }
+__tvec__ V<T> mix( const V<T>& y1, const V<T>& y2, const V<T>& t ){ return y1*(-t+1.0f)+y2*t; }
+template <template<typename...> class V, std::floating_point T, std::floating_point U> requires tvec<V>||tmat<V> V<T> lerp( const V<T>& y1, const V<T>& y2, U t ){ return y1*(-T(t)+1.0f)+y2*T(t); }
+template <template<typename...> class V, std::floating_point T, std::floating_point U> requires tvec<V>||tmat<V> V<T> mix( const V<T>& y1, const V<T>& y2, U t ){ return y1*(-T(t)+1.0f)+y2*T(t); }
 __forceinline vec3 reflect( const vec3& I, const vec3& N ){ return I-N*dot(I,N)*2.0f; }	// I: incident vector, N: normal
 __forceinline vec3 refract( const vec3& I, const vec3& N, float eta /* = n0/n1 */ ){ float d = dot(I,N); float k = 1.0f-eta*eta*(1.0f-d*d); return k<0.0f?0.0f:(I*eta-N*(eta*d+sqrtf(k))); } // I: incident vector, N: normal
-__forceinline float smoothstep(float edge0, float edge1, float t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*(3-2*t); } // C1-continuity
-__forceinline vec2 smoothstep( float edge0, float edge1, vec2 t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*(3.0f-t*2.0f); }
-__forceinline vec3 smoothstep( float edge0, float edge1, vec3 t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*(3.0f-t*2.0f); }
-__forceinline vec4 smoothstep( float edge0, float edge1, vec4 t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*(3.0f-t*2.0f); }
-__forceinline float smoothstep( float t ){ t=saturate(t); return t*t*(3-2*t); } // C1-continuity
-__forceinline vec2 smoothstep( const vec2& t ){ return vec2(smoothstep(t.x),smoothstep(t.y)); }
-__forceinline vec3 smoothstep( const vec3& t ){ return vec3(smoothstep(t.x),smoothstep(t.y),smoothstep(t.z)); }
-__forceinline vec4 smoothstep( const vec4& t ){ return vec4(smoothstep(t.x),smoothstep(t.y),smoothstep(t.z),smoothstep(t.w)); }
-__forceinline float smootherstep( float edge0, float edge1, float t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*t*(6.0f*t*t-15.0f*t+10.0f); } // C2-continuity (by Ken Perlin)
-__forceinline vec2 smootherstep( float edge0, float edge1, vec2 t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*t*(6.0f*t*t-15.0f*t+10.0f); }
-__forceinline vec3 smootherstep( float edge0, float edge1, vec3 t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*t*(6.0f*t*t-15.0f*t+10.0f); }
-__forceinline vec4 smootherstep( float edge0, float edge1, vec4 t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*t*(6.0f*t*t-15.0f*t+10.0f); }
-__forceinline float smootherstep( float t ){ t=saturate(t); return t*t*t*(6.0f*t*t-15.0f*t+10.0f); } // C2-continuity (by Ken Perlin)
-__forceinline vec2 smootherstep( const vec2& t ){ return vec2(smootherstep(t.x),smootherstep(t.y)); }
-__forceinline vec3 smootherstep( const vec3& t ){ return vec3(smootherstep(t.x),smootherstep(t.y),smootherstep(t.z)); }
-__forceinline vec4 smootherstep( const vec4& t ){ return vec4(smootherstep(t.x),smootherstep(t.y),smootherstep(t.z),smootherstep(t.w)); }
+__tvec__ V<T> smoothstep( T edge0, T edge1, V<T> t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*(3.0f-t*2.0f); }
+__tvec__ V<T> smootherstep( T edge0, T edge1, V<T> t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*t*(6.0f*t*t-15.0f*t+10.0f); }
 // packing/unpacking/casting: https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_shading_language_packing.txt
 __forceinline uint packUnorm2x16( vec2 v ){ ushort2 u={}; for(int k=0;k<2;k++) (&u.x)[k]=ushort(round(clamp(v[k],0.0f,1.0f)*65535.0f)); return reinterpret_cast<uint&>(u); }
 __forceinline uint packSnorm2x16( vec2 v ){ short2 s={}; for(int k=0;k<2;k++) (&s.x)[k]=short(round(clamp(v[k],-1.0f,1.0f)*32767.0f)); return reinterpret_cast<uint&>(s); }
@@ -799,38 +714,13 @@ __forceinline vec3 vec2BitsToNormVec3( vec2 v )
 }
 
 // NaN/inf detection
-__forceinline bool isnan( float* f, size_t n ){ for(size_t k=0;k<n;k++) if(isnan(f[k])) return true; return false; }
-__forceinline bool isnan( double* f, size_t n ){ for(size_t k=0;k<n;k++) if(isnan(f[k])) return true; return false; }
-__forceinline bool isnan( long double* f, size_t n ){ for(size_t k=0;k<n;k++) if(isnan(f[k])) return true; return false; }
-__forceinline bool isnan( vec2 v ){ return isnan(&v.x,v.size()); }
-__forceinline bool isnan( vec3 v ){ return isnan(&v.x,v.size()); }
-__forceinline bool isnan( vec4 v ){ return isnan(&v.x,v.size()); }
-__forceinline bool isnan( dvec2 v ){ return isnan(&v.x,v.size()); }
-__forceinline bool isnan( dvec3 v ){ return isnan(&v.x,v.size()); }
-__forceinline bool isnan( dvec4 v ){ return isnan(&v.x,v.size()); }
-__forceinline bool isnan( mat2 m ){ return isnan(m.data(),m.size()); }
-__forceinline bool isnan( mat3 m ){ return isnan(m.data(),m.size()); }
-__forceinline bool isnan( mat4 m ){ return isnan(m.data(),m.size()); }
-__forceinline bool isnan( dmat2 m ){ return isnan(m.data(),m.size()); }
-__forceinline bool isnan( dmat3 m ){ return isnan(m.data(),m.size()); }
-__forceinline bool isnan( dmat4 m ){ return isnan(m.data(),m.size()); }
-__forceinline bool isinf( float* f, size_t n ){ for(size_t k=0;k<n;k++) if(isinf(f[k])) return true; return false; }
-__forceinline bool isinf( double* f, size_t n ){ for(size_t k=0;k<n;k++) if(isinf(f[k])) return true; return false; }
-__forceinline bool isinf( long double* f, size_t n ){ for(size_t k=0;k<n;k++) if(isinf(f[k])) return true; return false; }
-__forceinline bool isinf( vec2 v ){ return isinf(&v.x,v.size()); }
-__forceinline bool isinf( vec3 v ){ return isinf(&v.x,v.size()); }
-__forceinline bool isinf( vec4 v ){ return isinf(&v.x,v.size()); }
-__forceinline bool isinf( dvec2 v ){ return isinf(&v.x,v.size()); }
-__forceinline bool isinf( dvec3 v ){ return isinf(&v.x,v.size()); }
-__forceinline bool isinf( dvec4 v ){ return isinf(&v.x,v.size()); }
-__forceinline bool isinf( mat2 m ){ return isinf(m.data(),m.size()); }
-__forceinline bool isinf( mat3 m ){ return isinf(m.data(),m.size()); }
-__forceinline bool isinf( mat4 m ){ return isinf(m.data(),m.size()); }
-__forceinline bool isinf( dmat2 m ){ return isinf(m.data(),m.size()); }
-__forceinline bool isinf( dmat3 m ){ return isinf(m.data(),m.size()); }
-__forceinline bool isinf( dmat4 m ){ return isinf(m.data(),m.size()); }
+template <std::floating_point T> __forceinline bool isnan( T* f, size_t n ){ for(size_t k=0;k<n;k++) if(isnan(f[k])) return true; return false; }
+template <std::floating_point T> __forceinline bool isinf( T* f, size_t n ){ for(size_t k=0;k<n;k++) if(isinf(f[k])) return true; return false; }
+__tvec__ bool isnan( V<T> v ){ return isnan(&v.x,v.size()); }
+__tvec__ bool isinf( V<T> v ){ return isinf(&v.x,v.size()); }
+__tmat__ bool isnan( V<T> m ){ return isnan(m.data(),m.size()); }
+__tmat__ bool isinf( V<T> m ){ return isinf(&m.data(),m.size()); }
 
-//*************************************
 // spline interpolations
 template <class T> T hermite( T v0, T v1, T v2, T v3, double t, double tension=0.5, double bias=0.0, double continuity=-0.5 )
 {
@@ -895,7 +785,6 @@ __forceinline vec2	prand2( float fmin, float fmax ){ return prand2()*(fmax-fmin)
 __forceinline vec3	prand3( float fmin, float fmax ){ return prand3()*(fmax-fmin)+fmin; }
 __forceinline vec4	prand4( float fmin, float fmax ){ return prand4()*(fmax-fmin)+fmin; }
 
-//*************************************
 // xorshift-based random number generator: https://en.wikipedia.org/wiki/Xorshift
 __forceinline uint  xorshift32( uint& x ){ x^=x<<13;x^=x>>17;x^=x<<5;return x; }
 __forceinline float xrand(  uint& x ){ return float(x=xorshift32(x))*2.3283064e-10f; }
@@ -907,7 +796,6 @@ __forceinline vec2  xrand2( uint& x, float fmin, float fmax ){ return xrand2(x)*
 __forceinline vec3  xrand3( uint& x, float fmin, float fmax ){ return xrand3(x)*(fmax-fmin)+fmin; }
 __forceinline vec4  xrand4( uint& x, float fmin, float fmax ){ return xrand4(x)*(fmax-fmin)+fmin; }
 
-//*************************************
 // alternative wrappers for deprecated std::random_shuffle
 template <class RandomIt>
 void random_shuffle( RandomIt first, RandomIt last, uint seed=0 ){ std::mt19937 e=seed?std::mt19937(seed):std::mt19937(std::random_device()()); std::shuffle(first,last,e); }
@@ -921,5 +809,14 @@ vector<T> random_shuffle_indices( size_t count, uint seed=0 )
 	return v;
 }
 
+// undef macros
+#undef __tvec__
+#undef __tmat__
+#undef __fvec2
+#undef __fvec3
+#undef __fvec4
+#undef __fvec
+
 //*************************************
 #endif // __GX_MATH_H__
+//*************************************

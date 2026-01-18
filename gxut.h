@@ -176,8 +176,8 @@ using std::type_index;
 #if defined(_MSVC_LANG) && __cplusplus<_MSVC_LANG
 	#error __cplusplus!=_MSVC_LANG: update __cplusplus in C/C++ > Command Line > Additional Options > /Zc:__cplusplus
 #endif
-#if __cplusplus<201703L
-	#error __cplusplus<201703L: gxut requires at least C++17
+#if __cplusplus<202002L
+	#error __cplusplus<202002L: gxut requires C++20 or later
 #endif
 
 // C++11
@@ -194,8 +194,12 @@ namespace fs = std::filesystem;
 #include <string_view>
 // C++20: __cpluplus works here; keep for this for vcpp legacy check
 #if (__cplusplus>=202002L)||(defined(_MSVC_LANG)&&_MSVC_LANG>=202002L)||(defined(_HAS_CXX20)&&_HAS_CXX20)
+	#include <concepts>	
 	#include <span>
 	using std::span;
+	// user-defined template type traits
+	template <template<typename...>class, template<typename...>class> constexpr bool same_template = false;
+	template <template<typename...>class T> constexpr bool same_template<T,T> = true;
 #endif
 // C++23
 #if (__cplusplus>=202302L)||(defined(_MSVC_LANG)&&_MSVC_LANG>=202302L)||(defined(_HAS_CXX23)&&_HAS_CXX23)

@@ -378,9 +378,8 @@ template <class R, class T>
 __noinline auto explode( const T* src, const T* delims=__whitespaces<T>() )
 {
 	auto v = explode<vector,T>(src,delims);
-	// if constexpr (std::is_same_v<std::remove_cv_t<std::remove_reference_t<R>>,int>)
-	if constexpr (std::is_integral_v<R>){ vector<R> x; for(auto& t:v) x.emplace_back(R(fast::atoi(t.c_str()))); return x; }
-	else if constexpr (std::is_floating_point_v<R>){ vector<R> x; for(auto& t:v) x.emplace_back(R(fast::atof(t.c_str()))); return x; }
+	if constexpr (std::integral<std::remove_cvref_t<R>>){ vector<R> x; for(auto& t:v) x.emplace_back(R(fast::atoi(t.c_str()))); return x; }
+	else if constexpr (std::floating_point<std::remove_cvref_t<R>>){ vector<R> x; for(auto& t:v) x.emplace_back(R(fast::atof(t.c_str()))); return x; }
 	else { static_assert(std::false_type::value, "explode_t(): unsupported return type R"); }
 }
 
