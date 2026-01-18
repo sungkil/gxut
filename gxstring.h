@@ -253,9 +253,6 @@ namespace fast
 		int i=0;for(;;str++){uint d=static_cast<uint>(*str)-'0';if(d>9)break;i=i*10+d;} // integers
 		return neg?-i:i;
 	}
-	__forceinline int wtoi( const wchar_t* str ){ return atoi(wtoa(str)); }
-	__forceinline int atoi( const wchar_t* str ){ return atoi(wtoa(str)); }
-
 	__forceinline double atof( const char* str )
 	{
 		while(*str==' '||*str=='\t'||*str=='\n'||*str=='\r')str++; // skip leading white spaces
@@ -268,14 +265,17 @@ namespace fast
 		double scale=1;while(e>=8){scale*=1E8;e-=8;} while(e>0){scale*=10.0;e--;} v=eng?v/scale:v*scale; // apply exponents
 		return neg?-v:v;
 	}
-	__forceinline double wtof( const wchar_t* str ){ return atof(wtoa(str)); }
-	__forceinline double atof( const wchar_t* str ){ return atof(wtoa(str)); }
 
 	template <class T> T		aton( const char* a );
-	template<> inline int		aton<int>( const char* a ){		return atoi(a); }
-	template<> inline uint		aton<uint>( const char* a ){	return uint(atoi(a)); }
-	template<> inline float		aton<float>( const char* a ){	return float(atof(a)); }
-	template<> inline double	aton<double>( const char* a ){	return double(atof(a)); }
+	template<> inline int		aton<int>( const char* a ){			return atoi(a); }
+	template<> inline uint		aton<uint>( const char* a ){		return uint(atoi(a)); }
+	template<> inline float		aton<float>( const char* a ){		return float(atof(a)); }
+	template<> inline double	aton<double>( const char* a ){		return double(atof(a)); }
+	template <class T> T		aton( const wchar_t* w );
+	template<> inline int		aton<int>( const wchar_t* w ){		return atoi(wtoa(w)); }
+	template<> inline uint		aton<uint>( const wchar_t* w ){		return uint(atoi(wtoa(w))); }
+	template<> inline float		aton<float>( const wchar_t* w ){	return float(atof(wtoa(w))); }
+	template<> inline double	aton<double>( const wchar_t* w ){	return double(atof(wtoa(w))); }
 }
 
 // hexadecimanal conversion
