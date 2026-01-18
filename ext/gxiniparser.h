@@ -88,6 +88,8 @@ public:
 	// set
 	template<class T> void set( const char* key, T value );
 	template<class T> void set( const char* sec, const char* key, T value ){ if(!sec||!*sec||!key||!*key) return; if(!sec||!*sec) return set<T>(key,value); if(!key||!*key) return set<T>(sec,value); char sk[257]; snprintf(sk,256,"%s:%s",sec,key); set<T>(sk,value); }
+	template<class T> void set_or_clear_default( const char* key, T value, T default_value ){ if(value==default_value) return clear(key); set<T>(key,value); }
+	template<class T> void set_or_clear_default( const char* sec, const char* key, T value, T default_value ){ if(value==default_value) return clear(sec,key); set<T>(sec,key,value); }
 };
 
 __noinline void parser_t::read_line( wchar_t* line, wchar_t* sec )
@@ -216,6 +218,12 @@ template<> __noinline void parser_t::set<float4>( const char* key, float4 value 
 template<> __noinline void parser_t::set<vec2>( const char* key, vec2 value ){			set<float2>(key,reinterpret_cast<float2&>(value)); }
 template<> __noinline void parser_t::set<vec3>( const char* key, vec3 value ){			set<float3>(key,reinterpret_cast<float3&>(value)); }
 template<> __noinline void parser_t::set<vec4>( const char* key, vec4 value ){			set<float4>(key,reinterpret_cast<float4&>(value)); }
+
+// template specializations for set_or_clear_default()
+template<> __noinline void parser_t::set_or_clear_default<const char*>( const char* key, const char* value, const char* default_value ){ if(stricmp(value,default_value)==0) return clear(key); set<const char*>(key,value); }
+template<> __noinline void parser_t::set_or_clear_default<char*>( const char* key, char* value, char* default_value ){ if(stricmp(value,default_value)==0) return clear(key); set<const char*>(key,value); }
+template<> __noinline void parser_t::set_or_clear_default<const char*>( const char* sec, const char* key, const char* value, const char* default_value ){ if(stricmp(value,default_value)==0) return clear(sec,key); set<const char*>(sec,key,value); }
+template<> __noinline void parser_t::set_or_clear_default<char*>( const char* sec, const char* key, char* value, char* default_value ){ if(stricmp(value,default_value)==0) return clear(sec,key); set<const char*>(sec,key,value); }
 
 //*************************************
 } // namespace ini
