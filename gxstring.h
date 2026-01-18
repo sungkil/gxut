@@ -374,9 +374,9 @@ __noinline const T* join( const V& v, const T* delims=__strdup<T,char>(" ") )
 template <template<typename...>class V=vector, class T=char>
 __noinline V<std::basic_string<T>> explode( const T* src, const T* delims=__whitespaces<T>() )
 {
-	using R = std::basic_string<T>; V<R> v; if(!src||!*src) return v;
-	if constexpr (requires{v.emplace_back(R());}){ v.reserve(32); for( T *ctx=0, *t=strtok_s(__strdup(src),delims,&ctx); t; t=strtok_s(nullptr,delims,&ctx) ) v.emplace_back(t); return v; }
-	else if constexpr (requires{v.emplace(R());}){ for( T *ctx=0, *t=strtok_s(__strdup(src),delims,&ctx); t; t=strtok_s(nullptr,delims,&ctx) ) v.emplace(t); return v; }
+	using R=std::basic_string<T>; V<R> v; if(!src||!*src) return v;
+	if constexpr (requires{v.emplace_back(R());}){ v.reserve(32); for(T *c=0, *t=strtok_s(__strdup(src),delims,&c); t; t=strtok_s(nullptr,delims,&c) ) v.emplace_back(t); return v; }
+	else if constexpr (requires{v.emplace(R());}){ for(T *c=0, *t=strtok_s(__strdup(src),delims,&c); t; t=strtok_s(nullptr,delims,&c) ) v.emplace(t); return v; }
 	else { static_assert(std::false_type::value, "explode(): unsupported container type V"); }
 }
 
@@ -384,7 +384,7 @@ template <class R, class T>
 __noinline auto explode( const T* src, const T* delims=__whitespaces<T>() )
 {
 	using U=std::remove_cvref_t<R>;
-	if constexpr (std::integral<U>||std::floating_point<U>){ vector<U> x; for(auto&& t:explode<vector,T>(src,delims)) x.emplace_back(fast::aton<U>(t.c_str())); return x; }
+	if constexpr (std::integral<U>||std::floating_point<U>){ vector<U> v; v.reserve(32); for(T *c=0, *t=strtok_s(__strdup(src),delims,&c); t; t=strtok_s(nullptr,delims,&c) ) v.emplace_back(fast::aton<U>(t)); return v; }
 	else { static_assert(std::false_type::value, "explode_t(): unsupported return type R"); }
 }
 
