@@ -61,8 +61,8 @@ template <class T> struct tvec2
 	__forceinline tvec2( T a, T b ){x=a;y=b;}
 
 	// extended constructors with explicit casting
-	template <class X> __forceinline tvec2( tvec2<X> v ){x=T(v.x);y=T(v.y);}
-	template <class X,class Y> __forceinline tvec2( X a, Y b ){x=T(a);y=T(b);}
+	template <class X, class Y> __forceinline tvec2( X a, Y b ){x=T(a);y=T(b);}
+	template <class X> __forceinline tvec2( tvec2<X> v ):tvec2(v.x,v.y){}
 
 	// assignment operators
 	__forceinline tvec2& operator=( A&& v ){ memcpy(this,&v,sizeof(v)); return *this; }
@@ -127,10 +127,10 @@ template <class T> struct tvec3
 	__forceinline tvec3( T a, V2 v ){x=a;y=v.x;z=v.y;}
 
 	// extended constructors with explicit casting
-	template <class X> __forceinline tvec3( tvec3<X> v ){x=T(v.x);y=T(v.y);z=T(v.z);}
-	template <class X,class Y,class Z> __forceinline tvec3( X a, Y b, Z c ){x=T(a);y=T(b);z=T(c);}
-	template <class X,class Z> __forceinline tvec3( tvec2<X> v, Z c ){x=T(v.x);y=T(v.y);z=T(c);}
-	template <class X,class Y> __forceinline tvec3( X a, tvec2<Y> v ){x=a;y=T(v.x);z=T(v.y);}
+	template <class X, class Y, class Z> __forceinline tvec3( X a, Y b, Z c ){x=T(a);y=T(b);z=T(c);}
+	template <class X> __forceinline tvec3( tvec3<X> v ):tvec3(v.x,v.y,v.z){}
+	template <class X, class Z> __forceinline tvec3( tvec2<X> v, Z c ):tvec3(v.x,v.y,c){}
+	template <class X, class Y> __forceinline tvec3( X a, tvec2<Y> v ):tvec3(a,v.x,v.y){}
 
 	// assignment operators
 	__forceinline tvec3& operator=( A&& v ){ memcpy(this,&v,sizeof(v)); return *this; }
@@ -203,14 +203,14 @@ template <class T> struct tvec4
 	__forceinline tvec4( V3 v, T d ){x=v.x;y=v.y;z=v.z;w=d;}
 
 	// extended constructors with explicit casting
-	template <class X> __forceinline tvec4( tvec4<X> v ){x=T(v.x);y=T(v.y);z=T(v.z);w=T(v.w);}
-	template <class X,class Y,class Z,class W> __forceinline tvec4( X a, Y b, Z c, W d ){x=T(a);y=T(b);z=T(c);w=T(d);}
-	template <class X,class Y,class W> __forceinline tvec4( X a, tvec2<Y> v, W d ){x=T(a);y=T(v.x);z=T(v.y);w=T(d);}
-	template <class X,class Y> __forceinline tvec4( X a, tvec3<Y> v ){x=T(a);y=T(v.x);z=T(v.y);w=T(v.z);}
-	template <class X,class Y,class Z> __forceinline tvec4( X a, Y b, tvec2<Z> v ){x=T(a);y=T(b);z=T(v.x);w=T(v.y);}
-	template <class X,class Z,class W> __forceinline tvec4( tvec2<X> v, Z c, W d ){x=T(v.x);y=T(v.y);z=T(c);w=T(d);}
-	template <class X,class Z> __forceinline tvec4( tvec2<X> v, tvec2<Z> u ){x=T(v.x);y=T(v.y);z=T(u.x);w=T(u.y);}
-	template <class X,class W> __forceinline tvec4( tvec3<X> v, W d ){x=T(v.x);y=T(v.y);z=T(v.z);w=T(d);}
+	template <class X, class Y, class Z, class W> __forceinline tvec4( X a, Y b, Z c, W d ){x=T(a);y=T(b);z=T(c);w=T(d);}
+	template <class X> __forceinline tvec4( tvec4<X> v ):tvec4(v.x,v.y,v.z,v.w){}
+	template <class X, class Y, class W> __forceinline tvec4( X a, tvec2<Y> v, W d ):tvec4(a,v.x,v.y,d){}
+	template <class X, class Y> __forceinline tvec4( X a, tvec3<Y> v ):tvec4(a,v.x,v.y,v.z){}
+	template <class X, class Y, class Z> __forceinline tvec4( X a, Y b, tvec2<Z> v ):tvec4(a,b,v.x,v.y){}
+	template <class X, class Z, class W> __forceinline tvec4( tvec2<X> v, Z c, W d ):tvec4(v.x,v.y,c,d){}
+	template <class X, class Z> __forceinline tvec4( tvec2<X> v, tvec2<Z> u ):tvec4(v.x,v.y,u.x,u.y){}
+	template <class X, class W> __forceinline tvec4( tvec3<X> v, W d ):tvec4(v.x,v.y,v.z,d){}
 
 	// assignment operators
 	__forceinline tvec4& operator=( A&& v ){ memcpy(this,&v,sizeof(v)); return *this; }
