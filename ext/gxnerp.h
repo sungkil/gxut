@@ -11,9 +11,9 @@ inline std::tuple<vec3,vec3,vec3,vec3> extract_eyes( const mat4& m0, const mat4&
 inline mat4& assign_eyes( mat4& r, const vec3& eye )
 {
 	// re-translate the eye
-	r._03 = -eye.dot(r.rvec[0].xyz);
-	r._13 = -eye.dot(r.rvec[1].xyz);
-	r._23 = -eye.dot(r.rvec[2].xyz);
+	r._03 = -eye.dot(r.rvec(0).xyz);
+	r._13 = -eye.dot(r.rvec(1).xyz);
+	r._23 = -eye.dot(r.rvec(2).xyz);
 	return r;
 }
 
