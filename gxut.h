@@ -197,9 +197,6 @@ namespace fs = std::filesystem;
 	#include <concepts>	
 	#include <span>
 	using std::span;
-	// user-defined template type traits
-	template <template<typename...>class, template<typename...>class> constexpr bool same_template = false;
-	template <template<typename...>class T> constexpr bool same_template<T,T> = true;
 #endif
 // C++23
 #if (__cplusplus>=202302L)||(defined(_MSVC_LANG)&&_MSVC_LANG>=202302L)||(defined(_HAS_CXX23)&&_HAS_CXX23)
