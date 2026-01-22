@@ -204,7 +204,7 @@ struct camera_t // std140 layout for OpenGL uniform buffer objects
 {
 	mat4	view_matrix, projection_matrix;
 	float	fovy, aspect, dnear, dfar;
-	vec4	eye, at, up, dir; // 16-bytes aligned for std140 layout
+	vec4	eye, dir, up; // 16-bytes aligned for std140 layout
 	float	focal, fy, E, df;
 };
 #else
@@ -212,10 +212,9 @@ struct camera_t // 16-bytes aligned for std140 layout
 {
 	mat4 view_matrix, projection_matrix;
 	float fovy, aspect, dnear, dfar; // fov in radians; height for orthographic projection
-	vec3 eye;	float width=0;
-	vec3 at;	float height=0;
-	vec3 up;	float fovy_degrees=30.0f;
-	vec3 dir;	float fn=0;
+	vec3 eye;	float height=0;
+	vec3 dir;	float fovy_degrees=30.0f;
+	vec3 up;	float fn=0;
 	alignas(16) float focal=0;	// focal length (in mm); alignas should apply to a SINGLE float
 	float fy=0, E=0, df=0;		// focal length (in pixels), lens radius, focusing depth (in object distance)
 
@@ -237,8 +236,8 @@ struct camera_t // 16-bytes aligned for std140 layout
 	float	coc_scale( int height ) const { return coc_norm_scale()*float(height)*0.5f; } // screen-space coc scale; so called "K" so far
 };
 static_assert(sizeof(camera_t)%16==0, "sizeof(camera_t) should be aligned at 16-byte boundary");
-static_assert(sizeof(camera_t)==224, "sizeof(camera_t)!=224"); // manual size check
-inline string STR_GLSL_STRUCT_CAMERA = "struct camera_t { mat4 view_matrix, projection_matrix; float fovy, aspect, dnear, dfar; vec4 eye, at, up, dir; float focal, fy, E, df; };\n";
+static_assert(sizeof(camera_t)==208, "sizeof(camera_t)!=208"); // manual size check
+inline string STR_GLSL_STRUCT_CAMERA = "struct camera_t { mat4 view_matrix, projection_matrix; float fovy, aspect, dnear, dfar; vec4 eye, dir, up; float focal, fy, E, df; };\n";
 #endif
 
 struct campreset; // forward decls.
@@ -271,7 +270,7 @@ struct stereo_t
 	uint		model = 0;			// stereo-rendering model
 	float		ipd = 64.0f;		// inter-pupil distance for stereoscopy: 6.4 cm = men's average
 	camera_t	left, right;		// left, right cameras
-	void		update( const camera& c ){ if(!model) return; float s=0.5f*ipd, o=s*c.dnear/c.df, t=c.dnear*tanf(0.5f*c.fovy*(c.fovy<pi?1.0f:pi/180.0f)), R=t*c.aspect; vec3 stereo_dir = normalize(cross(c.dir,c.up))*s; auto& l=left; memcpy(&l,&c,sizeof(l)); l.eye-=stereo_dir; l.at-=stereo_dir; l.dir=l.at-l.eye; l.view_matrix=mat4::look_to(l.eye,l.dir,l.up); l.projection_matrix=mat4::perspective_off_center(-R+o,R+o,t,-t,c.dnear,c.dfar); auto& r=right; memcpy(&r,&c,sizeof(r)); r.eye+=stereo_dir; r.at+=stereo_dir; r.dir=r.at-r.eye; r.view_matrix=mat4::look_to(r.eye,r.dir,r.up); r.projection_matrix=mat4::perspective_off_center(-R-o,R-o,t,-t,c.dnear,c.dfar);}
+	void		update( const camera& c ){ if(!model) return; float s=0.5f*ipd, o=s*c.dnear/c.df, t=c.dnear*tanf(0.5f*c.fovy*(c.fovy<pi?1.0f:pi/180.0f)), R=t*c.aspect; vec3 stereo_dir = normalize(cross(c.dir,c.up))*s; auto& l=left; memcpy(&l,&c,sizeof(l)); l.eye-=stereo_dir; l.dir-=stereo_dir; l.view_matrix=mat4::look_to(l.eye,l.dir,l.up); l.projection_matrix=mat4::perspective_off_center(-R+o,R+o,t,-t,c.dnear,c.dfar); auto& r=right; memcpy(&r,&c,sizeof(r)); r.eye+=stereo_dir; r.dir+=stereo_dir; r.view_matrix=mat4::look_to(r.eye,r.dir,r.up); r.projection_matrix=mat4::perspective_off_center(-R-o,R-o,t,-t,c.dnear,c.dfar);}
 };
 
 // utilities for camera
