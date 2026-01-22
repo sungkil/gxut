@@ -292,19 +292,21 @@ template <class T=char> __forceinline T* __strdup( const T* s ){ const T* t=s; w
 // nocase/logical base template
 namespace nocase { template <class T> struct less {}; template <class T> struct equal_to {}; template <class T> struct hash {}; };
 namespace logical { template <class T> struct less {}; };
-// user types
-#define __default_types(n)		static const int N=n; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+N; } static constexpr size_t size(){ return N; }
-#define __default_index(T)		__forceinline T& operator[]( ptrdiff_t i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( ptrdiff_t i ) const { return ((T*)this)[i]; }
-#define __default_ctors(D,T,c)	__forceinline c()=default;__forceinline c(c&&)=default;__forceinline c(const c&)=default;__forceinline c(initializer_list<T> v){ memset(&x,0,sizeof(T)*D); size_t k=0; for(auto& i:v){(&x)[k++]=i;if(k>=D)break;}} __forceinline c(const array<T,D>& v){memcpy(&x,v.data(),sizeof(T)*D);} __forceinline c(const std::vector<T>& v){memset(&x,0,sizeof(T)*D);if(!v.empty())memcpy(&x,v.data(),sizeof(T)*std::min(D,int(v.size())));}
-#define __default_assns(c)		__forceinline c& operator=(c&&)=default;__forceinline c& operator=(const c&)=default; __forceinline c& operator=(T a){ for(auto& it:*this) it=a; return *this; }
-#define __default_cmps(A)		__forceinline bool operator==( const A& other ) const { return memcmp(this,&other,sizeof(*this))==0; } __forceinline bool operator!=( const A& other ) const { return memcmp(this,&other,sizeof(*this))!=0; }
-#define __default_array_impl(D,T,V) __default_types(D); __default_index(T); __default_ctors(D,T,V); __default_assns(V);
-template <class T> struct tarray2  { __default_array_impl(2,T,tarray2); __default_cmps(tarray2); union{struct{T x,y;};struct{T r,g;};}; };
-template <class T> struct tarray3  { __default_array_impl(3,T,tarray3); __default_cmps(tarray3); using V2=tarray2<T>; union{struct{T x,y,z;};struct{T r,g,b;};union{V2 xy,rg;};struct{T _x;union{V2 yz,gb;};};}; };
-template <class T> struct tarray4  { __default_array_impl(4,T,tarray4); __default_cmps(tarray4); using V2=tarray2<T>; using V3=tarray3<T>; union{struct{T x,y,z,w;};struct{T r,g,b,a;};struct{union{V2 xy,rg;};union{V2 zw,ba;};};union{V3 xyz,rgb;};struct{T _x;union{V3 yzw,gba;V2 yz,gb;};};}; };
+
+// type alias and array types
+#define __default_array_impl(V,T,D)\
+	static constexpr int N=D; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t; __forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; } constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+N; } static constexpr size_t size(){ return N; }\
+	__forceinline T& operator[]( ptrdiff_t i ){ return ((T*)this)[i]; } __forceinline const T& operator[]( ptrdiff_t i ) const { return ((T*)this)[i]; }\
+	__forceinline V()=default;__forceinline V(V&&)=default;__forceinline V(const V&)=default;__forceinline V(initializer_list<T> v){ memset(&x,0,sizeof(T)*D); size_t k=0; for(auto& i:v){(&x)[k++]=i;if(k>=D)break;}} __forceinline V(const array<T,D>& v){memcpy(&x,v.data(),sizeof(T)*D);} __forceinline V(const std::vector<T>& v){memset(&x,0,sizeof(T)*D);if(!v.empty())memcpy(&x,v.data(),sizeof(T)*std::min(D,int(v.size())));}\
+	__forceinline V& operator=(V&&)=default;__forceinline V& operator=(const V&)=default; __forceinline V& operator=(T a){ for(auto& it:*this) it=a; return *this; }
+#define __default_cmp_impl(V) __forceinline bool operator==( const V& other ) const { return memcmp(this,&other,sizeof(*this))==0; } __forceinline bool operator!=( const V& other ) const { return memcmp(this,&other,sizeof(*this))!=0; }
+template <class T> struct tarray2  { __default_array_impl(tarray2,T,2); __default_cmp_impl(tarray2); T x,y;  };
+template <class T> struct tarray3  { __default_array_impl(tarray3,T,3); __default_cmp_impl(tarray3); T x,y,z; };
+template <class T> struct tarray4  { __default_array_impl(tarray4,T,4); __default_cmp_impl(tarray4); T x,y,z,w; };
+#undef __default_cmp_impl
 using uint		= unsigned int;			using uchar		= unsigned char;		using ushort	= unsigned short;	using ulong = unsigned long;
 using bool2		= tarray2<bool>;		using bool3		= tarray3<bool>;		using bool4		= tarray4<bool>;
-#ifndef __cuda__ // type definitions in CUDA/vector_types.h
+#ifndef __cuda__ // avoid conflicts with type definitions in CUDA/vector_types.h
 using float2	= tarray2<float>;		using float3	= tarray3<float>;		using float4	= tarray4<float>;
 using double2	= tarray2<double>;		using double3	= tarray3<double>;		using double4	= tarray4<double>;
 using uchar2	= tarray2<uchar>;		using uchar3	= tarray3<uchar>;		using uchar4	= tarray4<uchar>; // do not define char2, char3, char4 to avoid confustion in char or int8_t

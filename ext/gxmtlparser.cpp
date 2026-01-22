@@ -424,9 +424,9 @@ static bool is_normal_map( path file_path )
 		const auto& s = halton_samples[k];
 		ivec2 tc = ivec2(min(w-1,int((w-1)*s.x)),min(h-1,int((h-1)*s.y)));
 		uchar3 c = *i->ptr<uchar3>(tc.y,tc.x);
-		if(c.r==c.g&&c.r==c.b) continue;			// skip grayscale
-		if(c.b<c.r||c.b<c.g||c.b<127) continue;		// probably wrong
-		vec3 n = vec3(c.r,c.g,c.b)/127.5f-1.0f; if(fabs(n.length()-1.0f)>0.3f) continue;	// length around one
+		if(c.x==c.y&&c.x==c.z) continue;			// skip grayscale
+		if(c.z<c.x||c.z<c.y||c.z<127) continue;		// probably wrong
+		vec3 n = vec3(c.x,c.y,c.z)/127.5f-1.0f; if(fabs(n.length()-1.0f)>0.3f) continue;	// length around one
 		bcount++;
 	}
 

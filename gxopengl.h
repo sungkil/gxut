@@ -1564,7 +1564,7 @@ inline vector<Uniform> Program::get_active_uniforms( bool b_bind )
 		if(prop[GL_ATOMIC_COUNTER_BUFFER_INDEX]!=-1){ int b; glGetActiveAtomicCounterBufferiv(ID,prop[GL_ATOMIC_COUNTER_BUFFER_INDEX],GL_ATOMIC_COUNTER_BUFFER_BINDING,&b); _atomic_counter_buffer_binding_map[u.name]=b; continue; } // Intel compilers do not define block for atomic counter
 		else if(u.ID<0&&u.block.index<0) continue; // invalid variables (except for atomic counter)
 		u.type=prop[GL_TYPE]; u.block.offset=prop[GL_OFFSET]; u.array_size=prop[GL_ARRAY_SIZE];
-		u.row_major=prop[GL_IS_ROW_MAJOR]!=GL_FALSE; if(u.block.index>=0&&u.is_matrix()&&!u.row_major){ oncef("[warning] %s: column-major layout\n",u.name); }
+		u.row_major=prop[GL_IS_ROW_MAJOR]!=GL_FALSE;
 		v.emplace_back(u);
 	}
 	if(program0>=0) glUseProgram(program0); // restore the original program

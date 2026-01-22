@@ -188,9 +188,15 @@ template<> __noinline float parser_t::get<float>( const char* key ){		auto* v=ge
 template<> __noinline int2 parser_t::get<int2>( const char* key ){			auto* v=get(key); return *v==0?int2{}:atoi<int2>(v); }
 template<> __noinline int3 parser_t::get<int3>( const char* key ){			auto* v=get(key); return *v==0?int3{}:atoi<int3>(v); }
 template<> __noinline int4 parser_t::get<int4>( const char* key ){			auto* v=get(key); return *v==0?int4{}:atoi<int4>(v); }
+template<> __noinline ivec2 parser_t::get<ivec2>( const char* key ){		auto* v=get(key); return *v==0?ivec2{}:atoi<ivec2>(v); }
+template<> __noinline ivec3 parser_t::get<ivec3>( const char* key ){		auto* v=get(key); return *v==0?ivec3{}:atoi<ivec3>(v); }
+template<> __noinline ivec4 parser_t::get<ivec4>( const char* key ){		auto* v=get(key); return *v==0?ivec4{}:atoi<ivec4>(v); }
 template<> __noinline float2 parser_t::get<float2>( const char* key ){		auto* v=get(key); return *v==0?float2{}:atof<float2>(v); }
 template<> __noinline float3 parser_t::get<float3>( const char* key ){		auto* v=get(key); return *v==0?float3{}:atof<float3>(v); }
 template<> __noinline float4 parser_t::get<float4>( const char* key ){		auto* v=get(key); return *v==0?float4{}:atof<float4>(v); }
+template<> __noinline vec2 parser_t::get<vec2>( const char* key ){			auto* v=get(key); return *v==0?vec2{}:atof<vec2>(v); }
+template<> __noinline vec3 parser_t::get<vec3>( const char* key ){			auto* v=get(key); return *v==0?vec3{}:atof<vec3>(v); }
+template<> __noinline vec4 parser_t::get<vec4>( const char* key ){			auto* v=get(key); return *v==0?vec4{}:atof<vec4>(v); }
 
 // template specializations for set()
 template<> __noinline void parser_t::set<const char*>( const char* key, const char* value ){ if(!key||!*key) return; if(!value||!*value) return clear(key); bool b=key_exists(key); entry_t* e=get_or_create_entry(key); if(b&&e->value==value) return; e->value=value; save(); }
