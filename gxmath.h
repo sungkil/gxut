@@ -67,7 +67,6 @@ using half2	= tarray2<half>; using half3 = tarray3<half>; using half4 = tarray4<
 #endif
 
 //*************************************
-// legacy: template <class T,template <class> class A=tarray2> struct tvec2 (template argument for template)
 template <class T> struct tvec2
 {
 	using A = tarray2<T>;
