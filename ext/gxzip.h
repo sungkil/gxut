@@ -318,7 +318,7 @@ namespace gx {
 struct binary_cache
 {
 	binary_cache( bool compress ){ b.compress=compress; }
-	virtual ~binary_cache(){ if(fp){ fclose(fp); fp=nullptr; } }
+	virtual ~binary_cache(){ if(!fp) return; fclose(fp); fp=nullptr; }
 	operator FILE* () const { return fp; }
 
 	virtual path cache_path()=0;
@@ -329,8 +329,8 @@ struct binary_cache
 
 	int writef( __printf_format_string__ const char* fmt, ... ){ if(!fp) return EOF; va_list a; va_start(a,fmt); int r=_vfprintf_l(fp,fmt,NULL,a); va_end(a); return r; }
 	int getsf( const char* fmt, ... ){ if(!fp) return EOF; static char* buff=(char*)malloc((1<<14)+1); fgets(buff,(1<<14),fp); va_list a; va_start(a,fmt); int r=vsscanf(buff,fmt,a); va_end(a); return r; }
-	bool write( void* ptr, size_t size ){ if(!fp) return 0; return size==fwrite(ptr,1,size,fp); }
-	bool read( void* ptr, size_t size ){ if(!fp) return 0; return size==fread(ptr,1,size,fp); }
+	bool write( void* ptr, size_t size ){ if(!fp) return false; return size==fwrite(ptr,1,size,fp); }
+	bool read( void* ptr, size_t size ){ if(!fp) return false; return size==fread(ptr,1,size,fp); }
 	bool compress( bool rm_src=true );
 	bool decompress();
 
@@ -341,8 +341,8 @@ private:
 
 __noinline void binary_cache::close()
 {
-	if(fp){ fclose(fp); fp=nullptr; }
-	if(b.compress){ if(!b.read) compress(); else if(zip_path().exists()) unlink(cache_path().c_str()); }
+	if(!fp) return; fclose(fp); fp=nullptr; if(!b.compress) return;
+	if(!b.read) compress(); else if(zip_path().exists()&&cache_path().exists()) unlink(cache_path().c_str());
 }
 
 __noinline bool binary_cache::open( bool read )
@@ -356,7 +356,7 @@ __noinline bool binary_cache::open( bool read )
 		if(!cpath.exists()) return false;
 		fp = fopen(cpath.c_str(),"rb");
 		uint s=0; fread(&s,sizeof(s),1,fp);
-		if(!fp||sig!=s){ if(fp) fclose(fp); if(zpath.exists()) unlink(cpath.c_str()); return false; }
+		if(!fp||sig!=s){ if(fp){ fclose(fp); fp=nullptr; } if(zpath.exists()) unlink(cpath.c_str()); return false; }
 	}
 	else
 	{
@@ -370,6 +370,7 @@ __noinline bool binary_cache::open( bool read )
 __noinline bool binary_cache::compress( bool rm_src )
 {
 	if(!cache_path().exists()) return false;
+	if(zip_path().exists()) zip_path().delete_file();
 	HZIP hZip = CreateZip( atow(zip_path().c_str()), nullptr);
 	if(ZR_OK==ZipAdd( hZip, atow(cache_path().filename().c_str()), atow(cache_path().c_str()))){ CloseZipZ(hZip); if(rm_src) unlink(cache_path().c_str()); return true; }
 	else { printf( "Unable to compress %s\n", cache_path().filename().c_str() ); CloseZipZ( hZip ); return false; }
