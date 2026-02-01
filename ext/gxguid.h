@@ -41,7 +41,7 @@ struct guid_t : public GUID
 
 	operator GUID (){ return *this; }
 	operator const GUID () const { return *this; }
-	operator bool() const { static decltype(Data4) z={}; return Data1||Data2||Data3||memcmp(Data4, &z, sizeof(z))!=0; }
+	operator bool() const { static constexpr decltype(Data4) z={}; return Data1||Data2||Data3||memcmp(Data4, &z, sizeof(z))!=0; }
 	const char* c_str( bool lowercase=false, bool braces=true ) const { char* b=__strbuf(39); auto* d=Data4; snprintf(b,39,lowercase?"{%08lx-%04hx-%04hx-%02hhx%02hhx-%02hhx%02hhx%02hhx%02hhx%02hhx%02hhx}":"{%08lX-%04hX-%04hX-%02hhX%02hhX-%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX}",Data1,Data2,Data3,d[0],d[1],d[2],d[3],d[4],d[5],d[6],d[7]); if(!braces) (++b)[36]=0; return b; }
 	guid_t& clear(){ memset(this,0,sizeof(GUID)); return *this; }
 

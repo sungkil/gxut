@@ -27,9 +27,9 @@
 #endif
 
 // Byte Order Masks (BOMs) for unicode encoding
-static const unsigned char BOM_UTF8[3]	= {0xEF,0xBB,0xBF};
-static const unsigned char BOM_UTF16[2]	= {0xFF,0xFE}; // little endian
-static const unsigned char BOM_UTF32[4]	= {0xFF,0xFE,0x00,0x00}; // little endian
+static constexpr unsigned char BOM_UTF8[3]	= {0xEF,0xBB,0xBF};
+static constexpr unsigned char BOM_UTF16[2]	= {0xFF,0xFE}; // little endian
+static constexpr unsigned char BOM_UTF32[4]	= {0xFF,0xFE,0x00,0x00}; // little endian
 
 namespace nocase
 {
@@ -399,7 +399,7 @@ explode_conservative( const T* src, T delim )
 
 template <class T> __noinline const T* substr( const T* _Src, int _Pos, int _Count=0 )
 {
-	static T *nullstr=(T*)L""; if(!_Src||!*_Src) return nullstr;
+	static const T* nullstr=(T*)L""; if(!_Src||!*_Src) return nullstr;
 	size_t l = strlen(_Src); if(_Pos<0) _Pos+=int(l); if(_Pos>=int(l)) return nullstr; if(_Count<=0) _Count+=int(l);
 	return __strdup(_Src+_Pos,size_t(_Pos)+_Count<=l?size_t(_Count):size_t(l-_Pos));
 }
@@ -496,7 +496,7 @@ __noinline const wchar_t* unicode_symbols_to_ansi( const wchar_t* str )
 
 template <class T> __noinline const T* auto_quote( const T* _Src )
 {
-	size_t l=strlen(_Src); static const T q=T('\"'); if(!*_Src||(_Src[0]==q&&_Src[l-1]==q)) return __strdup(_Src,l);
+	size_t l=strlen(_Src); static constexpr T q=T('\"'); if(!*_Src||(_Src[0]==q&&_Src[l-1]==q)) return __strdup(_Src,l);
 	const T* s=trim(_Src); if(!strpbrk(s,__strdup<T,char>(" '\t|&<>"))) return __strdup(_Src,l);
 	T* b=__strbuf<T>(l+2); b[0]=q; memcpy(b+1,_Src,l*sizeof(T)); b[l+1]=q; b[l+2]=0; return b;
 }

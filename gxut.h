@@ -135,7 +135,7 @@ inline int __cdecl sscanf( char const* const _Buffer, char const* const _Format,
 inline int __cdecl puts( char const* _Buffer ){ return fputs(_Buffer,stdout); }
 #endif
 // a safer alternative to fscanf (dangerous with newliens): sscanf() after fgets()
-inline const char* __cdecl fgetsf( FILE* const _Stream, const char* fmt, ... ){ if(!_Stream) return nullptr; static char* buff=(char*)malloc((1<<14)+1); if(!fgets(buff,(1<<14),_Stream)) return nullptr; if(!*buff) return buff; va_list a; va_start(a, fmt); int r=vsscanf(buff, fmt, a); va_end(a); return buff; }
+inline const char* __cdecl fgetsf( FILE* const _Stream, const char* fmt, ... ){ if(!_Stream) return nullptr; static thread_local char* buff=(char*)malloc((1<<14)+1); if(!fgets(buff,(1<<14),_Stream)) return nullptr; if(!*buff) return buff; va_list a; va_start(a, fmt); int r=vsscanf(buff, fmt, a); va_end(a); return buff; }
 
 // compile-time test of printf-style format string
 #ifdef __msvc__
@@ -285,7 +285,7 @@ template <class T> struct auto_sized_ptr_t : public sized_ptr_t<T> { using sized
 template <class T> struct pptr_t { T** pptr=nullptr; pptr_t()=default; pptr_t( T*& ptr ):pptr(&ptr){} pptr_t( const T*& ptr ):pptr(&const_cast<T*&>(ptr)){} pptr_t( T** _pptr ):pptr(_pptr){} pptr_t( const T** _pptr ):pptr((T**)_pptr){} pptr_t& operator=( T*& ptr ){ pptr=&ptr; return *this; } pptr_t& operator=( const T*& ptr ){ pptr=&const_cast<T*&>(ptr); return *this; } pptr_t& operator=( T** _pptr ){ pptr=_pptr; return *this; } pptr_t& operator=( const T** _pptr ){ pptr=(T**)_pptr; return *this; } T* operator->(){ return pptr?*pptr:nullptr; } const T* operator->() const { return pptr?*pptr:nullptr; } operator T*(){ return pptr?*pptr:nullptr; } operator const T*() const { return pptr?*pptr:nullptr; } T* ptr(){ return pptr?*pptr:nullptr; } const T* ptr() const { return pptr?*pptr:nullptr; } };
 
 // shared circular string buffers
-template <class T=char> __forceinline T* __strbuf( size_t len ){ static T* C[1<<14]={}; static unsigned int cid=0; cid=cid%(sizeof(C)/sizeof(C[0])); C[cid]=(T*)(C[cid]?realloc(C[cid],sizeof(T)*(len+2)):malloc(sizeof(T)*(len+2))); if(C[cid]){ C[cid][0]=C[cid][len]=C[cid][len+1]=0; } return C[cid++]; } // add one more char for convenience
+template <class T=char> __forceinline T* __strbuf( size_t len ){ static thread_local T* C[1<<14]={}; static thread_local unsigned int cid=0; cid=cid%(sizeof(C)/sizeof(C[0])); C[cid]=(T*)(C[cid]?realloc(C[cid],sizeof(T)*(len+2)):malloc(sizeof(T)*(len+2))); if(C[cid]){ C[cid][0]=C[cid][len]=C[cid][len+1]=0; } return C[cid++]; } // add one more char for convenience
 template <class T=char> __forceinline T* __strdup( const T* s, size_t len ){ T* d=__strbuf<T>(size_t(len)); size_t k=0; while(k<len&&*s) d[k++]=*(s++); d[k]=d[k+1]=0; return d; }
 template <class T=char> __forceinline T* __strdup( const T* s ){ const T* t=s; while(*t) t++; return __strdup<T>(s,t-s); }
 

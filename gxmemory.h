@@ -98,17 +98,17 @@ struct izip_t	// common interface to zip, 7zip, ...
 // signature detection
 inline bool is_7zip_signature( void* ptr, size_t size=0 )
 {
-	static unsigned char szip[]={'7','z',0xBC,0xAF,0x27,0x1C};
+	static constexpr unsigned char szip[]={'7','z',0xBC,0xAF,0x27,0x1C};
 	if(size&&size<sizeof(szip)) return false;
 	return memcmp(ptr,szip,sizeof(szip))==0;
 }
 
 inline bool is_zip_signature( void* ptr, size_t size=0 )
 {
-	static unsigned char pk[]		={0x50,0x4b,0x03,0x04};
-	static unsigned char pklite[]	={0x50,0x4B,0x4C,0x49,0x54,0x45};
-	static unsigned char pksfx[]	={0x50,0x4B,0x53,0x70,0x58};
-	static unsigned char winzip[]	={0x57,0x69,0x6E,0x5A,0x69,0x70};
+	static constexpr unsigned char pk[]		= {0x50,0x4b,0x03,0x04};
+	static constexpr unsigned char pklite[]	= {0x50,0x4B,0x4C,0x49,0x54,0x45};
+	static constexpr unsigned char pksfx[]	= {0x50,0x4B,0x53,0x70,0x58};
+	static constexpr unsigned char winzip[]	= {0x57,0x69,0x6E,0x5A,0x69,0x70};
 	if(size&&size<6) return false;
 	if(memcmp(ptr,pk,sizeof(pk))==0)			return true;
 	if(memcmp(ptr,pklite,sizeof(pklite))==0)	return true;

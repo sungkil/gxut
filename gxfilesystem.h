@@ -37,7 +37,7 @@ inline int chdir( const path_t& dir ){ return ::chdir(dir.c_str()); }
 template <class T=wchar_t>
 __noinline bool iglob( const T* str, size_t slen, const T* pattern, size_t plen ) // case-insensitive
 {
-	static const T q=T('?'), a=T('*');
+	static constexpr T q=T('?'), a=T('*');
 	int n=int(slen?slen:strlen(str)), m=int(plen?plen:strlen(pattern)); if(m==0) return n==0;
 	int i,j,t,p; for(i=0,j=0,t=-1,p=-1;i<n;)
 	{
@@ -190,6 +190,8 @@ struct path : public path_t
 	const char* name( bool with_ext=true ) const { return __strdup((with_ext?filename():stem()).c_str()); }
 	const wchar_t* wname( bool with_ext=true ) const { return atow((with_ext?filename():stem()).c_str()); }
 	const char* slash() const { return __strdup(to_slash().c_str()); }
+	// relative slash
+	const char* rs( path from="" ) const { return relative(from).slash(); }
 	const char* auto_quote() const { if(!*_data||(_data[0]=='\"'&&_data[strlen(_data)-1]=='\"')) return c_str(); auto* t=__strbuf(capacity); size_t l=strlen(_data); memcpy(t,_data,l*sizeof(value_type)); if(t[l]==' '||t[l]=='\t'||t[l]=='\n') t[l]=0; if(t[0]==' '||t[0]=='\t'||t[0]=='\n') t++; if(t[0]!='-'&&!strpbrk(t," \t\n|&<>")) return c_str(); path p; p[0]='\"'; memcpy(p._data+1, _data, l*sizeof(value_type)); p[l+1]='\"'; p[l+2]=0; return __strdup(p.c_str()); }
 
 	// shell operations
@@ -277,9 +279,9 @@ __noinline path path::junction() const
 
 __noinline FILE* path::fopen( const char* mode, bool utf8 ) const
 {
-	char m[32]={0}; snprintf(m,32,"%s%s",mode,utf8?",ccs=UTF-8":"");
+	char m[32]={0}; strcpy(m,mode); if(utf8) strcat(m,",ccs=UTF-8");
 	FILE* fp = ::fopen(_data,m); if(!fp) return nullptr;
-	else if(strcmp(mode,"w")==0&&utf8&&extension()!="sln") _fseeki64(fp,0,SEEK_SET); // remove byte order mask (BOM); sln use BOM, but vcxproj do not use BOM
+	if(utf8&&strchr(mode,'w')&&extension()!="sln") _fseeki64(fp,0,SEEK_SET); // remove byte order mask (BOM); sln use BOM, but vcxproj do not use BOM
 	return fp;
 }
 
@@ -297,14 +299,10 @@ template<> __noinline sized_ptr_t<wchar_t> path::read_file<wchar_t>() const
 {
 	sized_ptr_t<wchar_t> p={nullptr,0};
 	FILE* fp=fopen("r",true); if(!fp) return {nullptr,0};
-	size_t size0 = ::file_size(fp); if(!size0){ fclose(fp); p.ptr=(wchar_t*)memset(malloc(sizeof(wchar_t)),0,sizeof(wchar_t)); return p; }
-
-	std::wstring buffer; buffer.reserve(size0*2);
-	wchar_t buff[4096]; while(fgetws(buff,4096,fp)) buffer+=buff; fclose(fp);
-	p.size = buffer.size();
-	p.ptr = (wchar_t*) malloc((p.size+1)*sizeof(wchar_t));
-	if(p.ptr) memcpy(p.ptr,buffer.c_str(),p.size*sizeof(wchar_t));
-	p.ptr[p.size]=0;
+	size_t size0=::file_size(fp); if(size0==0){ fclose(fp); p.ptr=(wchar_t*)memset(malloc(sizeof(wchar_t)*2),0,sizeof(wchar_t)*2); return p; }
+	wchar_t* b=p.ptr=(wchar_t*)malloc((size0+2)*sizeof(wchar_t)); // two more char for double null-ending
+	while(fgetws(b,4096,fp)) b+=wcslen(b); fclose(fp);
+	p.size=(b-p.ptr); p.ptr[p.size]=p.ptr[p.size+1]=0;
 	return p;
 }
 
@@ -312,14 +310,10 @@ template<> __noinline sized_ptr_t<char> path::read_file<char>() const
 {
 	sized_ptr_t<char> p={nullptr,0};
 	FILE* fp=fopen("r"); if(!fp) return {nullptr,0};
-	size_t size0 = ::file_size(fp); if(!size0){ fclose(fp); p.ptr=(char*)memset(malloc(sizeof(char)),0,sizeof(char)); return p; }
-
-	string buffer; buffer.reserve(size0*2);
-	char buff[4096]; while(fgets(buff,4096,fp)) buffer+=buff; fclose(fp);
-	p.size = buffer.size();
-	p.ptr = (char*) malloc((p.size+2)*sizeof(char));
-	if(p.ptr) memcpy(p.ptr,buffer.c_str(),p.size*sizeof(char));
-	p.ptr[p.size]=p.ptr[p.size+1]=0; // two more bytes for null-ended wchar_t string
+	size_t size0=::file_size(fp); if(size0==0){ fclose(fp); p.ptr=(char*)memset(malloc(sizeof(char)*2),0,sizeof(char)*2); return p; }
+	char* b=p.ptr=(char*)malloc((size0+2)*sizeof(char)); // two more char for double null-ending
+	while(fgets(b,4096,fp)) b+=strlen(b); fclose(fp);
+	p.size=(b-p.ptr); p.ptr[p.size]=p.ptr[p.size+1]=0;
 	return p;
 }
 

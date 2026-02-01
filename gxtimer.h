@@ -67,7 +67,7 @@ inline void sleep( long long ms ){ usleep(ms*1000); }
 
 inline void limit_fps( double fps, double overhead_in_ms=0 ) // overhead: estimated delta to compensate slight differences
 {
-	static timer_t m; static auto t = m.now();
+	static thread_local timer_t m; static auto t = m.now();
 	auto t1 = t + 1000.0/fps-overhead_in_ms;
 	for( t=m.now(); t<t1; t=m.now()) usleep(10);
 }
