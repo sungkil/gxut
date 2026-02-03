@@ -34,11 +34,11 @@ static constexpr unsigned char BOM_UTF32[4]	= {0xFF,0xFE,0x00,0x00}; // little e
 namespace nocase
 {
 	template <> struct less<string>{ bool operator()(const string& a,const string& b)const{return stricmp(a.c_str(),b.c_str())<0;}};
-	template <> struct less<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return wcsicmp(a.c_str(),b.c_str())<0;}};
+	template <> struct less<wstring>{ bool operator()(const wstring& a,const wstring& b)const{return wcsicmp(a.c_str(),b.c_str())<0;}};
 	template <> struct equal_to<string>{ bool operator()(const string& a,const string& b)const{return stricmp(a.c_str(),b.c_str())==0;}};
-	template <> struct equal_to<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b)const{return wcsicmp(a.c_str(),b.c_str())==0;}};
+	template <> struct equal_to<wstring>{ bool operator()(const wstring& a,const wstring& b)const{return wcsicmp(a.c_str(),b.c_str())==0;}};
 	template <> struct hash<string> { size_t operator()( const string& p ) const { return std::hash<string>()(strlwr(__strdup(p.c_str()))); }};
-	template <> struct hash<std::wstring> { size_t operator()( const std::wstring& p ) const { return std::hash<std::wstring>()(strlwr(__strdup(p.c_str()))); }};
+	template <> struct hash<wstring> { size_t operator()( const wstring& p ) const { return std::hash<wstring>()(strlwr(__strdup(p.c_str()))); }};
 
 	template <class T> using			set = std::set<T,less<T>>;
 	template <class T, class V> using	map = std::map<T,V,less<T>>;
@@ -49,7 +49,7 @@ namespace nocase
 #ifdef __msvc__
 namespace logical
 {
-	template <> struct less<std::wstring>{ bool operator()(const std::wstring& a,const std::wstring& b) const { return strcmplogical(a.c_str(),b.c_str())<0;} };
+	template <> struct less<wstring>{ bool operator()(const wstring& a,const wstring& b) const { return strcmplogical(a.c_str(),b.c_str())<0;} };
 	template <> struct less<string>{ bool operator()(const string& a,const string& b) const { return strcmplogical(a.c_str(),b.c_str())<0;} };
 	template <class T> using			set = std::set<T,less<T>>;
 	template <class T, class V> using	map = std::map<T,V,less<T>>;

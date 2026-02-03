@@ -69,9 +69,9 @@ struct path : public path_t
 	path( const path& p ) noexcept : path_t(reinterpret_cast<const path_t&>(p)){}
 	path( path&& p ) noexcept { _data=p._data; p._data=nullptr; } // cache moves as well
 	path( const wchar_t* s ) noexcept : path_t() { if(s&&*s) strcpy(_data,wtoa(s)); }
-	path( const std::wstring& s ) noexcept : path_t() { if(!s.empty()) strcpy(_data,wtoa(s.c_str())); }
-	path( std::wstring&& s ) noexcept : path_t() { if(!s.empty()) strcpy(_data,wtoa(s.c_str())); }
-	path( std::wstring_view s ) noexcept : path_t() { size_t l=s.size(); if(!l){ *_data=0; return; } strcpy(_data,wtoa(__strdup<wchar_t>(s.data(),l))); }
+	path( const wstring& s ) noexcept : path_t() { if(!s.empty()) strcpy(_data,wtoa(s.c_str())); }
+	path( wstring&& s ) noexcept : path_t() { if(!s.empty()) strcpy(_data,wtoa(s.c_str())); }
+	path( wstring_view s ) noexcept : path_t() { size_t l=s.size(); if(!l){ *_data=0; return; } strcpy(_data,wtoa(__strdup<wchar_t>(s.data(),l))); }
 
 	// operator overloading: casting and conversion
 	operator path_t& (){ return *this; }
@@ -219,8 +219,7 @@ struct path : public path_t
 
 	// file content access: void (rb/wb), char (r/w), wchar_t (r/w,ccs=UTF-8)
 	FILE* fopen( const char* mode, bool utf8=false ) const;
-	template <class T=void> sized_ptr_t<const T> read_file() const;
-	string read_file() const;
+	template <class T=string> T read_file() const;
 	bool write_file( const void* ptr, size_t size ) const;
 	bool write_file( const char* s ) const;
 	bool write_file( const wchar_t* s ) const;
@@ -229,7 +228,7 @@ struct path : public path_t
 	bool is_binary_file() const	{ FILE* f=fopen("rb"); if(!f) return false; char b[4096]; while(1){ size_t n=fread(b, 1, sizeof(b), f); if(!n) break; if(memchr(b, 0, n)){ fclose(f); return true; } } fclose(f); return false; }
 
 	// scan(): file name pattern, ext_filter (specific extensions delimited by semicolons)
-	struct filter_t { filter_t( const path& _self, const string& delimited_extensions ); template <bool recursive=true> vector<path> scan( const char* pattern=nullptr ) const { return std::move(self.__scan(recursive,pattern,this)); } vector<sized_ptr_t<wchar_t>> v; protected: const path& self; vector<std::wstring> __buffer; };
+	struct filter_t { filter_t( const path& _self, const string& delimited_extensions ); template <bool recursive=true> vector<path> scan( const char* pattern=nullptr ) const { return std::move(self.__scan(recursive,pattern,this)); } vector<sized_ptr_t<wchar_t>> v; protected: const path& self; vector<wstring> __buffer; };
 	filter_t filter( const string& delimited_extensions ) const { return filter_t(*this,delimited_extensions); }
 	template <bool recursive=true> vector<path> scan(const char* pattern=nullptr) const { return std::move(__scan(recursive,pattern,nullptr)); }
 	template <bool recursive=true> vector<path> subdirs( const char* pattern=nullptr ) const;
@@ -286,38 +285,19 @@ __noinline FILE* path::fopen( const char* mode, bool utf8 ) const
 	return fp;
 }
 
-template<> __noinline sized_ptr_t<const void> path::read_file<void>() const
+template <> __noinline string path::read_file<string>() const
 {
-	FILE* fp=fopen("rb",false); if(!fp) return {}; size_t size=::file_size(fp); if(!size){ fclose(fp); return {}; }
-	void* ptr=malloc(size+1); if(!ptr){ fclose(fp); return {}; }
-	fread(ptr,1,size,fp); fclose(fp); ((char*)ptr)[size]=0;
-	return {ptr,size,true}; // set as auto_free
-}
-
-template<> __noinline sized_ptr_t<const char> path::read_file<char>() const
-{
-	FILE* fp=fopen("r"); if(!fp) return {}; size_t size=::file_size(fp); if(size==0){ fclose(fp); return {"",0,false}; } size_t cap=size+2; // double null-ending and enough buffer
-	char* ptr=malloc<char>(cap); if(!ptr){ fclose(fp); return {"",0,false}; }
-	size_t n=0; while(true){ if(cap-n<2){ size_t g=cap>4096?cap:4096; auto* p1=realloc<char>(ptr,cap+g); if(!p1) break; ptr=p1; cap+=g; } char* b=ptr+n; if(!fgets(b,cap-n>4096?4096:int(cap-n),fp)) break; n+=strlen(b); } fclose(fp);
-	if(cap-n<2){ auto* p1=realloc<char>(ptr,cap+2); if(p1){ptr=p1;cap+=2;} else if(cap>=2&&n>cap-2){n=cap-2;} }
-	ptr[n]=ptr[n+1]=0; return {ptr,n,true}; // set as auto_free
-}
-
-template<> __noinline sized_ptr_t<const wchar_t> path::read_file<wchar_t>() const
-{
-	FILE* fp=fopen("r",true); if(!fp) return {}; size_t size=::file_size(fp); if(size==0){ fclose(fp); return {L"",0,false}; } size_t cap=size+2; // double null-ending and enough buffer
-	wchar_t* ptr=malloc<wchar_t>(cap); if(!ptr){ fclose(fp); return {L"",0,false}; }
-	size_t n=0; while(true){ if(cap-n<2){ size_t g=cap>4096?cap:4096; auto* p1=realloc<wchar_t>(ptr,cap+g); if(!p1) break; ptr=p1; cap+=g; } wchar_t* b=ptr+n; if(!fgetws(b,cap-n>4096?4096:int(cap-n),fp)) break; n+=wcslen(b); } fclose(fp);
-	if(cap-n<2){ auto* p1=realloc<wchar_t>(ptr,cap+2); if(p1){ptr=p1;cap+=2;} else if(cap>=2&&n>cap-2){n=cap-2;} }
-	ptr[n]=ptr[n+1]=0; return {ptr,n,true}; // set as auto_free
-}
-
-__noinline string path::read_file() const
-{
-	char* ptr=nullptr; size_t size=0;
-	FILE* fp=fopen("r"); if(!fp) return ""; size=::file_size(fp); if(size==0){ fclose(fp); return ""; }
+	FILE* fp=fopen("r"); if(!fp) return ""; size_t size=::file_size(fp); if(size==0){ fclose(fp); return ""; }
 	string s; s.resize(size>4096?size:4096); size_t n=0;
 	while(true){ if(size_t t=s.size();t-n<2) s.resize(t+(t>4096?t:4096)); char* b=&s[0]+n; size_t r=s.size()-n; if(!fgets(b,r>4096?4096:int(r),fp)) break; n+=strlen(b); }
+	fclose(fp); s.resize(n); return s;
+}
+
+template <> __noinline wstring path::read_file<wstring>() const
+{
+	FILE* fp=fopen("r",true); if(!fp) return L""; size_t size=::file_size(fp); if(size==0){ fclose(fp); return L""; }
+	wstring s; s.resize(size>4096?size:4096); size_t n=0;
+	while(true){ if(size_t t=s.size();t-n<2) s.resize(t+(t>4096?t:4096)); wchar_t* b=&s[0]+n; size_t r=s.size()-n; if(!fgetws(b,r>4096?4096:int(r),fp)) break; n+=wcslen(b); }
 	fclose(fp); s.resize(n); return s;
 }
 
@@ -355,7 +335,7 @@ __noinline vector<path> path::__scan( bool recursive, const char* pattern, const
 	path src=empty()?path(".")+preferred_separator:(is_relative()?absolute():canonical()); if(src.exists()&&src.is_dir()) src=src.append_slash();
 	path srcp=src.filename(); if(!srcp.empty()){ if(!pattern) pattern=srcp.c_str(); src=src.dir(); }
 	__scan_t si; si.b.recursive=recursive; si.b.glob=pattern&&strpbrk(pattern,"*?"); si.ext.v=extension_filter&&!extension_filter->v.empty()?extension_filter->v.data():nullptr; si.ext.l=extension_filter?extension_filter->v.size():0;
-	std::wstring wpattern=pattern?atow(pattern):L""; si.glob.pattern=pattern?wpattern.c_str():nullptr; si.glob.l=pattern?wpattern.size():0;
+	wstring wpattern=pattern?atow(pattern):L""; si.glob.pattern=pattern?wpattern.c_str():nullptr; si.glob.l=pattern?wpattern.size():0;
 	si.result.reserve(1ull<<12);__scan_recursive(atow(src.c_str()),si);
 	return si.result;
 }
@@ -365,7 +345,7 @@ vector<path> path::subdirs( const char* pattern ) const
 {
 	path src=empty()?path(".")+preferred_separator:(is_relative()?path(".").append_slash().absolute():*this).append_slash(); if(!src.is_dir()) return vector<path>{};
 	__scan_t si; si.b.recursive=recursive; si.b.glob=pattern&&strpbrk(pattern,"*?"); si.ext.v=nullptr; si.ext.l=0;
-	std::wstring wpattern=pattern?atow(pattern):L""; si.glob.pattern=pattern?wpattern.c_str():nullptr; si.glob.l=pattern?wpattern.size():0;
+	wstring wpattern=pattern?atow(pattern):L""; si.glob.pattern=pattern?wpattern.c_str():nullptr; si.glob.l=pattern?wpattern.size():0;
 	si.result.reserve(1ull<<12);__subdirs_recursive(atow(src.c_str()),si);
 	return si.result;
 }
@@ -375,7 +355,7 @@ __noinline void path::__scan_recursive( const wchar_t* _dir, path::__scan_t& si 
 	size_t dl=wcslen(_dir); wchar_t dir[capacity]={}; wcsncpy(dir,_dir,dl); wcscpy(dir+dl,L"*.*"); // append wildcard for search
 	WIN32_FIND_DATAW fd={}; HANDLE h=FindFirstFileExW(dir,FindExInfoBasic/*minimal(faster)*/,&fd,FindExSearchNameMatch,0,FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
 	wchar_t *f=fd.cFileName, *p=dir+dl; auto* e=si.ext.v; dir[dl]=0; // revert wildcard
-	vector<std::wstring> sdir; if(si.b.recursive) sdir.reserve(32);
+	vector<wstring> sdir; if(si.b.recursive) sdir.reserve(32);
 	while(FindNextFileW(h,&fd)) // skip directly first '.'
 	{
 		if(f[0]==L'.'){ if(!f[1]||(f[1]==L'.'&&f[2]==0)||memcmp(f+1,L"git",sizeof(wchar_t)*4)==0) continue; } // skip ., .., .git

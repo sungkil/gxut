@@ -26,8 +26,6 @@
 namespace gx { namespace argparse {
 //***********************************************
 
-using wstring = std::wstring;
-
 struct argument_t
 {
 	argument_t& add_help( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); vector<char> buff(vsnprintf(0,0,fmt,a)+1); vsnprintf(&buff[0],buff.size(),fmt,a); va_end(a); shelp=trim(&buff[0],"\n"); return *this; }
@@ -494,7 +492,7 @@ inline bool parser_t::usage( const char* alt_name )
 inline const char* parser_t::rebuild_arguments( int argc, wchar_t* argv[] )
 {
 	if(argc<=1) return "";
-	static std::wstring a; a.clear();
+	static wstring a; a.clear();
 	for( int k=1; k < argc; k++ )
 	{
 		bool ws=wcschr(argv[k],L' ')||wcschr(argv[k],L'\t');

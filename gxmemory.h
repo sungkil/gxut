@@ -92,7 +92,7 @@ struct izip_t	// common interface to zip, 7zip, ...
 	virtual bool load()=0;
 	virtual bool extract_to_files( path dir, const char* name=nullptr )=0;	// if name==nullptr, extract all files. otherwise, extract a single file with the name
 	virtual zipentry_t* extract_to_memory( const char* name=nullptr )=0;		// if name==nullptr, extract all files and return the first pointer. otherwise, extract a single file with the name and returns the pointer
-	virtual zipentry_t* find( const char* name ){ std::wstring w=atow(name); for(auto& e:entries){ if(wcsicmp(e.name,w.c_str())==0) return &e; } return nullptr; }
+	virtual zipentry_t* find( const char* name ){ wstring w=atow(name); for(auto& e:entries){ if(wcsicmp(e.name,w.c_str())==0) return &e; } return nullptr; }
 };
 
 // signature detection
@@ -152,7 +152,7 @@ struct resource_t : public mem_t
 	bool load( int res_id ){ return find(res_id)&&load(); }
 
 	// loading for specific types
-	string load_string(){ if(type!=MAKEINTRESOURCEW(6/*string 6*/)||!load()) return ""; std::wstring w; w.resize(size/sizeof(decltype(w)::value_type)); memcpy((void*)w.c_str(),ptr,size); return wtoa(w.c_str()); }
+	string load_string(){ if(type!=MAKEINTRESOURCEW(6/*string 6*/)||!load()) return ""; wstring w; w.resize(size/sizeof(decltype(w)::value_type)); memcpy((void*)w.c_str(),ptr,size); return wtoa(w.c_str()); }
 	izip_t* load_zip( LPCWSTR lpName ){ if(!find(lpName)) return nullptr; return load_zip(); }
 	izip_t* load_zip( int res_id ){ if(!find(res_id)) return nullptr; return load_zip(); }
 	izip_t* load_zip();
@@ -188,7 +188,7 @@ inline unsigned int crc32c( unsigned int crc0, const sized_ptr_t<void>& p ){ ret
 inline unsigned int crc32c( unsigned int crc0, const char* s ){ return s&&*s?crc32c(crc0,(const void*)s,strlen(s)):crc0; }
 inline unsigned int crc32c( unsigned int crc0, const wchar_t* s ){ return s&&*s?crc32c(crc0,(const void*)s,wcslen(s)):crc0; }
 inline unsigned int crc32c( unsigned int crc0, const string& s ){ return s.empty()?crc0:crc32c(crc0,(const void*)s.c_str(),s.size()); }
-inline unsigned int crc32c( unsigned int crc0, const std::wstring& s ){ return s.empty()?crc0:crc32c(crc0,(const void*)s.c_str(), s.size()*sizeof(wchar_t)); }
+inline unsigned int crc32c( unsigned int crc0, const wstring& s ){ return s.empty()?crc0:crc32c(crc0,(const void*)s.c_str(), s.size()*sizeof(wchar_t)); }
 template <class T> inline unsigned int crc32c( unsigned int crc0, const vector<T>& v ){ return v.empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
 template <class T> inline unsigned int crc32c( unsigned int crc0, const vector<T>* v ){ return !v||v->empty()?crc0:crc32c(crc0,v->data(),v->size()*sizeof(T)); }
 template <class T, size_t N> inline unsigned int crc32c( unsigned int crc0, const array<T,N>& v ){ return v.empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
@@ -199,7 +199,7 @@ inline unsigned int crc32c( const sized_ptr_t<void>& p ){ return crc32c(0,p); }
 inline unsigned int crc32c(	const char* s ){ return crc32c(0,s); }
 inline unsigned int crc32c(	const wchar_t* s ){ return crc32c(0,s); }
 inline unsigned int crc32c(	const string& s ){ return crc32c(0,s); }
-inline unsigned int crc32c(	const std::wstring& s ){ return crc32c(0,s); }
+inline unsigned int crc32c(	const wstring& s ){ return crc32c(0,s); }
 
 template <class T> inline unsigned int crc32c( const vector<T>& v ){ return crc32c<T>(0,v); }
 template <class T> inline unsigned int crc32c( const vector<T>* v ){ return crc32c<T>(0,v); }

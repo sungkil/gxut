@@ -439,7 +439,7 @@ template <HKEY root=HKEY_CLASSES_ROOT> // HKEY_CLASSES_ROOT, HKEY_LOCAL_MACHINE,
 struct key_t
 {
 	HKEY hkey=nullptr;
-	std::wstring key;
+	wstring key;
 
 	key_t( __printf_format_string__ const char* fmt, ... ){ if(!fmt) return; va_list a; va_start(a,fmt); size_t len=size_t(vsnprintf(0,0,fmt,a)); vector<char> b; b.resize(len+1,0); vsnprintf(b.data(),len+1,fmt,a); va_end(a); if(b.back()=='/'||b.back()=='\\') b.back()=0; this->key=atow(b.data()); }
 	~key_t(){ close(); }
@@ -453,11 +453,11 @@ struct key_t
 	
 	// template specialization
 	template <class T=string> T get( const char* name=nullptr );
-	template <> inline string get<string>( const char* name ){ return wtoa(get<std::wstring>(name).c_str()); }
-	template <> inline std::wstring get<std::wstring>( const char* name ){ vector<BYTE> v; DWORD t; if(!query( name, &v, &t )) return L""; if(t==REG_SZ) return std::wstring((wchar_t*)v.data()); else if(t==REG_DWORD){ return atow(utoa(*((DWORD*)v.data()))); } return L""; }
+	template <> inline string get<string>( const char* name ){ return wtoa(get<wstring>(name).c_str()); }
+	template <> inline wstring get<wstring>( const char* name ){ vector<BYTE> v; DWORD t; if(!query( name, &v, &t )) return L""; if(t==REG_SZ) return wstring((wchar_t*)v.data()); else if(t==REG_DWORD){ return atow(utoa(*((DWORD*)v.data()))); } return L""; }
 	template <> inline DWORD get<DWORD>( const char* name ){ vector<BYTE> v; DWORD t; if(!query( name, &v, &t )) return 0; if(t==REG_DWORD) return *((DWORD*)v.data()); else if(t==REG_SZ) return DWORD(atoi((char*)v.data())); return 0; }
 #ifdef __GX_FILESYSTEM_H__
-	template <> inline path get<path>( const char* name ){ return path(get<std::wstring>(name)); }
+	template <> inline path get<path>( const char* name ){ return path(get<wstring>(name)); }
 #endif
 
 protected:

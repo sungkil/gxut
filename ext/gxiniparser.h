@@ -149,7 +149,7 @@ __noinline bool parser_t::save_as( const path_t& file_path )
 	auto_lock_t lock(cs);
 
 	string sec; bool bLine0=true;
-	std::wstring buff;
+	wstring buff;
 	for( auto it=dic.begin(); it!=dic.end(); )
 	{
 		entry_t* e=it->second;
