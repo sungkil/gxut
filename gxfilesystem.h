@@ -164,6 +164,9 @@ struct path : public path_t
 	path canonical() const { if(is_pipe()) return *this; if(is_remote()) return to_slash(); path p(*this); p.__canonicalize(); return p; } // not necessarily absolute: return relative path as well
 	path reparse() const; // get normalized path of files in junction directories
 
+	// extended attribute query
+	bool is_binary_file() const	{ FILE* f=fopen("rb"); if(!f) return false; char b[4096]; while(1){ size_t n=fread(b,1,sizeof(b),f); if(!n) break; if(memchr(b,0,n)){fclose(f);return true;}} fclose(f); return false; }
+
 	// decomposition
 	path dir()				const { return __super::dir(); }
 	path unc_root()			const { return __super::unc_root(); }
@@ -220,17 +223,17 @@ struct path : public path_t
 	// file content access: void (rb/wb), char (r/w), wchar_t (r/w,ccs=UTF-8)
 	FILE* fopen( const char* mode, bool utf8=false ) const;
 	template <class T=string> T read_file() const;
-	bool write_file( const void* ptr, size_t size ) const;
-	bool write_file( const char* s ) const;
-	bool write_file( const wchar_t* s ) const;
-	bool write_file( const sized_ptr_t<void>& p ) const { return p?write_file(p.ptr,p.size):false; }
-	template <class T> bool write_file( const sized_ptr_t<T>& p ) const { return p?write_file(p.ptr,p.size*sizeof(T)):false; }
-	bool is_binary_file() const	{ FILE* f=fopen("rb"); if(!f) return false; char b[4096]; while(1){ size_t n=fread(b, 1, sizeof(b), f); if(!n) break; if(memchr(b, 0, n)){ fclose(f); return true; } } fclose(f); return false; }
+	sized_ptr_t<const void> read_binary() const { FILE* fp=fopen("rb",false); if(!fp) return {}; size_t size=::file_size(fp); if(!size){ fclose(fp); return {}; } void* ptr=malloc(size); if(!ptr||size!=fread(ptr,1,size,fp)){ fclose(fp); safe_free(ptr); return {}; } fclose(fp); return {ptr,size,true}; } // set as auto_free
+	bool write_file( const void* ptr, size_t size ) const { FILE* fp=fopen("wb"); if(!fp) return false; size_t size_written=ptr&&size?fwrite(ptr,1,size,fp):0; fclose(fp); return size_written==size; }
+	bool write_file( const char* s ) const { FILE* fp=fopen("w"); if(!fp) return false; int ret = s&&*s?fputs(s,fp):0; fclose(fp); return ret>=0; }
+	bool write_file( const wchar_t* s ) const { FILE* fp=fopen("w",true); if(!fp) return false; int ret = s&&*s?fputws(s,fp):0; fclose(fp); return ret>=0; }
+	bool write_file( const sized_ptr_t<void>& p ) const { return write_file(p.ptr,p.size); }
+	template <class T> bool write_file( const sized_ptr_t<T>& p ) const { return write_file(p.ptr,p.size*sizeof(T)); }
 
 	// scan(): file name pattern, ext_filter (specific extensions delimited by semicolons)
 	struct filter_t { filter_t( const path& _self, const string& delimited_extensions ); template <bool recursive=true> vector<path> scan( const char* pattern=nullptr ) const { return std::move(self.__scan(recursive,pattern,this)); } vector<sized_ptr_t<wchar_t>> v; protected: const path& self; vector<wstring> __buffer; };
 	filter_t filter( const string& delimited_extensions ) const { return filter_t(*this,delimited_extensions); }
-	template <bool recursive=true> vector<path> scan(const char* pattern=nullptr) const { return std::move(__scan(recursive,pattern,nullptr)); }
+	template <bool recursive=true> vector<path> scan( const char* pattern=nullptr ) const { return std::move(__scan(recursive,pattern,nullptr)); }
 	template <bool recursive=true> vector<path> subdirs( const char* pattern=nullptr ) const;
 
 	// crc32c/md5 checksums of the file content implement in gxmemory.h
@@ -299,27 +302,6 @@ template <> __noinline wstring path::read_file<wstring>() const
 	wstring s; s.resize(size>4096?size:4096); size_t n=0;
 	while(true){ if(size_t t=s.size();t-n<2) s.resize(t+(t>4096?t:4096)); wchar_t* b=&s[0]+n; size_t r=s.size()-n; if(!fgetws(b,r>4096?4096:int(r),fp)) break; n+=wcslen(b); }
 	fclose(fp); s.resize(n); return s;
-}
-
-__noinline bool path::write_file( const void* ptr, size_t size ) const
-{
-	FILE* fp=fopen("wb"); if(!fp) return false;
-	size_t size_written = ptr&&size?fwrite(ptr,1,size,fp):0; fclose(fp);
-	return size_written==size;
-}
-
-__noinline bool path::write_file( const char* s ) const
-{
-	FILE* fp=fopen("w"); if(!fp) return false;
-	int ret = s&&*s?fputs(s,fp):0; fclose(fp);
-	return ret>=0;
-}
-
-__noinline bool path::write_file( const wchar_t* s ) const
-{
-	FILE* fp=fopen("w",true); if(!fp) return false;
-	int ret = s&&*s?fputws(s,fp):0; fclose(fp);
-	return ret>=0;
 }
 
 __noinline path::filter_t::filter_t( const path& _self, const string& delimited_extensions ):self(_self)
