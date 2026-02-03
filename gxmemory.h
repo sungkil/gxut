@@ -184,7 +184,7 @@ inline unsigned int crc32c( unsigned int crc0, const void* ptr, size_t size ){ s
 #else
 inline unsigned int crc32c( unsigned int crc0, const void* ptr, size_t size ){ return ptr&&size?crc32<0x82f63b78UL>(crc0,ptr,size):crc0; }
 #endif
-inline unsigned int crc32c( unsigned int crc0, sized_ptr_t<void> p ){ return p.ptr&&p.size?crc32c(crc0,(const void*)p.ptr,p.size):crc0; }
+inline unsigned int crc32c( unsigned int crc0, const sized_ptr_t<void>& p ){ return p.ptr&&p.size?crc32c(crc0,(const void*)p.ptr,p.size):crc0; }
 inline unsigned int crc32c( unsigned int crc0, const char* s ){ return s&&*s?crc32c(crc0,(const void*)s,strlen(s)):crc0; }
 inline unsigned int crc32c( unsigned int crc0, const wchar_t* s ){ return s&&*s?crc32c(crc0,(const void*)s,wcslen(s)):crc0; }
 inline unsigned int crc32c( unsigned int crc0, const string& s ){ return s.empty()?crc0:crc32c(crc0,(const void*)s.c_str(),s.size()); }
@@ -195,7 +195,7 @@ template <class T, size_t N> inline unsigned int crc32c( unsigned int crc0, cons
 template <class T, size_t N> inline unsigned int crc32c( unsigned int crc0, const array<T,N>* v ){ return !v||v->empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
 
 inline unsigned int crc32c( const void* ptr, size_t size ){ return crc32c(0,ptr,size); }
-inline unsigned int crc32c( sized_ptr_t<void> p ){ return crc32c(0,p); }
+inline unsigned int crc32c( const sized_ptr_t<void>& p ){ return crc32c(0,p); }
 inline unsigned int crc32c(	const char* s ){ return crc32c(0,s); }
 inline unsigned int crc32c(	const wchar_t* s ){ return crc32c(0,s); }
 inline unsigned int crc32c(	const string& s ){ return crc32c(0,s); }

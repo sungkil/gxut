@@ -219,12 +219,13 @@ struct path : public path_t
 
 	// file content access: void (rb/wb), char (r/w), wchar_t (r/w,ccs=UTF-8)
 	FILE* fopen( const char* mode, bool utf8=false ) const;
-	template <class T=void> sized_ptr_t<T> read_file() const;
+	template <class T=void> sized_ptr_t<const T> read_file() const;
 	string read_file() const;
 	bool write_file( const void* ptr, size_t size ) const;
-	bool write_file( sized_ptr_t<void> p ) const { return p.ptr&&p.size?write_file(p.ptr,p.size):false; }
 	bool write_file( const char* s ) const;
 	bool write_file( const wchar_t* s ) const;
+	bool write_file( const sized_ptr_t<void>& p ) const { return p?write_file(p.ptr,p.size):false; }
+	template <class T> bool write_file( const sized_ptr_t<T>& p ) const { return p?write_file(p.ptr,p.size*sizeof(T)):false; }
 	bool is_binary_file() const	{ FILE* f=fopen("rb"); if(!f) return false; char b[4096]; while(1){ size_t n=fread(b, 1, sizeof(b), f); if(!n) break; if(memchr(b, 0, n)){ fclose(f); return true; } } fclose(f); return false; }
 
 	// scan(): file name pattern, ext_filter (specific extensions delimited by semicolons)
@@ -285,42 +286,40 @@ __noinline FILE* path::fopen( const char* mode, bool utf8 ) const
 	return fp;
 }
 
-template<> __noinline sized_ptr_t<void> path::read_file<void>() const
+template<> __noinline sized_ptr_t<const void> path::read_file<void>() const
 {
-	sized_ptr_t<void> p={nullptr,0};
-	FILE* fp=fopen("rb",false); if(!fp) return {nullptr,0};
-	p.size = ::file_size(fp); if(!p.size){ fclose(fp); return {nullptr, 0}; }
-	p.ptr=malloc(p.size+1); if(p.ptr) fread(p.ptr,1,p.size,fp); ((char*)p.ptr)[p.size]=0;
-	fclose(fp);
-	return p;
+	FILE* fp=fopen("rb",false); if(!fp) return {}; size_t size=::file_size(fp); if(!size){ fclose(fp); return {}; }
+	void* ptr=malloc(size+1); if(!ptr){ fclose(fp); return {}; }
+	fread(ptr,1,size,fp); fclose(fp); ((char*)ptr)[size]=0;
+	return {ptr,size,true}; // set as auto_free
 }
 
-template<> __noinline sized_ptr_t<wchar_t> path::read_file<wchar_t>() const
+template<> __noinline sized_ptr_t<const char> path::read_file<char>() const
 {
-	sized_ptr_t<wchar_t> p={nullptr,0};
-	FILE* fp=fopen("r",true); if(!fp) return {nullptr,0};
-	size_t size0=::file_size(fp); if(size0==0){ fclose(fp); p.ptr=(wchar_t*)memset(malloc(sizeof(wchar_t)*2),0,sizeof(wchar_t)*2); return p; }
-	wchar_t* b=p.ptr=(wchar_t*)malloc((size0+2)*sizeof(wchar_t)); // two more char for double null-ending
-	while(fgetws(b,4096,fp)) b+=wcslen(b); fclose(fp);
-	p.size=(b-p.ptr); p.ptr[p.size]=p.ptr[p.size+1]=0;
-	return p;
+	FILE* fp=fopen("r"); if(!fp) return {}; size_t size=::file_size(fp); if(size==0){ fclose(fp); return {"",0,false}; } size_t cap=size+2; // double null-ending and enough buffer
+	char* ptr=malloc<char>(cap); if(!ptr){ fclose(fp); return {"",0,false}; }
+	size_t n=0; while(true){ if(cap-n<2){ size_t g=cap>4096?cap:4096; auto* p1=realloc<char>(ptr,cap+g); if(!p1) break; ptr=p1; cap+=g; } char* b=ptr+n; if(!fgets(b,cap-n>4096?4096:int(cap-n),fp)) break; n+=strlen(b); } fclose(fp);
+	if(cap-n<2){ auto* p1=realloc<char>(ptr,cap+2); if(p1){ptr=p1;cap+=2;} else if(cap>=2&&n>cap-2){n=cap-2;} }
+	ptr[n]=ptr[n+1]=0; return {ptr,n,true}; // set as auto_free
 }
 
-template<> __noinline sized_ptr_t<char> path::read_file<char>() const
+template<> __noinline sized_ptr_t<const wchar_t> path::read_file<wchar_t>() const
 {
-	sized_ptr_t<char> p={nullptr,0};
-	FILE* fp=fopen("r"); if(!fp) return {nullptr,0};
-	size_t size0=::file_size(fp); if(size0==0){ fclose(fp); p.ptr=(char*)memset(malloc(sizeof(char)*2),0,sizeof(char)*2); return p; }
-	char* b=p.ptr=(char*)malloc((size0+2)*sizeof(char)); // two more char for double null-ending
-	while(fgets(b,4096,fp)) b+=strlen(b); fclose(fp);
-	p.size=(b-p.ptr); p.ptr[p.size]=p.ptr[p.size+1]=0;
-	return p;
+	FILE* fp=fopen("r",true); if(!fp) return {}; size_t size=::file_size(fp); if(size==0){ fclose(fp); return {L"",0,false}; } size_t cap=size+2; // double null-ending and enough buffer
+	wchar_t* ptr=malloc<wchar_t>(cap); if(!ptr){ fclose(fp); return {L"",0,false}; }
+	size_t n=0; while(true){ if(cap-n<2){ size_t g=cap>4096?cap:4096; auto* p1=realloc<wchar_t>(ptr,cap+g); if(!p1) break; ptr=p1; cap+=g; } wchar_t* b=ptr+n; if(!fgetws(b,cap-n>4096?4096:int(cap-n),fp)) break; n+=wcslen(b); } fclose(fp);
+	if(cap-n<2){ auto* p1=realloc<wchar_t>(ptr,cap+2); if(p1){ptr=p1;cap+=2;} else if(cap>=2&&n>cap-2){n=cap-2;} }
+	ptr[n]=ptr[n+1]=0; return {ptr,n,true}; // set as auto_free
 }
 
-__noinline string path::read_file() const {			sized_ptr_t<char> p=read_file<char>(); if(!p||!p.size) return ""; string s=p.ptr; free(p.ptr); return s; }
-template<> __noinline sized_ptr_t<const void>		path::read_file<const void>() const { auto p=read_file<void>(); return {(const void*)p.ptr,p.size}; }
-template<> __noinline sized_ptr_t<const char>		path::read_file<const char>() const { auto p=read_file<char>(); return {(const char*)p.ptr,p.size}; }
-template<> __noinline sized_ptr_t<const wchar_t>	path::read_file<const wchar_t>() const { auto p=read_file<wchar_t>(); return {(const wchar_t*)p.ptr,p.size}; }
+__noinline string path::read_file() const
+{
+	char* ptr=nullptr; size_t size=0;
+	FILE* fp=fopen("r"); if(!fp) return ""; size=::file_size(fp); if(size==0){ fclose(fp); return ""; }
+	string s; s.resize(size>4096?size:4096); size_t n=0;
+	while(true){ if(size_t t=s.size();t-n<2) s.resize(t+(t>4096?t:4096)); char* b=&s[0]+n; size_t r=s.size()-n; if(!fgets(b,r>4096?4096:int(r),fp)) break; n+=strlen(b); }
+	fclose(fp); s.resize(n); return s;
+}
 
 __noinline bool path::write_file( const void* ptr, size_t size ) const
 {

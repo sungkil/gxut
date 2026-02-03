@@ -272,20 +272,27 @@ using std::max;
 #endif
 
 // alloc/deallocation functions
-template <class T> T* malloc( size_t size ){ return (T*) ::malloc(size); }
-template <class T> T* realloc( void* ptr, size_t size ){ return (T*) ::realloc(ptr,size); }
+template <class T> T* malloc( size_t size ){ return (T*) ::malloc(size*sizeof(T)); }
+template <class T> T* realloc( void* ptr, size_t size ){ return (T*) ::realloc(ptr,size*sizeof(T)); }
 template <class T> T*& safe_free( T*& p ){ if(p) free((void*)p); return p=nullptr; }
 template <class T> T*& safe_delete( T*& p ){ if(p) delete p; return p=nullptr; }
 
 // pointer type with size: waiting for a C++ standard for proposal P0901R3 (std::sized_ptr_t)
-template <class T=void> struct sized_ptr_t { T* ptr=nullptr; size_t size=0; operator T* (){return ptr;} operator const T* () const {return ptr;} T* operator->(){return ptr;} const T* operator->() const {return ptr;} };
-template <class T> struct auto_sized_ptr_t : public sized_ptr_t<T> { using sized_ptr_t<T>::ptr; using sized_ptr_t<T>::size; using sized_ptr_t<T>::sized_ptr_t; using sized_ptr_t<T>::operator T*; using sized_ptr_t<T>::operator const T*; using sized_ptr_t<T>::operator->; auto_sized_ptr_t()=default; auto_sized_ptr_t( const sized_ptr_t<T>& t ){ptr=t.ptr;size=t.size;} ~auto_sized_ptr_t(){safe_free(ptr);} auto_sized_ptr_t& operator=( const sized_ptr_t<T>& t ){ptr=t.ptr;size=t.size; return *this; } };
+template <class T=void> struct sized_ptr_t
+{
+	T* ptr=nullptr; size_t size=0; const bool auto_free=false;
+	~sized_ptr_t(){ if(auto_free) safe_free(ptr); } sized_ptr_t()=default;
+	sized_ptr_t( sized_ptr_t&& other ) noexcept {memcpy(&ptr,&other.ptr,sizeof(*this));memset(&other.ptr,0,sizeof(other));}
+	sized_ptr_t( T* ptr, size_t size, bool autofree=false ):auto_free(autofree){this->ptr=ptr;this->size=size;}
+	sized_ptr_t& operator=( sized_ptr_t&& other ){memcpy(&ptr,&other.ptr,sizeof(*this));memset(&other.ptr,0,sizeof(other));return *this;}
+	operator T* (){return ptr;} operator const T* () const {return ptr;} T* operator->(){return ptr;} const T* operator->() const {return ptr;}
+};
 
 // double-pointer wrapper to use it as a single-pointer
 template <class T> struct pptr_t { T** pptr=nullptr; pptr_t()=default; pptr_t( T*& ptr ):pptr(&ptr){} pptr_t( const T*& ptr ):pptr(&const_cast<T*&>(ptr)){} pptr_t( T** _pptr ):pptr(_pptr){} pptr_t( const T** _pptr ):pptr((T**)_pptr){} pptr_t& operator=( T*& ptr ){ pptr=&ptr; return *this; } pptr_t& operator=( const T*& ptr ){ pptr=&const_cast<T*&>(ptr); return *this; } pptr_t& operator=( T** _pptr ){ pptr=_pptr; return *this; } pptr_t& operator=( const T** _pptr ){ pptr=(T**)_pptr; return *this; } T* operator->(){ return pptr?*pptr:nullptr; } const T* operator->() const { return pptr?*pptr:nullptr; } operator T*(){ return pptr?*pptr:nullptr; } operator const T*() const { return pptr?*pptr:nullptr; } T* ptr(){ return pptr?*pptr:nullptr; } const T* ptr() const { return pptr?*pptr:nullptr; } };
 
 // shared circular string buffers
-template <class T=char> __forceinline T* __strbuf( size_t len ){ static thread_local T* C[1<<14]={}; static thread_local unsigned int cid=0; cid=cid%(sizeof(C)/sizeof(C[0])); C[cid]=(T*)(C[cid]?realloc(C[cid],sizeof(T)*(len+2)):malloc(sizeof(T)*(len+2))); if(C[cid]){ C[cid][0]=C[cid][len]=C[cid][len+1]=0; } return C[cid++]; } // add one more char for convenience
+template <class T=char> __forceinline T* __strbuf( size_t len ){ static thread_local T* C[1<<12]={}; static thread_local unsigned int cid=0; cid=cid%(sizeof(C)/sizeof(C[0])); C[cid]=(T*)(C[cid]?realloc(C[cid],sizeof(T)*(len+2)):malloc(sizeof(T)*(len+2))); if(C[cid]){ C[cid][0]=C[cid][len]=C[cid][len+1]=0; } return C[cid++]; } // add one more char for convenience
 template <class T=char> __forceinline T* __strdup( const T* s, size_t len ){ T* d=__strbuf<T>(size_t(len)); size_t k=0; while(k<len&&*s) d[k++]=*(s++); d[k]=d[k+1]=0; return d; }
 template <class T=char> __forceinline T* __strdup( const T* s ){ const T* t=s; while(*t) t++; return __strdup<T>(s,t-s); }
 
