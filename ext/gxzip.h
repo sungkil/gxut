@@ -315,70 +315,73 @@ __noinline vector<uchar> decompress( void* ptr, size_t size )
 namespace gx {
 //***********************************************
 
+template <bool zip=false>
 struct binary_cache
 {
-	path file_path; // this must be used in dtor, so declare as a member; do not use virtual function
-
-	binary_cache( bool compress ){ b.compress=compress; }
 	virtual ~binary_cache();
-	operator FILE* () const { return fp; }
-
-	virtual path zip_path(){ return file_path.empty()?"":file_path+".zip"; }
-	virtual uint crc()=0; // custom crc for signature detection
+	virtual path file_path()=0;
+	virtual uint crc()=0; // implement and augment crc for signature detection
 	virtual bool open( bool read=true );
-
+	
+	operator FILE* () const { return fp; }
+	path zip_path(){ return _file_path.empty()?"":_file_path+".zip"; }
 	int writef( __printf_format_string__ const char* fmt, ... ){ if(!fp) return EOF; va_list a; va_start(a,fmt); int r=_vfprintf_l(fp,fmt,NULL,a); va_end(a); return r; }
 	int getsf( const char* fmt, ... ){ if(!fp) return EOF; static char* buff=(char*)malloc((1<<14)+1); fgets(buff,(1<<14),fp); va_list a; va_start(a,fmt); int r=vsscanf(buff,fmt,a); va_end(a); return r; }
 	bool write( void* ptr, size_t size ){ if(!fp) return false; return size==fwrite(ptr,1,size,fp); }
 	bool read( void* ptr, size_t size ){ if(!fp) return false; return size==fread(ptr,1,size,fp); }
-	bool compress( bool rm_src=true );
-	bool decompress();
 
 private:
 	FILE* fp = nullptr;
-	struct { bool read=false, compress=false; } b;
+	struct { bool read=false; } b;
+	const path _file_path; // cache of file_path(); declare as a member, since virtual function in dtor is already destroyed
+	bool compress();
+	bool decompress();
 };
 
-__noinline binary_cache::~binary_cache()
+template<> __noinline binary_cache<false>::~binary_cache(){ if(fp){ fclose(fp); fp=nullptr;} }
+template<> __noinline binary_cache<true>::~binary_cache()
 {
 	// caution: dtor here uses only base-class functions, because a derive object has been already destroyed
-	if(fp){ fclose(fp); fp=nullptr; } if(!b.compress) return;
-	if(!b.read) compress(); else if(zip_path().exists()&&file_path.exists()) unlink(file_path.c_str());
+	if(!fp) return; fclose(fp); fp=nullptr;
+	if(!b.read) compress(); else if(zip_path().exists()&&_file_path.exists()) unlink(_file_path.c_str());
 }
 
-__noinline bool binary_cache::open( bool read )
+template <bool zip>
+__noinline bool binary_cache<zip>::open( bool read )
 {
 	b.read = read;
 	uint sig = crc32c(crc(),string(__TIMESTAMP__));
-	path cpath = file_path;
+	const_cast<path&>(_file_path) = file_path();
 	path zpath = zip_path();
 	if(b.read)
 	{
-		if(b.compress&&zpath.exists()&&!decompress()) return false;
-		if(!cpath.exists()) return false;
-		fp = fopen(cpath.c_str(),"rb");
+		if(zip&&zpath.exists()&&!decompress()) return false;
+		if(!_file_path.exists()) return false;
+		fp = fopen(_file_path.c_str(),"rb");
 		uint s=0; fread(&s,sizeof(s),1,fp);
-		if(!fp||sig!=s){ if(fp){ fclose(fp); fp=nullptr; } if(zpath.exists()) unlink(cpath.c_str()); return false; }
+		if(!fp||sig!=s){ if(fp){ fclose(fp); fp=nullptr; } if(zpath.exists()) unlink(_file_path.c_str()); return false; }
 	}
 	else
 	{
-		if(!cpath.dir().exists()) cpath.dir().mkdir();
-		fp = fopen(cpath.c_str(),"wb"); if(!fp) return false;
+		if(!_file_path.dir().exists()) _file_path.dir().mkdir();
+		fp = fopen(_file_path.c_str(),"wb"); if(!fp) return false;
 		fwrite(&sig,sizeof(sig),1,fp);
 	}
 	return true;
 }
 
-__noinline bool binary_cache::compress( bool rm_src )
+template<> __noinline bool binary_cache<false>::compress(){ return false; }
+template<> __noinline bool binary_cache<true>::compress()
 {
-	if(!file_path.exists()) return false;
+	if(!_file_path.exists()) return false;
 	path zpath=zip_path(); zpath.dir().mkdir();
 	HZIP hZip = CreateZip( atow(zpath.c_str()), nullptr);
-	if(ZR_OK==ZipAdd( hZip, atow(file_path.filename().c_str()), atow(file_path.c_str()))){ CloseZipZ(hZip); if(rm_src) unlink(file_path.c_str()); return true; }
-	else { printf( "Unable to compress %s\n", file_path.filename().c_str() ); CloseZipZ( hZip ); return false; }
+	if(ZR_OK==ZipAdd( hZip, atow(_file_path.filename().c_str()), atow(_file_path.c_str()))){ CloseZipZ(hZip); unlink(_file_path.c_str()); return true; }
+	else { printf( "Unable to compress %s\n", _file_path.filename().c_str() ); CloseZipZ( hZip ); return false; }
 }
 
-__noinline bool binary_cache::decompress()
+template<> __noinline bool binary_cache<false>::decompress(){ return false; }
+template<> __noinline bool binary_cache<true>::decompress()
 {
 	path zpath=zip_path(); if(!zpath.exists()) return false;
 	zip_t zip_file(zpath); return zip_file.load()&&!zip_file.entries.empty()&&zip_file.extract_to_files(zpath.dir());
