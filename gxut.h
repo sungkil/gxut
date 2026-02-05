@@ -134,7 +134,7 @@ inline int __cdecl vsscanf( char const* const _Buffer, char const* const _Format
 inline int __cdecl sscanf( char const* const _Buffer, char const* const _Format, ... ){ int _Result; va_list _ArgList; __crt_va_start(_ArgList, _Format); _Result = __stdio_common_vsscanf( _CRT_INTERNAL_LOCAL_SCANF_OPTIONS, _Buffer, (size_t)-1, _Format, NULL, _ArgList); return _Result; }
 inline int __cdecl puts( char const* _Buffer ){ return fputs(_Buffer,stdout); }
 #endif
-// a safer alternative to fscanf (dangerous with newliens): sscanf() after fgets()
+// a safer alternative to fscanf (dangerous with newlines): sscanf() after fgets()
 inline const char* __cdecl fgetsf( FILE* const _Stream, const char* fmt, ... ){ if(!_Stream) return nullptr; static thread_local char* buff=(char*)malloc((1<<14)+1); if(!fgets(buff,(1<<14),_Stream)) return nullptr; if(!*buff) return buff; va_list a; va_start(a, fmt); int r=vsscanf(buff, fmt, a); va_end(a); return buff; }
 
 // compile-time test of printf-style format string
