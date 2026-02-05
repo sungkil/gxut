@@ -103,7 +103,7 @@ __noinline gl::Texture* gxCreateTexture2DFromMemory( const char* name, GLsizei w
 	// set dimensions
 	texture->_width		= width;
 	texture->_height	= height;
-	texture->_depth		= 1;
+	texture->_layers	= 1;
 	texture->_levels	= 1;
 
 	// attributes

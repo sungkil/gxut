@@ -221,7 +221,7 @@ struct Query : public Object
 {
 	GLuint64 result=0;
 	Query( GLuint ID, const char* name, GLenum target ):Object(ID,name,target){}
-	~Query() override { GLuint id=ID; glDeleteQueries(1,&id); }
+	~Query() override { glDeleteQueries(1,(GLuint*)&ID); }
 
 	bool	is_available(){ GLint available; glGetQueryObjectiv(ID,GL_QUERY_RESULT_AVAILABLE, &available); return available!=0; }
 	void	finish(){ glGetQueryObjectui64v(ID,GL_QUERY_RESULT,&result); } // use GL_QUERY_RESULT_NO_WAIT for async query download
@@ -261,8 +261,12 @@ protected:
 //*************************************
 struct Buffer : public Object
 {
-	Buffer( GLuint ID, const char* name, GLenum target, size_t size ):Object(ID,name,target),_size(size){} // bind() and bind_back() should be called to actually create this buffer
-	~Buffer() override { GLuint id=ID; if(id) glDeleteBuffers( 1, &id ); }
+	Buffer( GLuint ID, const char* name, GLenum target, size_t size ):Object(ID,name,target),_size(size){instances.emplace(this);} // bind() and bind_back() should be called to actually create this buffer
+	~Buffer() override { if(!ID) return; instances.erase(this); glDeleteBuffers( 1, (GLuint*)&ID ); }
+
+	// batch-delete all buffer instances
+	static void delete_all_instances( GLenum target=GL_SHADER_STORAGE_BUFFER ){ for( auto& t:vector(instances.begin(),instances.end()) ){ if(t->target!=target) continue; delete t; instances.erase(t); } }
+
 	GLuint bind( bool b_bind=true ){ GLuint b0=binding(); if(!b_bind||b0!=ID) glBindBuffer( target, b_bind?ID:0 ); if(target==GL_TRANSFORM_FEEDBACK) glBindTransformFeedback(target, b_bind?ID:0 ); return b0; }
 	GLuint bind_as( GLenum target1, bool b_bind=true ){ GLuint b0=binding(target1); if(!b_bind||b0!=ID) glBindBuffer( target1, b_bind?ID:0 ); return b0; }
 	GLuint bind_base( GLuint index, bool b_bind=true ){ GLuint b0=binding(); if(base_bindable(target)&&(!b_bind||b0!=ID)) glBindBufferBase( target, index, b_bind?ID:0 ); return b0; }
@@ -304,6 +308,9 @@ struct Buffer : public Object
 protected:
 		
 	size_t _size=0;
+	
+	// instance-related for batch delete
+	static inline set<Buffer*> instances;
 };
 
 //*************************************
@@ -370,7 +377,7 @@ namespace gl {
 struct VertexArray : public Object
 {
 	VertexArray( GLuint ID, const char* name ):Object(ID,name,GL_VERTEX_ARRAY),vertex_buffer(nullptr),index_buffer(nullptr),vertex_count(0),index_count(0){};
-	~VertexArray() override { if(vertex_buffer){ delete vertex_buffer; vertex_buffer=nullptr; } if(index_buffer){ delete index_buffer; index_buffer=nullptr; } GLuint id=ID; if(id) glDeleteVertexArrays( 1, &id ); }
+	~VertexArray() override { if(vertex_buffer){ delete vertex_buffer; vertex_buffer=nullptr; } if(index_buffer){ delete index_buffer; index_buffer=nullptr; } if(ID) glDeleteVertexArrays(1,(GLuint*)&ID); }
 	GLuint bind( bool b_bind=true ){ GLuint b0=binding(); if(!b_bind||b0!=ID) glBindVertexArray( b_bind?ID:0 ); return b0; }
 
 	inline void draw_arrays( GLint first, GLsizei count=0, GLenum mode=GL_TRIANGLES, bool b_bind=true ){ if(b_bind) bind(); glDrawArrays( mode, first, count?count:GLsizei(vertex_count) ); }
@@ -463,6 +470,7 @@ gl::Texture* gxCreateTexture3D(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,G
 gl::Texture* gxCreateTextureCube(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,GLvoid*[6],bool);
 gl::Texture* gxCreateTextureBuffer(const char*,gl::Buffer*,GLint);
 gl::Texture* gxCreateTextureRectangle(const char*,GLsizei,GLsizei,GLint,GLvoid*);
+gl::Texture* gxCreateTextureView(gl::Texture*,GLuint,GLuint,GLuint,GLuint,GLenum,bool);
 gl::Texture* gxCreateTexture2DFromMemory(const char*,GLsizei,GLsizei,GLuint,GLint);
 
 //*************************************
@@ -472,11 +480,11 @@ namespace gl {
 //*************************************
 struct Texture : public Object
 {
-	Texture( GLuint ID, const char* name, GLenum target, GLenum InternalFormat, GLenum Format, GLenum Type ):Object(ID,name,target),_internal_format(InternalFormat),_type(Type),_format(Format),_channels(gxGetTextureChannels(InternalFormat)),_bpp(gxGetTextureBPP(InternalFormat)){}
-	~Texture() override { delete_views(_next); make_resident(false); glDeleteTextures(1,(GLuint*)&ID); invalidated()=true; }
+	Texture(GLuint ID,const char* name,GLenum target,GLenum InternalFormat,GLenum Format,GLenum Type): Object(ID,name,target),_internal_format(InternalFormat),_type(Type),_format(Format),_channels(gxGetTextureChannels(InternalFormat)),_bpp(gxGetTextureBPP(InternalFormat)){instances.emplace(this);}
+	~Texture() override { safe_delete(_next);safe_delete(_temp);make_resident(false);glDeleteTextures(1, (GLuint*)&ID);if(instances.contains(this)) instances.erase(this);invalidated()=true; }
 
 	// delete texture views and query to check whether dirty/deleted textures exist
-	static void delete_views( Texture*& v ){ if(!v) return; delete_views(v->_next); v->make_resident(false); glDeleteTextures(1,(GLuint*)&v->ID); delete v; v=nullptr; invalidated()=true; }
+	static void delete_all_instances(){ for( auto& t:vector(instances.begin(),instances.end()) ) delete t; instances.clear(); }
 	static bool& invalidated(){ static bool b=true; return b; }
 
 	GLuint bind( bool b_bind=true ){ GLuint b0=gxGetIntegerv(_target_binding); if(!b_bind||ID!=b0) glBindTexture( target, b_bind?ID:0 ); return b0; }
@@ -493,12 +501,11 @@ struct Texture : public Object
 	GLint mip_levels() const {				return _levels; } // on-demand query: is_immutable()?get_texture_parameteriv(GL_TEXTURE_VIEW_NUM_LEVELS):get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)-get_texture_parameteriv(GL_TEXTURE_BASE_LEVEL)+1; }
 	GLint width( GLint level=0 ) const {	return max(1,_width>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_WIDTH, level )
 	GLint height( GLint level=0 ) const {	return (target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY||target==GL_TEXTURE_BUFFER)?1:max(1,_height>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_HEIGHT, level );
-	GLint depth( GLint level=0 ) const {	return (target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY||target==GL_TEXTURE_BUFFER||target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_RECTANGLE)?1:(target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY)?_depth:max(1,_depth>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_DEPTH, level );
-	GLint layers( GLint level=0 ) const {	return (target==GL_TEXTURE_1D_ARRAY)?height(level):(target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_3D)?depth(level):target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY?depth(level):1; }
+	GLint layers() const {					return _layers; }
 
 	// texture size helpers for the first mip level
-	ivec2	size( GLint level=0 ) const {	return ivec2{width(level),height(level)}; }
-	vec2	sizef( GLint level=0 ) const {	return vec2{float(width(level)),float(height(level))}; }
+	ivec2 size( GLint level=0 ) const {		return ivec2{width(level),height(level)}; }
+	vec2  sizef( GLint level=0 ) const {	return vec2{float(width(level)),float(height(level))}; }
 
 	// other texture queries
 	ivec2 mip_range() const {	ivec2 range=ivec2{get_texture_parameteriv(GL_TEXTURE_BASE_LEVEL),get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)}; return ivec2{range.x,range.y-range.x+1}; }
@@ -551,15 +558,17 @@ struct Texture : public Object
 	// get_image/set_image
 	void get_image( GLvoid* pixels, GLint level=0 ){ if(target==GL_TEXTURE_BUFFER){ oncef("[%s] read_pixels() not supports GL_TEXTURE_BUFFER\n", _name ); return; } else if(glGetTextureImage){ glGetTextureImage( ID, level, format(), type(), GLsizei(mem_size()), pixels ); return; } GLuint b0=bind(); glGetTexImage( target, level, format(), type(), pixels ); glBindTexture( target, b0 ); }
 	void get_sub_image( GLvoid* pixels, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLint level=0, GLint zoffset=0, GLsizei depth=1 ){ if(target==GL_TEXTURE_BUFFER){ oncef("[%s] read_pixels() not supports GL_TEXTURE_BUFFER\n", _name ); return; } if(!glGetTextureSubImage){ oncef("[%s] glGetTextureSubImage==nullptr\n", _name ); return; } glGetTextureSubImage( ID, level, xoffset, yoffset, zoffset, width, height, depth, format(), type(), Bpp()*width*height, pixels ); }
-	void set_image( GLvoid* pixels, GLint level=0, GLsizei width=0, GLsizei height=0, GLsizei depth=0, GLint x=0, GLint y=0, GLint z=0 );
+	void set_image( GLvoid* pixels, GLint level=0, GLsizei width=0, GLsizei height=0, GLsizei layers=0, GLint x=0, GLint y=0, GLint z=0 );
+	bool copy( Texture* dst, GLint level=0 );
 
 	// instance-related
-	inline Texture* clone( const char* name );
-	inline bool copy( Texture* dst, GLint level=0 );
+	Texture* clone( const char* name );
+	inline Texture* dup( bool copy_data=true ){ if(!_temp) instances.erase(_temp=clone("TMP")); if(copy_data) copy(_temp); return _temp; }
 
-	// view-related function
+	// view-related function (> OpenGL 4.3)
 	inline static uint crc( GLuint min_level, GLuint levels, GLuint min_layer, GLuint layers, GLenum target, bool force_array ){ struct info { GLuint min_level, levels, min_layer, layers; GLenum target; bool force_array; }; info i={min_level,levels,min_layer,layers,target,force_array}; return crc32(0,&i,sizeof(i)); }
-	inline Texture* view( GLuint min_level, GLuint levels, GLuint min_layer=0, GLuint layers=1, GLenum target=0, bool force_array=false ); // view support (> OpenGL 4.3)
+	inline bool is_view() const { return _b_view; }
+	inline Texture* view( GLuint min_level, GLuint levels, GLuint min_layer=0, GLuint layers=1, GLenum target=0, bool force_array=false ){ return pfCreateTextureView(this,min_level,levels,min_layer,layers,target,force_array); }
 	inline Texture* slice( GLuint layer, GLuint level=0 ){ return view(level,1,layer,1); }
 	inline Texture* last_mip( GLuint layer=0 ){ return view(_levels-1,1,layer,1); }
 	inline Texture* array_view(){ return (layers()>1)?this:view(0,mip_levels(), 0, layers(), 0, true); }
@@ -570,6 +579,7 @@ struct Texture : public Object
 	friend Texture* ::gxCreateTexture3D(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,GLvoid*);
 	friend Texture* ::gxCreateTextureCube(const char*,GLint,GLsizei,GLsizei,GLsizei,GLint,GLvoid* data[6],bool);
 	friend Texture* ::gxCreateTextureBuffer(const char*,gl::Buffer*,GLint);
+	friend Texture* ::gxCreateTextureView(gl::Texture*,GLuint,GLuint,GLuint,GLuint,GLenum,bool);
 	friend Texture* ::gxCreateTextureRectangle(const char*,GLsizei,GLsizei,GLint,GLvoid*);
 	friend Texture* ::gxCreateTexture2DFromMemory(const char*,GLsizei,GLsizei,GLuint,GLint);
 
@@ -581,7 +591,7 @@ protected: // protected data members
 	// dimensions
 	GLint		_width=1;
 	GLint		_height=1;
-	GLint		_depth=1;
+	GLint		_layers=1;
 	GLint		_levels=1;
 
 	// internal format, type, format
@@ -592,14 +602,20 @@ protected: // protected data members
 	GLint		_bpp;
 	GLsizei		_multisamples=1;
 
-	// view-related
-	uint		_key=0;			// key of the current view
-	Texture*	_next=nullptr;	// next view node: a node of linked list, starting from the parent node
+	// dup and views
+	decltype(gxCreateTextureView)* pfCreateTextureView=gxCreateTextureView; // this should be kept as parent dll function
+	Texture*	_temp=nullptr;		// temporary duplication from dup()
+	uint		_key=0;				// key of the current view
+	bool		_b_view=false;		// is this view?
+	Texture*	_next=nullptr;		// next view node: a node of linked list, starting from the parent node
+
+	// instance-related for batch delete
+	static inline set<Texture*> instances;
 };
 
-inline void Texture::set_image( GLvoid* pixels, GLint level, GLsizei width, GLsizei height, GLsizei depth, GLint x, GLint y, GLint z )
+inline void Texture::set_image( GLvoid* pixels, GLint level, GLsizei width, GLsizei height, GLsizei layers, GLint x, GLint y, GLint z )
 {
-	GLenum g=target, f=format(),t=type(); GLsizei w=width?width:this->width(),h=height?height:this->height(),d=depth?depth:this->depth();
+	GLenum g=target, f=format(),t=type(); GLsizei w=width?width:this->width(),h=height?height:this->height(),d=layers?layers:this->_layers;
 	bool dsa=glTextureSubImage1D&&glTextureSubImage2D&&glTextureSubImage3D; GLuint b0=dsa?0:bind();
 	if(g==GL_TEXTURE_1D){ if(dsa) glTextureSubImage1D(ID,0,x,w,f,t,pixels); else glTexSubImage1D(g,0,x,w,f,t,pixels); }
 	else if(g==GL_TEXTURE_2D||g==GL_TEXTURE_1D_ARRAY||(g>=GL_TEXTURE_CUBE_MAP_POSITIVE_X&&g<=GL_TEXTURE_CUBE_MAP_NEGATIVE_Z)){ if(dsa) glTextureSubImage2D(ID,0,x,y,w,h,f,t,pixels); else glTexSubImage2D(g,0,x,y,w,h,f,t,pixels); }
@@ -615,20 +631,20 @@ inline Texture* Texture::clone( const char* name )
 	GLint mag_filter	= get_texture_parameteriv( GL_TEXTURE_MAG_FILTER );
 
 	bool b_multisample = target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY;
-	GLint m=mip_levels(), w=width(), h=height(), d=depth(), l=layers(), f=internal_format();
+	GLint m=mip_levels(), w=width(), h=height(), l=layers(), f=internal_format();
 
 	Texture* t =
 		(target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY) ? gxCreateTexture1D( name, m, w, l, f, nullptr, false ):
 		(target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY) ? gxCreateTexture2D( name, m, w, h, l, f, nullptr, false, b_multisample, multisamples() ):
-		(target==GL_TEXTURE_3D) ? gxCreateTexture3D( name, m, w, h, d, f, nullptr ):
+		(target==GL_TEXTURE_3D) ? gxCreateTexture3D( name, m, w, h, l, f, nullptr ):
 		(target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY) ? gxCreateTextureCube( name, m, w, h, l, f, nullptr, false ):
 		(target==GL_TEXTURE_RECTANGLE) ? gxCreateTextureRectangle( name, w, h, f, nullptr ):nullptr;
 
 	if(t==nullptr){ printf( "Texture[\"%s\"]::%s()==nullptr\n", name, __func__ ); return nullptr; }
 
 	t->texture_parameteri( GL_TEXTURE_WRAP_S, wrap );
-	if(t->height()>1)	t->texture_parameteri( GL_TEXTURE_WRAP_T, wrap );
-	if(t->depth()>1)	t->texture_parameteri( GL_TEXTURE_WRAP_R, wrap );
+	if(t->height()>1)			t->texture_parameteri( GL_TEXTURE_WRAP_T, wrap );
+	if(target==GL_TEXTURE_3D)	t->texture_parameteri( GL_TEXTURE_WRAP_R, wrap );
 	t->texture_parameteri( GL_TEXTURE_MIN_FILTER, min_filter );
 	t->texture_parameteri( GL_TEXTURE_MAG_FILTER, mag_filter );
 
@@ -640,10 +656,10 @@ inline Texture* Texture::clone( const char* name )
 
 inline bool Texture::copy( Texture* dst, GLint level )
 {
-	if(dst==nullptr) return false; GLint w0=width(level),h0=height(level),d0=depth(level),w1=dst->width(level),h1=dst->height(level),d1=dst->depth(level);
-	if(w0!=w1||h0!=h1||d0!=d1){ oncef("%s::copy(): Dimension (%dx%dx%d) is different from %s (%dx%dx%d)\n", _name, w0, h0, d0, dst->_name, w1, h1, d1 ); return false; }
+	if(dst==nullptr) return false; GLint w0=width(level),h0=height(level),l0=layers(),w1=dst->width(level),h1=dst->height(level),l1=dst->layers();
+	if(w0!=w1||h0!=h1||l0!=l1){ oncef("%s::copy(): Dimension (%dx%dx%d) is different from %s (%dx%dx%d)\n", _name, w0, h0, l0, dst->_name, w1, h1, l1 ); return false; }
 	if(mem_size()!=dst->mem_size()){ oncef("%s::copy(): %s.mem_size(=%d) != %s.mem_size(=%d)\n", _name, _name, int(mem_size()), dst->_name, int(dst->mem_size()) ); return false; }
-	glCopyImageSubData( ID, target, level, 0, 0, 0, dst->ID, dst->target, level, 0, 0, 0, w0, h0, d0 ); return true;
+	glCopyImageSubData( ID, target, level, 0, 0, 0, dst->ID, dst->target, level, 0, 0, 0, w0, h0, l0 ); return true;
 }
 
 //*************************************
@@ -670,8 +686,8 @@ __noinline gl::Texture* gxCreateTexture1D( const char* name, GLint levels, GLsiz
 
 	// set dimensions
 	texture->_width		= width;
-	texture->_height	= target==GL_TEXTURE_1D_ARRAY?layers:1;
-	texture->_depth		= 1;
+	texture->_height	= 1;
+	texture->_layers	= target==GL_TEXTURE_1D_ARRAY?layers:1;
 	texture->_levels	= levels;
 
 	// generate mipmap
@@ -723,7 +739,7 @@ __noinline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsiz
 	// set dimensions
 	texture->_width		= width;
 	texture->_height	= height;
-	texture->_depth		= target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY?layers:1;
+	texture->_layers	= target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY?layers:1;
 	texture->_levels	= target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_ARRAY?levels:1;
 
 	// generate mipmap
@@ -768,7 +784,7 @@ __noinline gl::Texture* gxCreateTexture3D( const char* name, GLint levels, GLsiz
 	// set dimensions
 	texture->_width		= width;
 	texture->_height	= height;
-	texture->_depth		= depth;
+	texture->_layers	= depth;
 	texture->_levels	= levels;
 
 	// generate mipmap
@@ -816,7 +832,7 @@ __noinline gl::Texture* gxCreateTextureCube( const char* name, GLint levels, GLs
 	// set dimensions
 	texture->_width		= width;
 	texture->_height	= height;
-	texture->_depth		= count*6;
+	texture->_layers	= count*6;
 	texture->_levels	= levels;
 
 	// generate mipmap
@@ -857,7 +873,6 @@ __noinline gl::Texture* gxCreateTextureBuffer( const char* name, gl::Buffer* buf
 	// set dimensions
 	texture->_width		= texture->get_texture_level_parameteriv( GL_TEXTURE_WIDTH, 0 );
 	texture->_height	= 1;
-	texture->_depth		= 1;
 	texture->_levels	= 1;
 
 	// unbind the texture
@@ -886,7 +901,6 @@ __noinline gl::Texture* gxCreateTextureRectangle( const char* name, GLsizei widt
 	// set dimensions
 	texture->_width		= width;
 	texture->_height	= height;
-	texture->_depth		= 1;
 	texture->_levels	= 1;
 
 	// attributes
@@ -898,23 +912,24 @@ __noinline gl::Texture* gxCreateTextureRectangle( const char* name, GLsizei widt
 	return texture;
 }
 
-inline gl::Texture* gl::Texture::view( GLuint min_level, GLuint levels, GLuint min_layer, GLuint layers, GLenum target, bool force_array )
+__noinline gl::Texture* gxCreateTextureView(gl::Texture* src, GLuint min_level, GLuint levels, GLuint min_layer, GLuint layers, GLenum target, bool force_array)
 {
-	uint key = gl::Texture::crc(min_level,levels,min_layer,layers,target,force_array);
-	for(gl::Texture* t=this; t; t=t->_next ) if(t->_key==key) return t;
+	const uint key=gl::Texture::crc(min_level,levels,min_layer,layers,target,force_array);
+	if(key==gl::Texture::crc(0,src->_levels,0,src->_layers,src->target,false)) return src;
+	for(gl::Texture* t=src; t; t=t->_next ) if(t->_key==key) return t;
 
-	if(this->target==GL_TEXTURE_BUFFER){ printf( "%s(): texture buffer (%s) cannot have a view\n", __func__, this->_name ); return nullptr; }
-	if(levels==0){ printf( "%s(): %s->view should have more than one levels\n", __func__, this->_name ); return nullptr; }
-	if(layers==0){ printf( "%s(): %s->view should have more than one layers\n", __func__, this->_name ); return nullptr; }
-	if((min_level+levels)>GLuint(this->mip_levels())){ printf( "%s(): %s->view should have less than %d levels\n", __func__, this->_name, this->mip_levels() ); return nullptr; }
-	if((min_layer+layers)>GLuint(this->layers())){ printf( "%s(): %s->view should have less than %d layers\n", __func__, this->_name, this->layers() ); return nullptr; }
-	if(!this->is_immutable()){ printf("%s(): !%s->is_immutable()\n", __func__, this->_name ); return nullptr; }
+	if(src->target==GL_TEXTURE_BUFFER){ printf( "%s(): texture buffer (%s) cannot have a view\n", __func__, src->_name ); return nullptr; }
+	if(levels==0){ printf( "%s(): %s->view should have more than one levels\n", __func__, src->_name ); return nullptr; }
+	if(layers==0){ printf( "%s(): %s->view should have more than one layers\n", __func__, src->_name ); return nullptr; }
+	if((min_level+levels)>GLuint(src->mip_levels())){ printf( "%s(): %s->view should have less than %d levels\n", __func__, src->_name, src->mip_levels() ); return nullptr; }
+	if((min_layer+layers)>GLuint(src->layers())){ printf( "%s(): %s->view should have less than %d layers\n", __func__, src->_name, src->layers() ); return nullptr; }
+	if(!src->is_immutable()){ printf("%s(): !%s->is_immutable()\n", __func__, src->_name ); return nullptr; }
 
 	// correct the new target
 	if(target==0)
 	{
-		target=this->target;
-		GLenum t=this->target;
+		target=src->target;
+		GLenum t=src->target;
 		if(force_array)
 		{
 			if(t==GL_TEXTURE_1D||t==GL_TEXTURE_1D_ARRAY) target=GL_TEXTURE_1D_ARRAY;
@@ -922,24 +937,28 @@ inline gl::Texture* gl::Texture::view( GLuint min_level, GLuint levels, GLuint m
 			else if(t==GL_TEXTURE_2D_MULTISAMPLE||t==GL_TEXTURE_2D_MULTISAMPLE_ARRAY) target=GL_TEXTURE_2D_MULTISAMPLE_ARRAY;
 			else if(t==GL_TEXTURE_CUBE_MAP) target=GL_TEXTURE_CUBE_MAP_ARRAY;
 		}
-		else if(this->target==GL_TEXTURE_1D_ARRAY&&layers==1) target=GL_TEXTURE_1D;
-		else if(this->target==GL_TEXTURE_2D_ARRAY&&layers==1) target=GL_TEXTURE_2D;
-		else if(this->target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY&&layers==1) target=GL_TEXTURE_2D_MULTISAMPLE;
-		else if(this->target==GL_TEXTURE_CUBE_MAP_ARRAY&&layers==1) target=GL_TEXTURE_CUBE_MAP;
+		else if(t==GL_TEXTURE_1D_ARRAY&&layers==1) target=GL_TEXTURE_1D;
+		else if(t==GL_TEXTURE_2D_ARRAY&&layers==1) target=GL_TEXTURE_2D;
+		else if(t==GL_TEXTURE_2D_MULTISAMPLE_ARRAY&&layers==1) target=GL_TEXTURE_2D_MULTISAMPLE;
+		else if(t==GL_TEXTURE_CUBE_MAP_ARRAY&&layers==1) target=GL_TEXTURE_CUBE_MAP;
 	}
 
 	// create a new texture; here, we must use glGenTextures() instead of glCreateTextures(), because texture view requires to have a created but uninitialized texture.
 	GLuint ID1; glGenTextures(1,&ID1); if(ID1==0) return nullptr;
-	bool b_slice0 = min_level==0&&levels==1&&layers==1;
-	const char* name1 = b_slice0?::format("%s[%u]",this->_name,min_layer):(::format("%s[%u:%u][%u:%u]", this->_name, min_layer, layers-1, min_level, levels-1));
+	string name1=string(src->_name);
+	name1+=::format("[%u",min_layer); if(layers>1) name1+=::format(":%u",min_layer+layers);
+	name1+=::format("|%u",min_level); if(levels>1) name1+=::format(":%u",min_level+levels);
+	name1+="]";
 
 	// get attributes
-	GLint internal_format	= this->internal_format();
-	GLint wrap				= this->get_texture_parameteriv( GL_TEXTURE_WRAP_S );
-	GLint min_filter		= this->get_texture_parameteriv( GL_TEXTURE_MIN_FILTER );
-	GLint mag_filter		= this->get_texture_parameteriv( GL_TEXTURE_MAG_FILTER );
+	GLint internal_format	= src->internal_format();
+	GLint wrap				= src->get_texture_parameteriv( GL_TEXTURE_WRAP_S );
+	GLint min_filter		= src->get_texture_parameteriv( GL_TEXTURE_MIN_FILTER );
+	GLint mag_filter		= src->get_texture_parameteriv( GL_TEXTURE_MAG_FILTER );
 
-	gl::Texture* t1=new gl::Texture(ID1,name1,target,internal_format,this->format(),this->type());
+	gl::Texture* t1=new gl::Texture(ID1,name1.c_str(),target,internal_format,src->format(),src->type());
+	gl::Texture::instances.erase(t1); // remove views from instances, since they are released from their parent
+	t1->pfCreateTextureView=src->pfCreateTextureView; // make sure to use gxCreateTextureView of the parent
 	t1->_key = key;
 
 	// correct min_filter, mag_filter
@@ -950,13 +969,13 @@ inline gl::Texture* gl::Texture::view( GLuint min_level, GLuint levels, GLuint m
 	}
 
 	// create view and set attributes
-	glTextureView( t1->ID, target, this->ID, internal_format, min_level, levels, min_layer, layers);
+	glTextureView( t1->ID, target, src->ID, internal_format, min_level, levels, min_layer, layers );
 	
 	// set dimensions
-	t1->_multisamples = this->_multisamples;
-	t1->_width	= this->width(min_level);
-	t1->_height	= this->height(min_level);
-	t1->_depth	= layers;
+	t1->_multisamples = src->_multisamples;
+	t1->_width	= src->width(min_level);
+	t1->_height	= src->height(min_level);
+	t1->_layers	= layers;
 	t1->_levels	= levels;
 
 	// filter should be set after dimensions
@@ -964,7 +983,7 @@ inline gl::Texture* gl::Texture::view( GLuint min_level, GLuint levels, GLuint m
 	t1->set_wrap( wrap );
 
 	// add to linked list for search
-	for( gl::Texture* t=this; t; t=t->_next ) if(t->_next==nullptr){ t->_next=t1; break; }
+	for( gl::Texture* t=src; t; t=t->_next ) if(t->_next==nullptr){ t->_next=t1; break; }
 	return t1;
 }
 
@@ -980,7 +999,7 @@ struct Framebuffer : public Object
 	static Framebuffer*& instance();
 
 	Framebuffer( GLuint ID, const char* name ) : Object(ID,name,GL_FRAMEBUFFER){ memset(_active_targets,0,sizeof(_active_targets)); glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA ); }
-	~Framebuffer() override { glBindFramebuffer(GL_FRAMEBUFFER,0); glBindRenderbuffer(GL_RENDERBUFFER,0);memset(_active_targets,0,sizeof(_active_targets)); GLuint id=ID; if(ID) glDeleteFramebuffers(1,&id); for(auto& it:_depth_buffers){const depth_key_t& key=reinterpret_cast<const depth_key_t&>(it.first); if(key.renderbuffer) glDeleteRenderbuffers(1,&it.second); else glDeleteTextures(1,&it.second); } _depth_buffers.clear(); }
+	~Framebuffer() override { glBindFramebuffer(GL_FRAMEBUFFER,0); glBindRenderbuffer(GL_RENDERBUFFER,0);memset(_active_targets,0,sizeof(_active_targets)); if(ID) glDeleteFramebuffers(1,(GLuint*)&ID); for(auto& it:_depth_buffers){const depth_key_t& key=reinterpret_cast<const depth_key_t&>(it.first); if(key.renderbuffer) glDeleteRenderbuffers(1,&it.second); else glDeleteTextures(1,&it.second); } _depth_buffers.clear(); }
 	GLuint bind( bool b_bind=true ){ GLuint b0=binding(); if(!b_bind||ID!=b0) glBindFramebuffer( GL_FRAMEBUFFER, b_bind?ID:0 ); return b0; }
 
 	void bind( Texture* t0, Texture* t1=nullptr, Texture* t2=nullptr, Texture* t3=nullptr, Texture* t4=nullptr, Texture* t5=nullptr, Texture* t6=nullptr, Texture* t7=nullptr ){ if(ID) bind(t0,0,0,t1,0,0,t2,0,0,t3,0,0,t4,0,0,t5,0,0,t6,0,0,t7,0,0); }
