@@ -193,7 +193,7 @@ struct frustum_t : public array<vec4, 6> // left, right, top, bottom, near, far
 	__forceinline frustum_t( const mat4& view_projection_matrix ){ update(view_projection_matrix); }
 	__forceinline frustum_t& operator=( frustum_t&& ) = default;
 	__forceinline frustum_t& operator=( const frustum_t& ) = default;
-	__forceinline frustum_t& update( const mat4& view_projection_matrix ){ mat4 r=view_projection_matrix.transpose(); auto* p=data();for(int k=0;k<6;k++){ p[k]=r[3]+r[k>>1]*float(1-(k&1)*2);p[k]/=p[k].xyz.length();} return *this; }
+	__forceinline frustum_t& update( const mat4& view_projection_matrix ){ auto& m=view_projection_matrix; auto* p=data();for(int k=0;k<6;k++){ p[k]=m.rvec(3)+m.rvec(k>>1)*float(1-(k&1)*2);p[k]/=p[k].xyz.length();} return *this; }
 	__forceinline bool cull( const bbox_t& b) const { vec4 pv={}; pv.w=1.0f; for(int k=0;k<6;k++){ const vec4& plane=operator[](k); for(int j=0;j<3;j++)pv[j]=plane[j]>0?b.M[j]:b.m[j]; if(pv.dot(plane)<0)return true;} return false; }
 };
 
