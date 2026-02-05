@@ -730,7 +730,7 @@ __noinline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsiz
 	else if(target==GL_TEXTURE_2D_MULTISAMPLE){			glTexStorage2DMultisample(target, multisamples, internal_format, width, height, GL_TRUE ); }
 	else if(target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY){	glTexStorage3DMultisample(target, multisamples, internal_format, width, height, layers, GL_TRUE ); }
 	GLenum e1 = glGetError(); // texture error 
-	if(e1!=GL_NO_ERROR&&e1!=e0){ printf( "%s(%s): %s\n", __func__, name, 	gxGetErrorString(e1) ); delete texture; return nullptr; }
+	if(e1!=GL_NO_ERROR&&e1!=e0){ printf( "%s(%s): %s\n", __func__, name, gxGetErrorString(e1) ); delete texture; return nullptr; }
 
 	// test if the format is immutable
 	GLint b_immutable; glGetTexParameteriv( target, GL_TEXTURE_IMMUTABLE_FORMAT, &b_immutable );
