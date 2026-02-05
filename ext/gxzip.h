@@ -318,10 +318,11 @@ namespace gx {
 template <bool zip=false>
 struct binary_cache
 {
-	virtual ~binary_cache();
+	virtual ~binary_cache(){ close(); }
 	virtual path file_path()=0;
 	virtual uint crc()=0; // implement and augment crc for signature detection
 	virtual bool open( bool read=true );
+	void close();
 	
 	operator FILE* () const { return fp; }
 	path zip_path(){ return _file_path.empty()?"":_file_path+".zip"; }
@@ -338,8 +339,11 @@ private:
 	bool decompress();
 };
 
-template<> __noinline binary_cache<false>::~binary_cache(){ if(fp){ fclose(fp); fp=nullptr;} }
-template<> __noinline binary_cache<true>::~binary_cache()
+template<> __noinline void binary_cache<false>::close()
+{
+	if(!fp) return; fclose(fp); fp=nullptr;
+}
+template<> __noinline void binary_cache<true>::close()
 {
 	// caution: dtor here uses only base-class functions, because a derive object has been already destroyed
 	if(!fp) return; fclose(fp); fp=nullptr;
