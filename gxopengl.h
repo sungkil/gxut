@@ -512,7 +512,6 @@ struct Texture : public Object
 	ivec2 filter() const {		return ivec2{get_texture_parameteriv(GL_TEXTURE_MIN_FILTER),get_texture_parameteriv(GL_TEXTURE_MAG_FILTER)}; }
 	ivec3 wrap() const {		ivec3 w{get_texture_parameteriv(GL_TEXTURE_WRAP_S),get_texture_parameteriv(GL_TEXTURE_WRAP_T),0}; if(target==GL_TEXTURE_3D||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY) w.z=get_texture_parameteriv(GL_TEXTURE_WRAP_R); return w; }
 	GLint base_level() const {	return get_texture_parameteriv(GL_TEXTURE_BASE_LEVEL); }
-	GLint max_level() const {	return get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL); }
 	GLint min_filter() const {	return get_texture_parameteriv(GL_TEXTURE_MIN_FILTER); }
 	GLint mag_filter() const {	return get_texture_parameteriv(GL_TEXTURE_MAG_FILTER); }
 	GLint wrap_s() const {		return get_texture_parameteriv(GL_TEXTURE_WRAP_S); }
