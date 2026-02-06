@@ -203,14 +203,14 @@ template <class T=void*> __forceinline T get_proc_address( const char* name )
 //*************************************
 struct Object
 {
-	const GLuint	ID;
-	const GLenum	target;
-	
+	const GLuint ID;
+	const GLenum target;
+
 	virtual ~Object(){}
 	Object( GLuint id, const char* name, GLenum _target ):ID(id),target(_target),_target_binding(gxGetTargetBinding(_target)){ size_t l=strlen(name),c=sizeof(_name)-1,n=l<c?l:c;strncpy((char*)_name,name,n);((char*)_name)[n]=0; }
 	const char* name() const { return _name; }
-	__forceinline GLuint binding( GLenum _target=0 ) const { return _target==0?gxGetIntegerv(_target_binding):gxGetIntegerv(gxGetTargetBinding(_target)); }
-	
+	__forceinline GLuint binding( GLenum target=0 ) const { return target==0?gxGetIntegerv(_target_binding):gxGetIntegerv(gxGetTargetBinding(target)); }
+
 protected:
 	const char		_name[256]={};
 	const GLenum	_target_binding=0;
@@ -561,6 +561,9 @@ struct Texture : public Object
 	void set_image( GLvoid* pixels, GLint level=0, GLsizei width=0, GLsizei height=0, GLsizei layers=0, GLint x=0, GLint y=0, GLint z=0 );
 	bool copy( Texture* dst, GLint level=0 );
 
+	// render target query
+	bool is_render_target() const;
+
 	// instance-related
 	Texture* clone( const char* name );
 	inline Texture* dup( bool copy_data=true ){ if(!_temp) instances.erase(_temp=clone("TMP")); if(copy_data) copy(_temp); return _temp; }
@@ -582,6 +585,7 @@ struct Texture : public Object
 	friend Texture* ::gxCreateTextureView(gl::Texture*,GLuint,GLuint,GLuint,GLuint,GLenum,bool);
 	friend Texture* ::gxCreateTextureRectangle(const char*,GLsizei,GLsizei,GLint,GLvoid*);
 	friend Texture* ::gxCreateTexture2DFromMemory(const char*,GLsizei,GLsizei,GLuint,GLint);
+	friend struct Framebuffer;
 
 	friend struct fx::metadata_t;
 	fx::metadata_t* metadata = nullptr;
@@ -601,6 +605,9 @@ protected: // protected data members
 	GLint		_channels;
 	GLint		_bpp;
 	GLsizei		_multisamples=1;
+
+	// fbo of this render target
+	Framebuffer* _fbo=nullptr;
 
 	// dup and views
 	decltype(gxCreateTextureView)* pfCreateTextureView=gxCreateTextureView; // this should be kept as parent dll function
@@ -995,18 +1002,18 @@ namespace gl {
 struct Framebuffer : public Object
 {
 	struct depth_key_t { union { struct {uint width:16, height:16, multisamples:8, layers:16, renderbuffer:1, dummy:7;}; uint64_t value; }; depth_key_t():value(0){} };
-	static const GLint MAX_COLOR_ATTACHMENTS=8;
-	static Framebuffer*& instance();
+	static const GLint MAX_COLOR_ATTACHMENTS=6;
+	static Framebuffer*& singleton();
 
-	Framebuffer( GLuint ID, const char* name ) : Object(ID,name,GL_FRAMEBUFFER){ memset(_active_targets,0,sizeof(_active_targets)); glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA ); }
-	~Framebuffer() override { glBindFramebuffer(GL_FRAMEBUFFER,0); glBindRenderbuffer(GL_RENDERBUFFER,0);memset(_active_targets,0,sizeof(_active_targets)); if(ID) glDeleteFramebuffers(1,(GLuint*)&ID); for(auto& it:_depth_buffers){const depth_key_t& key=reinterpret_cast<const depth_key_t&>(it.first); if(key.renderbuffer) glDeleteRenderbuffers(1,&it.second); else glDeleteTextures(1,&it.second); } _depth_buffers.clear(); }
+	Framebuffer( GLuint ID, const char* name ): Object(ID,name,GL_FRAMEBUFFER){ glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA ); }
+	~Framebuffer() override { glBindFramebuffer(GL_FRAMEBUFFER,0); glBindRenderbuffer(GL_RENDERBUFFER,0); if(ID) glDeleteFramebuffers(1,(GLuint*)&ID); for(auto& it:_depth_buffers){const depth_key_t& key=reinterpret_cast<const depth_key_t&>(it.first); if(key.renderbuffer) glDeleteRenderbuffers(1,&it.second); else glDeleteTextures(1,&it.second); } _depth_buffers.clear(); }
 	GLuint bind( bool b_bind=true ){ GLuint b0=binding(); if(!b_bind||ID!=b0) glBindFramebuffer( GL_FRAMEBUFFER, b_bind?ID:0 ); return b0; }
 
-	void bind( Texture* t0, Texture* t1=nullptr, Texture* t2=nullptr, Texture* t3=nullptr, Texture* t4=nullptr, Texture* t5=nullptr, Texture* t6=nullptr, Texture* t7=nullptr ){ if(ID) bind(t0,0,0,t1,0,0,t2,0,0,t3,0,0,t4,0,0,t5,0,0,t6,0,0,t7,0,0); }
-	void bind( Texture* t0, GLint layer0, GLint mipLevel0, Texture* t1=nullptr, GLint layer1=0, GLint mipLevel1=0, Texture* t2=nullptr, GLint layer2=0, GLint mipLevel2=0, Texture* t3=nullptr, GLint layer3=0, GLint mipLevel3=0, Texture* t4=nullptr, GLint layer4=0, GLint mipLevel4=0, Texture* t5=nullptr, GLint layer5=0, GLint mipLevel5=0, Texture* t6=nullptr, GLint layer6=0, GLint mipLevel6=0, Texture* t7=nullptr, GLint layer7=0, GLint mipLevel7=0 );
+	void bind( Texture* t0, Texture* t1=nullptr, Texture* t2=nullptr, Texture* t3=nullptr, Texture* t4=nullptr, Texture* t5=nullptr ){ if(ID) bind(t0,0,0,t1,0,0,t2,0,0,t3,0,0,t4,0,0,t5,0,0); }
+	void bind( Texture* t0, GLint layer0, GLint mipLevel0, Texture* t1=nullptr, GLint layer1=0, GLint mipLevel1=0, Texture* t2=nullptr, GLint layer2=0, GLint mipLevel2=0, Texture* t3=nullptr, GLint layer3=0, GLint mipLevel3=0, Texture* t4=nullptr, GLint layer4=0, GLint mipLevel4=0, Texture* t5=nullptr, GLint layer5=0, GLint mipLevel5=0 );
 	void bind_no_attachments( GLint width, GLint height, GLint layers=1, GLint samples=1 ); // ARB_framebuffer_no_attachments
-	void bind_layers( Texture* t0, GLint mipLevel0, Texture* t1=nullptr, GLint mipLevel1=0, Texture* t2=nullptr, GLint mipLevel2=0, Texture* t3=nullptr, GLint mipLevel3=0, Texture* t4=nullptr, GLint mipLevel4=0, Texture* t5=nullptr, GLint mipLevel5=0, Texture* t6=nullptr, GLint mipLevel6=0, Texture* t7=nullptr, GLint mipLevel7=0 ); // t needs to be multi-layers
-	void bind_layers( Texture* t0, Texture* t1=nullptr, Texture* t2=nullptr, Texture* t3=nullptr, Texture* t4=nullptr, Texture* t5=nullptr, Texture* t6=nullptr, Texture* t7=nullptr ){ bind_layers(t0,0,t1,0,t2,0,t3,0,t4,0,t5,0,t6,0,t7,0); } // t needs to be multi-layers
+	void bind_layers( Texture* t0, GLint mipLevel0, Texture* t1=nullptr, GLint mipLevel1=0, Texture* t2=nullptr, GLint mipLevel2=0, Texture* t3=nullptr, GLint mipLevel3=0, Texture* t4=nullptr, GLint mipLevel4=0, Texture* t5=nullptr, GLint mipLevel5=0 ); // t needs to be multi-layers
+	void bind_layers( Texture* t0, Texture* t1=nullptr, Texture* t2=nullptr, Texture* t3=nullptr, Texture* t4=nullptr, Texture* t5=nullptr ){ bind_layers(t0,0,t1,0,t2,0,t3,0,t4,0,t5,0); } // t needs to be multi-layers
 	void bind_depth_buffer( GLint width, GLint height, GLint layers=1, bool multisample=false, GLsizei multisamples=1 );
 	static void unbind(){ glBindFramebuffer( GL_FRAMEBUFFER, 0 ); }
 	void unbind_depth_buffer();
@@ -1033,36 +1040,49 @@ struct Framebuffer : public Object
 	static void set_blend_equation_separate( GLenum modeRGB, GLenum modeAlpha ){ glBlendEquationSeparate( modeRGB, modeAlpha ); }
 
 	static void set_multisample( bool b_multisample ){ b_multisample ? glEnable(GL_MULTISAMPLE):glDisable(GL_MULTISAMPLE); }
-	static const GLenum* draw_buffers( uint index=0 ){ static GLenum d[MAX_COLOR_ATTACHMENTS]={GL_COLOR_ATTACHMENT0,GL_COLOR_ATTACHMENT1,GL_COLOR_ATTACHMENT2,GL_COLOR_ATTACHMENT3,GL_COLOR_ATTACHMENT4,GL_COLOR_ATTACHMENT5,GL_COLOR_ATTACHMENT6,GL_COLOR_ATTACHMENT7}; return &d[index]; }
+	static const GLenum* draw_buffers( uint index=0 ){ static GLenum d[MAX_COLOR_ATTACHMENTS]={GL_COLOR_ATTACHMENT0,GL_COLOR_ATTACHMENT1,GL_COLOR_ATTACHMENT2,GL_COLOR_ATTACHMENT3,GL_COLOR_ATTACHMENT4,GL_COLOR_ATTACHMENT5}; return &d[index]; }
 	void clear( const vec4& color=0 ){ for( uint k=0;k<MAX_COLOR_ATTACHMENTS;k++) if(_active_targets[k]) clear_color_buffer( k, color, false ); clear_depth_buffer(); }
 	void clear_depth_buffer( float depth=1.0f ){ if(glClearNamedFramebufferfv) glClearNamedFramebufferfv( ID, GL_DEPTH, 0, &depth ); else glClearBufferfv( GL_DEPTH, 0, &depth ); }
 	void clear_color_buffer( GLint draw_buffer, const vec4& color, bool b_clear_depth=false ){ if(draw_buffer>=GL_DRAW_BUFFER0) draw_buffer-=GL_DRAW_BUFFER0; if(glClearNamedFramebufferfv) glClearNamedFramebufferfv( ID, GL_COLOR, draw_buffer, (GLfloat*)&color ); else glClearBufferfv( GL_COLOR, draw_buffer, color ); if(b_clear_depth) clear_depth_buffer(); }
 	void clear_color_bufferi( GLint draw_buffer, const ivec4& color, bool b_clear_depth=false ){ if(draw_buffer>=GL_DRAW_BUFFER0) draw_buffer-=GL_DRAW_BUFFER0; if(glClearNamedFramebufferiv) glClearNamedFramebufferiv( ID, GL_COLOR, draw_buffer, color ); else glClearBufferiv( GL_COLOR, draw_buffer, color ); if(b_clear_depth) clear_depth_buffer(); }
 	void clear_color_bufferui( GLint draw_buffer, const uvec4& color, bool b_clear_depth=false ){ if(draw_buffer>=GL_DRAW_BUFFER0) draw_buffer-=GL_DRAW_BUFFER0; if(glClearNamedFramebufferuiv) glClearNamedFramebufferuiv( ID, GL_COLOR, draw_buffer, color ); else glClearBufferuiv( GL_COLOR, draw_buffer, color ); if(b_clear_depth) clear_depth_buffer(); }
-	
+
+	// friend structure/functions
+	friend struct Texture;
+
 protected:
 	struct state_t { bool depth_test=true, cull_face=true, blend=false, wireframe[2]={false,false}; } _state_stack;
 	bool _b_color_mask=true, _b_depth_mask=true;
-	GLenum _active_targets[MAX_COLOR_ATTACHMENTS];
+	GLenum _active_targets[MAX_COLOR_ATTACHMENTS]={};
+	Texture* _active_textures[MAX_COLOR_ATTACHMENTS]={};
 	std::map<uint64_t,GLuint> _depth_buffers;
 };
 
+__noinline bool Texture::is_render_target() const
+{
+	if(!_fbo) return false;
+	for(auto* a:_fbo->_active_textures) if(a==this) return true;
+	return false;
+}
+
 //*************************************
-inline void Framebuffer::bind( gl::Texture* t0, GLint layer0, GLint mipLevel0, gl::Texture* t1, GLint layer1, GLint mipLevel1, Texture* t2, GLint layer2, GLint mipLevel2, Texture* t3, GLint layer3, GLint mipLevel3, Texture* t4, GLint layer4, GLint mipLevel4, Texture* t5, GLint layer5, GLint mipLevel5, Texture* t6, GLint layer6, GLint mipLevel6, Texture* t7, GLint layer7, GLint mipLevel7 )
+inline void Framebuffer::bind( gl::Texture* t0, GLint layer0, GLint mipLevel0, gl::Texture* t1, GLint layer1, GLint mipLevel1, Texture* t2, GLint layer2, GLint mipLevel2, Texture* t3, GLint layer3, GLint mipLevel3, Texture* t4, GLint layer4, GLint mipLevel4, Texture* t5, GLint layer5, GLint mipLevel5 )
 {
 	if(ID==0){ bind(false); return; }
 
 	// still necessary, regardless of direct_state_access, because draw functions are not aware where they are drawn.
 	glBindFramebuffer( GL_FRAMEBUFFER, ID );
 
-	gl::Texture*	T[MAX_COLOR_ATTACHMENTS]	= {t0,t1,t2,t3,t4,t5,t6,t7};
-	GLint			L[MAX_COLOR_ATTACHMENTS]	= {layer0,layer1,layer2,layer3,layer4,layer5,layer6,layer7};
-	GLint			M[MAX_COLOR_ATTACHMENTS]	= {mipLevel0,mipLevel1,mipLevel2,mipLevel3,mipLevel4,mipLevel5,mipLevel6,mipLevel7};
+	gl::Texture*	T[MAX_COLOR_ATTACHMENTS]	= {t0,t1,t2,t3,t4,t5};
+	GLint			L[MAX_COLOR_ATTACHMENTS]	= {layer0,layer1,layer2,layer3,layer4,layer5};
+	GLint			M[MAX_COLOR_ATTACHMENTS]	= {mipLevel0,mipLevel1,mipLevel2,mipLevel3,mipLevel4,mipLevel5};
 
 	uint draw_buffer_count=0;
 	for( int k=0; k < MAX_COLOR_ATTACHMENTS; k++ )
 	{
-		gl::Texture* t = T[k];
+		if(_active_textures[k]) _active_textures[k]->_fbo=nullptr;
+		gl::Texture* t=_active_textures[k]=T[k]; if(t) t->_fbo=this;
+
 		GLenum target = t ? (_active_targets[k]=t->target) : _active_targets[k];
 		if(target==GL_TEXTURE_3D||target==GL_TEXTURE_1D_ARRAY||target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY) glFramebufferTextureLayer( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0+k, t?t->ID:0, t?M[k]:0, t?L[k]:0 );
 		else if(target==GL_TEXTURE_1D||target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_BUFFER||target==GL_TEXTURE_RECTANGLE) glFramebufferTexture( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0+k, t?t->ID:0, t?M[k]:0 );
@@ -1075,7 +1095,7 @@ inline void Framebuffer::bind( gl::Texture* t0, GLint layer0, GLint mipLevel0, g
 	// if there are attachments, set viewport and bind depth buffer
 	GLint width=t0->width(mipLevel0), height=t0->height(mipLevel0);
 	glViewport( 0, 0, width, height );
-		
+
 	// bind depth buffer, when depth test is enabled
 	bool b_multisample = _active_targets[0]==GL_TEXTURE_2D_MULTISAMPLE||_active_targets[0]==GL_TEXTURE_2D_MULTISAMPLE_ARRAY;
 	bind_depth_buffer( width, height, 1, b_multisample, b_multisample&&T[0]?T[0]->multisamples():1 );
@@ -1086,7 +1106,7 @@ inline void Framebuffer::bind( gl::Texture* t0, GLint layer0, GLint mipLevel0, g
 	check_status();
 }
 
-inline void Framebuffer::bind_layers( Texture* t0, GLint mipLevel0, Texture* t1, GLint mipLevel1, Texture* t2, GLint mipLevel2, Texture* t3, GLint mipLevel3, Texture* t4, GLint mipLevel4, Texture* t5, GLint mipLevel5, Texture* t6, GLint mipLevel6, Texture* t7, GLint mipLevel7 ) // for gl_Layer redirection in geometry shader
+inline void Framebuffer::bind_layers( Texture* t0, GLint mipLevel0, Texture* t1, GLint mipLevel1, Texture* t2, GLint mipLevel2, Texture* t3, GLint mipLevel3, Texture* t4, GLint mipLevel4, Texture* t5, GLint mipLevel5 ) // for gl_Layer redirection in geometry shader
 {
 	if(ID==0||t0==nullptr){ bind(false); return; }
 
@@ -1095,16 +1115,18 @@ inline void Framebuffer::bind_layers( Texture* t0, GLint mipLevel0, Texture* t1,
 	// regardless of direct_state_access, it is still necessary, because draw functions are not aware where they are drawn.
 	glBindFramebuffer( GL_FRAMEBUFFER, ID );
 
-	gl::Texture*	T[MAX_COLOR_ATTACHMENTS] = { t0, t1, t2, t3, t4, t5, t6, t7 };
-	GLint			M[MAX_COLOR_ATTACHMENTS] = { mipLevel0, mipLevel1, mipLevel2, mipLevel3, mipLevel4, mipLevel5, mipLevel6, mipLevel7 };
+	gl::Texture*	T[MAX_COLOR_ATTACHMENTS] = { t0, t1, t2, t3, t4, t5 };
+	GLint			M[MAX_COLOR_ATTACHMENTS] = { mipLevel0, mipLevel1, mipLevel2, mipLevel3, mipLevel4, mipLevel5 };
 
 	uint num_draw_buffers=0;
 	for( int k=0; k < MAX_COLOR_ATTACHMENTS; k++ )
 	{
-		gl::Texture* t = T[k];
+		if(_active_textures[k]) _active_textures[k]->_fbo=nullptr;
+		gl::Texture* t=_active_textures[k]=T[k]; if(t) t->_fbo=this;
+
 		glFramebufferTexture( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0+k, t?t->ID:0, t?M[k]:0 );
-		if(t){ num_draw_buffers++; _active_targets[k] = t->target; }
-		else _active_targets[k] = 0;
+		if(t){ num_draw_buffers++; _active_targets[k]=t->target; }
+		else _active_targets[k]=0;
 	}
 
 	// if there are attachments, set viewport and bind depth buffer
@@ -1197,7 +1219,7 @@ inline gl::Framebuffer* gxCreateFramebuffer( const char* name=nullptr )
 	return new gl::Framebuffer(ID,name&&*name?name:"FBO");	// name defaulted to "FBO"
 }
 
-inline gl::Framebuffer*& gl::Framebuffer::instance()
+inline gl::Framebuffer*& gl::Framebuffer::singleton()
 {
 	struct auto_fbo_t { gl::Framebuffer* ptr=gxCreateFramebuffer("FBO"); ~auto_fbo_t(){ if(ptr) delete ptr; } };
 	static auto_fbo_t f; if(!f.ptr) printf("%s(): fbo==nullptr",__func__); return f.ptr;
@@ -1445,7 +1467,7 @@ struct Program : public Object
 	}
 
 	// special set_uniform functions: vector, texture, and bool
-	void set_uniform( const char* name, Texture* t ){ if(!t) return; Uniform* u=get_uniform(name); if(!u) return; if(u->ID<0||u->texture_binding<0) return; u->texture=t; if(glProgramUniform1i)glProgramUniform1i(ID,u->ID,u->texture_binding); else { if(binding()!=ID) glUseProgram(ID); glUniform1i(u->ID,u->texture_binding); } u->bind_texture(); }
+	void set_uniform( const char* name, Texture* t ){ if(!t) return; if(t->is_render_target()){ printf("%s(%s): error: %s is a render target\n",__func__,name,t->name()); return; } Uniform* u=get_uniform(name); if(!u) return; if(u->ID<0||u->texture_binding<0) return; u->texture=t; if(glProgramUniform1i)glProgramUniform1i(ID,u->ID,u->texture_binding); else { if(binding()!=ID) glUseProgram(ID); glUniform1i(u->ID,u->texture_binding); } u->bind_texture(); }
 	void set_uniform( const char* name, Texture** t ){ if(!t||!*t) return; set_uniform( name, *t ); }
 	void set_uniform( const char* name, bool b ){ int v=b?1:0; set_uniform( name, &v ); }
 	template <class T> void set_uniform( const char* name, const T& v ){ set_uniform( name, &v ); }
