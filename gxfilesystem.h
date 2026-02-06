@@ -165,7 +165,7 @@ struct path : public path_t
 	path reparse() const; // get normalized path of files in junction directories
 
 	// extended attribute query
-	bool is_binary_file() const	{ FILE* f=fopen("rb"); if(!f) return false; char b[4096]; while(1){ size_t n=fread(b,1,sizeof(b),f); if(!n) break; if(memchr(b,0,n)){fclose(f);return true;}} fclose(f); return false; }
+	bool is_binary_file() const	{ FILE* f=fopen("rb"); if(!f) return false; char b[4096]; while(1){ size_t n=::fread(b,1,sizeof(b),f); if(!n) break; if(memchr(b,0,n)){fclose(f);return true;}} fclose(f); return false; }
 
 	// decomposition
 	path dir()				const { return __super::dir(); }
@@ -220,15 +220,16 @@ struct path : public path_t
 	FILETIME mfiletime() const;
 	const char* mtimestamp() const { if(!exists()) return ""; struct tm t; _gmtime64_s(&t,&(__attrib().st_mtime)); char* buff=__strbuf(256);sprintf(buff,"%04d%02d%02d%02d%02d%02d",t.tm_year+1900,t.tm_mon+1,t.tm_mday,t.tm_hour,t.tm_min,t.tm_sec);return buff; }
 
-	// file content access: void (rb/wb), char (r/w), wchar_t (r/w,ccs=UTF-8)
+	// file access: void (rb/wb), char (r/w), wchar_t (r/w,ccs=UTF-8)
 	FILE* fopen( const char* mode, bool utf8=false ) const;
-	template <class T=string> T read_file() const;
-	sized_ptr_t<const void> read_binary() const { FILE* fp=fopen("rb",false); if(!fp) return {}; size_t size=::file_size(fp); if(!size){ fclose(fp); return {}; } void* ptr=malloc(size); if(!ptr||size!=fread(ptr,1,size,fp)){ fclose(fp); safe_free(ptr); return {}; } fclose(fp); return {ptr,size,true}; } // set as auto_free
-	bool write_file( const void* ptr, size_t size ) const { FILE* fp=fopen("wb"); if(!fp) return false; size_t size_written=ptr&&size?fwrite(ptr,1,size,fp):0; fclose(fp); return size_written==size; }
-	bool write_file( const char* s ) const { FILE* fp=fopen("w"); if(!fp) return false; int ret = s&&*s?fputs(s,fp):0; fclose(fp); return ret>=0; }
-	bool write_file( const wchar_t* s ) const { FILE* fp=fopen("w",true); if(!fp) return false; int ret = s&&*s?fputws(s,fp):0; fclose(fp); return ret>=0; }
-	bool write_file( const sized_ptr_t<void>& p ) const { return write_file(p.ptr,p.size); }
-	template <class T> bool write_file( const sized_ptr_t<T>& p ) const { return write_file(p.ptr,p.size*sizeof(T)); }
+	template <class T=string> T read() const;
+	bool write( const void* ptr, size_t size ) const { FILE* fp=fopen("wb"); if(!fp) return false; size_t size_written=ptr&&size?::fwrite(ptr,1,size,fp):0; fclose(fp); return size_written==size; }
+	bool write( const sized_ptr_t<void>& p ) const { return write(p.ptr,p.size); }
+	template <class T> bool write( const sized_ptr_t<T>& p ) const { return write(p.ptr,p.size*sizeof(T)); }
+	bool write( const char* s ) const { FILE* fp=fopen("w"); if(!fp) return false; int r=s&&*s?fputs(s,fp):0; fclose(fp); return r>=0; }
+	bool write( const wchar_t* w ) const { FILE* fp=fopen("w",true); if(!fp) return false; int r=w&&*w?fputws(w,fp):0; fclose(fp); return r>=0; }
+	bool write( const string& s ) const { return write(s.c_str()); }
+	bool write( const wstring& w ) const { return write(w.c_str()); }
 
 	// scan(): file name pattern, ext_filter (specific extensions delimited by semicolons)
 	struct filter_t { filter_t( const path& _self, const string& delimited_extensions ); template <bool recursive=true> vector<path> scan( const char* pattern=nullptr ) const { return std::move(self.__scan(recursive,pattern,this)); } vector<sized_ptr_t<wchar_t>> v; protected: const path& self; vector<wstring> __buffer; };
@@ -288,7 +289,7 @@ __noinline FILE* path::fopen( const char* mode, bool utf8 ) const
 	return fp;
 }
 
-template <> __noinline string path::read_file<string>() const
+template <> __noinline string path::read<string>() const
 {
 	FILE* fp=fopen("r"); if(!fp) return ""; size_t size=::file_size(fp); if(size==0){ fclose(fp); return ""; }
 	string s; s.resize(size>4096?size:4096); size_t n=0;
@@ -296,7 +297,7 @@ template <> __noinline string path::read_file<string>() const
 	fclose(fp); s.resize(n); return s;
 }
 
-template <> __noinline wstring path::read_file<wstring>() const
+template <> __noinline wstring path::read<wstring>() const
 {
 	FILE* fp=fopen("r",true); if(!fp) return L""; size_t size=::file_size(fp); if(size==0){ fclose(fp); return L""; }
 	wstring s; s.resize(size>4096?size:4096); size_t n=0;
