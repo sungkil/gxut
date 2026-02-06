@@ -498,7 +498,7 @@ struct Texture : public Object
 	inline void texture_parameterfv( GLenum pname, const GLfloat* params ) const { if(glTextureParameterfv) glTextureParameterfv(ID, pname, params); else { GLuint b0=gxGetIntegerv(_target_binding); glBindTexture(target,ID); glTexParameterfv(target,pname,params); glBindTexture(target,b0); } }
 
 	// texture dimension queries: pre-recorded when creating this
-	GLint mip_levels() const {				return _levels; } // on-demand query: is_immutable()?get_texture_parameteriv(GL_TEXTURE_VIEW_NUM_LEVELS):get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)-get_texture_parameteriv(GL_TEXTURE_BASE_LEVEL)+1; }
+	GLint levels() const {					return _levels; } // on-demand query: is_immutable()?get_texture_parameteriv(GL_TEXTURE_VIEW_NUM_LEVELS):get_texture_parameteriv(GL_TEXTURE_MAX_LEVEL)-get_texture_parameteriv(GL_TEXTURE_BASE_LEVEL)+1; }
 	GLint width( GLint level=0 ) const {	return max(1,_width>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_WIDTH, level )
 	GLint height( GLint level=0 ) const {	return (target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY||target==GL_TEXTURE_BUFFER)?1:max(1,_height>>level); } // on-demand query: get_texture_level_parameteriv( GL_TEXTURE_HEIGHT, level );
 	GLint layers() const {					return _layers; }
@@ -638,7 +638,7 @@ inline Texture* Texture::clone( const char* name )
 	GLint mag_filter	= get_texture_parameteriv( GL_TEXTURE_MAG_FILTER );
 
 	bool b_multisample = target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY;
-	GLint m=mip_levels(), w=width(), h=height(), l=layers(), f=internal_format();
+	GLint m=levels(), w=width(), h=height(), l=layers(), f=internal_format();
 
 	Texture* t =
 		(target==GL_TEXTURE_1D||target==GL_TEXTURE_1D_ARRAY) ? gxCreateTexture1D( name, m, w, l, f, nullptr, false ):
@@ -656,7 +656,7 @@ inline Texture* Texture::clone( const char* name )
 	t->texture_parameteri( GL_TEXTURE_MAG_FILTER, mag_filter );
 
 	this->copy(t);
-	if(t->mip_levels()>1) t->generate_mipmap();
+	if(t->levels()>1) t->generate_mipmap();
 
 	return t;
 }
@@ -928,7 +928,7 @@ __noinline gl::Texture* gxCreateTextureView(gl::Texture* src, GLuint min_level, 
 	if(src->target==GL_TEXTURE_BUFFER){ printf( "%s(): texture buffer (%s) cannot have a view\n", __func__, src->_name ); return nullptr; }
 	if(levels==0){ printf( "%s(): %s->view should have more than one levels\n", __func__, src->_name ); return nullptr; }
 	if(layers==0){ printf( "%s(): %s->view should have more than one layers\n", __func__, src->_name ); return nullptr; }
-	if((min_level+levels)>GLuint(src->mip_levels())){ printf( "%s(): %s->view should have less than %d levels\n", __func__, src->_name, src->mip_levels() ); return nullptr; }
+	if((min_level+levels)>GLuint(src->levels())){ printf( "%s(): %s->view should have less than %d levels\n", __func__, src->_name, src->levels() ); return nullptr; }
 	if((min_layer+layers)>GLuint(src->layers())){ printf( "%s(): %s->view should have less than %d layers\n", __func__, src->_name, src->layers() ); return nullptr; }
 	if(!src->is_immutable()){ printf("%s(): !%s->is_immutable()\n", __func__, src->_name ); return nullptr; }
 
