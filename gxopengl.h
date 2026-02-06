@@ -571,10 +571,11 @@ struct Texture : public Object
 	// view-related function (> OpenGL 4.3)
 	inline static uint crc( GLuint min_level, GLuint levels, GLuint min_layer, GLuint layers, GLenum target, bool force_array ){ struct info { GLuint min_level, levels, min_layer, layers; GLenum target; bool force_array; }; info i={min_level,levels,min_layer,layers,target,force_array}; return crc32(0,&i,sizeof(i)); }
 	inline bool is_view() const { return _b_view; }
-	inline Texture* view( GLuint min_level, GLuint levels, GLuint min_layer=0, GLuint layers=1, GLenum target=0, bool force_array=false ){ return pfCreateTextureView(this,min_level,levels,min_layer,layers,target,force_array); }
-	inline Texture* slice( GLuint layer, GLuint level=0 ){ return view(level,1,layer,1); }
-	inline Texture* last_mip( GLuint layer=0 ){ return view(_levels-1,1,layer,1); }
-	inline Texture* array_view(){ return (layers()>1)?this:view(0,mip_levels(), 0, layers(), 0, true); }
+	inline Texture* view( GLuint min_level, GLuint levels, GLuint min_layer, GLuint layers, GLenum target=0, bool force_array=false ){ return pfCreateTextureView(this,min_level,levels,min_layer,layers,target,force_array); }
+	inline Texture* slice( GLuint layer ){ return view(0,1,layer,1); }
+	inline Texture* mip( GLuint min_level ){ return view(min_level,1,0,1); }
+	inline Texture* last_mip(){ return view(_levels-1,1,0,1); }
+	inline Texture* array_view(){ return _layers>1?this:view(0,_levels,0,_layers,0,true); }
 
 	// friend functions to access data members
 	friend Texture* ::gxCreateTexture1D(const char*,GLint,GLsizei,GLsizei,GLint,GLvoid*,bool);
