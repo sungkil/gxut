@@ -1015,8 +1015,9 @@ struct Framebuffer : public Object
 	void bind_layers( Texture* t0, GLint mipLevel0, Texture* t1=nullptr, GLint mipLevel1=0, Texture* t2=nullptr, GLint mipLevel2=0, Texture* t3=nullptr, GLint mipLevel3=0, Texture* t4=nullptr, GLint mipLevel4=0, Texture* t5=nullptr, GLint mipLevel5=0 ); // t needs to be multi-layers
 	void bind_layers( Texture* t0, Texture* t1=nullptr, Texture* t2=nullptr, Texture* t3=nullptr, Texture* t4=nullptr, Texture* t5=nullptr ){ bind_layers(t0,0,t1,0,t2,0,t3,0,t4,0,t5,0); } // t needs to be multi-layers
 	void bind_depth_buffer( GLint width, GLint height, GLint layers=1, bool multisample=false, GLsizei multisamples=1 );
-	static void unbind(){ glBindFramebuffer( GL_FRAMEBUFFER, 0 ); }
+	void unbind();
 	void unbind_depth_buffer();
+
 	void check_status(){ GLenum s=glCheckNamedFramebufferStatus?glCheckNamedFramebufferStatus(ID,GL_FRAMEBUFFER):glCheckFramebufferStatus(GL_FRAMEBUFFER); if(s==GL_FRAMEBUFFER_COMPLETE) return; if(s==GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT) oncef( "[%s] GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT\n", _name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT) oncef( "[%s] GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT\n", _name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER) oncef( "[%s] GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER\n", _name ); else if(s==GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER) oncef( "[%s] GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER\n", _name ); else if(s==GL_FRAMEBUFFER_UNSUPPORTED) oncef( "[%s] GL_FRAMEBUFFER_UNSUPPORTED\n", _name ); }
 	void read_pixels( GLenum attachment, GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLvoid* img ){ if(ID) glNamedFramebufferReadBuffer(ID,GL_COLOR_ATTACHMENT0+attachment); else glReadBuffer(GL_BACK); glReadPixels( x, y, width, height, format, type, img ); }
 	void set_viewport( GLint x, GLint y, GLsizei width, GLsizei height ){ glViewport( x, y, width, height ); }
@@ -1053,6 +1054,7 @@ struct Framebuffer : public Object
 protected:
 	struct state_t { bool depth_test=true, cull_face=true, blend=false, wireframe[2]={false,false}; } _state_stack;
 	bool _b_color_mask=true, _b_depth_mask=true;
+	static inline Framebuffer* _active_fbo=nullptr;
 	GLenum _active_targets[MAX_COLOR_ATTACHMENTS]={};
 	Texture* _active_textures[MAX_COLOR_ATTACHMENTS]={};
 	std::map<uint64_t,GLuint> _depth_buffers;
@@ -1060,7 +1062,7 @@ protected:
 
 __noinline bool Texture::is_render_target() const
 {
-	if(!_fbo) return false;
+	if(!_fbo||_fbo!=Framebuffer::_active_fbo) return false;
 	for(auto* a:_fbo->_active_textures) if(a==this) return true;
 	return false;
 }
@@ -1072,6 +1074,7 @@ inline void Framebuffer::bind( gl::Texture* t0, GLint layer0, GLint mipLevel0, g
 
 	// still necessary, regardless of direct_state_access, because draw functions are not aware where they are drawn.
 	glBindFramebuffer( GL_FRAMEBUFFER, ID );
+	Framebuffer::_active_fbo=this;
 
 	gl::Texture*	T[MAX_COLOR_ATTACHMENTS]	= {t0,t1,t2,t3,t4,t5};
 	GLint			L[MAX_COLOR_ATTACHMENTS]	= {layer0,layer1,layer2,layer3,layer4,layer5};
@@ -1114,6 +1117,7 @@ inline void Framebuffer::bind_layers( Texture* t0, GLint mipLevel0, Texture* t1,
 
 	// regardless of direct_state_access, it is still necessary, because draw functions are not aware where they are drawn.
 	glBindFramebuffer( GL_FRAMEBUFFER, ID );
+	Framebuffer::_active_fbo=this;
 
 	gl::Texture*	T[MAX_COLOR_ATTACHMENTS] = { t0, t1, t2, t3, t4, t5 };
 	GLint			M[MAX_COLOR_ATTACHMENTS] = { mipLevel0, mipLevel1, mipLevel2, mipLevel3, mipLevel4, mipLevel5 };
@@ -1207,6 +1211,22 @@ inline void Framebuffer::bind_no_attachments( GLint width, GLint height, GLint l
 
 	bind(nullptr,0,0); // detach all
 	glViewport( 0, 0, width, height ); // set viewport
+}
+
+__noinline void Framebuffer::unbind()
+{
+	Framebuffer::_active_fbo=nullptr;
+	for( int k=0; k < MAX_COLOR_ATTACHMENTS; k++ )
+	{
+		auto*& a=_active_textures[k]; if(a){ a->_fbo=nullptr; a=nullptr; }
+		GLenum target = _active_targets[k]; if(!target) continue;
+		if(target==GL_TEXTURE_3D||target==GL_TEXTURE_1D_ARRAY||target==GL_TEXTURE_2D_ARRAY||target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY||target==GL_TEXTURE_CUBE_MAP||target==GL_TEXTURE_CUBE_MAP_ARRAY) glFramebufferTextureLayer( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0+k, 0, 0, 0 );
+		else if(target==GL_TEXTURE_1D||target==GL_TEXTURE_2D||target==GL_TEXTURE_2D_MULTISAMPLE||target==GL_TEXTURE_BUFFER||target==GL_TEXTURE_RECTANGLE) glFramebufferTexture( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0+k, 0, 0 );
+		_active_targets[k]=0;
+	}
+	unbind_depth_buffer();
+	glBindFramebuffer(GL_FRAMEBUFFER,0);
+	glBindRenderbuffer(GL_RENDERBUFFER,0);
 }
 
 //*************************************
@@ -1448,8 +1468,8 @@ struct program_source_t : public std::map<GLuint,shader_source_t> // <shader_typ
 //*************************************
 struct Program : public Object
 {
-	Program( GLuint ID, const char* name ) : Object(ID,name,GL_PROGRAM){ get_instances().emplace(this); }
-	~Program() override { if(!ID) return; glDeleteProgram(ID); _uniform_cache.clear(); _invalid_uniform_cache.clear(); get_instances().erase(this); }
+	Program( GLuint ID, const char* name ) : Object(ID,name,GL_PROGRAM){ instances().emplace(this); }
+	~Program() override { if(!ID) return; glDeleteProgram(ID); _uniform_cache.clear(); _invalid_uniform_cache.clear(); instances().erase(this); }
 	static void unbind(){ glUseProgram(0); }
 	GLuint bind( bool b_bind=true );
 	bool validate( bool b_log=true ); // check if the program can run in the current state
@@ -1467,7 +1487,7 @@ struct Program : public Object
 	}
 
 	// special set_uniform functions: vector, texture, and bool
-	void set_uniform( const char* name, Texture* t ){ if(!t) return; if(t->is_render_target()){ printf("%s(%s): error: %s is a render target\n",__func__,name,t->name()); return; } Uniform* u=get_uniform(name); if(!u) return; if(u->ID<0||u->texture_binding<0) return; u->texture=t; if(glProgramUniform1i)glProgramUniform1i(ID,u->ID,u->texture_binding); else { if(binding()!=ID) glUseProgram(ID); glUniform1i(u->ID,u->texture_binding); } u->bind_texture(); }
+	void set_uniform( const char* name, Texture* t ){ if(!t) return; if(!has_compute_shader()&&t->is_render_target()){ oncef("%s.%s(%s): error: %s is a render target\n",this->name(),__func__,name,t->name()); return; } Uniform* u=get_uniform(name); if(!u) return; if(u->ID<0||u->texture_binding<0) return; u->texture=t; if(glProgramUniform1i)glProgramUniform1i(ID,u->ID,u->texture_binding); else { if(binding()!=ID) glUseProgram(ID); glUniform1i(u->ID,u->texture_binding); } u->bind_texture(); }
 	void set_uniform( const char* name, Texture** t ){ if(!t||!*t) return; set_uniform( name, *t ); }
 	void set_uniform( const char* name, bool b ){ int v=b?1:0; set_uniform( name, &v ); }
 	template <class T> void set_uniform( const char* name, const T& v ){ set_uniform( name, &v ); }
@@ -1521,6 +1541,10 @@ struct Program : public Object
 	ivec3 get_compute_work_group_size(){ return _compute_work_group_size.x?_compute_work_group_size:(_compute_work_group_size=gxGetProgramiv3(ID,GL_COMPUTE_WORK_GROUP_SIZE)); }
 	bool assert_compute_work_group_size( int work_group_size_x, int work_group_size_y, int work_group_size_z=1 ){ auto d=get_compute_work_group_size(); if(work_group_size_x==d.x&&work_group_size_y==d.y&&work_group_size_z==d.z) return true; oncef( "program[%s]: work_group_size (%d,%d,%d) != (%d,%d,%d)\n", name(), d.x, d.y, d.z, work_group_size_x, work_group_size_y, work_group_size_z ); return false; }
 
+	// query program type
+	bool has_shader( GLenum shader_type ) const { for(auto& it:source) if(it.first==shader_type) return true; return false; }
+	bool has_compute_shader(){ return has_shader(GL_COMPUTE_SHADER); }
+
 	// subroutines: must be bound after glUseProgram(); pre-binding is invalidated for every glUseProgram()
 	GLuint get_subroutine_index( const char* name, GLenum shader_type=GL_FRAGMENT_SHADER ){ return glGetSubroutineIndex(ID,shader_type,name); }
 	GLuint get_subroutine_uniform_location( const char* name, GLenum shader_type=GL_FRAGMENT_SHADER ){ return glGetSubroutineUniformLocation(ID,shader_type,name); }
@@ -1536,7 +1560,7 @@ struct Program : public Object
 	}
 
 	// instances
-	static std::set<Program*>& get_instances(){ static std::set<Program*> i; return i; }
+	static std::set<Program*>& instances(){ static std::set<Program*> i; return i; }
 
 	// friend classes/functions
 	friend struct Effect;
@@ -1580,7 +1604,7 @@ struct directive_t
 inline GLuint Program::bind( bool b_bind )
 {
 	GLuint b0=binding(); if(!b_bind||b0!=ID) glUseProgram(b_bind?ID:0); if(!b_bind) return b0;
-	if(_uniform_cache.empty()) update_uniform_cache(); else if(Texture::invalidated()){std::set<Program*>& s=get_instances();for(auto it:s)it->update_uniform_cache();Texture::invalidated()=false;}
+	if(_uniform_cache.empty()) update_uniform_cache(); else if(Texture::invalidated()){std::set<Program*>& s=instances();for(auto it:s)it->update_uniform_cache();Texture::invalidated()=false;}
 	for(auto& it:_uniform_cache)
 	{
 		auto& n=it.first; auto& u=it.second;
