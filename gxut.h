@@ -196,7 +196,7 @@ namespace fs = std::filesystem;
 #include <string_view>
 // C++20: __cpluplus works here; keep for this for vcpp legacy check
 #if (__cplusplus>=202002L)||(defined(_MSVC_LANG)&&_MSVC_LANG>=202002L)||(defined(_HAS_CXX20)&&_HAS_CXX20)
-	#include <concepts>	
+	#include <concepts>
 	#include <span>
 	using std::span;
 #endif

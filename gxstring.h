@@ -76,7 +76,8 @@ inline int64_t	   atoill( const char* a ){ char* e=nullptr;int64_t v=strtoll(a,&
 inline uint64_t	   atoull( const char* a ){ char* e=nullptr;uint64_t v=strtoull(a,&e,10); return v; }
   
 // comma separation for size_t
-inline const char* tocomma( uint64_t u ){ const char* a=format("%llu",u); if(u<1000) return a; size_t l=strlen(a); vector<char> v; v.resize(l+1); memcpy(&v[0],a,l+1); for( uint k=((l%3)?(l%3):3); k<l; k+=4,l++ ) v.emplace(v.begin()+k,','); return format("%s",&v[0]); }
+template <std::unsigned_integral T> inline const char* tocomma( T u ){ uint64_t t=uint64_t(u); const char* a=format("%llu",t); if(u<1000) return a; size_t l=strlen(a); vector<char> v(a,a+l+1); for(uint k=((l%3)?(l%3):3);k<l;k+=4,l++) v.emplace(v.begin()+k,','); return __strdup(v.data()); }
+template <std::signed_integral T> inline const char* tocomma( T i ){ const char* s=tocomma(uint64_t(abs(i))); return i<0?format("-%s",s):s; }
 
 // user types to string
 inline const char* itoa( const int2& v ){ return format("%d %d",v.x,v.y); }
@@ -323,6 +324,11 @@ template <class T> const T* trim( const T* src, const T* delims=__whitespaces<T>
 {
 	if(!src||!src[0]) return (const T*)L"";
 	const T* r=rtrim(src,delims); return r+(*r?strspn(src,delims):0);
+}
+
+template <class T> std::basic_string<T> trim( const std::basic_string<T>& src, const T* delims=__whitespaces<T>() )
+{
+	return trim(src.c_str(),delims);
 }
 
 template <class T> const T* trim( const T* src, T delim )
