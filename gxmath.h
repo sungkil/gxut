@@ -568,7 +568,6 @@ using dmat2	= tmat2<double>;	using dmat3 = tmat3<double>;	using dmat4 = tmat4<do
 // concepts for matrices
 template <template<typename...>class T> concept tmat = same_template<T,tmat2>||same_template<T,tmat3>||same_template<T,tmat4>;
 #define __TMAT__			template <template<typename...> class M, floating_point T> requires tmat<M>
-#define __TVEC_TMAT__		template <template<typename...> class V, floating_point T> requires tvec<V>||tmat<V>
 #define __TVEC_FUNC__(func)	__TVEC__ __forceinline V<T> func( const V<T>& v ){ V<T> r; r.x=T(func(v.x)); r.y=T(func(v.y)); for(int k=2;k<V<T>::N;k++) r[k]=T(func(v[k])); return r; }
 
 // matrix types to string
@@ -613,8 +612,10 @@ __TVEC_FUNC__(cos) __TVEC_FUNC__(sin) __TVEC_FUNC__(tan) __TVEC_FUNC__(cosh) __T
 __TVEC_FUNC__(acos) __TVEC_FUNC__(asin) __TVEC_FUNC__(atan) __TVEC_FUNC__(acosh) __TVEC_FUNC__(asinh) __TVEC_FUNC__(atanh)
 __TVEC_FUNC__(abs) __TVEC_FUNC__(ceil) __TVEC_FUNC__(fabs) __TVEC_FUNC__(floor) __TVEC_FUNC__(fract) __TVEC_FUNC__(saturate) __TVEC_FUNC__(sign) __TVEC_FUNC__(exp)
 __TVEC_FUNC__(sigmoid) __TVEC_FUNC__(smoothstep) __TVEC_FUNC__(smootherstep)
-__TVEC_TMAT__ __forceinline bool isnan( V<T> v ){ for(size_t k=0;k<V<T>::N;k++) if(isnan(v[k])) return true; return false; }
-__TVEC_TMAT__ __forceinline bool isinf( V<T> m ){ for(size_t k=0;k<V<T>::N;k++) if(isinf(m[k])) return true; return false; }
+__TVEC__ __forceinline bool isnan( V<T> v ){ for(size_t k=0;k<V<T>::N;k++) if(isnan((&v.x)[k])) return true; return false; }
+__TMAT__ __forceinline bool isnan( M<T> m ){ for(size_t k=0;k<M<T>::N;k++) if(isnan((&m._00)[k])) return true; return false; }
+__TVEC__ __forceinline bool isinf( V<T> v ){ for(size_t k=0;k<V<T>::N;k++) if(isinf((&v.x)[k])) return true; return false; }
+__TMAT__ __forceinline bool isinf( M<T> m ){ for(size_t k=0;k<M<T>::N;k++) if(isinf((&m._00)[k])) return true; return false; }
 __forceinline vec2 fma( vec2 a, vec2 b, vec2 c ){ return vec2(fma(a.x,b.x,c.x),fma(a.y,b.y,c.y)); }
 __forceinline vec3 fma( vec3 a, vec3 b, vec3 c ){ return vec3(fma(a.x,b.x,c.x),fma(a.y,b.y,c.y),fma(a.z,b.z,c.z)); }
 __forceinline vec4 fma( vec4 a, vec4 b, vec4 c ){ return vec4(fma(a.x,b.x,c.x),fma(a.y,b.y,c.y),fma(a.z,b.z,c.z),fma(a.w,b.w,c.w)); }
@@ -806,7 +807,6 @@ struct bbox_t { vec3 m=3.402823466e+38F; uint __0; vec3 M=-3.402823466e+38F; uin
 #undef __TVEC__
 #undef __TVEC_X__
 #undef __TMAT__
-#undef __TVEC_TMAT__
 #undef __TVEC_FUNC__
 
 //*************************************
