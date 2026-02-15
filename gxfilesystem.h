@@ -342,6 +342,7 @@ __noinline void path::__scan_recursive( const wchar_t* _dir, path::__scan_t& si 
 	while(FindNextFileW(h,&fd)) // skip directly first '.'
 	{
 		if(f[0]==L'.'){ if(!f[1]||(f[1]==L'.'&&f[2]==0)||memcmp(f+1,L"git",sizeof(wchar_t)*4)==0) continue; } // skip ., .., .git
+		if(f[0]==L'~'&&f[1]==L'$') continue; // skip temporary files
 		if((fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)==0) // files
 		{
 			size_t fl=wcslen(f); if(e){size_t j=0;for(;j<si.ext.l;j++){if(e[j].size<fl&&wcsicmp(e[j],f+fl-e[j].size)==0)break;}if(j==si.ext.l)continue;}
