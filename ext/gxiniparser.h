@@ -58,16 +58,16 @@ public:
 	// query and retrieval
 	void set_path( const path_t& file_path ){ this->file_path = file_path.absolute(); }
 	const path_t& get_path() const { return file_path; }
-	bool key_exists( const char* key ) const { if(key==nullptr||key[0]=='\0') return false; return dic.find(key)!=dic.end(); }
-	bool key_exists( const char* sec, const char* key ) const { if(!key||!*key) return false; if(!sec||!*sec) return key_exists(key); char sk[4096]; snprintf(sk,4096,"%s:%s",sec,key); return dic.find(sk)!=dic.end(); }
-	bool section_exists( const char* sec ) const { if(sec==nullptr||sec[0]=='\0') return false; for(auto& it:dic) if(stricmp(it.second->section.c_str(),sec)==0) return true; return false; }
+	bool key_exists( const char* seckey ) const { return seckey&&*seckey?dic.find(seckey)!=dic.end():false; }
+	bool key_exists( const char* sec, const char* key ) const { if(!sec||!*sec) return false; char sk[1024]; snprintf(sk,1024,"%s:%s",sec,key?key:""); return dic.find(sk)!=dic.end(); }
+	bool section_exists( const char* sec ) const { if(!sec||!*sec) return false; for(auto& it:dic) if(stricmp(it.second->section.c_str(),sec)==0) return true; return false; }
 	std::set<string> section_set() const { std::set<string> ss;for(auto& it:dic)ss.emplace(it.second->section);return ss;}
 	vector<string> sections(){ vector<string> sl; std::set<string> ss; for(auto& it:entries()){ if(ss.find(it->section.c_str())!=ss.end()) continue; sl.emplace_back(it->section); ss.emplace(it->section); } return sl; }
 	vector<entry_t*> entries( const char* sec=nullptr ){ vector<entry_t*> el; for(auto& it:dic) if(sec==nullptr||stricmp(it.second->section.c_str(),sec)==0) el.emplace_back(it.second); std::sort(el.begin(),el.end(),entry_t::compare_by_index); return el; } // return all entries if no section is given
 
 	// clear
-	void clear( const char* seckey ){ auto it=dic.find(seckey);if(it==dic.end()) return; delete it->second; dic.erase(it); save(); }
-	void clear( const char* sec, const char* key ){ char sk[4096]; snprintf(sk,4096,"%s:%s",sec,key); clear(sk); }
+	void clear( const char* seckey ){ if(!seckey||!*seckey) return; auto it=dic.find(seckey);if(it==dic.end()) return; delete it->second; dic.erase(it); save(); }
+	void clear( const char* sec, const char* key ){ char sk[1024]; snprintf(sk,1024,"%s:%s",sec,key?key:""); clear(sk); }
 	void clear_section( const string& sec ){ bool b_save=false; for(auto it=dic.begin();it!=dic.end();){if(stricmp(it->second->section.c_str(),sec.c_str())==0){delete it->second;it=dic.erase(it);b_save=true; }else it++;} if(b_save) save(); }
 
 	// load/save
@@ -81,13 +81,13 @@ public:
 
 	// get
 	__forceinline const char* get( const char* key ){ if(!key||!*key) return ""; auto it=dic.find(key); return it==dic.end()?"":it->second->value.c_str(); }
-	__forceinline const char* get( const char* sec, const char* key ){ if(!sec||!*sec||!key||!*key) return ""; char sk[257]; snprintf(sk,256,"%s:%s",sec,key); return get(sk); }
-	template<class T> T get( const char* sec, const char* key ){ if(!sec||!*sec||!key||!*key) return get<T>(""); if(!sec||!*sec) return get<T>(key); if(!key||!*key) return get<T>(sec); char sk[257]; snprintf(sk,256,"%s:%s",sec,key); return get<T>(sk); }
+	__forceinline const char* get( const char* sec, const char* key ){ if(!sec||!*sec) return ""; char sk[256]; snprintf(sk,256,"%s:%s",sec,key?key:""); return get(sk); }
+	template<class T> T get( const char* sec, const char* key ){ if(!sec||!*sec) return get<T>(""); char sk[256]; snprintf(sk,256,"%s:%s",sec,key?key:""); return get<T>(sk); }
 	template<class T> T get( const char* key );
 
 	// set
 	template<class T> void set( const char* key, T value );
-	template<class T> void set( const char* sec, const char* key, T value ){ if(!sec||!*sec||!key||!*key) return; if(!sec||!*sec) return set<T>(key,value); if(!key||!*key) return set<T>(sec,value); char sk[257]; snprintf(sk,256,"%s:%s",sec,key); set<T>(sk,value); }
+	template<class T> void set( const char* sec, const char* key, T value ){ if(!sec||!*sec) return; char sk[256]; snprintf(sk,256,"%s:%s",sec,key?key:""); set<T>(sk,value); }
 	template<class T> void set_or_clear_default( const char* key, T value, T default_value ){ if(value==default_value) return clear(key); set<T>(key,value); }
 	template<class T> void set_or_clear_default( const char* sec, const char* key, T value, T default_value ){ if(value==default_value) return clear(sec,key); set<T>(sec,key,value); }
 };
@@ -103,8 +103,9 @@ __noinline void parser_t::read_line( wchar_t* line, wchar_t* sec )
 
 		int l=int(wcslen(t)); if(l<2) continue;
 		if(t[0]==L'['){ wcscpy(sec,itrim(t+1)); continue; } // assign section
-		wchar_t* v=0; for(int k=0;k<l;k++)if(t[k]==L'='){t[k]=0;v=t+k+1;break;} if(!t||!v) continue; t=itrim(t); if(!*t) continue;
-		snprintf(seckey,std::extent<decltype(seckey)>::value,"%s:%s",wtoa(sec),wtoa(t));get_or_create_entry(seckey)->value=wtoa(itrim(v));
+		wchar_t* v=0; for(int k=0;k<l;k++)if(t[k]==L'='){t[k]=0;v=t+k+1;break;} t=itrim(t); if(!*t) continue;
+		snprintf(seckey,std::extent<decltype(seckey)>::value,"%s:%s",wtoa(sec),v?wtoa(t):"");
+		get_or_create_entry(seckey)->value=v?wtoa(itrim(v)):wtoa(t);
 	}
 }
 
