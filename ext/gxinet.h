@@ -14,6 +14,7 @@
 #include <ws2tcpip.h>
 #include <wininet.h>
 #include <windns.h>
+#include <netlistmgr.h>
 #pragma comment( lib, "winhttp.lib" )
 #pragma comment( lib, "ws2_32" )
 #pragma comment( lib, "wininet" )
@@ -21,7 +22,7 @@
 
 struct inet
 {
-	static bool is_offline(){ static int status=-1; if(status<0){ DWORD s; status=InternetGetConnectedState(&s,0)&&s!=INTERNET_CONNECTION_OFFLINE?1:0; } return status<1; }
+	static bool is_offline();
 	static inline const path_t CACHE_DIR = apptemp()+"update\\";
 	static const char* get_registered_ip_address();
 };
@@ -72,6 +73,16 @@ __noinline const char* inet::get_registered_ip_address()
 	if(rec&&buff&&!inet_ntop(AF_INET,(struct sockaddr_in*)&rec->Data.A.IpAddress,buff,1024)) return nullptr;
 	DnsFree(rec, DnsFreeRecordList);
 	return buff;
+}
+
+__noinline bool inet::is_offline()
+{
+	static bool i=false, b=true; if(i) return b; i=true; // defaulted to offline
+	HRESULT hr0=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED|COINIT_DISABLE_OLE1DDE); if(FAILED(hr0)) return b;
+	INetworkListManager* nlm=nullptr; if(FAILED(CoCreateInstance(CLSID_NetworkListManager,0,CLSCTX_ALL,IID_PPV_ARGS(&nlm)))) return b;
+	VARIANT_BOOL c=VARIANT_FALSE; auto hr1=nlm->get_IsConnectedToInternet(&c);safe_release(nlm);
+	if(hr0!=RPC_E_CHANGED_MODE) CoUninitialize();
+	return b=(FAILED(hr1)||c!=VARIANT_TRUE);
 }
 
 #endif // __GX_INET_H__
