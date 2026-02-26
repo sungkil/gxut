@@ -942,8 +942,7 @@ __noinline bool create_process( const char* app, const char* args=nullptr, bool 
 {
 	STARTUPINFOW si={sizeof(si)}; si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=windowed?SW_SHOW:SW_HIDE;
 	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,build_cmdline(app,args),0,0,FALSE,priority,0,0,&si,&pi)||!pi.hProcess||!pi.hThread){ printf( "%s(%s,%s): failed to create process\n", __func__, app?app:"", args?args:"" ); return false; }
-	if(wait){ WaitForSingleObject(pi.hProcess,INFINITE); CloseHandle(pi.hThread); CloseHandle(pi.hProcess); }
-	return true;
+	if(!wait) return true; WaitForSingleObject(pi.hProcess,INFINITE); DWORD ecode=0; if(!GetExitCodeProcess(pi.hProcess,&ecode)) ecode=EXIT_FAILURE; CloseHandle(pi.hThread); CloseHandle(pi.hProcess); return ecode==0;
 }
 
 __noinline bool kill_process( string_view process_name, bool quiet=true )
