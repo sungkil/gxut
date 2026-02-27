@@ -955,10 +955,11 @@ __noinline bool kill_process( string_view process_name, bool quiet=true )
 // message box wrappers
 inline HWND& __message_box_owner_hwnd(){ static HWND h=nullptr; return h; }
 inline void set_message_box_owner( HWND hwnd ){ __message_box_owner_hwnd()=hwnd; }
-__noinline int message_box( const char* msg, const char* title, HWND hwnd=nullptr ){ return MessageBoxA(hwnd?hwnd:__message_box_owner_hwnd(),msg,title,MB_OKCANCEL|MB_ICONWARNING|MB_SYSTEMMODAL); }
-__noinline bool confirm( HWND hwnd, __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); auto* m=vformat(fmt,a); va_end(a); return IDOK==os::message_box(m,"Warning",hwnd); }
-__noinline bool confirm( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); auto* m=vformat(fmt,a); va_end(a); return IDOK==os::message_box(m,"Warning"); }
-} __noinline bool mbox( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); auto* m=vformat(fmt,a); va_end(a); return IDOK==os::message_box(m,"Message"); } namespace os {
+__noinline bool message_box( HWND hwnd, const char* title, const char* msg ){ return IDOK==MessageBoxA(hwnd?hwnd:__message_box_owner_hwnd(),msg,title,MB_OKCANCEL|MB_ICONWARNING|MB_SYSTEMMODAL); }
+__noinline bool host_box( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); auto* m=vformat(fmt,a); va_end(a); return os::create_process(nullptr,format("msg * \"%s\"",m),false,true); }
+__noinline bool confirm( HWND hwnd, __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); auto* m=vformat(fmt,a); va_end(a); return os::message_box(hwnd,"Warning",m); }
+__noinline bool confirm( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); auto* m=vformat(fmt,a); va_end(a); return os::message_box(nullptr,"Warning",m); }
+} __noinline bool mbox( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); auto* m=vformat(fmt,a); va_end(a); return os::message_box(nullptr,"Message",m); } namespace os {
 
 #elif defined __gcc__
 __noinline bool create_process( const char* app, const char* args=nullptr, bool b_wait=true )
