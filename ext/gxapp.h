@@ -94,23 +94,21 @@ __noinline bool updater::fetch()
 __noinline bool updater::open()
 {
 	if(!cache.dst.exists()||cache.dst.mtime()<=dst.mtime()) return false;
-	if(!os::message_box(nullptr,"update","found a new update. Would you like to update the app?")) return false;
+	if(!mbox.confirm("Found a new update. Would you like to update the app?")) return false;
 	return os::create_process( nullptr, format("%s --update %s",auto_quote(cache.dst.c_str()),auto_quote(dst.canonical().c_str())), false );
 }
 
 __noinline bool update( string server_url, path dst_path="" )
 {
-	SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 	if(__argc>2&&wcscmp(__wargv[1],L"--update")==0)
 	{
 		path src1=path(exe::path());
 		path dst1=__wargv[2]; if(!dst1.exists()) return false;
 		// wait for dst1 closes
 		int k=0; for(;k<1024;k++){ if(os::find_process(dst1.c_str()).empty())break; Sleep(10); }
-		if(k==1024){ os::message_box(nullptr,"update", format("%s is still alive\n", dst1.rs())); return false; }
-		if(src1.copy_file(dst1)){ os::message_box(nullptr,"update", format("%s is updated well\n", dst1.rs())); return true; }
-		os::message_box(nullptr,"update", format("failed to update from %s to %s\n",src1.rs(),dst1.rs()));
-		return false;
+		if(k==1024) return ebox("Unable to update, since %s is still alive.\n", dst1.rs());
+		if(src1.copy_file(dst1)){ mbox("%s is updated well\n", dst1.rs()); return true; }
+		return ebox("failed to update from %s to %s\n",src1.rs(),dst1.rs());
 	}
 
 	updater u(server_url,dst_path);
