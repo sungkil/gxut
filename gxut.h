@@ -952,12 +952,12 @@ __noinline bool kill_process( string_view process_name, bool quiet=true )
 	return 0==system(cmd.c_str());
 }
 
-// auto DPI awareness in a console process
-#ifndef _WINDLL
+// auto DPI awareness in a non-DLL process
+#if defined(WINVER)&&WINVER>=0x0605&&!defined(_WINDLL)
 namespace dpi
 {
 	struct __autoaware_t { __autoaware_t(){ if(!IsProcessDPIAware()) SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2); }};
-	inline __autoaware_t __autodpiaware;
+	inline __autoaware_t __autoaware;
 }
 #endif
 
