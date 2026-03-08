@@ -545,7 +545,7 @@ __noinline __pathinfo __split_path( const char* path, bool b_dir, bool b_stem, b
 	if(path[l-1]=='/'||path[l-1]=='\\') return __pathinfo{b_dir?__strdup(path):(char*)"",0,0}; // trailing slash means just a directory
 	const char* d = b_dir?__strdup(dirname((char*)__strdup(path))):nullptr; string b = basename((char*)__strdup(path));
 	const char* s = b_stem?__strdup(fs::path(b.c_str()).stem().c_str()):nullptr;
-	const char* x = b_extension?__strdup(fs::path(b.c_str()).extension().c_str()):nullptr; if(*x=='.') x++;
+	const char* x = b_extension?__strdup(fs::path(b.c_str()).extension().c_str()):nullptr;
 	return __pathinfo{(char*)d,(char*)s,(char*)x};
 #endif
 }
@@ -554,12 +554,12 @@ __noinline __pathinfo __split_path( const char* path, bool b_dir, bool b_stem, b
 namespace exe {
 //*************************************
 #ifdef __msvc__
-inline const char* path(){	static char e[PATH_MAX+1]={}; if(*e) return e; GetModuleFileNameA(nullptr,e,sizeof(e)-1); return e; }
+inline const char* path(){		static char e[PATH_MAX+1]={}; if(*e) return e; GetModuleFileNameA(nullptr,e,sizeof(e)-1); return e; }
 #elif defined(__gcc__)
-inline const char* path(){	static char e[PATH_MAX+1]={}; if(*e) return e; if(readlink("/proc/self/exe",e,sizeof(e)-1)>0) return ""; return e; }
+inline const char* path(){		static char e[PATH_MAX+1]={}; if(*e) return e; if(readlink("/proc/self/exe",e,sizeof(e)-1)>0) return ""; return e; }
 #endif
-inline const char* dir(){	static char d[PATH_MAX]={}; if(*d) return d; return strcpy(d,__split_path(path(),true,false,false).dir); }
-inline const char* name(){	static char n[PATH_MAX]={}; if(*n) return n; return strcpy(n,__split_path(path(),false,true,false).stem); }
+inline const char* dir(){		static char d[PATH_MAX+1]={}; if(*d) return d; return strcpy(d,__split_path(path(),true,false,false).dir); }
+inline const char* name( bool ext=false ){ static char t[PATH_MAX+1]={}, f[PATH_MAX+1]={}; if(!ext&&*t) return t; else if(ext&&*f) return f; auto i=__split_path(path(),false,true,ext); return ext?strcat(strcpy(f,i.stem),i.x):strcpy(t,i.stem); }
 //*************************************
 } // end namespace exe
 //*************************************
@@ -953,7 +953,7 @@ __noinline bool kill_process( string_view process_name, bool quiet=true )
 }
 
 // auto DPI awareness in a console process
-#if defined(_CONSOLE)&&!defined(_WINDLL)
+#ifndef _WINDLL
 namespace dpi
 {
 	struct __autoaware_t { __autoaware_t(){ if(!IsProcessDPIAware()) SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2); }};
