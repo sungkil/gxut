@@ -22,6 +22,14 @@
 	#include <gxut/gxut.h>
 #endif
 
+#ifndef __GX_OS_H__
+	#if __has_include("gxos.h")
+		#include "gxos.h"
+	#elif  __has_include(<gxut/gxos.h>)
+		#include <gxut/gxos.h>
+	#endif
+#endif
+
 //***********************************************
 namespace gx { namespace argparse {
 //***********************************************
@@ -393,6 +401,10 @@ inline bool parser_t::validate()
 
 inline bool parser_t::usage( const char* alt_name )
 {
+	bool b_console_has_parent=false;
+#ifdef __GX_OS_H__
+	if(os::console::has_parent()) b_console_has_parent=true;
+#endif
 	vector<std::pair<string,string>> req_args, opt_args, opts;
 
 	// print options for multi-line help
@@ -435,7 +447,9 @@ inline bool parser_t::usage( const char* alt_name )
 	if(cap==0&&commands.empty()) return exit("no argument/options found\n");
 
 	// now, prints the results
-	fprintf( stdout, "\n%s version %04d-%02d-%02d\n", attrib.name, compiler::year(), compiler::month(), compiler::day() );
+	if(b_console_has_parent) fprintf( stdout, "\n" );
+
+	fprintf( stdout, "%s version %04d-%02d-%02d\n", attrib.name, compiler::year(), compiler::month(), compiler::day() );
 	if(!attrib.copyright.empty()) fprintf( stdout, "%s\n", trim(attrib.copyright.c_str()) );
 	if(!attrib.header.empty()) fprintf( stdout, "%s\n\n", attrib.header.c_str() );
 
@@ -482,10 +496,7 @@ inline bool parser_t::usage( const char* alt_name )
 		fprintf( stdout, "\n%s\n", attrib.footer.c_str() );
 	}
 
-#ifdef __GX_OS_H__
-	if(!os::console::has_parent()) system("pause");
-#endif
-
+	if(!b_console_has_parent){ fprintf( stdout, "\n" ); system("pause"); }
 	return false;
 }
 
