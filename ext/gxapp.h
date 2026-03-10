@@ -90,11 +90,11 @@ __noinline bool updater::fetch()
 	}
 
 	// find an entry from the index
-	path server_name; time_t t1=0;
+	path server_name;
 	for( auto& t : {name,name+".7z",name+".zip",name.replace_extension("7z"),name.replace_extension("zip")} )
 	{
 		auto j=indices.find(t); if(j==indices.end()) continue;
-		server_name=t.c_str(); t1=j->second; break;
+		server_name=t.c_str(); break;
 	}
 	if(server_name.empty()) server_name=name+".7z"; // defaulted to 7z
 
@@ -102,11 +102,8 @@ __noinline bool updater::fetch()
 	const_cast<path&>(cache.src) = cache_dir+server_name;
 	bool b_zip = server_name.extension()=="zip"||server_name.extension()=="7z";
 	time_t t0 = cache.src.mtime();
-	if(t0<t1||!t1)
-	{
-		bool b_wget = wget(server_dir+server_name.c_str(),cache.src); if(!cache.src.exists()) return false; // try to download; still may return false for cache
-		if(b_wget&&cache.src.mtime()>t0&&!b_zip) printf( "downloaded %s\n", cache.src.rs() );
-	}
+	bool b_wget = wget(server_dir+server_name.c_str(),cache.src); if(!cache.src.exists()) return false; // try to download; still may return false for cache
+	if(b_wget&&cache.src.mtime()>t0&&!b_zip) printf( "downloaded %s\n", cache.src.rs() );
 	
 	if(b_zip) // try to extract the app from zip/7z
 	{
