@@ -52,31 +52,62 @@ namespace gx::app {
 
 struct updater
 {
-	const string	server;
-	const path		dst;
-	const struct { path src, dst; } cache;
+	static inline const string	server_dir = "https://cg.skku.edu/apps/";
+	static inline const path	cache_dir = path(os::local_appdata())+"gxapp\\update\\";
+
+	const path	name;
+	const path	dst;
+	const struct { path src, dst, index; } cache;
 	
-	updater( string server_url, path dst_path="" );
+	updater( string appname, path dst_path );
 	bool fetch(); // return a newer server file exists
 	bool open();
 };
 
-__noinline updater::updater( string server_url, path dst_path ): server(server_url), dst(dst_path)
+__noinline updater::updater( string appname, path dst_path ):
+	name(appname.empty()?exe::name(true):appname), dst(dst_path)
 {
 	if(dst.empty()) const_cast<path&>(dst) = exe::path();
-	const_cast<path&>(cache.src) = apptemp()+"update\\"+path(server_url).name();
-	const_cast<path&>(cache.dst) = cache.src.dir()+dst.name();
+	const_cast<path&>(cache.dst) = cache_dir+dst.name();
+	const_cast<path&>(cache.index) = cache_dir+"index.txt";
 }
 
 __noinline bool updater::fetch()
 {
 	if(inet::is_offline()) return false;
 
+	// fetch index first
+	wget(server_dir+"index.txt",cache.index); // try to download index; still may return false for cache
+	if(!cache.index.exists()) return false; // no index found
+
+	// read indices
+	std::map<string,time_t> indices;
+	for(auto&& l:explode(cache.index.read().c_str(),"\r\n"))
+	{
+		auto v=explode(l.c_str()," \t\n"); if(v.empty()||v.front().size()<2||v.front()[0]=='.') continue;
+		string name=v.front(); time_t t=0; if(v.size()>1) sscanf(v[1].c_str(),"%llx",&t);
+		indices.emplace(name,t);
+	}
+
+	// find an entry from the index
+	path server_name; time_t t1=0;
+	for( auto& t : {name,name+".7z",name+".zip",name.replace_extension("7z"),name.replace_extension("zip")} )
+	{
+		auto j=indices.find(t); if(j==indices.end()) continue;
+		server_name=t.c_str(); t1=j->second; break;
+	}
+	if(server_name.empty()) server_name=name+".7z"; // defaulted to 7z
+
+	// now fetch the entry
+	const_cast<path&>(cache.src) = cache_dir+server_name;
+	bool b_zip = server_name.extension()=="zip"||server_name.extension()=="7z";
 	time_t t0 = cache.src.mtime();
-	bool b_wget = wget(server,cache.src); // try to download; still may return false for cache
-	if(!cache.src.exists()) return false;
-	bool b_zip = cache.src.extension()=="zip"||cache.src.extension()=="7z";
-	if(b_wget&&cache.src.mtime()>t0&&!b_zip) printf( "[update] downloaded %s\n", cache.src.rs() );
+	if(t0<t1||!t1)
+	{
+		bool b_wget = wget(server_dir+server_name.c_str(),cache.src); if(!cache.src.exists()) return false; // try to download; still may return false for cache
+		if(b_wget&&cache.src.mtime()>t0&&!b_zip) printf( "downloaded %s\n", cache.src.rs() );
+	}
+	
 	if(b_zip) // try to extract the app from zip/7z
 	{
 		izip_t* z = load_zip(cache.src); if(!z){ printf( "[update] unable to load %s\n",cache.src.to_slash().c_str()); return false; }
@@ -84,7 +115,7 @@ __noinline bool updater::fetch()
 		if(!cache.dst.exists()||FileTimeToTime(e->mtime)>cache.dst.mtime())
 		{
 			if(!z->extract_to_files(cache.dst.dir(),cache.dst.name())){ printf( "[update] unable to extract %s\n", cache.dst.name() ); safe_delete(z); return false; }
-			printf( "[update] downloaded %s\n", cache.dst.rs() );
+			printf( "downloaded %s\n", cache.dst.rs() );
 		}
 		safe_delete(z);
 	}
@@ -98,7 +129,7 @@ __noinline bool updater::open()
 	return os::create_process( nullptr, format("%s --update %s",auto_quote(cache.dst.c_str()),auto_quote(dst.canonical().c_str())), false );
 }
 
-__noinline bool update( string server_url, path dst_path="" )
+__noinline bool update( string name="", path dst_path="" )
 {
 	if(__argc>2&&wcscmp(__wargv[1],L"--update")==0)
 	{
@@ -111,7 +142,7 @@ __noinline bool update( string server_url, path dst_path="" )
 		return ebox("failed to update from %s to %s\n",src1.rs(),dst1.rs());
 	}
 
-	updater u(server_url,dst_path);
+	updater u(name,dst_path);
 	if(!u.fetch()) return false;
 	if(!u.open()) return false;
 	return true;
