@@ -18,7 +18,7 @@ namespace obj {
 static const std::set<string>& get_archive_extensions()
 {
 	static std::set<string> m; if(!m.empty()) return m;
-#if defined(__7Z_H) && defined(__7Z_MEMINSTREAM_H)
+#if defined(__7ZIP_H__)||defined(ZIP7_INC_7Z_H)||defined(__7Z_H)
 	m.insert("7z");
 #endif
 #if defined(_unzip_H)||defined(__GXZIP_H__)
@@ -256,7 +256,7 @@ path obj::decompress( const path& file_path )
 		if(!z.extract_to_files(dst_path.dir())) return path();
 	}
 #endif
-#if defined(__7Z_H) && defined(__7Z_MEMINSTREAM_H)
+#if defined(__7ZIP_H__)||defined(ZIP7_INC_7Z_H)||defined(__7Z_H)
 	if(file_path.extension()=="7z")
 	{
 		szip_t s(file_path);

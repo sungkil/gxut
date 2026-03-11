@@ -29,20 +29,28 @@
 	#define __7ZIP_H__
 	#include <7zip/7zTypes.h>
 	#include <7zip/7z.h>
-	#include <7zip/7zAlloc.h>
-	#include <7zip/7zCrc.h>
+	#include <7zip/7zWindows.h>
 	#include <7zip/7zFile.h>
-	#include <7zip/7zVersion.h>
-	#include <7zip/7zMemInStream-slee.h> // https://github.com/poiru/7z-memstream
 #elif __has_include(<7zip/include/7zTypes.h>)
 	#define __7ZIP_H__
 	#include <7zip/include/7zTypes.h>
 	#include <7zip/include/7z.h>
-	#include <7zip/include/7zAlloc.h>
-	#include <7zip/include/7zCrc.h>
+	#include <7zip/include/7zWindows.h>
 	#include <7zip/include/7zFile.h>
-	#include <7zip/include/7zVersion.h>
-	#include <7zip/include/7zMemInStream-slee.h> // https://github.com/poiru/7z-memstream
+#endif
+
+// inline function prototypes not to include headers
+#ifdef __7ZIP_H__
+extern "C" {
+void __fastcall CrcGenerateTable();
+void *SzAlloc(ISzAllocPtr p, size_t size);
+void SzFree(ISzAllocPtr p, void *address);
+void *SzAllocTemp(ISzAllocPtr p, size_t size);
+void SzFreeTemp(ISzAllocPtr p, void *address);
+// https://github.com/poiru/7z-memstream
+typedef struct { ILookInStream s; const Byte *begin; const Byte *pos; const Byte *end; } CMemInStream;
+void MemInStream_Init(CMemInStream *p, const void *begin, size_t length);
+}
 #endif
 
 //*************************************
@@ -150,7 +158,8 @@ struct szip_t : public izip_t
 	szip_t( void* ptr, size_t size ){ if(!ptr||!size) return; crc_generate_table(); MemInStream_Init(mem_stream = new CMemInStream(),ptr,size); }
 
 	virtual void release() override {for(auto& e:entries){if(e.ptr){free(e.ptr);e.ptr=nullptr;}}entries.clear();SzArEx_Free(&db,&alloc_impl);if(look_stream){delete look_stream;look_stream=nullptr;} if(file_stream){File_Close(&file_stream->file);delete file_stream;file_stream=nullptr;} if(mem_stream){delete mem_stream;mem_stream=nullptr;} }
-	virtual bool load() override {if(!look_in_stream()) return false; SzArEx_Init(&db);if(SzArEx_Open(&db,look_in_stream(),&alloc_impl,&alloc_temp)!=SZ_OK){printf("unable to SzArEx_Open(%s)\n",file_path.c_str());release();return false;}for( uint k=0, kn=db.NumFiles; k<kn; k++ ){if(SzArEx_IsDir(&db,k)) continue;zipentry_t e;memset(&e,0,sizeof(e));e.index=k;SzArEx_GetFileNameUtf16(&db,k,(ushort*)e.name);e.attr=SzBitWithVals_Check(&db.Attribs,k)?db.Attribs.Vals[k]:0;if(SzBitWithVals_Check(&db.MTime,k)) memcpy(&e.mtime,db.MTime.Vals+k,sizeof(FILETIME));e.size=SzArEx_GetFileSize(&db,k);e.unc_size=long(e.size);entries.emplace_back(e);}return true;}
+	virtual bool load() override { if(!look_in_stream()) return false; SzArEx_Init(&db);if(SzArEx_Open(&db,look_in_stream(),&alloc_impl,&alloc_temp)!=SZ_OK){printf("unable to SzArEx_Open(%s)\n",file_path.c_str());release();return false;}for( uint k=0, kn=db.NumFiles; k<kn; k++ ){if(SzArEx_IsDir(&db,k)) continue;zipentry_t e;memset(&e,0,sizeof(e));e.index=k;SzArEx_GetFileNameUtf16(&db,k,(ushort*)e.name);e.attr=SzBitWithVals_Check(&db.Attribs,k)?db.Attribs.Vals[k]:0;if(SzBitWithVals_Check(&db.MTime,k)) memcpy(&e.mtime,db.MTime.Vals+k,sizeof(FILETIME));e.size=SzArEx_GetFileSize(&db,k);e.unc_size=long(e.size);entries.emplace_back(e);}return true;}
+
 	virtual bool extract_to_files( path dir, const char* name=nullptr ) override {uchar* ob=nullptr;uint bl=-1;for(size_t k=0,kn=entries.size(),of=0,obs=0,os=0;k<kn;k++){auto& e=entries[k];if(e.is_dir()||(name&&stricmp(name,wtoa(e.name))!=0)) continue; path p=dir+wtoa(e.name); if(!p.dir().exists()) p.dir().mkdir(); if(SZ_OK!=SzArEx_Extract(&db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){printf("unable to SzArEx_Extract(%s)\n",wtoa(e.name));return false;} bool x=p.exists(),r=x&&p.is_readonly(),h=x&&p.is_hidden(); if(r) p.set_readonly(false); if(h) p.set_hidden(false); FILE* fp=fopen(p.c_str(),"wb"); if(!fp){ printf("unable to fopen(%s)\n", p.c_str()); return false; } fwrite(ob+of, os, 1, fp); fclose(fp); if(e.attr) SetFileAttributesW(atow(p.c_str()), e.attr); p.utime(FileTimeToTime(e.mtime)); if(r) p.set_readonly(true); if(h) p.set_hidden(true); } if(ob) alloc_impl.Free(&alloc_impl, ob); return true; }
 	virtual zipentry_t* extract_to_memory( const char* name=nullptr ) override { if(!look_in_stream()||entries.empty())return nullptr; uchar* ob=nullptr;uint bl=-1;for(size_t k=0,kn=entries.size(),of=0,obs=0,os=0;k<kn;k++){auto& e=entries[k];if(e.is_dir()||e.ptr||(name&&stricmp(name,wtoa(e.name))!=0)) continue;if(SZ_OK!=SzArEx_Extract(&db,look_in_stream(),e.index,&bl,&ob,&obs,&of,&os,&alloc_impl,&alloc_temp)){printf("unable to SzArEx_Extract(%s)\n",wtoa(e.name));return nullptr;} e.ptr=malloc(os); if(e.ptr) memcpy(e.ptr,ob+of,e.size=os); if(ob) alloc_impl.Free(&alloc_impl,ob); } return name?find(name):&entries.front(); }
 
