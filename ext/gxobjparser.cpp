@@ -18,11 +18,9 @@ namespace obj {
 static const std::set<string>& get_archive_extensions()
 {
 	static std::set<string> m; if(!m.empty()) return m;
-#if defined(__7ZIP_H__)||defined(ZIP7_INC_7Z_H)||defined(__7Z_H)
-	m.insert("7z");
-#endif
-#if defined(_unzip_H)||defined(__GXZIP_H__)
-	m.insert("zip");
+#if defined(__GXZIP_H__)
+	m.emplace("7z");
+	m.emplace("zip");
 #endif
 	return m;
 }
@@ -242,33 +240,19 @@ namespace obj::cache
 	}
 }
 
+#ifdef __GXZIP_H__
 path obj::decompress( const path& file_path )
 {
 	path dst_path;
-#if defined(__GXZIP_H__)||defined(_unzip_H)
-	if(file_path.extension()=="zip")
-	{
-		zip_t z(file_path);
-		if(!z.load()||z.entries.empty()){ printf("%s(): unabled to load %s",__func__,file_path.c_str()); return dst_path; }
-		if(z.entries.size()!=1){ printf("%s(): have only a single file for mesh in %s\n",__func__,file_path.c_str() ); return dst_path; }
-		dst_path = cache::get_dir()+wtoa(z.entries.front().name);
-		if(dst_path.exists()) dst_path.delete_file();
-		if(!z.extract_to_files(dst_path.dir())) return path();
-	}
-#endif
-#if defined(__7ZIP_H__)||defined(ZIP7_INC_7Z_H)||defined(__7Z_H)
-	if(file_path.extension()=="7z")
-	{
-		szip_t s(file_path);
-		if(!s.load()||s.entries.empty()){ printf("%s(): unabled to load %s",__func__,file_path.c_str()); return dst_path; }
-		if(s.entries.size()!=1){ printf("%s(): have only a single file for mesh in %s\n",__func__,file_path.c_str() ); return dst_path; }
-		dst_path = cache::get_dir()+wtoa(s.entries.front().name);
-		if(dst_path.exists()) dst_path.delete_file();
-		if(!s.extract_to_files(dst_path.dir())) return path();
-	}
-#endif
+	izip_t* z=load_zip(file_path); if(!z){ printf("%s(): unabled to load %s",__func__,file_path.c_str()); return ""; }
+	if(z->entries.size()!=1){ printf("%s(): have only a single file for mesh in %s\n",__func__,file_path.c_str() ); safe_delete(z); return ""; }
+	dst_path = cache::get_dir()+wtoa(z->entries.front().name);
+	if(dst_path.exists()) dst_path.delete_file();
+	if(!z->extract_to_files(dst_path.dir())){ safe_delete(z); return ""; }
+	safe_delete(z);
 	return dst_path;
 }
+#endif
 
 //*************************************
 __forceinline uint get_or_create_vertex( char* str )

@@ -63,8 +63,6 @@ protected:
 	static const char* _uname(){ static char n[256]; SYSTEMTIME s; GetSystemTime(&s); snprintf( n, _countof(n), "%p%02d%02d%02d%02d%04d%05d", GetCurrentThreadId(), s.wDay, s.wHour, s.wMinute, s.wSecond, s.wMilliseconds, rand() ); return n; } // make unique file name
 };
 
-#ifndef __ZIPENTRY__
-#define __ZIPENTRY__
 typedef struct
 { int index;                 // index of this file within the zip
   TCHAR name[MAX_PATH];      // filename within the zip
@@ -73,7 +71,6 @@ typedef struct
   long comp_size;            // sizes of item, compressed and uncompressed. These
   long unc_size;             // may be -1 if not yet known (e.g. being streamed in)
 } ZIPENTRY;
-#endif
 
 struct zipentry_t : public ZIPENTRY
 {

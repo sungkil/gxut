@@ -15,7 +15,7 @@
 #include <wininet.h>
 #include <windns.h>
 #include <netlistmgr.h>
-#pragma comment( lib, "winhttp.lib" )
+#pragma comment( lib, "winhttp" )
 #pragma comment( lib, "ws2_32" )
 #pragma comment( lib, "wininet" )
 #pragma comment( lib, "dnsapi" )
