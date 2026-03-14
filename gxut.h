@@ -783,13 +783,12 @@ __noinline path_t path_t::relative( path_t from ) const
 	path_t dt = dir().absolute();
 
 	// explode directories
-	vector<path_t> vf; vf.reserve(8); for( char *ctx=nullptr, *k=strtok_s(df._data,"/\\", &ctx); k; k=strtok_s(0,"/\\", &ctx)) vf.emplace_back(k);
-	vector<path_t> vt; vt.reserve(8); for( char *ctx=nullptr, *k=strtok_s(dt._data,"/\\", &ctx); k; k=strtok_s(0,"/\\", &ctx)) vt.emplace_back(k);
+	vector<char*> vf; vf.reserve(4); for(char *c=0,*k=strtok_s(df._data,"\\/",&c); k; k=strtok_s(0,"\\/", &c)) vf.emplace_back(k);
+	vector<char*> vt; vt.reserve(4); for(char *c=0,*k=strtok_s(dt._data,"\\/",&c); k; k=strtok_s(0,"\\/", &c)) vt.emplace_back(k);
 
 	// traverse across different directory levels
-	path_t r; size_t f=0,t=0,zf=vf.size(),zt=vt.size();	for(; f<zf&&t<zt; f++, t++ ){ if(vf[f]!=vt[t]) break; }
-	static const path_t dd="..";						for(; f<zf; f++ ) r += dd + preferred_separator;
-														for(; t<zt; t++ ) r += vt[t] + preferred_separator;
+	size_t f=0,t=0,zf=vf.size(),zt=vt.size(); for(;f<zf&&t<zt;f++,t++){ if(stricmp(vf[f],vt[t])!=0) break; }
+	static const path_t dd=".."s+preferred_separator; path_t r; for(f;f<zf;f++) r+=dd; for(t;t<zt;t++) r+=path_t(vt[t])+preferred_separator;
 	return __is_separator(back())?r:r+filename();
 }
 
