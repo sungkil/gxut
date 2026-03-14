@@ -103,7 +103,7 @@ __noinline bool updater::fetch()
 	bool b_zip = server_name.extension()=="zip"||server_name.extension()=="7z";
 	time_t t0 = cache.src.mtime();
 	bool b_wget = wget(server_dir+server_name.c_str(),cache.src); if(!cache.src.exists()) return false; // try to download; still may return false for cache
-	if(b_wget&&cache.src.mtime()>t0&&!b_zip) printf( "downloaded %s\n", cache.src.rs() );
+	//if(b_wget&&cache.src.mtime()>t0&&!b_zip) printf( "downloaded %s\n", cache.src.as() );
 	
 	if(b_zip) // try to extract the app from zip/7z
 	{
@@ -112,7 +112,7 @@ __noinline bool updater::fetch()
 		if(!cache.dst.exists()||FileTimeToTime(e->mtime)>cache.dst.mtime())
 		{
 			if(!z->extract_to_files(cache.dst.dir(),cache.dst.name())){ printf( "[update] unable to extract %s\n", cache.dst.name() ); safe_delete(z); return false; }
-			printf( "downloaded %s\n", cache.dst.rs() );
+			//printf( "downloaded %s\n", cache.dst.as() );
 		}
 		safe_delete(z);
 	}

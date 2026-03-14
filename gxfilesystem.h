@@ -193,8 +193,8 @@ struct path : public path_t
 	const char* name( bool with_ext=true ) const { return __strdup((with_ext?filename():stem()).c_str()); }
 	const wchar_t* wname( bool with_ext=true ) const { return atow((with_ext?filename():stem()).c_str()); }
 	const char* slash() const { return __strdup(to_slash().c_str()); }
-	// relative slash
-	const char* rs( path from="" ) const { return relative(from).slash(); }
+	const char* as( path base="" ) const { return absolute(base).slash(); } // absolute slash
+	const char* rs( path from="" ) const { return relative(from).slash(); } // relative slash
 	const char* auto_quote() const { if(!*_data||(_data[0]=='\"'&&_data[strlen(_data)-1]=='\"')) return c_str(); auto* t=__strbuf(capacity); size_t l=strlen(_data); memcpy(t,_data,l*sizeof(value_type)); if(t[l]==' '||t[l]=='\t'||t[l]=='\n') t[l]=0; if(t[0]==' '||t[0]=='\t'||t[0]=='\n') t++; if(t[0]!='-'&&!strpbrk(t," \t\n|&<>")) return c_str(); path p; p[0]='\"'; memcpy(p._data+1, _data, l*sizeof(value_type)); p[l+1]='\"'; p[l+2]=0; return __strdup(p.c_str()); }
 
 	// shell operations
