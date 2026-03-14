@@ -779,17 +779,19 @@ __noinline path_t path_t::absolute( path_t base ) const
 __noinline path_t path_t::relative( path_t from ) const
 {
 	if(empty()||is_pipe()||is_ssh()||is_remote()||is_relative()) return *this;
-	path_t df = from.empty()?cwd():from.dir().absolute(); if(tolower(df[0])!=tolower(_data[0])) return *this; // different drive
-	path_t dt = dir().absolute();
+	path_t df=from.empty()?cwd():from.append_slash().absolute(); if(tolower(df[0])!=tolower(_data[0])) return *this; // different drive
+	path_t dt=dir().absolute();
 
-	// explode directories
-	vector<char*> vf; vf.reserve(4); for(char *c=0,*k=strtok_s(df._data,"\\/",&c); k; k=strtok_s(0,"\\/", &c)) vf.emplace_back(k);
-	vector<char*> vt; vt.reserve(4); for(char *c=0,*k=strtok_s(dt._data,"\\/",&c); k; k=strtok_s(0,"\\/", &c)) vt.emplace_back(k);
+	// explode directories to their pointers without costly copy
+	vector<char*> vf; vf.reserve(8); for(char *c=0,*k=strtok_s(df._data,"\\/",&c); k; k=strtok_s(0,"\\/",&c)) vf.emplace_back(k);
+	vector<char*> vt; vt.reserve(8); for(char *c=0,*k=strtok_s(dt._data,"\\/",&c); k; k=strtok_s(0,"\\/",&c)) vt.emplace_back(k);
 
 	// traverse across different directory levels
-	size_t f=0,t=0,zf=vf.size(),zt=vt.size(); for(;f<zf&&t<zt;f++,t++){ if(stricmp(vf[f],vt[t])!=0) break; }
-	static const path_t dd=".."s+preferred_separator; path_t r; for(f;f<zf;f++) r+=dd; for(t;t<zt;t++) r+=path_t(vt[t])+preferred_separator;
-	return __is_separator(back())?r:r+filename();
+	size_t f=0,t=0,zf=vf.size(),zt=vt.size(),l=0; path_t p; auto* r=p._data;
+	for(;f<zf&&t<zt;f++,t++){ if(stricmp(vf[f],vt[t])!=0) break; }
+	for(;f<zf;f++,r+=3){r[0]=r[1]='.';r[2]=preferred_separator;}
+	for(;t<zt;t++){strncpy(r,vt[t],l=strlen(vt[t]));r[l]=preferred_separator;r+=l+1;}
+	*r=0; return __is_separator(back())?p:p+filename();
 }
 
 #ifdef __msvc__
