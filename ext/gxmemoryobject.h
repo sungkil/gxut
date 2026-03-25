@@ -56,7 +56,7 @@ __noinline gl::MemoryObject* gxCreateMemoryObject( const char* name, void* handl
 	if(!name||!*name){ printf("%s(): name==nullptr\n", __func__); return nullptr; }
 	if(!handle){ printf("%s(): handle==nullptr\n", __func__); return nullptr; }
 	if(!size){ printf("%s(): size==0\n", __func__); return nullptr; }
-	
+
 	// load extensions
 	if(!glCreateMemoryObjectsEXT&&!(glCreateMemoryObjectsEXT=gl::get_proc_address<decltype(glCreateMemoryObjectsEXT)>("glCreateMemoryObjectsEXT"))) return nullptr;
 	if(!glDeleteMemoryObjectsEXT&&!(glDeleteMemoryObjectsEXT=gl::get_proc_address<decltype(glDeleteMemoryObjectsEXT)>("glDeleteMemoryObjectsEXT"))) return nullptr;

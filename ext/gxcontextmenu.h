@@ -69,7 +69,7 @@ bool registry_t::add_shell_impl( string subkey, bool b_log )
 	subkey=format("%s\\shell",str_replace(subkey.c_str(),"/","\\"));
 	if(root==HKEY_LOCAL_MACHINE) subkey="SOFTWARE\\Classes\\"s+subkey;
 	if(!subkey_exists<root>(subkey)){ if(b_log) printf( "%s(%s): %s not exists\n",__func__, subkey.c_str(), subkey.c_str() ); return false; }
-	
+
 	subkey+="\\"s+shell.name;
 	auto* d=get_or_create_datum<root>(subkey); if(!d) return false;
 	if(!shell.custom_name.empty())	d->value = shell.custom_name;
@@ -130,7 +130,7 @@ inline bool registry_t::install( bool b_dry )
 	printf("____________________\n\n");
 	printf(trim(dump().c_str()));
 	printf("\n____________________\n\n");
-	
+
 	if(b_dry) return true;
 
 	// find reg
@@ -149,7 +149,7 @@ inline bool registry_t::install( bool b_dry )
 
 		printf( "%s import %s", reg_exe_path.stem().c_str(), reg_path.to_slash().c_str() );
 		auto t = std::async(reg_thread,reg_exe_path,reg_path);
-		
+
 		// find and focus to a UAC window from consent.exe
 		HWND h_uac=nullptr;
 		for( int k=0, kn=300; k<kn; k++ ) // wait for 3 sec.

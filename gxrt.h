@@ -142,7 +142,7 @@ __noinline mesh* bvh_t::create_proxy( bool double_sided, bool quads )
 	// vertex/index definitions of a default box
 	const auto corners = bbox(-1.0f, 1.0f).corners();
 	const auto tri_indices = get_box_indices(double_sided,quads);
-		
+
 	// create vertices/indices for triangles
 	auto& i = proxy->indices;
 	auto& v = proxy->vertices;
@@ -337,7 +337,7 @@ __noinline vector<area_light_t> find_area_lights( mesh* p_mesh )
 	{
 		const auto& m = p_mesh->materials[g.material_index]; if(m.bsdf!=BSDF_EMISSIVE) continue;
 		if(g.count!=6){ printf("%s(%s): no support other than two-triangle quads\n", __func__, g.name() ); continue; }
-		
+
 		// first find the indices of shared edge and isolated vertices
 		std::map<uint,uint> c; // index counter
 		for( uint k=g.first_index, kn=k+g.count; k<kn; k++ ){ auto i=indices[k]; auto it=c.find(i); c[i]=1+(it==c.end()?0:it->second); }

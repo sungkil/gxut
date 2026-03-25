@@ -5,7 +5,7 @@
 #if __has_include("gxfilesystem.h")
 	#include "gxfilesystem.h"
 #elif __has_include("../gxfilesystem.h")
-	#include "../gxfilesystem.h"	
+	#include "../gxfilesystem.h"
 #elif __has_include(<gxut/gxfilesystem.h>)
 	#include <gxut/gxfilesystem.h>
 #endif
@@ -46,7 +46,7 @@ __noinline bool wget( string remote_url, path local_path )
 	BOOL q=WinHttpQueryHeaders(r,WINHTTP_QUERY_LAST_MODIFIED|WINHTTP_QUERY_FLAG_SYSTEMTIME,0,&st,&z,0); if(!q){ printf("%s(%s): unable to query headers\n",__func__,remote_url.c_str()); return false; }
 	if(st.wYear==0){ printf("%s(%s): last modified time not exists\n",__func__,remote_url.c_str()); return false; }
 	time_t t=SystemTimeToTime(st); if(local_path.exists()&&local_path.mtime()>=(t-2)) return true;
-	
+
 	if(!local_path.dir().exists()) local_path.dir().mkdir();
 	FILE* fp=fopen(local_path.c_str(),"wb"); if(!fp){ printf("%s(%s): unable to open %s\n",__func__,remote_url.c_str(), local_path.to_slash().c_str()); return false; }
 	const size_t capacity=1<<16; static void* buffer = malloc(capacity);

@@ -36,7 +36,7 @@ static const char* __GX_MESH_H_TIMESTAMP__ = strdup(__TIMESTAMP__);
 #ifndef GL_TRIANGLES
 	#define GL_TRIANGLES 0x0004
 #endif
-namespace gl { struct Buffer; struct VertexArray; struct Texture; } 
+namespace gl { struct Buffer; struct VertexArray; struct Texture; }
 // D3DX forward decl.
 struct ID3D10Buffer; struct ID3D10ShaderResourceView; struct ID3D11Buffer; struct ID3D11ShaderResourceView;
 // mesh forward decl.
@@ -432,7 +432,7 @@ struct object
 		const pointer operator->() const { return operator->(); }
 		bool operator==( const iterator& rhs ) const { return memcmp(this,&rhs,sizeof(*this))==0; }
 		bool operator!=( const iterator& rhs ) const { return memcmp(this,&rhs,sizeof(*this))!=0; }
-	
+
 	protected:
 		uint	index, parent;
 		mesh*	root;
@@ -473,7 +473,7 @@ struct mesh
 	uint	instance_count=1;	// instances are physically added into objects
 
 	// proxy mesh
-	mesh*	proxy=nullptr;		// created and released in GL_Mesh 
+	mesh*	proxy=nullptr;		// created and released in GL_Mesh
 
 	// auxiliary information
 	char	file_path[PATH_MAX]={};	// mesh file path (e.g., *.obj, *.obj.7z)
@@ -609,7 +609,7 @@ __noinline int find_up_vector( const mesh* p_mesh )
 		if(!strstr(strlwr(buff),f)||o.box.max_extent()<(o.box.min_extent()*4.0f)) continue;
 		d[o.box.min_axis()]++; break;
 	}
-	
+
 	int a=2;
 	if(d[0]>0&&d[0]>d[2]) a=0;
 	if(d[1]>0&&d[1]>d[a]) a=1;
@@ -637,7 +637,7 @@ __noinline vector<uint> get_box_line_indices()
 __noinline mesh* create_box_mesh( bbox box=bbox{vec3(-1.0f),vec3(1.0f)}, const char* name="box", bool double_sided=false, bool quads=false )
 {
 	mesh* m = new mesh();
-	
+
 	// create box vertices
 	for( auto& c : box.corners() ) m->vertices.emplace_back(vertex{c,vec3(0.0f),vec2(0.0f)});
 
@@ -672,7 +672,7 @@ __noinline mesh* mesh::create_proxy( bool double_sided, bool quads )
 	// vertex/index definitions of a default box
 	const auto corners = bbox(-1.0f,1.0f).corners();
 	const auto tri_indices = get_box_indices(double_sided,quads);
-		
+
 	// create vertices/indices for triangles
 	auto& i = proxy->indices;
 	auto& v = proxy->vertices;

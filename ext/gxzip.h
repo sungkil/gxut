@@ -40,7 +40,7 @@ struct binary_cache
 	virtual uint crc()=0; // implement and augment crc for signature detection
 	virtual bool open( bool read=true );
 	void close();
-	
+
 	operator FILE* () const { return fp; }
 	path zip_path(){ return _file_path.empty()?"":_file_path+".zip"; }
 	int writef( __printf_format_string__ const char* fmt, ... ){ if(!fp) return EOF; va_list a; va_start(a,fmt); int r=_vfprintf_l(fp,fmt,NULL,a); va_end(a); return r; }

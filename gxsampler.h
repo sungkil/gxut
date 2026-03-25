@@ -35,7 +35,7 @@ struct isampler_t
 	enum surface_t { SQUARE, CIRCLE, HEMISPHERE, COSHEMI, SPHERE, CYLINDER }; // COSHEMI: cosine-weighted hemisphere
 	static vector<string> model_names(){ return {"simple","Poisson","Halton","Hammersley"}; }
 	static vector<string> surface_names(){ return {"square","circle","hemisphere","coshemi","sphere","cylinder"}; }
-	
+
 	model_t		model=POISSON;
 	surface_t	surface=CIRCLE;
 	uint		seed=5489u; // std::mt19937::default_seed
@@ -71,7 +71,7 @@ struct sampler_t : public isampler_t
 
 	void		resize( size_t size ){ _data.resize(const_cast<uint&>(n)=uint(size)); resample(); }
 	uint		resample(); // return the number of generated samples
-	
+
 protected:
 	void		_reshape( vec4* v, surface_t dst );
 	void		_make_centered();
@@ -112,7 +112,7 @@ struct bridson_t
 	vector<cell>	grid;
 	vector<vec2>	samples;
 	std::deque<sample>	active_queue;
-	
+
 	bridson_t( bool circ ):circular(circ){};
 	void reset( const int count, float radius ){ r=radius; grid_size=int(ceil(1.0f/cell_size())); grid.resize(size_t(grid_size)*grid_size); for(auto& c:grid) c.clear(); active_queue.clear(); samples.clear(); samples.reserve(size_t(count)*3); } /* 3 times more samples */
 	float cell_size(){ return r/1.4142135623730950488f; }
@@ -120,7 +120,7 @@ struct bridson_t
 	bool in_grid( ivec2 v ){ return v.x>=0&&v.x<grid_size&&v.y>=0&&v.y<grid_size; }
 	ivec2 to_grid( vec2& v ){ return ivec2(int((v.x/cell_size())), int((v.y/cell_size()))); }
 	sample gen_intial_sample(){ sample s={}; s.pos=vec2(0.5f,0.5f); s.tc = to_grid(s.pos); return s; }
-	sample gen_annulus( vec2 p ){ sample s={}; float t = prand()*pi2; s.pos = p + vec2(cosf(t),sinf(t))*(prand()+1.0f)*r; s.tc = to_grid(s.pos); return s; } 
+	sample gen_annulus( vec2 p ){ sample s={}; float t = prand()*pi2; s.pos = p + vec2(cosf(t),sinf(t))*(prand()+1.0f)*r; s.tc = to_grid(s.pos); return s; }
 	static array<ivec2,20> gen_neighbors(){ array<ivec2,20> n={}; for(int k=0,y=-2;y<3;y++)for(int x=-2;x<3;x++){ if((x==0&&y==0)||(abs(x)==2&&abs(y)==2)) continue; n[k++]=ivec2(x,y); } return n; }
 
 	int generate( const int count, float radius );
@@ -169,7 +169,7 @@ __noinline int bridson_t::generate( const int count, float radius )
 	// 0. reset all
 	reset(count,radius);
 	static const array<ivec2,20> neighbors = gen_neighbors();
-		
+
 	// 1. generate first sample
 	const float r2 = r*r;
 	sample s0 = std::move(gen_intial_sample());
@@ -182,7 +182,7 @@ __noinline int bridson_t::generate( const int count, float radius )
 	{
 		int j = urand()%active_queue.size();
 		sample p = active_queue[j];
-			
+
 		static const int kn=30;
 		int k; for(k=0;k<kn;k++)
 		{
@@ -210,7 +210,7 @@ __noinline int bridson_t::generate( const int count, float radius )
 
 		if(k==kn) active_queue.erase(active_queue.begin()+j);
 	}
-		
+
 	return int(samples.size());
 }
 
@@ -322,7 +322,7 @@ inline void sampler_t::_reshape( vec4* v, surface_t dst )
 {
 	if(empty()||dst==SQUARE) return; // square in [0,1]
 	if(dst==CYLINDER&&model!=HALTON) return void(printf("[Sampler] cylindrical sampling supports only Halton sequences\n" ));  // cylinder only for Halton sampling
-	
+
 	if(dst==CIRCLE||dst==COSHEMI||dst==CYLINDER)
 	{
 		// coshemi: apply Nusselt analog (2D uniform is a top view of cosine-weighted hemisphere)

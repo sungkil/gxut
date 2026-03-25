@@ -162,7 +162,7 @@ __noinline bool parser_t::save_as( const path_t& file_path )
 		buff+=format(L"%s = %s\n",atow(e->key.c_str()),atow(e->value.c_str()));bLine0=false;
 		it++;
 	}
-	
+
 	bool file_exists = access(file_path.c_str(),0)==0;
 	bool b_hidden_file=false;if(file_exists&&(GetFileAttributesW(::atow(file_path.c_str()))&FILE_ATTRIBUTE_HIDDEN)){b_hidden_file=true;SetFileAttributesW(atow(file_path.c_str()),GetFileAttributesW(atow(file_path.c_str()))&(~FILE_ATTRIBUTE_HIDDEN) );} // save and remove hidden attribute
 	FILE* fp=nullptr; for(uint k=0;fp==nullptr&&k<20;k++){ fp=fopen(file_path.c_str(), "w,ccs=UTF-8"); Sleep(5); } // wait 100ms for busy writing
@@ -171,7 +171,7 @@ __noinline bool parser_t::save_as( const path_t& file_path )
 	fputws(buff.c_str(),fp);
 	fclose(fp);
 	if(b_hidden_file) SetFileAttributesW(atow(file_path.c_str()),GetFileAttributesW(atow(file_path.c_str()))|FILE_ATTRIBUTE_HIDDEN ); // restore hidden attribute
-	
+
 	return true;
 }
 

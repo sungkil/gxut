@@ -153,7 +153,7 @@ struct context_t
 	virtual void play()=0; // run current animation seleted in Animation plugin
 	virtual void stop()=0; // stop current animation seleted in Animation plugin
 	virtual bool load_xml( const char* file_path )=0; // load from camera.xml or *.rex
-	
+
 	virtual bool empty() const=0;
 	virtual size_t size() const=0;
 	virtual void clear()=0;

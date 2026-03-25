@@ -32,13 +32,12 @@ namespace gx {
 struct timer_t
 {
 	double x, y;
-	
+
 	__forceinline timer_t(){ x=now(); }
 	__forceinline void clear(){ x=y=now(); }
 	__forceinline double begin(){ return x=now(); }
 	__forceinline double end(){ return (y=now())-x; }
 	__forceinline double delta() const { return y-x; }
-	
 	__forceinline static double now(){ return std::chrono::duration_cast<std::chrono::duration<double,std::milli>>(std::chrono::high_resolution_clock::now()-__epoch()).count(); }
 	__forceinline static timer_t& singleton(){ static timer_t* i=new timer_t(); return *i; }
 

@@ -38,14 +38,14 @@ struct argument_t
 {
 	argument_t& add_help( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); vector<char> buff(vsnprintf(0,0,fmt,a)+1); vsnprintf(&buff[0],buff.size(),fmt,a); va_end(a); shelp=trim(&buff[0],"\n"); return *this; }
 	argument_t& set_default( const char* v ){ parsed.value=atow(v); return *this; }
-	argument_t& set_optional(){ optional=true; return *this; } 
-	
+	argument_t& set_optional(){ optional=true; return *this; }
+
 protected:
 	string		name;
 	string		shelp;
 	bool		optional=false;
 	struct parsed_t { wstring value; void clear(){ value.clear(); } } parsed;
-	
+
 	friend struct parser_t;
 	bool value_exists() const { return !parsed.value.empty(); }
 	void clear(){ parsed.clear(); } // clear values
@@ -61,7 +61,7 @@ struct option_t
 	option_t& add_help( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); vector<char> buff(vsnprintf(0,0,fmt,a)+1); vsnprintf(&buff[0],buff.size(),fmt,a); shelp=trim(&buff[0],"\n"); va_end(a); return *this; }
 	option_t& add_break( int count=1 ){ break_count+=count; return* this; }
 	option_t& set_default( const char* arg ){ parsed.value=atow(arg); return *this; }
-	option_t& set_hidden(){ hidden=true; return *this; } 
+	option_t& set_hidden(){ hidden=true; return *this; }
 
 protected:
 	friend struct parser_t;
@@ -113,7 +113,7 @@ struct parser_t
 	inline bool command_exists( const string& name ) const;
 	inline bool callback_exists(){ parser_t* p=this;while(p&&!p->pf_callback) p=p->parent; return p&&p->pf_callback?true:false; }
 	inline bool help_exists() const { return parsed.b.help_exists; }
-		
+
 	// multi-name query for exists
 	inline bool exists() const { return false; }  // terminator for template argument-pack expansion
 	template<typename... Args> bool exists( const char* name, Args... args ) const;
@@ -146,7 +146,7 @@ struct parser_t
 	template<> inline uint		get<uint>( const string& name ) const { return uint(atoi(get<string>(name).c_str())); }
 	template<> inline float		get<float>( const string& name ) const { return float(atof(get<string>(name).c_str())); }
 	template<> inline double	get<double>( const string& name ) const { return atof(get<string>(name).c_str()); }
-	
+
 	// get multiple values
 	template <class T=string>	vector<T> others( const string& name="" ) const;
 	template <>					vector<string> others( const string& name ) const;
@@ -158,7 +158,7 @@ struct parser_t
 	// error handling, debugging
 	bool exit( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); const char* w=vformat(fmt,a); va_end(a); char msg[2048]; snprintf( msg, 2048, "[%s] %s\nUse -h option to see usage.\n", name(), trim(w,"\n") ); fprintf( stdout, msg ); return false; }
 	void dump();
-	
+
 protected:
 
 	struct attribute_t
@@ -263,7 +263,7 @@ inline void parser_t::select_parser_impl( parser_t*& p, int argc, wchar_t** argv
 {
 	p->b_command_found = true;
 	int next=p->attrib.depth+1; if(argc<=next) return;
-	
+
 	const wchar_t* a=trim(argv[next]); if(!a||!*a||wcsicmp(a,L"help")==0) return;
 	string arg=wtoa(a); if(arg[0]==L'-') return; // option should not precede the command
 	for(auto* c:p->commands)
@@ -303,7 +303,7 @@ inline bool parser_t::parse( int argc, wchar_t* argv[], bool b_validate )
 	for( int k=arg_begin(); k < argc; k++ )
 	{
 		const wchar_t* a = argv[k];
-		
+
 		if(!a[0]) continue;
 		else if(option_needs_subarg) // a[0]!=L'-'
 		{

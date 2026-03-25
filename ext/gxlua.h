@@ -54,7 +54,7 @@ struct stack_t
 
 	// element properties
 	size_t raw_len( int i ) const { return lua_rawlen(L,i); }
-	
+
 	// push
 	template <class T=void> void push( T v ) const {}
 	template<> void push<bool>( bool b ) const {		lua_pushboolean(L,b?1:0); }
@@ -64,7 +64,7 @@ struct stack_t
 	template<> void push<void*>( void* ptr ) const {	lua_pushlightuserdata(L,ptr); }
 	template<> void push<string>( string s ) const {	lua_pushstring(L,s.c_str()); }
 	template<> void push<lua_CFunction>( lua_CFunction f ) const {	lua_pushcclosure(L,f,0); }
-	
+
 	void push_nil() const { lua_pushnil(L); }
 	void push_string( const string& s ) const { lua_pushstring(L,s.c_str()); }
 	void push_string( const char* s ) const { lua_pushstring(L,s); }
@@ -85,7 +85,7 @@ struct stack_t
 	template <> uint			value<uint>( int i )		const { return (uint) lua_tointegerx(L,i,nullptr); }
 	template <> float			value<float>( int i )		const { return (float) lua_tonumberx(L,i,nullptr); }
 	template <> double			value<double>( int i )		const { return (double) lua_tonumberx(L,i,nullptr); }
-	
+
 	// special accessors
 	void*		pointer( int i )	const { return (void*) lua_topointer(L,i); }
 	void*		userdata( int i )	const { return lua_touserdata(L,i); }
@@ -96,7 +96,7 @@ struct stack_t
 struct lua_state_t
 {
 	union { lua_State* L; stack_t stack; };
-	
+
 	// basic functions
 	lua_state_t(){ L=nullptr; }
 	~lua_state_t(){ release(); }
@@ -123,11 +123,11 @@ struct lua_state_t
 		if(!pcall(nargs,nresults)){ printf( "script fails: %s\n", error() ); return false; }
 		return true;
 	}
-	
+
 	// utilities: garbage collection, error handling
 	void gc(){ lua_gc( L, LUA_GCCOLLECT, 0 ); }
-	const char* error(){ static string msg; msg=lua_tolstring(L,-1,nullptr); lua_settop(L,-2); return msg.c_str(); }	
-	
+	const char* error(){ static string msg; msg=lua_tolstring(L,-1,nullptr); lua_settop(L,-2); return msg.c_str(); }
+
 	// globals
 	bool get_global( const char* name ){ lua_getglobal(L,name); bool b=lua_toboolean(L,-1)!=0; if(!b) lua_settop(L,-2); return b; }
 	void set_global( const char* name ){ lua_setglobal(L,name); }

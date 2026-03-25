@@ -57,7 +57,7 @@ inline BITMAPINFO* create_font_bitmap_info( int width, int height, int channels 
 	bmih->biWidth = width;
 	bmih->biHeight = height; // bottom up
 	RGBQUAD* palette = bmp_info->bmiColors;
- 	for(int i=0;i<256;i++){ palette[i].rgbBlue=palette[i].rgbGreen=palette[i].rgbRed=BYTE(i); palette[i].rgbReserved=0; }
+	for(int i=0;i<256;i++){ palette[i].rgbBlue=palette[i].rgbGreen=palette[i].rgbRed=BYTE(i); palette[i].rgbReserved=0; }
 	return bmp_info;
 }
 
@@ -74,8 +74,8 @@ inline font_engine::~font_engine()
 inline font_engine::font_engine( const char* face, int point_size, uchar3 color, uchar3 shadow, bool vflip ):vflip_table(vflip)
 {
 	if(!(hDC=CreateCompatibleDC(nullptr))){ printf( "font_engine: hDC==nullptr\n" ); return; }
-	
-	// monochrome memory DC 
+
+	// monochrome memory DC
 	dpi = GetDeviceCaps(hDC,LOGPIXELSY);
 	POINT pt={0,dpi*point_size/72};DPtoLP(hDC,&pt,1);
 
@@ -169,7 +169,7 @@ inline bool font_engine::raster( wchar_t c )
 		DrawTextW( hDC, buff, -1, &rc, DT_SINGLELINE|DT_LEFT|DT_VCENTER|DT_NOCLIP );
 		GetDIBits( hDC, bitmap, 0, h, b->data, bitmap_info, DIB_RGB_COLORS );
 	}
-	
+
 	bool wide=false;
 	for(int y=0, kn=int(bmps.size());y<h;y++)
 	{

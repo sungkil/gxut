@@ -74,7 +74,7 @@ inline bool		   atob( const char* a ){ return a&&*a&&(stricmp(a,"true")==0||atoi
 inline uint		   atou( const char* a ){ char* e=nullptr;uint v=(uint)strtoul(a,&e,10); return v; }
 inline int64_t	   atoill( const char* a ){ char* e=nullptr;int64_t v=strtoll(a,&e,10); return v; }
 inline uint64_t	   atoull( const char* a ){ char* e=nullptr;uint64_t v=strtoull(a,&e,10); return v; }
-  
+
 // comma separation for size_t
 template <std::unsigned_integral T> inline const char* tocomma( T u ){ uint64_t t=uint64_t(u); const char* a=format("%llu",t); if(u<1000) return a; size_t l=strlen(a); vector<char> v(a,a+l+1); for(uint k=((l%3)?(l%3):3);k<l;k+=4,l++) v.emplace(v.begin()+k,','); return __strdup(v.data()); }
 template <std::signed_integral T> inline const char* tocomma( T i ){ const char* s=tocomma(uint64_t(abs(i))); return i<0?format("-%s",s):s; }

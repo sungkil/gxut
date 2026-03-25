@@ -120,7 +120,7 @@ vector<mtl::section_t> parse_mtl( path file_path )
 
 	if(!file_path.exists()){ printf("%s(): %s not exists\n", __func__, file_path.c_str() ); return v; }
 	FILE* fp = file_path.fopen("r"); if(!fp){ printf("%s(): unable to open %s\n", __func__, file_path.c_str()); return v; }
-	
+
 	// fill no-name header entry
 	v.emplace_back(mtl::section_t());
 
@@ -133,7 +133,7 @@ vector<mtl::section_t> parse_mtl( path file_path )
 		{
 			if(*b)
 			{
-				if(!v.back().name.empty()) v.emplace_back(mtl::section_t()); 
+				if(!v.back().name.empty()) v.emplace_back(mtl::section_t());
 				v.back().items.emplace_back(mtl::item_t("",b));
 			}
 			continue;
@@ -142,7 +142,7 @@ vector<mtl::section_t> parse_mtl( path file_path )
 		auto vs = std::move(explode(b));
 		if(vs.size()<2){ b_dirty=true; continue; } // cull no-value lines
 		const string& key = vs[0];
-		
+
 		if(stricmp(key.c_str(),"newmtl")==0)
 		{
 			v.emplace_back(mtl::section_t(vs[1]));
@@ -210,7 +210,7 @@ bool load( path file_path, vector<material_impl>& materials, bool with_cache )
 
 	// pre-parse raw lines
 	vector<mtl::section_t> sections = std::move(parse_mtl(file_path)); if(sections.empty()) return false;
-	
+
 	// default material for light source (mat_index==0 or emissive>0)
 	materials.clear();
 
@@ -234,7 +234,7 @@ bool load( path file_path, vector<material_impl>& materials, bool with_cache )
 		"Ir",		// intensity from reflected direction
 		"It",		// intensity from transmitted direction
 	};
-	
+
 	// start loading
 	for( auto& section : sections )
 	{
@@ -363,7 +363,7 @@ bool load( path file_path, vector<material_impl>& materials, bool with_cache )
 	// update file after bump_as_normal
 	if(b_dirty) save_mtl( file_path, sections, opt_time );
 	if(!with_cache) printf( "Loading %s ... completed in %.2f ms\n", file_path.name(), timer.end() );
-	
+
 	return true;
 }
 
@@ -465,7 +465,7 @@ static bool generate_normal_map( path normal_path, path bump_path, path mtl_path
 	float bump_scale = min(1000.0f,1.0f/(1.0f+0.000001f));
 	uchar *B=bump->data, *N=normal->data;
 	int NW=int(normal->stride()), BW=int(bump->stride());
-	
+
 	for( int y=0; y<yn; y++ )
 	{
 		uchar3* dst = (uchar3*)(N+y*NW);
@@ -507,12 +507,12 @@ static path get_normal_path( const path& bump_path, nocase::map<path,path>& bton
 
 	path base = bump_path.remove_extension();
 	path ext = bump_path.extension();
-	
+
 	// remove postfix for bump
 	if(base.size()>4&&stristr(substr(base.c_str(),-4),"bump")) base=path(substr(base.c_str(),0,-4))+"norm";
 	else if(base.back()==L'b') base.back()=L'n';
 	else base+="n";
-	
+
 	for( int k=0; k<8; k++, base+="n" )
 	{
 		path dst = base+"."+ext;
@@ -541,7 +541,7 @@ static float optimize_textures( path file_path, vector<mtl::section_t>& sections
 			src = dst;
 			b_dirty = true;
 		}
-	
+
 	// find valid existing images
 	nocase::set<path> used_images;
 	for( auto& section : sections ) for( auto* t : section.maps() )
@@ -572,7 +572,7 @@ static float optimize_textures( path file_path, vector<mtl::section_t>& sections
 		path norm_path = get_normal_path( b->map_path(), bton, used_images ); if(norm_path.empty()) continue;
 		if(!norm_path.exists()&&!generate_normal_map( norm_path, b->map_path(), file_path )) continue;
 		n = m.add_norm( norm_path.relative(mtl_dir).c_str() ); if(!n) continue;
-		
+
 		used_images.insert(norm_path);
 		bton[b->map_path()] = norm_path;
 		b_dirty=true;

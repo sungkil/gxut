@@ -45,11 +45,11 @@ __noinline image* load_image( path file_path, bool vflip=true, bool force_rgb=tr
 	int w, h, c; // comp returns the original channels
 	stbi_set_flip_vertically_on_load(vflip?1:0);
 	stbi_uc* data = stbi_load( file_path.c_str(), &w, &h, &c, force_rgb?3:0); if(!data) return nullptr;
-	
+
 	image* i = new image_header(w,h,8,c);
 	if(i->stride()==(w*c)) // already 4-byte alinged
 	{
-		i->data = data; 
+		i->data = data;
 	}
 	else // apply 4-byte alignment
 	{
@@ -57,22 +57,22 @@ __noinline image* load_image( path file_path, bool vflip=true, bool force_rgb=tr
 		for( int y=0; y<h; y++ ) memcpy( i->ptr<uchar>(y), data+y*w*c, w*c );
 		stbi_image_free(data);
 	}
-	
+
 	return i;
 }
 
 __noinline bool save_image( image* i, path file_path, bool vflip=true, bool rgb_to_bgr=false, int jpeg_quality=95 )
 {
 	if(!i||!i->data) return false;
-	
+
 	// save only jpeg or png
 	struct { bool jpg=false, png=false; } b;
 	if(const auto e=file_path.extension(); e=="jpg"||e=="jpeg") b.jpg=true; else if(e=="png") b.png=true;
 	else { printf("%s(): unsupported extension (%s)\n", __func__, e.c_str() ); return false; }
-	
+
 	int w=i->width, h=i->height, c=i->channels, sr=int(i->stride()), dr=w*c;
 	struct { uchar* data; int stride; } output = {i->data,sr};
-	
+
 	if((b.jpg&&sr>dr)||rgb_to_bgr)
 	{
 		static uchar* t=nullptr; static size_t tz=0; if(tz<sr*h) t=realloc<uchar>(t,tz=sr*h);

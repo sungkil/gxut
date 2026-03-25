@@ -507,7 +507,7 @@ template <floating_point T> struct tmat4 : public imat<tmat4,tvec4,T,4>
 	__forceinline static tmat4 shear( const V2& yz, const V2& zx, const V2& xy ){ tmat4 m; m._01=yz.x; m._02=yz.y; m._10=zx.y; m._12=zx.x; m._20=xy.x; m._21=xy.y; return m; }
 	__forceinline static tmat4 rotate( const V3& from, const V3& to ){ return M3::rotate(from,to); }
 	__forceinline static tmat4 rotate( const V3& axis, T angle ){ return M3::rotate(axis,angle); }
-	
+
 	__forceinline static tmat4 look_at( const V3& eye, const V3& center, const V3& up ){ return look_to(eye,center-eye,up); }
 	__forceinline static tmat4 look_at_inverse( const V3& eye, const V3& center, const V3& up ){ look_to_inverse(eye,center-eye,up); }
 	__forceinline static tmat4 look_to( const V3& eye, const V3& dir, const V3& up ){ V3 n=-dir.normalize(), u=(up.cross(n)).normalize(), v=n.cross(u); tmat4 m; m._00=u.x;m._01=u.y;m._02=u.z; m._03=-u.dot(eye); m._10=v.x;m._11=v.y;m._12=v.z; m._13=-v.dot(eye); m._20=n.x;m._21=n.y;m._22=n.z; m._23=-n.dot(eye); return m; }
@@ -658,7 +658,7 @@ __forceinline vec2 normVec3BitsToVec2( vec3 v )
 {
 	static const uint cap=21, hcap=10, cmask=0x1fffff, hmask=0x3ff;	// channel capacity, half capacity, channel capacity mask (=(1<<cap)-1), half capacity mask (=(1<<hcap)-1)
 	uvec3 u = uvec3(uint(v.x*cmask),uint(v.y*cmask),uint(v.z*cmask));
-	return vec2( uintBitsToFloat(u.x|((u.z&~hmask)<<(cap-hcap))), uintBitsToFloat((u.y<<1)|(u.z&hmask)<<(cap+1)|1) ); // bits = ( [z.11,x.21], [z.10,y.21,validity-bit] ) 
+	return vec2( uintBitsToFloat(u.x|((u.z&~hmask)<<(cap-hcap))), uintBitsToFloat((u.y<<1)|(u.z&hmask)<<(cap+1)|1) ); // bits = ( [z.11,x.21], [z.10,y.21,validity-bit] )
 }
 
 __forceinline vec3 vec2BitsToNormVec3( vec2 v )

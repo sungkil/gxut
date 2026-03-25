@@ -56,7 +56,7 @@
 	#endif
 	#define gxHasExtension(name)	GX_ARB_##name
 #endif
-	
+
 #ifdef GX_OPENGL_GLFX
 	#if __has_include(<GL/glfx.h>)
 		#include <GL/glfx.h>
@@ -174,11 +174,11 @@ template <> constexpr	GLenum gxTypeToInternalFormat<float>(){	return GL_R32F; }
 //*************************************
 namespace gl {
 //*************************************
-	
+
 inline namespace context
 {
 	inline bool is_core_profile(){ static GLint mask=0; if(mask==0) glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &mask); return mask==GL_CONTEXT_CORE_PROFILE_BIT; }
-	inline bool is_compatibility_profile(){ static GLint mask=0; if(mask==0) glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &mask); return mask==GL_CONTEXT_COMPATIBILITY_PROFILE_BIT; } 
+	inline bool is_compatibility_profile(){ static GLint mask=0; if(mask==0) glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &mask); return mask==GL_CONTEXT_COMPATIBILITY_PROFILE_BIT; }
 }
 
 // simple GL/WGL extension loader
@@ -252,7 +252,7 @@ struct timer_t : public Object
 	double	delta(){ if(!_complete) finish(); return y-x; }
 	double	now(){ return (gxGetInteger64v(GL_TIMESTAMP))/1000000.0; }
 	void	clear(){ _complete=true; }
-	
+
 protected:
 	const GLuint	_ID1=0;
 	bool			_complete=false;
@@ -306,9 +306,9 @@ struct Buffer : public Object
 	GLint usage(){ return parameteriv(GL_BUFFER_USAGE); }
 
 protected:
-		
+
 	size_t _size=0;
-	
+
 	// instance-related for batch delete
 	static inline set<Buffer*> instances;
 };
@@ -341,7 +341,7 @@ inline gl::Buffer* gxCreateBuffer( const char* name, GLenum target, GLsizeiptr s
 {
 	// glCreateBuffers() also initializes objects, while glGenBuffers() do not initialze until bind() is called
 	GLuint ID; if(glCreateBuffers) glCreateBuffers(1,&ID); else glGenBuffers(1,&ID); if(ID==0){ printf( "%s(): unable to create buffer %s\n", __func__, name ); return nullptr; }
-	
+
 	gl::Buffer* buffer = new gl::Buffer(ID,name,target,size);
 	if(persistent) storage_flags |= GL_MAP_PERSISTENT_BIT|GL_MAP_COHERENT_BIT;
 	if(glNamedBufferStorage) glNamedBufferStorage(ID,size,data,storage_flags);
@@ -411,7 +411,7 @@ inline gl::VertexArray* gxCreateVertexArray( const char* name, const vertex* p_v
 
 	gl::Buffer* vbo = gxCreateBuffer( format("%s.VTX",name), GL_ARRAY_BUFFER, sizeof(vertex)*vertex_count, usage, p_vertices, 0 ); if(!vbo){ printf( "%s(): unable to create vertex_buffer %s.VTX\n", __func__, name ); return nullptr; }
 	gl::Buffer* ibo = p_indices&&index_count ? gxCreateBuffer( format("%s.IDX",name), GL_ELEMENT_ARRAY_BUFFER, sizeof(uint)*index_count, usage, p_indices ) : nullptr; if(p_indices&&index_count&&!ibo){ printf( "%s(): unable to create index buffer %s.IDX\n", __func__, name ); return nullptr; }
-	
+
 	va->vertex_buffer = vbo;
 	va->index_buffer = ibo;
 	va->vertex_count = vertex_count;
@@ -736,7 +736,7 @@ __noinline gl::Texture* gxCreateTexture2D( const char* name, GLint levels, GLsiz
 	else if(target==GL_TEXTURE_2D_ARRAY){				glTexStorage3D( target, levels, internal_format, width, height, layers );	if(data) glTexSubImage3D( target, 0, 0, 0, 0, width, height, layers, format, type, data ); }
 	else if(target==GL_TEXTURE_2D_MULTISAMPLE){			glTexStorage2DMultisample(target, multisamples, internal_format, width, height, GL_TRUE ); }
 	else if(target==GL_TEXTURE_2D_MULTISAMPLE_ARRAY){	glTexStorage3DMultisample(target, multisamples, internal_format, width, height, layers, GL_TRUE ); }
-	GLenum e1 = glGetError(); // texture error 
+	GLenum e1 = glGetError(); // texture error
 	if(e1!=GL_NO_ERROR&&e1!=e0){ printf( "%s(%s): %s\n", __func__, name, gxGetErrorString(e1) ); delete texture; return nullptr; }
 
 	// test if the format is immutable
@@ -977,7 +977,7 @@ __noinline gl::Texture* gxCreateTextureView(gl::Texture* src, GLuint min_level, 
 
 	// create view and set attributes
 	glTextureView( t1->ID, target, src->ID, internal_format, min_level, levels, min_layer, layers );
-	
+
 	// set dimensions
 	t1->_multisamples = src->_multisamples;
 	t1->_width	= src->width(min_level);
@@ -1030,7 +1030,7 @@ struct Framebuffer : public Object
 	void set_color_depth_mask( bool mask, bool b_force_mask=false ){ set_color_mask(mask,b_force_mask); set_depth_mask(mask,b_force_mask); }
 	void set_read_buffer( GLenum mode ){ if(glNamedFramebufferReadBuffer) glNamedFramebufferReadBuffer( ID, mode ); else glReadBuffer( mode ); }
 	void set_draw_buffer( GLenum mode ){ if(glNamedFramebufferDrawBuffer) glNamedFramebufferDrawBuffer( ID, mode ); else glDrawBuffer( mode ); }
-		
+
 	static void set_state( bool b_depth_test, bool b_cull_face, bool b_blend=false, bool b_wireframe=false ){ b_depth_test?glEnable(GL_DEPTH_TEST):glDisable(GL_DEPTH_TEST); b_cull_face?glEnable(GL_CULL_FACE):glDisable(GL_CULL_FACE); b_blend?glEnable(GL_BLEND):glDisable(GL_BLEND); glPolygonMode(GL_FRONT_AND_BACK,b_wireframe?GL_LINE:GL_FILL); }
 	static void get_state( bool* b_depth_test, bool* b_cull_face, bool* b_blend, bool* b_wireframe=nullptr ){ if(b_depth_test) *b_depth_test=gxGetBooleanv(GL_DEPTH_TEST); if(b_cull_face) *b_cull_face=gxGetBooleanv(GL_CULL_FACE); if(b_blend) *b_blend=gxGetBooleanv(GL_BLEND); if(b_wireframe){ GLint pm[2]; glGetIntegerv(GL_POLYGON_MODE,pm); *b_wireframe=pm[0]==GL_LINE; } }
 	void push_state(){ GLint pm[2]; glGetIntegerv(GL_POLYGON_MODE,pm); _state_stack={gxGetBooleanv(GL_DEPTH_TEST),gxGetBooleanv(GL_CULL_FACE),gxGetBooleanv(GL_BLEND),pm[0]==GL_LINE,pm[1]==GL_LINE}; }
@@ -1102,7 +1102,7 @@ inline void Framebuffer::bind( gl::Texture* t0, GLint layer0, GLint mipLevel0, g
 	// bind depth buffer, when depth test is enabled
 	bool b_multisample = _active_targets[0]==GL_TEXTURE_2D_MULTISAMPLE||_active_targets[0]==GL_TEXTURE_2D_MULTISAMPLE_ARRAY;
 	bind_depth_buffer( width, height, 1, b_multisample, b_multisample&&T[0]?T[0]->multisamples():1 );
-		
+
 	// set the draw buffers, even without attachments; then check the status
 	if(glNamedFramebufferDrawBuffers)	glNamedFramebufferDrawBuffers( ID, draw_buffer_count, draw_buffers() );
 	else								glDrawBuffers( draw_buffer_count, draw_buffers() );
@@ -1284,7 +1284,7 @@ struct Uniform
 	{
 		if(ID==-1) return "";
 		static float4 f; static int4 i; static uint4 u; static float m[16];
-			
+
 		switch(type)
 		{
 		case GL_FLOAT:				glGetUniformfv(program,ID,&f.x); return format("%g",f.x);
@@ -1429,11 +1429,9 @@ struct shader_source_t : public vector<named_string_t> // a list of source strin
 		}
 
 		if(TRIM_TRIPLE_NEWLINES){ for(int k=0;k<16&&strstr(f.c_str(),"\n\n\n");k++) f=str_replace(f.c_str(),"\n\n\n","\n\n"); }
-		f = str_replace(f.c_str(),";\nvoid main()\n\n{", ";\n\nvoid main()\n{" );
-			
-		return f;
+		return str_replace(f.c_str(),";\nvoid main()\n\n{", ";\n\nvoid main()\n{" );
 	}
-		
+
 	void flatten( const char* file_path ) const
 	{
 		path_t d=path_t(file_path).dir(); if(!d.exists()) d.mkdir();
@@ -1807,7 +1805,7 @@ inline void gxInfoLog( const char* name, const char* msg, const vector<gl::named
 inline GLuint gxCompileShader( GLenum shader_type, const char* name, const vector<gl::named_string_t>& source )
 {
 	vector<const char*> ps; for( auto& s : source ) ps.push_back(s.value.c_str());
-	
+
 	GLuint ID = glCreateShader( shader_type ); if(ID==0){ printf("%s(): unable to glCreateShader(%u)\n", __func__, shader_type); return 0; }
 	glShaderSource( ID, GLsizei(ps.size()), ps.data(), nullptr );
 	glCompileShader( ID );
@@ -2016,7 +2014,7 @@ struct effect_source_t : public vector<named_string_t>
 	void append( string name, string source ){ if(!source.empty()&&source.back()!='\n') source+='\n'; if(!name.empty()){for(auto& s:*this) if(stricmp(s.name.c_str(),name.c_str())==0){ s.value=source; return; }} emplace_back( value_type{name,source} ); }
 	bool replace( string _where, string name, string source ){ auto it=find(_where); if(it==end()) return false; it->name=name; if(!source.empty()&&source.back()!='\n') source+='\n'; it->value=source; return true; }
 	bool replace( iterator _where, string name, string source ){ if(_where==end()) return false; _where->name = name; if(!source.empty()&&source.back()!='\n') source+='\n'; _where->value = source; return true; }
-		
+
 	string get_name( int index ) const { if(!macro.empty()){ if(index==0) return "macro.fx"; index--; } return this->at(index).name; }
 	vector<string> names() const { vector<string> v; if(!macro.empty()) v.emplace_back("macro.fx"); for( auto& s:*this) v.emplace_back(s.name); return v; }
 	vector<string> sources() const { vector<string> v; if(!macro.empty()) v.emplace_back(macro.merge()); for( auto& s:*this) v.emplace_back(s.value); return v; }
@@ -2034,7 +2032,7 @@ __noinline void effect_source_t::preprocess_include()
 {
 	include = include.merge(); // merge with global
 	if(gxHasShaderInclude()) return;
-	
+
 	// fallback to hard include when ARB_shading_language_include is not supported
 	for( auto& [cn,cs] : include )
 	{
@@ -2052,7 +2050,7 @@ struct Effect : public Object
 {
 	Effect( GLuint ID, const char* name ) : Object(ID,name,0){ if(!(quad=gxCreateQuadVertexArray())) printf("[%s] unable to create quad buffer\n",name); }
 	~Effect() override { active_program=nullptr; if(quad){ delete quad; quad=nullptr; } if(!pts.empty()){ for(auto& it:pts) safe_delete(it.second); pts.clear(); } for(auto& it:uniform_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} uniform_buffer_map.clear(); for(auto& it:atomic_counter_buffer_map){if(it.second){ delete it.second; it.second=nullptr; }} atomic_counter_buffer_map.clear(); for(auto* p:programs) delete p; programs.clear(); if(glDeleteNamedStringARB&&!include_names.empty()){for(auto& i:include_names) glDeleteNamedStringARB(-1,i.c_str());} }
-	
+
 	static void unbind(){ glUseProgram(0); }
 	Program* bind( __printf_format_string__ const char* program_name, ... ){ char buff[1024]; va_list a;va_start(a,program_name);vsnprintf(buff,1024,program_name,a);va_end(a); active_program=get_program(buff); if(active_program){ active_program->bind(); } else{ active_program=nullptr; glUseProgram(0); } return active_program; }
 	Program* bind( uint index ){ active_program=get_program_by_index(index); if(active_program){ active_program->bind(); } else { active_program=nullptr; glUseProgram(0); } return active_program; }
@@ -2083,7 +2081,7 @@ struct Effect : public Object
 	gl::Buffer* get_uniform_buffer( const char* name, bool log=true ){ auto it=uniform_buffer_map.find(name); if(it!=uniform_buffer_map.end()) return it->second; if(log) oncef( "[%s] %s(): unable to find %s\n", this->_name, __func__, name ); return nullptr; }
 	GLint get_uniform_block_binding( const char* name ){ GLint binding=active_program?active_program->get_uniform_block_binding(name):-1; if(binding!=-1) return binding; for( auto* program : programs ){ GLint b=program->get_uniform_block_binding(name); if(b!=-1) return b; } return -1; }
 	gl::Buffer* bind_uniform_buffer( const char* name, gl::Buffer* ub=nullptr /* if nullptr, use default buffer */ ){ gl::Buffer* b=ub?ub:get_uniform_buffer(name); if(!b) return nullptr; GLuint binding=get_uniform_block_binding(name); if(binding!=GLuint(-1)){ if(b->target==GL_UNIFORM_BUFFER) b->bind_base(binding); else b->bind_base_as(GL_UNIFORM_BUFFER, binding); return b; } oncef("[%s] %s(): unable to find uniform buffer binding %s\n", this->_name, __func__, name); return nullptr; }
-	
+
 	// effect-builtin atomic counter buffer
 	gl::Buffer* get_or_create_atomic_counter_buffer( const char* name ){ gl::Buffer* b=get_atomic_counter_buffer(name,false); if(b) return b; b=gxCreateBuffer(name,GL_ATOMIC_COUNTER_BUFFER,sizeof(uint),GL_DYNAMIC_DRAW,nullptr); if(!b){ printf("[%s] unable to create atomic_counter buffer [%s]\n", this->_name, name); return nullptr; } return atomic_counter_buffer_map[name]=b; }
 	gl::Buffer* get_atomic_counter_buffer( const char* name, bool log=true ){ auto it=atomic_counter_buffer_map.find(name); if(it!=atomic_counter_buffer_map.end()) return it->second; if(log) oncef( "[%s] %s(): unable to find %s\n", this->_name, __func__, name ); return nullptr; }
@@ -2124,7 +2122,7 @@ struct Effect : public Object
 	std::map<string, Buffer*>		atomic_counter_buffer_map; // effect-create instance of atomic counter buffer
 	std::map<uint64_t,VertexArray*>	pts;				// point vertex array
 	VertexArray*					quad=nullptr;
-	
+
 protected:
 
 	Program* find_program_from_uniform( const char* name, const char* func=nullptr )
@@ -2213,7 +2211,7 @@ inline gl::Effect* __gxCreateEffectImpl( gl::Effect* parent, const char* fxname,
 		glNamedStringARB(GL_SHADER_INCLUDE_ARB,-1,i.name.c_str(),-1,i.value.c_str() );
 		e->include_names.emplace(i.name);
 	}}
-	
+
 	uint crc0 = source.include.crc();
 	crc0 = crc32(crc0,__TIMESTAMP__,strlen(__TIMESTAMP__));
 	for( int k=0, kn=parser->program_count(); k<kn; k++ )
@@ -2226,7 +2224,7 @@ inline gl::Effect* __gxCreateEffectImpl( gl::Effect* parent, const char* fxname,
 			for( int i=0, ni=int(ev.size()); i<ni; i++ ) ns.emplace_back( gl::named_string_t{source.get_name(i), ev[i]} );
 			ss[parser->shader_type(k,j)] = ns;
 		}
-		
+
 		gl::Program* program = gxCreateProgram(fxname?fxname:"",parser->program_name(k),ss,crc0); if(!program){ glfxDeleteParser(&parser); if(e!=parent) delete e; return nullptr; }
 		e->append_program(program);
 	}

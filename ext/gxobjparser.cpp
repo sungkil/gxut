@@ -84,7 +84,7 @@ namespace obj::cache
 {
 	inline uint get_parser_id( path file_path )
 	{
-		static const string codestamp = 
+		static const string codestamp =
 			string(__GX_MESH_H_TIMESTAMP__)+
 			string(__GX_OBJPARSER_H_TIMESTAMP__)+
 			string(__GX_OBJPARSER_CPP_TIMESTAMP__)+
@@ -126,7 +126,7 @@ namespace obj::cache
 		fprintf( fp, "geometry_count = %u\n", uint(p_mesh->geometries.size()) );
 		fprintf( fp, "vertex_count = %u\n", uint(p_mesh->vertices.size()) );
 		fprintf( fp, "index_count = %u\n", uint(p_mesh->indices.size()) );
-	
+
 		// save bound
 		fprintf( fp, "bound = %f %f %f %f %f %f\n", p_mesh->box.m[0], p_mesh->box.m[1], p_mesh->box.m[2], p_mesh->box.M[0], p_mesh->box.M[1], p_mesh->box.M[2]);
 
@@ -187,7 +187,7 @@ namespace obj::cache
 		mesh* p_mesh = new mesh();
 		strcpy(p_mesh->file_path,file_path.c_str());
 		strcpy(p_mesh->mtl_path,mtl_path.exists()?mtl_name:"default");
-		
+
 		// load materials
 		if(mtl_path.exists()&&!mtl::load(mtl_path, p_mesh->materials, true )){ delete p_mesh; return nullptr; }
 
@@ -196,7 +196,7 @@ namespace obj::cache
 		uint geometry_count=0;	fgets(buff,8192,fp); sscanf(buff,"geometry_count = %u\n", &geometry_count );
 		uint vertex_count=0;	fgets(buff,8192,fp); sscanf(buff,"vertex_count = %u\n", &vertex_count);
 		uint index_count=0;		fgets(buff,8192,fp); sscanf(buff,"index_count = %u\n", &index_count);
-	
+
 		// exception handling on the counters
 		if(object_count>(1<<30)||geometry_count>(1<<30)){ fclose(fp); delete(p_mesh); return nullptr; }
 
@@ -313,7 +313,7 @@ namespace obj {
 mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const char*) )
 {
 	gx::timer_t t; t.begin();
-	mesh* p_mesh = nullptr;	
+	mesh* p_mesh = nullptr;
 
 	if(!is_extension_supported(file_path)){ printf("obj::%s(): unsupported format: %s\n",__func__, file_path.extension().c_str()); return nullptr; }
 	if(!file_path.exists()){ printf("obj::%s(): %s not exists",__func__,file_path.c_str()); return nullptr; }
@@ -472,7 +472,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 			uint i0 = get_or_create_vertex(buff);						indices.emplace_back(i0);
 			uint i1 = get_or_create_vertex(buff=obj::next_token(buff)); indices.emplace_back(i1);
 			uint i2 = get_or_create_vertex(buff=obj::next_token(buff)); indices.emplace_back(i2);
-			
+
 			// process further to read quads
 			buff=obj::next_token(buff);
 			if(buff&&*buff&&*buff!=' ')
@@ -506,7 +506,7 @@ mesh* load( path file_path, float* pLoadingTime, void(*flush_messages)(const cha
 				}
 				if(!mtl::load(mtl_path, p_mesh->materials)){ printf("unable to load %s\n",mtl_path0.slash()); return nullptr; }
 				strcpy( p_mesh->mtl_path, mtl_path.relative(path(file_path).dir()).c_str() );
-				
+
 				// postprocessing
 				if(!p_mesh->materials.empty()) mat_index = p_mesh->materials.size()>1?1:0; // default material
 				log_begin(); // start logging after loading materials

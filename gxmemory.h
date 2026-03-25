@@ -49,7 +49,7 @@ template <class T,bool readonly=false> struct mmap // memory-mapped file (simila
 {
 	T*		ptr=nullptr; // last mapped ptr
 	size_t	size=0;
-	
+
 	mmap( size_t n ):size(n){ size_t s=size*sizeof(T); hFileMap=CreateFileMappingW( INVALID_HANDLE_VALUE /* use pagefile */, nullptr, PAGE_READWRITE, DWORD(s>>32), DWORD(s&0xffffffff), _uname() ); }
 	mmap( const char* file_path){ struct _stat st={}; if(access(file_path,0)!=0) return; _stat(file_path,&st); size_t file_size=st.st_size; size=file_size/sizeof(T); if(file_size==0) return; hFile=CreateFileW(atow(file_path),GENERIC_READ|(readonly?0:GENERIC_WRITE), FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_RANDOM_ACCESS, nullptr); if(hFile==INVALID_HANDLE_VALUE){size=0;return;} size_t memsize=sizeof(T)*size; hFileMap=CreateFileMappingW(hFile,nullptr,readonly?PAGE_READONLY:PAGE_READWRITE,DWORD(uint64_t(memsize)>>32),DWORD(memsize&0xffffffff),nullptr); if(hFileMap==INVALID_HANDLE_VALUE){size=0;CloseHandle(hFile);hFile=nullptr;return;} }
 	virtual ~mmap(){ if(!empty()&&ptr){ FlushViewOfFile(ptr,0); UnmapViewOfFile(ptr); ptr=nullptr; } if(hFileMap!=INVALID_HANDLE_VALUE) CloseHandle(hFileMap); hFileMap=INVALID_HANDLE_VALUE; if(hFile!=INVALID_HANDLE_VALUE) CloseHandle(hFile); hFile=INVALID_HANDLE_VALUE; }
@@ -256,8 +256,8 @@ __noinline void md5::update( const void* data, size_t size )
 	static unsigned char buffer[64];
 	uint32_t lo=0, hi=0, lo0=lo, available, used;
 	if((lo=(lo0+size)&0x1fffffff)<lo0)hi++;hi+=uint32_t(size)>>29;
- 	used=lo0&0x3f;
- 	if(used)
+	used=lo0&0x3f;
+	if(used)
 	{
 		available = 64-used;
 		if(size<available){memcpy(&buffer[used],data,size);return;}
@@ -268,7 +268,7 @@ __noinline void md5::update( const void* data, size_t size )
 	}
 	if(size>=64){data=body((const unsigned char*)data,size&~(unsigned long)0x3f);size&=0x3f;}
 	memcpy(buffer,data,size);
-		
+
 	// finalize
 	used=lo&0x3f; buffer[used++]=0x80; available=64-used;
 	if(available<8){memset(&buffer[used],0,available);body(buffer,64);used=0;available=64;}
@@ -353,7 +353,7 @@ __noinline sized_ptr_t<T> decode( const string& encoded )
 	const char* table = __decoding_table();
 	size_t el = encoded.size();
 	m.size = el/4*3; if(encoded[el-1]=='=') m.size--; if(encoded[el-2]=='=') m.size--;
-	m.ptr = (T*) malloc(m.size+1); ((char*)m.ptr)[m.size]=0; // allocate 1 more byte for encoded string 
+	m.ptr = (T*) malloc(m.size+1); ((char*)m.ptr)[m.size]=0; // allocate 1 more byte for encoded string
 	uchar3*	dst = (uchar3*) m.ptr;
 	uchar* s = (uchar*) encoded.c_str();
 	for( size_t k=0, kn=encoded.size(); k<kn; k+=4, s+=4, dst++ )

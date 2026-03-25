@@ -161,7 +161,7 @@ inline const char* windir(){ return append_slash(env::get("WINDIR")); }
 //*************************************
 
 //*************************************
-namespace os { 
+namespace os {
 //*************************************
 // win32 utilities
 __noinline const char* get_last_error( DWORD error=0 ){ static char buff[4096]={};if(!error)error=GetLastError();char *s=nullptr;FormatMessageA( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,error,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPSTR)&s,0,nullptr);snprintf(buff,4096,"%s (code=%x)",s,uint(error));LocalFree(s);return buff; }
@@ -182,7 +182,7 @@ inline bool shutdown()
 
 inline bool is_dos_cmd( const char* cmd )
 {
-	static std::set<string> dos_cmd_map = 
+	static std::set<string> dos_cmd_map =
 	{
 		"append", "assoc", "attrib",
 		"batch",
@@ -378,7 +378,7 @@ __noinline bool redirect_process( const char* app, const char* args=nullptr,
 		buff[n_read]=0; printf(read_count==0?ltrim(buff):buff);
 		read_count += n_read;
 	}
-	
+
 	safe_close_handle( pi.hThread );
 	safe_close_handle( pi.hProcess );
 	safe_close_handle( stdout_read );
@@ -450,7 +450,7 @@ struct key_t
 	bool open( REGSAM sam=KEY_READ ){ if(hkey) return true; if(key.empty()) return false; LONG r=RegOpenKeyExW(root, key.c_str(),0,sam,&hkey); if(r!=ERROR_SUCCESS) hkey=nullptr; return hkey!=nullptr; }
 	void close(){ if(!hkey) return; RegCloseKey(hkey); hkey=nullptr; }
 	vector<string> find_subkeys( const char* pattern=nullptr ){ bool b_closed=!hkey; vector<string> v; if(b_closed&&!open(KEY_ENUMERATE_SUB_KEYS)) return v; DWORD j=0; char name[512]; while(true){ DWORD szname=std::extent<decltype(name)>::value; auto s=RegEnumKeyExA(hkey,j++,name,&szname,0,0,0,0); if(s!=ERROR_SUCCESS) break; if(pattern&&*pattern&&!stristr(name,pattern)) continue; v.emplace_back(name); } if(b_closed) close(); return v; }
-	
+
 	// template specialization
 	template <class T=string> T get( const char* name=nullptr );
 	template <> inline string get<string>( const char* name ){ return wtoa(get<wstring>(name).c_str()); }

@@ -104,7 +104,7 @@ void lua::state::open_gxmath()
 	t["reflect"] = &reflect;
 	t["refract"] = &refract;
 	t["lerp"] = sol::overload(sol::resolve<float(float,float,float)>(&lerp),sol::resolve<vec2(const vec2&,const vec2&,float)>(&lerp),sol::resolve<vec3(const vec3&,const vec3&,float)>(&lerp),sol::resolve<vec4(const vec4&,const vec4&,float)>(&lerp));
-	
+
 #define register4(L,F) \
 	(L)[#F] = sol::overload(sol::resolve<float(float)>(&F),sol::resolve<vec2(const vec2&)>(&F),sol::resolve<vec3(const vec3&)>(&F),sol::resolve<vec4(const vec4&)>(&F))
 

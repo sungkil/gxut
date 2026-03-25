@@ -62,7 +62,7 @@ struct path : public path_t
 	using path_t::operator/=;
 	using path_t::operator==;
 	using path_t::operator!=;
-	
+
 	// additional constructors
 	path( const path_t& p ) noexcept : path_t(p){}
 	path( path_t&& p ) noexcept : path_t(std::forward<path_t&&>(p)){}
@@ -154,7 +154,7 @@ struct path : public path_t
 	bool is_junction() const;
 	void set_hidden( bool h ) const {	if(!*_data) return; auto a=wattrib(); if(a!=INVALID_FILE_ATTRIBUTES) SetFileAttributesA(_data,a=h?(a|FILE_ATTRIBUTE_HIDDEN):(a^FILE_ATTRIBUTE_HIDDEN)); }
 	void set_readonly( bool r ) const {	if(!*_data) return; auto a=wattrib(); if(a!=INVALID_FILE_ATTRIBUTES) SetFileAttributesA(_data,a=r?(a|FILE_ATTRIBUTE_READONLY):(a^FILE_ATTRIBUTE_READONLY)); }
-	void set_system( bool s ) const {	if(!*_data) return; auto a=wattrib(); if(a!=INVALID_FILE_ATTRIBUTES) SetFileAttributesA(_data,a=s?(a|FILE_ATTRIBUTE_SYSTEM):(a^FILE_ATTRIBUTE_SYSTEM)); }	
+	void set_system( bool s ) const {	if(!*_data) return; auto a=wattrib(); if(a!=INVALID_FILE_ATTRIBUTES) SetFileAttributesA(_data,a=s?(a|FILE_ATTRIBUTE_SYSTEM):(a^FILE_ATTRIBUTE_SYSTEM)); }
 	path junction() const;
 
 	// path structure query
@@ -265,7 +265,7 @@ __noinline bool path::is_junction() const
 	if(!*_data||is_drive()) return false;
 	auto a=wattrib(); if(a==INVALID_FILE_ATTRIBUTES||(a&FILE_ATTRIBUTE_REPARSE_POINT)==0) return false;
 	return (a&FILE_ATTRIBUTE_DIRECTORY)==0?false:canonical().append_slash()!=reparse();
-} 
+}
 
 __noinline path path::junction() const
 {
@@ -421,7 +421,7 @@ struct url
 		j=strpbrk(t,"#"); if(j){fragment=j;*((char*)j)=0;}
 		query=t;
 	}
-	operator string() const 
+	operator string() const
 	{
 		string u;
 		if(!protocol.empty()) u=protocol+"://";

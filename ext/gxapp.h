@@ -58,7 +58,7 @@ struct updater
 	const path	name;
 	const path	dst;
 	const struct { path src, dst, index; } cache;
-	
+
 	updater( string appname, path dst_path );
 	bool fetch(); // return a newer server file exists
 	bool open();
@@ -104,7 +104,7 @@ __noinline bool updater::fetch()
 	time_t t0 = cache.src.mtime();
 	bool b_wget = wget(server_dir+server_name.c_str(),cache.src); if(!cache.src.exists()) return false; // try to download; still may return false for cache
 	//if(b_wget&&cache.src.mtime()>t0&&!b_zip) printf( "downloaded %s\n", cache.src.as() );
-	
+
 	if(b_zip) // try to extract the app from zip/7z
 	{
 		izip_t* z = load_zip(cache.src); if(!z){ printf( "[update] unable to load %s\n",cache.src.to_slash().c_str()); return false; }

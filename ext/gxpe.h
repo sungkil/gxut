@@ -53,8 +53,8 @@ __noinline const char* __rva_name( DWORD rva, PIMAGE_NT_HEADERS pNTHeader, PBYTE
 		DWORD size = s->Misc.VirtualSize; if(size==0) size=s->SizeOfRawData; // This 3 line idiocy is because Watcom's linker actually sets the Misc.VirtualSize field to 0.  (!!! - Retards....!!!)
 		if((rva>=s->VirtualAddress)&&(rva<(s->VirtualAddress+size))){ section=s; break; }
 	}
-    if(!section) return nullptr;
-    return (const char*)(imageBase+rva-int(section->VirtualAddress-section->PointerToRawData));
+	if(!section) return nullptr;
+	return (const char*)(imageBase+rva-int(section->VirtualAddress-section->PointerToRawData));
 }
 
 __noinline image_t load_image( const char* file_path )

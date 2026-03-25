@@ -72,7 +72,7 @@ __noinline ply_t* load( path ply_path )
 		if(stricmp(tag.c_str(),"comment")==0) continue; // bypass comments
 		if(stricmp(tag.c_str(),"end_header")==0) break;
 		if(v.size()<3) continue;
-		
+
 		if(tag=="property")
 		{
 			if(v[1]=="list"){} // actually, useless, but not rigorously implemented
@@ -111,7 +111,7 @@ __noinline ply_t* load( path ply_path )
 	ptr->vertex.count = vertex_count;
 	ptr->vertex.stride = ptr->vertex.properties.back().offset+ptr->vertex.properties.back().size();
 	ptr->vertex.data = malloc(ptr->vertex.size());
-	
+
 	// read binary vertices
 	size_t read_count = fread( (void*)ptr->vertex.data, ptr->vertex.stride, ptr->vertex.count, fp ); if(read_count<ptr->vertex.count){ printf("%s(%s): read_count(%zd)<vertex_count(%zd)\n", __func__,ply_path.c_str(),read_count, ptr->vertex.count); return safe_delete(ptr); }
 
@@ -129,7 +129,7 @@ __noinline ply_t* load( path ply_path )
 		}
 		if(ptr->face.data.size()!=ptr->face.count){ printf( "%s(%s): faces.size(%d)!=face_count(%d)\n",__func__,ply_path.c_str(),int(ptr->face.data.size()),int(ptr->face.count)); return safe_delete(ptr); }
 	}
-	
+
 	auto cur=_ftelli64(fp); _fseeki64(fp,0,SEEK_END); auto remainder=_ftelli64(fp)-cur;
 	if(remainder!=0) printf( "%s(%s): dummy data exists (%zd bytes)\n",__func__,ply_path.c_str(),remainder);
 

@@ -240,7 +240,7 @@ namespace fs = std::filesystem;
 	#define _MAX_PATH PATH_MAX // PATH_MAX = 4096 in linux
 	constexpr char preferred_separator = '/';
 	typedef struct stat64 stat_t;
-	template <typename T> struct dll_function_t { void* hdll=nullptr;T* ptr=nullptr; dll_function_t(const char* dll,const char* func){if((hdll=dlopen(dll,RTLD_LAZY)))ptr=(T*)(dlsym(hdll,func));} ~dll_function_t(){if(hdll){dlclose(hdll);hdll=nullptr;}} operator T* (){return ptr;} }; // dll function wrapper: load from dll and operates as a function with auto dll release	
+	template <typename T> struct dll_function_t { void* hdll=nullptr;T* ptr=nullptr; dll_function_t(const char* dll,const char* func){if((hdll=dlopen(dll,RTLD_LAZY)))ptr=(T*)(dlsym(hdll,func));} ~dll_function_t(){if(hdll){dlclose(hdll);hdll=nullptr;}} operator T* (){return ptr;} }; // dll function wrapper: load from dll and operates as a function with auto dll release
 #elif defined(__clang__)
 #endif
 
@@ -257,7 +257,7 @@ using std::max;
 // definitinos for posix compatibility
 #if defined __msvc__
 	#define ftello		_ftelli64
-	#define fseeko		_fseeki64	
+	#define fseeko		_fseeki64
 	#define S_IFIFO		_S_IFIFO
 	#define stat64		_stat64
 	#define popen		_popen
@@ -618,7 +618,7 @@ struct path_t
 	path_t& operator/=( const string_type& s ){ return *this=operator/(s); }
 	path_t& operator/=( string_view_type s ){ return *this=operator/(s); }
 	path_t& operator/=( value_type c ){ return *this=operator/(c); }
-	
+
 	// operator overloading: array access
 	inline value_type& operator[]( ptrdiff_t i ){ return _data[i]; }
 	inline const value_type& operator[]( ptrdiff_t i ) const { return _data[i]; }
@@ -920,7 +920,7 @@ __noinline wchar_t* build_cmdline( const char* app, const char* args )
 	size_t za=app?strlen(app):0, zg=args?strlen(args):0;
 	vector<char> va(1024,0), vb(1024,0), vc(1024,0); { size_t z=za; if(zg>z) z=zg; z=z<<1; if(va.size()<z){ va.resize(z,0); vb.resize(z,0); vc.resize(z,0); } }
 	char *a=va.data(), *b=vb.data(), *c=vc.data();
-	
+
 	// append extension to app
 	if(za&&!path_t(app).exists()&&path_t(app).extension().empty()){ path_t e=env::where(app); if(!e.empty()){ app=__strdup((path_t(app).is_absolute()?e:e.filename()).c_str()); za=strlen(app); } }
 
@@ -939,10 +939,11 @@ __noinline wchar_t* build_cmdline( const char* app, const char* args )
 	strcpy(c,app); return (wchar_t*)(atow(zg?strcat(strcat(c," "),args):c));
 }
 
-__noinline bool create_process( const char* app, const char* args=nullptr, bool wait=true, bool windowed=false, DWORD priority=NORMAL_PRIORITY_CLASS )
+// additional creation flags: CREATE_NO_WINDOW (hide console output), CREATE_NEW_CONSOLE
+__noinline bool create_process( const char* app, const char* args=nullptr, bool wait=true, bool windowed=false, DWORD creation_flags=NORMAL_PRIORITY_CLASS )
 {
 	STARTUPINFOW si={sizeof(si)}; si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=windowed?SW_SHOW:SW_HIDE;
-	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,build_cmdline(app,args),0,0,FALSE,priority,0,0,&si,&pi)||!pi.hProcess||!pi.hThread){ printf( "%s(%s,%s): failed to create process\n", __func__, app?app:"", args?args:"" ); return false; }
+	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,build_cmdline(app,args),0,0,FALSE,creation_flags,0,0,&si,&pi)||!pi.hProcess||!pi.hThread){ printf( "%s(%s,%s): failed to create process\n", __func__, app?app:"", args?args:"" ); return false; }
 	if(!wait) return true; WaitForSingleObject(pi.hProcess,INFINITE); DWORD ecode=0; if(!GetExitCodeProcess(pi.hProcess,&ecode)) ecode=EXIT_FAILURE; CloseHandle(pi.hThread); CloseHandle(pi.hProcess); return ecode==0;
 }
 
@@ -987,7 +988,7 @@ namespace os {
 __noinline bool create_process( const char* app, const char* args=nullptr, bool b_wait=true )
 {
 	pid_t pid = fork(); if(pid<0){ printf( "%s(): fork failed\n" ); return false; }
-	
+
 	if(pid==0){ char* const args2[2] = {(char*)args,nullptr}; execvp( app, args2 ); } // child process
 	else if(pid>0){ if(b_wait) wait(nullptr); } // parent process
 	return true;
