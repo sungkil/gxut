@@ -502,8 +502,10 @@ __noinline const wchar_t* unicode_symbols_to_ansi( const wchar_t* str )
 
 template <class T> __noinline const T* auto_quote( const T* _Src )
 {
-	size_t l=strlen(_Src); static constexpr T q=T('\"'); if(!*_Src||(_Src[0]==q&&_Src[l-1]==q)) return __strdup(_Src,l);
-	const T* s=trim(_Src); if(!strpbrk(s,__strdup<T,char>(" '\t|&<>"))) return __strdup(_Src,l);
+	static constexpr T q=T('\"');
+	static const T* p=strdup(__strdup<T,char>(" '\t|&<>"));
+	size_t l=strlen(_Src); if(!*_Src||(_Src[0]==q&&_Src[l-1]==q)) return __strdup(_Src,l);
+	const T* s=trim(_Src); if(!strpbrk(s,p)) return __strdup(_Src,l);
 	T* b=__strbuf<T>(l+2); b[0]=q; memcpy(b+1,_Src,l*sizeof(T)); b[l+1]=q; b[l+2]=0; return b;
 }
 

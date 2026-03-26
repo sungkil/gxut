@@ -410,6 +410,7 @@ template<> __forceinline wchar_t*	__strdup<wchar_t,wchar_t>( const wchar_t* s ){
 
 // define overloaded functions for wchar_t
 inline size_t strlen( const wchar_t* _Str ){ return wcslen(_Str); }
+inline wchar_t* strdup( const wchar_t* _Str ){ return wcsdup(_Str); }
 inline wchar_t* strcpy( wchar_t* _Dest, const wchar_t* _Src ){ return wcscpy(_Dest,_Src); }
 inline wchar_t* strncpy( wchar_t* _Dest, const wchar_t* _Src, size_t _Count ){ return wcsncpy(_Dest,_Src,_Count); }
 inline wchar_t* strcat( wchar_t* _Dest, const wchar_t* _Src ){ return wcscat(_Dest,_Src);  }
