@@ -154,8 +154,6 @@ inline const char* __cdecl fgetsf( FILE* const _Stream, const char* fmt, ... ){ 
 #include <typeinfo>
 #include <typeindex>
 #include <vector>
-using namespace std::string_literals; // enable s suffix for std::string literals
-using namespace std::literals::string_literals;
 
 // common unique types in std namespace; these types should hardly have the same names in user definitions
 using std::array;
@@ -164,6 +162,7 @@ using std::map;
 using std::pair;
 using std::set;
 using std::string;
+using namespace std::string_literals; // enable s suffix for std::string literals (C++14)
 using std::wstring;
 using std::string_view;
 using std::wstring_view;
