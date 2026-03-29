@@ -538,7 +538,7 @@ __noinline __pathinfo __split_path( const char* path, bool b_dir, bool b_stem, b
 	size_t sl = b_stem?_MAX_FNAME:0;	wchar_t* s=sl?__strbuf<wchar_t>(sl):0;
 	size_t xl = b_extension?_MAX_EXT:0;	wchar_t* x=xl?__strbuf<wchar_t>(xl):0;
 	_wsplitpath_s(atow(path),d,dl,i,il,s,sl,x,xl);
-	if(d&&*d) *d=toupper(*d); d=d&&i?strcat(d,i):d?d:i;
+	d=d&&i?strcat(d,i):d?d:i;
 	return __pathinfo{d?(char*)wtoa(d):0,s?(char*)wtoa(s):0,x?(char*)wtoa(x):0};
 #elif defined __gcc__
 	size_t l=strlen(path);

@@ -187,7 +187,7 @@ struct path : public path_t
 	// decompostion: extensions
 	vector<path> ancestors(path root="") const { auto a=__super::ancestors(root); vector<path> v;for(const auto& p:a) v.emplace_back(p); return v; }
 	vector<path> explode() const { vector<path> v; v.reserve(16); for( char *ctx=nullptr, *t=strtok_s(__strdup(_data),"\\/", &ctx); t; t=strtok_s(0,"\\/", &ctx)) v.emplace_back(t); return v; }
-	path drive() const	{ if(empty()) return ""; if(is_unc()) return unc_root(); char r[_MAX_DRIVE]={}; _splitpath_s(_data,r,_MAX_DRIVE,0,0,0,0,0,0); if(r&&*r) *r=toupper(*r); return r; }
+	path drive() const	{ if(empty()) return ""; if(is_unc()) return unc_root(); char r[_MAX_DRIVE]={}; _splitpath_s(_data,r,_MAX_DRIVE,0,0,0,0,0,0); return r; }
 
 	// simpler alias to decompositions
 	const char* name( bool with_ext=true ) const { return __strdup((with_ext?filename():stem()).c_str()); }
