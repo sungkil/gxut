@@ -282,6 +282,23 @@ template<> __forceinline bool tvec2<double>::operator==(const tvec2& v) const { 
 template<> __forceinline bool tvec3<double>::operator==(const tvec3& v) const { static const double p=precision<double>::value(); return std::abs(x-v.x)<=p&&std::abs(y-v.y)<=p&&std::abs(z-v.z)<=p; }
 template<> __forceinline bool tvec4<double>::operator==(const tvec4& v) const { static const double p=precision<double>::value(); return std::abs(x-v.x)<=p&&std::abs(y-v.y)<=p&&std::abs(z-v.z)<=p&&std::abs(w-v.w)<=p; }
 
+// add tuple-like interface for structured binding: tuple_size, tuple_element, get
+namespace std
+{
+	template <class T> struct tuple_size<tvec2<T>> : integral_constant<size_t,2> {};
+	template <class T> struct tuple_size<tvec3<T>> : integral_constant<size_t,3> {};
+	template <class T> struct tuple_size<tvec4<T>> : integral_constant<size_t,4> {};
+	template <std::size_t I, class T> struct tuple_element<I, tvec2<T>> { using type=T; };
+	template <std::size_t I, class T> struct tuple_element<I, tvec3<T>> { using type=T; };
+	template <std::size_t I, class T> struct tuple_element<I, tvec4<T>> { using type=T; };
+}
+template <std::size_t I, class T> decltype(auto) get(tvec2<T>& v){ if constexpr(I==0) return v.x; else return v.y; }
+template <std::size_t I, class T> decltype(auto) get(tvec3<T>& v){ if constexpr(I==0) return v.x; else if constexpr(I==1) return v.y; else return v.z; }
+template <std::size_t I, class T> decltype(auto) get(tvec4<T>& v){ if constexpr(I==0) return v.x; else if constexpr(I==1) return v.y; else if constexpr(I==2) return v.z; else return v.w; }
+template <std::size_t I, class T> T get(const tvec2<T>& v){ if constexpr(I==0) return v.x; else return v.y; }
+template <std::size_t I, class T> T get(const tvec3<T>& v){ if constexpr(I==0) return v.x; else if constexpr(I==1) return v.y; else return v.z; }
+template <std::size_t I, class T> T get(const tvec4<T>& v){ if constexpr(I==0) return v.x; else if constexpr(I==1) return v.y; else if constexpr(I==2) return v.z; else return v.w; }
+
 // alias type definitions
 using bvec2 = tvec2<bool>;			using bvec3 = tvec3<bool>;			using bvec4 = tvec4<bool>;
 using vec2	= tvec2<float>;			using vec3	= tvec3<float>;			using vec4	= tvec4<float>;
