@@ -103,19 +103,21 @@ __noinline bool updater::fetch()
 	bool b_zip = server_name.extension()=="zip"||server_name.extension()=="7z";
 	time_t t0 = cache.src.mtime();
 	bool b_wget = wget(server_dir+server_name.c_str(),cache.src); if(!cache.src.exists()) return false; // try to download; still may return false for cache
-	//if(b_wget&&cache.src.mtime()>t0&&!b_zip) printf( "downloaded %s\n", cache.src.as() );
+	// if(b_wget&&cache.src.mtime()>t0&&!b_zip) printf( "downloaded %s\n", cache.src.as() );
 
 	if(b_zip) // try to extract the app from zip/7z
 	{
 		izip_t* z = load_zip(cache.src); if(!z){ printf( "[update] unable to load %s\n",cache.src.to_slash().c_str()); return false; }
-		auto* e = z->find(cache.dst.name()); if(!e){ safe_delete(z); return false; }
-		if(!cache.dst.exists()||FileTimeToTime(e->mtime)>cache.dst.mtime())
+		if(z->entries.empty()){ printf( "[update] no entries in %s\n",cache.src.to_slash().c_str()); return false; }
+		auto& e=z->entries.front(); const_cast<path&>(cache.dst)=cache.dst.dir()+e.name; // rename dst by entry's name
+		if(!cache.dst.exists()||FileTimeToTime(e.mtime)>cache.dst.mtime())
 		{
-			if(!z->extract_to_files(cache.dst.dir(),cache.dst.name())){ printf( "[update] unable to extract %s\n", cache.dst.name() ); safe_delete(z); return false; }
-			//printf( "downloaded %s\n", cache.dst.as() );
+			if(!z->extract_to_files(cache.dst.dir())){ printf( "[update] unable to extract %s\n", cache.dst.name() ); safe_delete(z); return false; }
+			// printf( "downloaded %s\n", cache.dst.as() );
 		}
 		safe_delete(z);
 	}
+	// printf( "%s %d %d %llu %llu\n", cache.dst.c_str(), cache.dst.exists(), cache.dst.mtime()>dst.mtime(), cache.dst.mtime(), dst.mtime() );
 	return cache.dst.exists()&&cache.dst.mtime()>dst.mtime();
 }
 
@@ -131,12 +133,14 @@ __noinline bool update( string name="", path dst_path="" )
 	if(__argc>2&&wcscmp(__wargv[1],L"--update")==0)
 	{
 		path src1=path(exe::path());
-		path dst1=__wargv[2]; if(!dst1.exists()) return false;
-		// wait for dst1 closes
-		int k=0; for(;k<1024;k++){ if(os::find_process(dst1.c_str()).empty())break; Sleep(10); }
-		if(k==1024) return ebox("Unable to update, since %s is still alive.\n", dst1.rs());
-		if(src1.copy_file(dst1)){ mbox("%s is updated well\n", dst1.rs()); return true; }
-		return ebox("failed to update from %s to %s\n",src1.rs(),dst1.rs());
+		path dst0=__wargv[2]; if(!dst0.exists()) return false;
+		path dst1=dst0.dir()+src1.filename();
+		bool b_rename=dst0.filename()!=dst1.filename();
+		int k=0,kn=1024; for(;k<kn;k++){ if(os::find_process(dst0.c_str()).empty())break; Sleep(10); } // wait for dst1 closes
+		if(k==kn) return ebox("Unable to update, since %s is still alive.\n", dst0.rs());
+		if(!src1.copy_file(dst1)) return ebox("failed to update from %s to %s\n",src1.rs(),dst1.rs());
+		if(b_rename&&dst0.delete_file(true)) mbox("renamed %s to %s well\n", dst0.rs(), dst1.rs());
+		else if(!b_rename) mbox("%s is updated well\n", dst1.rs()); return true;
 	}
 
 	updater u(name,dst_path);
