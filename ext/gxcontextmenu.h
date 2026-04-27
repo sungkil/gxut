@@ -33,13 +33,16 @@ struct registry_t
 	template <HKEY root=HKEY_CLASSES_ROOT> bool add( string subkey, string name, string value );
 	bool	add_shell( string subkey, bool b_log=true ){ return add_shell_impl<HKEY_CLASSES_ROOT>(subkey,b_log)&&add_shell_impl<HKEY_LOCAL_MACHINE>(subkey,b_log); }
 	bool	add_office( string prefix, int end, int begin=1 );
+	bool	sub_office( string prefix, int end, int begin=1 );
 	bool	install( bool b_dry=false );
 	string	dump();
 
 protected:
 	template <HKEY root> datum_t* get_or_create_datum( string subkey );
+	template <HKEY root> datum_t* remove_datum( string subkey );
 	template <HKEY root> bool subkey_exists( string subkey ) const { return os::reg::key_t<root>(subkey.c_str()).open(); }
-	template <HKEY root> bool add_shell_impl( string subkey, bool b_log );
+	template <HKEY root> bool add_shell_impl( string subkey, bool b_log=false );
+	template <HKEY root> bool sub_shell_impl( string subkey, bool b_log=false );
 };
 
 template <HKEY root>
@@ -48,6 +51,16 @@ registry_t::datum_t* registry_t::get_or_create_datum( string subkey )
 	subkey=str_replace(subkey.c_str(),"/","\\");
 	for( auto* d : data ) if(stricmp(d->subkey.c_str(),subkey.c_str())==0) return d;
 	auto* d = new datum_t(subkey); d->section = wtoa(os::reg::key_t<root>(subkey.c_str()).c_str());
+	data.emplace_back(d);
+	return d;
+}
+
+template <HKEY root>
+registry_t::datum_t* registry_t::remove_datum( string subkey )
+{
+	subkey=str_replace(subkey.c_str(),"/","\\");
+	for( auto* d : data ) if(stricmp(d->subkey.c_str(),subkey.c_str())==0) return d;
+	auto* d = new datum_t(subkey); d->section = wtoa(os::reg::key_t<root>(subkey.c_str()).c_str(false));
 	data.emplace_back(d);
 	return d;
 }
@@ -87,14 +100,40 @@ bool registry_t::add_shell_impl( string subkey, bool b_log )
 	return true;
 }
 
+template <HKEY root>
+bool registry_t::sub_shell_impl( string subkey, bool b_log )
+{
+	if(shell.name.empty()){ printf("%s(): empty name\n",__func__); return false; }
+	subkey=format("%s\\shell",str_replace(subkey.c_str(),"/","\\"));
+	if(root==HKEY_LOCAL_MACHINE) subkey="SOFTWARE\\Classes\\"s+subkey;
+	if(!subkey_exists<root>(subkey)) return true;
+	subkey+="\\"s+shell.name;
+
+	auto* d=remove_datum<root>(subkey); if(!d) return false;
+	return true;
+}
+
 inline bool registry_t::add_office( string prefix, int end, int begin )
 {
 	bool b_dirty=false;
 	for( int k=begin, kn=end+1; k<kn; k++ )
 	{
 		string j = prefix+format(".%d",k);
-		if(add_shell_impl<HKEY_CLASSES_ROOT>(j,false)) continue;
-		if(add_shell_impl<HKEY_LOCAL_MACHINE>(j,false)) continue;
+		if(add_shell_impl<HKEY_CLASSES_ROOT>(j)) continue;
+		if(add_shell_impl<HKEY_LOCAL_MACHINE>(j)) continue;
+		b_dirty = true;
+	}
+	return b_dirty;
+}
+
+inline bool registry_t::sub_office( string prefix, int end, int begin )
+{
+	bool b_dirty=false;
+	for( int k=begin, kn=end+1; k<kn; k++ )
+	{
+		string j = prefix+format(".%d",k);
+		if(sub_shell_impl<HKEY_CLASSES_ROOT>(j)) continue;
+		if(sub_shell_impl<HKEY_LOCAL_MACHINE>(j)) continue;
 		b_dirty = true;
 	}
 	return b_dirty;
