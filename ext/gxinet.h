@@ -20,12 +20,64 @@
 #pragma comment( lib, "wininet" )
 #pragma comment( lib, "dnsapi" )
 
-struct inet
+//*************************************
+namespace inet {
+//*************************************
+
+static inline const path_t CACHE_DIR = apptemp()+"update\\";
+
+struct ipv4_t : public uchar4
 {
-	static bool is_offline();
-	static inline const path_t CACHE_DIR = apptemp()+"update\\";
-	static const char* get_registered_ip_address();
+	using uchar4::uchar4;
+	using uchar4::operator=;
+	ipv4_t(){ x=y=z=w=0; }
+	operator bool(){ return x||y||z||w; }
+	const char* c_str(){ return operator bool()?format("%u.%u.%u.%u",x,y,z,w):""; }
 };
+
+// registered ip can be retrieved using cmdline:
+// >> nslookup myip.opendns.com resolver1.opendns.com
+__noinline ipv4_t get_registered_ip_address()
+{
+	static bool b=false; static ipv4_t ip; if(b) return ip; b=true;
+	vector<char> v(1024,0); char* buff=v.data();
+	WSADATA wsa; if(WSAStartup(MAKEWORD(2,2), &wsa)!=0) return {};
+	DWORD dns[]={1,1111}; if(!inet_pton(AF_INET,"208.67.222.222",(struct sockaddr_in*)&dns[1])) return {};
+	PDNS_RECORD rec; if(DnsQuery_W(L"myip.opendns.com",DNS_TYPE_A,DNS_QUERY_BYPASS_CACHE,dns,&rec,nullptr)!=0||!rec) return {};
+	if(rec&&buff&&!inet_ntop(AF_INET,(struct sockaddr_in*)&rec->Data.A.IpAddress,buff,1024)) return {};
+	DnsFree(rec, DnsFreeRecordList);
+	uvec4 u;sscanf(buff,"%u.%u.%u.%u",&u.x,&u.y,&u.z,&u.w);
+	ip.x=u.x;ip.y=u.y;ip.z=u.z;ip.w=u.w;
+	return ip;
+}
+
+__noinline bool is_offline()
+{
+	static bool i=false, b=true; if(i) return b; i=true; // defaulted to offline
+	HRESULT hr0=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED|COINIT_DISABLE_OLE1DDE); if(FAILED(hr0)) return b;
+	INetworkListManager* nlm=nullptr; if(FAILED(CoCreateInstance(CLSID_NetworkListManager,0,CLSCTX_ALL,IID_PPV_ARGS(&nlm)))) return b;
+	VARIANT_BOOL c=VARIANT_FALSE; auto hr1=nlm->get_IsConnectedToInternet(&c);safe_release(nlm);
+	if(hr0!=RPC_E_CHANGED_MODE) CoUninitialize();
+	return b=(FAILED(hr1)||c!=VARIANT_TRUE);
+}
+
+// non-blocking fast ping (for within 10 ms)
+__noinline bool ping( const char* ip, unsigned short port, int timeout_ms=100 )
+{
+	SOCKET s=socket(AF_INET,SOCK_STREAM,IPPROTO_TCP); if(s==INVALID_SOCKET) return 0;
+	u_long m=1; ioctlsocket( s, FIONBIO, &m );
+	sockaddr_in a; a.sin_family=AF_INET; a.sin_port=htons(port); a.sin_addr.s_addr=inet_addr(ip);
+	connect(s,(sockaddr*)&a,sizeof(a));
+	fd_set wset; FD_ZERO(&wset); FD_SET(s,&wset);
+	timeval tv={}; tv.tv_usec=timeout_ms*1000;
+	int r=select(0,NULL,&wset,NULL,&tv ); if(r<=0){ closesocket(s); return false; }
+	int e=0, l=sizeof(e); getsockopt(s,SOL_SOCKET,SO_ERROR,(char*)&e,&l); closesocket(s);
+	return e==0;
+}
+
+//*************************************
+} // end namespace inet
+//*************************************
 
 // raw download primitive: return true only when a new file is downloaded or up-to-date cache exists
 __noinline bool wget( string remote_url, path local_path )
@@ -60,29 +112,6 @@ __noinline bool wget( string remote_url, path local_path )
 	if(!local_path.exists()) return false; // write failed
 	local_path.utime(t);
 	return true;
-}
-
-// registered ip can be retrieved using cmdline:
-// >> nslookup myip.opendns.com resolver1.opendns.com
-__noinline const char* inet::get_registered_ip_address()
-{
-	static char* buff=nullptr; if(buff) return buff; buff=(char*)malloc(1024*sizeof(char));
-	WSADATA wsadata; if(WSAStartup(MAKEWORD(2,2), &wsadata)!=0) return nullptr;
-	DWORD dns[]={1,1111}; if(!inet_pton(AF_INET,"208.67.222.222",(struct sockaddr_in*)&dns[1])) return nullptr;
-	PDNS_RECORD rec; if(DnsQuery_W(L"myip.opendns.com",DNS_TYPE_A,DNS_QUERY_BYPASS_CACHE,dns,&rec,nullptr)!=0||!rec) return nullptr;
-	if(rec&&buff&&!inet_ntop(AF_INET,(struct sockaddr_in*)&rec->Data.A.IpAddress,buff,1024)) return nullptr;
-	DnsFree(rec, DnsFreeRecordList);
-	return buff;
-}
-
-__noinline bool inet::is_offline()
-{
-	static bool i=false, b=true; if(i) return b; i=true; // defaulted to offline
-	HRESULT hr0=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED|COINIT_DISABLE_OLE1DDE); if(FAILED(hr0)) return b;
-	INetworkListManager* nlm=nullptr; if(FAILED(CoCreateInstance(CLSID_NetworkListManager,0,CLSCTX_ALL,IID_PPV_ARGS(&nlm)))) return b;
-	VARIANT_BOOL c=VARIANT_FALSE; auto hr1=nlm->get_IsConnectedToInternet(&c);safe_release(nlm);
-	if(hr0!=RPC_E_CHANGED_MODE) CoUninitialize();
-	return b=(FAILED(hr1)||c!=VARIANT_TRUE);
 }
 
 #endif // __GX_INET_H__
