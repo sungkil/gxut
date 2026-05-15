@@ -46,7 +46,7 @@ __noinline ipv4_t get_registered_ip_address()
 	PDNS_RECORD rec; if(DnsQuery_W(L"myip.opendns.com",DNS_TYPE_A,DNS_QUERY_BYPASS_CACHE,dns,&rec,nullptr)!=0||!rec) return {};
 	if(rec&&buff&&!inet_ntop(AF_INET,(struct sockaddr_in*)&rec->Data.A.IpAddress,buff,1024)) return {};
 	DnsFree(rec, DnsFreeRecordList);
-	uvec4 u;sscanf(buff,"%u.%u.%u.%u",&u.x,&u.y,&u.z,&u.w);
+	uint4 u;sscanf(buff,"%u.%u.%u.%u",&u.x,&u.y,&u.z,&u.w);
 	ip.x=u.x;ip.y=u.y;ip.z=u.z;ip.w=u.w;
 	return ip;
 }

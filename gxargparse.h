@@ -58,6 +58,7 @@ struct option_t
 
 	option_t& add_name( const char* name ){ if(name&&name[0]) names.insert(name); return *this; }
 	option_t& add_subarg( vector<string> constraints={} ){ subarg_count++; this->constraints.clear(); for( auto& c : constraints ) this->constraints.emplace_back(atow(c.c_str())); return *this; }
+	option_t& set_bool(){ return add_subarg({"true","false","0","1"}); }
 	option_t& add_help( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); vector<char> buff(vsnprintf(0,0,fmt,a)+1); vsnprintf(&buff[0],buff.size(),fmt,a); shelp=trim(&buff[0],"\n"); va_end(a); return *this; }
 	option_t& add_break( int count=1 ){ break_count+=count; return* this; }
 	option_t& set_default( const char* arg ){ parsed.value=atow(arg); return *this; }
@@ -142,6 +143,7 @@ struct parser_t
 	template<> inline string	get<string>( const string& name ) const { return wtoa(get<wstring>(name).c_str()); }
 	template<> inline wstring	get<wstring>( const string& name ) const;
 	template<> inline path		get<path>( const string& name ) const { return get<string>(name).c_str(); }
+	template<> inline bool		get<bool>( const string& name ) const { return atob(get<string>(name).c_str()); }
 	template<> inline int		get<int>( const string& name ) const { return atoi(get<string>(name).c_str()); }
 	template<> inline uint		get<uint>( const string& name ) const { return uint(atoi(get<string>(name).c_str())); }
 	template<> inline float		get<float>( const string& name ) const { return float(atof(get<string>(name).c_str())); }
@@ -526,10 +528,10 @@ inline const char* parser_t::rebuild_arguments( int argc, char* argv[] )
 
 inline void parser_t::dump()
 {
-	// retrive things to print
+	// retrieve things to print
 	vector<std::pair<string,wstring>> args, opts;
 	for(auto* a:arguments) if(!a->name.empty()) args.emplace_back( a->name, a->parsed.value );
-	wstring ots; for(auto& a:others()) ots+=format( L"%s ",a.c_str()); args.emplace_back( "others", ots );
+	wstring ots; for(auto& a:others()) ots+=format( L"%s ",atow(a.c_str())); args.emplace_back( "others", ots );
 	for(auto* o:options)
 	{
 		string n=o->name();
@@ -557,9 +559,9 @@ inline void parser_t::dump()
 	// now, print
 	fprintf( stdout, "******************************\n");
 	fprintf( stdout, "[arguments]\n");
-	for(auto& a:args) fprintf( stdout, fmt, a.first.c_str(), a.second.c_str() );
+	for(auto& a:args) fprintf( stdout, fmt, a.first.c_str(), wtoa(a.second.c_str()) );
 	fprintf( stdout, "\n[options]\n");
-	for(auto& o:opts) fprintf( stdout, fmt, o.first.c_str(), o.second.c_str() );
+	for(auto& o:opts) fprintf( stdout, fmt, o.first.c_str(), wtoa(o.second.c_str()) );
 	fprintf( stdout, "******************************\n\n");
 }
 
