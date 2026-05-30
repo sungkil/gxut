@@ -67,12 +67,6 @@
 	#endif
 #endif
 
-#if defined(GX_CUDA_GL_INTEROP) && __has_include(<cuda_gl_interop.h>)
-	#pragma warning( disable: 4819 )	// disable waring on the foreign codepage
-	#include <cuda_gl_interop.h>		// this should be located after glew/glad/gxcorearb.h
-	#pragma warning( default: 4819 )
-#endif
-
 //*************************************
 // binding query targets
 inline GLenum gxGetTargetBinding( GLenum target )
