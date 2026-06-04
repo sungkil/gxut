@@ -905,6 +905,13 @@ __noinline void add_path( path_t d ){ add_paths({d}); }
 namespace os { // minimal process definitions and message boxes
 //*************************************
 
+__noinline const char* get_last_error( DWORD error=0 )
+{
+	static char buff[4096]={};if(!error)error=GetLastError();
+	char *s=nullptr;FormatMessageA( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,error,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPSTR)&s,0,nullptr);
+	snprintf(buff,4096,"%s (code=%x)",s,uint(error));LocalFree(s);return buff;
+}
+
 __noinline string read_process( string cmd )
 {
 	FILE* pp = popen(cmd.c_str(),"rb"); if(!pp) return "";

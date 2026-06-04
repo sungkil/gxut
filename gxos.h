@@ -164,7 +164,6 @@ inline const char* windir(){ return append_slash(env::get("WINDIR")); }
 namespace os {
 //*************************************
 // win32 utilities
-__noinline const char* get_last_error( DWORD error=0 ){ static char buff[4096]={};if(!error)error=GetLastError();char *s=nullptr;FormatMessageA( FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS,nullptr,error,MAKELANGID(LANG_ENGLISH,SUBLANG_DEFAULT),(LPSTR)&s,0,nullptr);snprintf(buff,4096,"%s (code=%x)",s,uint(error));LocalFree(s);return buff; }
 __noinline void flush_message( int sleepTime=1 ){MSG m;for(int k=0;k<100&&PeekMessageW(&m,nullptr,0,0,PM_REMOVE);k++)SendMessageW(m.hwnd,m.message,m.wParam,m.lParam);if(sleepTime>=0) Sleep(sleepTime);}
 
 inline const char* module_path( HMODULE h_module ){ static char buff[_MAX_PATH]={}; wchar_t w[_MAX_PATH]; GetModuleFileNameW(h_module,w,_MAX_PATH); w[0]=::toupper(w[0]); return strcpy(buff,wtoa(w)); }
@@ -364,7 +363,7 @@ __noinline bool redirect_process( const char* app, const char* args=nullptr,
 	si.dwFlags		= si.dwFlags|STARTF_USESTDHANDLES;
 
 	// create process and wait if necessary
-	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,build_cmdline(app,args),0,0,TRUE,priority,0,0,&si,&pi )||!pi.hProcess||!pi.hThread){ printf("%s\n",get_last_error()); return false; }
+	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,build_cmdline(app,args),0,0,TRUE,priority,0,0,&si,&pi )||!pi.hProcess||!pi.hThread){ printf("%s\n",os::get_last_error()); return false; }
 
 	static char* buff=nullptr; static size_t blen=0;
 	DWORD n_avail=0, n_read=0, read_count=0;
