@@ -272,6 +272,9 @@ using std::max;
 	#define strtok_s	strtok_r
 #endif
 
+// type cast helper
+template <class T> auto& mutable_cast( const T& v ){ return const_cast<std::remove_cvref_t<decltype(v)>&>(v); }
+
 // alloc/deallocation functions
 template <class T> T* malloc( size_t size ){ return (T*) ::malloc(size*sizeof(T)); }
 template <class T> T* realloc( void* ptr, size_t size ){ return (T*) ::realloc(ptr,size*sizeof(T)); }
