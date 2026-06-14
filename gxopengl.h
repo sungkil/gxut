@@ -478,7 +478,7 @@ struct Texture : public Object
 	~Texture() override { safe_delete(_next);safe_delete(_temp);make_resident(false);glDeleteTextures(1, (GLuint*)&ID);if(instances.contains(this)) instances.erase(this);invalidated()=true; }
 
 	// delete texture views and query to check whether dirty/deleted textures exist
-	static void delete_all_instances(){ for( auto& t:vector(instances.begin(),instances.end()) ) delete t; instances.clear(); }
+	static void delete_all_instances(){ for( auto& t:vector(instances.begin(),instances.end()) ){ if(t){delete t;t=nullptr;} } instances.clear(); }
 	static bool& invalidated(){ static bool b=true; return b; }
 
 	GLuint bind( bool b_bind=true ){ GLuint b0=gxGetIntegerv(_target_binding); if(!b_bind||ID!=b0) glBindTexture( target, b_bind?ID:0 ); return b0; }
@@ -559,7 +559,8 @@ struct Texture : public Object
 
 	// instance-related
 	Texture* clone( const char* name );
-	inline Texture* dup( bool copy_data=true ){ if(!_temp) instances.erase(_temp=clone("TMP")); if(copy_data) copy(_temp); return _temp; }
+	inline Texture* dup(){ if(!_temp) instances.erase(_temp=clone("TMP")); copy(_temp); return _temp; }
+	inline Texture* temp(){ if(!_temp) instances.erase(_temp=clone("TMP")); return _temp; } // temporary voltatile texture for quick-and-dirty use
 
 	// view-related function (> OpenGL 4.3)
 	inline static uint crc( GLuint min_level, GLuint levels, GLuint min_layer, GLuint layers, GLenum target, bool force_array ){ struct info { GLuint min_level, levels, min_layer, layers; GLenum target; bool force_array; }; info i={min_level,levels,min_layer,layers,target,force_array}; return crc32(0,&i,sizeof(i)); }
@@ -605,7 +606,7 @@ protected: // protected data members
 
 	// dup and views
 	decltype(gxCreateTextureView)* pfCreateTextureView=gxCreateTextureView; // this should be kept as parent dll function
-	Texture*	_temp=nullptr;		// temporary duplication from dup()
+	Texture*	_temp=nullptr;		// temporary duplication from dup() or temp()
 	uint		_key=0;				// key of the current view
 	bool		_b_view=false;		// is this view?
 	Texture*	_next=nullptr;		// next view node: a node of linked list, starting from the parent node
