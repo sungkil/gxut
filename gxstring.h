@@ -37,8 +37,8 @@ namespace nocase
 	template <> struct less<wstring>{ bool operator()(const wstring& a,const wstring& b)const{return wcsicmp(a.c_str(),b.c_str())<0;}};
 	template <> struct equal_to<string>{ bool operator()(const string& a,const string& b)const{return stricmp(a.c_str(),b.c_str())==0;}};
 	template <> struct equal_to<wstring>{ bool operator()(const wstring& a,const wstring& b)const{return wcsicmp(a.c_str(),b.c_str())==0;}};
-	template <> struct hash<string> { size_t operator()( const string& p ) const { return std::hash<string>()(strlwr(__strdup(p.c_str()))); }};
-	template <> struct hash<wstring> { size_t operator()( const wstring& p ) const { return std::hash<wstring>()(strlwr(__strdup(p.c_str()))); }};
+	template <> struct hash<string>{ size_t operator()( const string& p ) const { return std::hash<string>()(strlwr(__strdup(p.c_str()))); }};
+	template <> struct hash<wstring>{ size_t operator()( const wstring& p ) const { return std::hash<wstring>()(strlwr(__strdup(p.c_str()))); }};
 
 	template <class T> using			set = std::set<T,less<T>>;
 	template <class T, class V> using	map = std::map<T,V,less<T>>;
