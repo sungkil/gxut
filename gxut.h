@@ -1019,6 +1019,7 @@ template <class F> F get_proc_address( const char* name, HMODULE h_module=nullpt
 	auto* __GetProcAddress = (void*(*)(const char*))GetProcAddress(h_module?h_module:h0,"GetProcAddress"); if(__GetProcAddress){ ptr=__GetProcAddress(name); if(ptr) return (F) ptr; }
 	return nullptr;
 }
+template <class F> F get_proc_address( const char* name, const char* module_name ){ return get_proc_address<F>(name,GetModuleHandleA(module_name)); }
 
 // safe procedure wrappers
 template <class F> struct proc_t { using type=F; };
