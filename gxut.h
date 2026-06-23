@@ -1019,19 +1019,27 @@ template <class F> F get_proc_address( const char* name, HMODULE h_module=nullpt
 	auto* __GetProcAddress = (void*(*)(const char*))GetProcAddress(h_module?h_module:h0,"GetProcAddress"); if(__GetProcAddress){ ptr=__GetProcAddress(name); if(ptr) return (F) ptr; }
 	return nullptr;
 }
-template <class F> F get_proc_address( const char* name, const char* module_name ){ return get_proc_address<F>(name,GetModuleHandleA(module_name)); }
+
+// safe procedure wrappers
+template <class F> struct proc_t { using type=F; };
+template <class R, class... Args> struct proc_t<R( Args... )>{ using type=R(*)( Args... ); type ptr=nullptr; operator type() const { return ptr; } proc_t()=default; proc_t( type t ):ptr(t){} R operator()( Args... args ) const { if(!ptr){ if constexpr(std::is_void_v<R>) return; else return R{}; } return ptr( std::forward<Args>(args)... ); } };
+template <class R, class... Args> struct proc_t<R( Args... ) noexcept>{ using type=R(*)( Args... ) noexcept; type ptr=nullptr; operator type() const { return ptr; } proc_t()=default; proc_t( type t ):ptr(t){} R operator()( Args... args ) const noexcept { if(!ptr){ if constexpr(std::is_void_v<R>) return; else return R{}; } return ptr( std::forward<Args>(args)... ); } };
+template <class R, class... Args> struct proc_t<R(*)( Args... )> : proc_t<R(Args...)> { using proc_t<R(Args...)>::proc_t; };
+template <class R, class... Args> struct proc_t<R(*)( Args... ) noexcept> : proc_t<R(Args...) noexcept> { using proc_t<R(Args...) noexcept>::proc_t; };
 
 struct dll_t
 {
 	HMODULE hdll = nullptr;
 
-	~dll_t(){ release(); }
-	void release(){ if(hdll){ FreeLibrary(hdll); hdll=nullptr; } }
-	const char* file_path(){ static char f[_MAX_PATH]={}; wchar_t w[_MAX_PATH]; if(hdll) GetModuleFileNameW(hdll,w,_MAX_PATH); return strcpy(f,wtoa(w)); }
-	bool load( const char* dll_path ){ return nullptr!=(hdll=LoadLibraryW(atow(dll_path))); }
-	template <class F> F get_proc_address( const char* name ) const { return hdll==nullptr?nullptr:(F)GetProcAddress(hdll,name); }
-	template <class F> F* get_proc_address( const char* name, F*& p ) const { return hdll==nullptr?p=nullptr:p=(F*)GetProcAddress(hdll,name); }
-	operator bool() const { return hdll!=nullptr; }
+	dll_t()=default; dll_t( const dll_t& )=delete; dll_t& operator=( const dll_t& )=delete; ~dll_t(){ cache.clear(); if(hdll){ FreeLibrary(hdll); hdll=nullptr; } }
+	dll_t( const char* dll_path ){ load(dll_path); }
+	operator HMODULE() const { return hdll; }
+	bool load( const char* dll_path ){ if(hdll) return true; return nullptr!=(hdll=LoadLibraryW(atow(dll_path))); }
+	[[nodiscard]] void* get_proc_address( const char* name ) const { if(!hdll) return nullptr; auto j=cache.find(name); return j!=cache.end()?j->second:(const_cast<decltype(cache)&>(cache)[name]=GetProcAddress(hdll,name)); }
+	template <class F> [[nodiscard]] auto get_proc_address( const char* name ) const { return hdll?proc_t<F>{reinterpret_cast<typename proc_t<F>::type>(get_proc_address(name))}:proc_t<F>{}; }
+	const char* file_path(){ static char f[_MAX_PATH]={}; wchar_t w[_MAX_PATH]={}; if(hdll) GetModuleFileNameW(hdll,w,_MAX_PATH); return strcpy(f,wtoa(w)); }
+protected:
+	std::map<string,void*> cache;
 };
 #endif
 
