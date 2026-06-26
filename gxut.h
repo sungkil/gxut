@@ -1036,6 +1036,7 @@ struct dll_t
 	dll_t( const char* dll_path ){ load(dll_path); }
 	operator HMODULE() const { return hdll; }
 	bool load( const char* dll_path ){ if(hdll) return true; return nullptr!=(hdll=LoadLibraryW(atow(dll_path))); }
+	template <class F> F* get_proc_address( const char* name, F*& p ) const { return hdll==nullptr?p=nullptr:p=(F*)GetProcAddress(hdll,name); }
 	[[nodiscard]] void* get_proc_address( const char* name ) const { if(!hdll) return nullptr; auto j=cache.find(name); return j!=cache.end()?j->second:(const_cast<decltype(cache)&>(cache)[name]=GetProcAddress(hdll,name)); }
 	template <class F> [[nodiscard]] auto get_proc_address( const char* name ) const { return hdll?proc_t<F>{reinterpret_cast<typename proc_t<F>::type>(get_proc_address(name))}:proc_t<F>{}; }
 	const char* file_path(){ static char f[_MAX_PATH]={}; wchar_t w[_MAX_PATH]={}; if(hdll) GetModuleFileNameW(hdll,w,_MAX_PATH); return strcpy(f,wtoa(w)); }
