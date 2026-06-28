@@ -378,10 +378,10 @@ __noinline bool redirect_process( const char* app, const char* args=nullptr,
 		read_count += n_read;
 	}
 
-	safe_close_handle( pi.hThread );
-	safe_close_handle( pi.hProcess );
-	safe_close_handle( stdout_read );
-	safe_close_handle( stdout_write );
+	safe_close( pi.hThread );
+	safe_close( pi.hProcess );
+	safe_close( stdout_read );
+	safe_close( stdout_write );
 
 	if(count) *count = read_count;
 	return true;
@@ -410,7 +410,7 @@ __noinline bool runas( const char* app, const char* args=nullptr, bool wait=true
 	if(wait)
 	{
 		if(info.hProcess) WaitForSingleObject(info.hProcess,INFINITE);
-		safe_close_handle(info.hProcess);
+		safe_close(info.hProcess);
 	}
 	return true;
 }
