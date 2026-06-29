@@ -101,7 +101,7 @@ struct capture_t
 	capture_t& clear(){ memset(this,0,sizeof(*this)); return *this; }
 };
 
-// globally shared data; registerd or allocated in factory
+// globally shared data; registered or allocated in factory
 struct shared_t
 {
 	struct var // shared variable type
