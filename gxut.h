@@ -909,7 +909,7 @@ __noinline void add_path( path_t d ){ add_paths({d}); }
 //*************************************
 
 //*************************************
-namespace os { // minimal process definitions and message boxes
+namespace os { // minimal process definitions, message boxes, within-app shared data, ...
 //*************************************
 
 __noinline const char* get_last_error( DWORD error=0 )
@@ -1008,6 +1008,18 @@ __noinline bool create_process( const char* app, const char* args=nullptr, bool 
 	return true;
 }
 #endif
+
+// within-app shared pointer, which requires setting in app
+template <class T> struct named_shared_t
+{
+	named_shared_t( string name="named_shared<"s+string(typeid(T).name())+">"s ){ mapping=OpenFileMappingA(FILE_MAP_ALL_ACCESS,0,name.c_str()); if(!mapping||mapping==INVALID_HANDLE_VALUE){mapping=CreateFileMappingA(INVALID_HANDLE_VALUE,0,PAGE_READWRITE,0,sizeof(void*),name.c_str()); if(!mapping||mapping==INVALID_HANDLE_VALUE){ printf("%s::mapping==INVALID_HANDLE_VALUE\n",name.c_str()); return; }} view=(decltype(view))MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(view)); }
+	~named_shared_t(){ if(view){ UnmapViewOfFile(view); view=nullptr; } safe_close(mapping); }
+	operator T*&(){ return *view; }		operator const T*&() const { return *view; }
+	T*& operator->(){ return *view; }	const T*& operator->() const { return *view; }
+protected:
+	HANDLE	mapping = nullptr;
+	T**		view = nullptr;
+};
 
 //*************************************
 } // end namespace os
