@@ -21,6 +21,7 @@ struct registry_t
 	struct
 	{
 		string	name, custom_name, icon, cmd;
+		struct { bool multiselect=true; } b;
 		struct { bool before=false, after=false; } separator;
 	} shell;
 
@@ -87,6 +88,7 @@ bool registry_t::add_shell_impl( string subkey, bool b_log )
 	auto* d=get_or_create_datum<root>(subkey); if(!d) return false;
 	if(!shell.custom_name.empty())	d->value = shell.custom_name;
 	if(!shell.icon.empty())			d->entries.emplace_back("Icon",shell.icon);
+	if(shell.b.multiselect)			d->entries.emplace_back("MultiSelectModel","Player");
 	if(shell.separator.before)		d->entries.emplace_back("SeparatorBefore","");
 	if(shell.separator.after)		d->entries.emplace_back("SeparatorAfter","");
 
