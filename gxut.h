@@ -919,12 +919,12 @@ __noinline const char* get_last_error( DWORD error=0 )
 	snprintf(buff,4096,"%s (code=%x)",s,uint(error));LocalFree(s);return buff;
 }
 
-__noinline string read_process( string cmd )
+__noinline string read_process( string cmd, int* exit_code=nullptr )
 {
 	FILE* pp = popen(cmd.c_str(),"rb"); if(!pp) return "";
 	vector<char> v; v.reserve(1024); char buff[64]={}; size_t n=0; while( (n=fread(buff,1,sizeof(buff),pp)) ) v.insert(v.end(),buff,buff+n); v.emplace_back(0);
-	bool b_eof= feof(pp); pclose(pp); if(!b_eof) printf("%s(%s): broken pipe\n", __func__, cmd.c_str() );
-	return v.data();
+	bool b_eof=feof(pp); int r=pclose(pp); if(exit_code) *exit_code=r; if(!b_eof) printf("%s(%s): broken pipe\n", __func__, cmd.c_str() );
+	return std::move(string(v.data()));
 }
 
 #ifdef __msvc__
