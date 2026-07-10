@@ -290,9 +290,11 @@ template <class T=void> struct sized_ptr_t
 {
 	T* ptr=nullptr; size_t size=0; const bool auto_free=false;
 	~sized_ptr_t(){ if(auto_free) safe_free(ptr); } sized_ptr_t()=default;
+	sized_ptr_t( const sized_ptr_t& other ) noexcept {memcpy(&ptr,&other.ptr,sizeof(*this));if(other.auto_free)const_cast<bool&>(auto_free)=false;}
 	sized_ptr_t( sized_ptr_t&& other ) noexcept {memcpy(&ptr,&other.ptr,sizeof(*this));memset(&other.ptr,0,sizeof(other));}
 	sized_ptr_t( T* ptr, size_t size, bool autofree=false ):auto_free(autofree){this->ptr=ptr;this->size=size;}
 	sized_ptr_t& operator=( sized_ptr_t&& other ){memcpy(&ptr,&other.ptr,sizeof(*this));memset(&other.ptr,0,sizeof(other));return *this;}
+	sized_ptr_t& operator=( const sized_ptr_t& other ){memcpy(&ptr,&other.ptr,sizeof(*this));if(other.auto_free)const_cast<bool&>(auto_free)=false;return *this;}
 	operator T* (){return ptr;} operator const T* () const {return ptr;} T* operator->(){return ptr;} const T* operator->() const {return ptr;}
 };
 
