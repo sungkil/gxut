@@ -44,7 +44,13 @@ inline image* load_image( const char* file_path, bool vflip=true, bool force_rgb
 inline image* load_image_header( const char* file_path ){ static auto rex_load_image_header = get_proc_address<decltype(&load_image_header)>("rex_load_image_header"); return rex_load_image_header( file_path ); }
 inline image* load_image_from_memory( void* ptr, size_t size, bool vflip=true, bool force_rgb=true ){ static auto rex_load_image_from_memory = get_proc_address<decltype(&load_image_from_memory)>("rex_load_image_from_memory"); return rex_load_image_from_memory( ptr, size, vflip, force_rgb ); }
 inline void   save_image( const char* file_path, image* pimage, bool vflip=true, bool force_rgb=false, int quality=95 ){ static auto rex_save_image = get_proc_address<decltype(&save_image)>("rex_save_image"); if(pimage) rex_save_image( file_path, pimage, vflip, force_rgb, quality ); }
-inline void   resize_image( image* src, image* dst ){ static auto rex_resize_image = get_proc_address<decltype(&resize_image)>("rex_resize_image"); if(src&&dst) rex_resize_image(src,dst); }
+inline image* copy_image( image* src, image* dst, bool vflip=false ){ static auto rex_copy_image = get_proc_address<decltype(&copy_image)>("rex_copy_image"); return rex_copy_image(src,dst,vflip); }
+inline image* resize_image( image* src, image* dst ){ static auto rex_resize_image = get_proc_address<decltype(&resize_image)>("rex_resize_image"); return src&&dst?rex_resize_image(src,dst):nullptr; }
+inline image* vflip_image( image* src, image* dst ){ return copy_image(src,dst,true); }
+inline image* rgb_to_gray( image* src, image* dst, bool vflip=false ){ static auto rex_rgb_to_gray = get_proc_address<decltype(&rgb_to_gray)>("rex_rgb_to_gray"); return rex_rgb_to_gray(src,dst,vflip); }
+inline image* rgb_to_bgr( image* src, image* dst, bool vflip=false ){ static auto rex_rgb_to_bgr = get_proc_address<decltype(&rgb_to_bgr)>("rex_rgb_to_bgr"); return rex_rgb_to_bgr(src,dst,vflip); }
+inline image* rgb_to_rgba( image* src, image* dst, bool vflip=false ){ static auto rex_rgb_to_rgba = get_proc_address<decltype(&rgb_to_rgba)>("rex_rgb_to_rgba"); return rex_rgb_to_rgba(src,dst,vflip); }
+inline image* rgba_to_rgb( image* src, image* dst, bool vflip=false ){ static auto rex_rgba_to_rgb = get_proc_address<decltype(&rgba_to_rgb)>("rex_rgba_to_rgb"); return rex_rgba_to_rgb(src,dst,vflip); }
 
 // progressive rendering plugin helper
 struct progressive_t
