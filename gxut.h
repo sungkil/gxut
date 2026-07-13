@@ -337,6 +337,20 @@ using longlong2	= tarray2<int64_t>;		using longlong3	= tarray3<int64_t>;		using 
 using ulonglong2= tarray2<uint64_t>;	using ulonglong3= tarray3<uint64_t>;	using ulonglong4= tarray4<uint64_t>;
 #endif
 
+// zero-padded 4-byte bool (for 4-byte GLSL bool)
+struct alignas(4) bool32_t
+{
+	constexpr bool32_t() noexcept = default;
+	constexpr bool32_t( bool b )  noexcept : v(b){}
+	operator bool&() noexcept { return v; }
+	operator const bool&() const noexcept { return v; }
+	constexpr bool32_t& operator=( bool b ) noexcept { v=b; return *this; }
+private:
+	bool v=false; char z[3]={};
+};
+static_assert(std::is_standard_layout_v<bool32_t>);
+static_assert(std::is_trivially_copyable_v<bool32_t>);
+
 //*************************************
 namespace cpu {
 //*************************************
