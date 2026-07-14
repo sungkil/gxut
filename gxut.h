@@ -204,6 +204,11 @@ namespace fs = std::filesystem;
 	#include <stdfloat> // float16_t; but not implemented yet
 #endif
 
+// SSE 4.2
+#if (defined(_M_X64)||defined(__LP64__))&&__has_include(<nmmintrin.h>)
+	#include <nmmintrin.h>
+#endif
+
 // platform-independent posix headers
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -391,6 +396,14 @@ __noinline unsigned int crc32( unsigned int crc0, const void* ptr, size_t size )
 	for(;size;size--,b++)c=t[0][(c^(*b))&0xff]^(c>>8);
 	return ~c;
 }
+
+#ifdef _INCLUDED_NMM
+template <class T, size_t N> concept pod_crc_type_t = sizeof(T)==N&&std::is_trivially_copyable_v<T>&&(std::is_integral_v<T>||std::is_floating_point_v<T>);
+template <pod_crc_type_t<1> T> unsigned int crc32c( unsigned int crc0, T value ){ return _mm_crc32_u8(crc0,std::bit_cast<unsigned char>(value)); }
+template <pod_crc_type_t<2> T> unsigned int crc32c( unsigned int crc0, T value ){ return _mm_crc32_u16(crc0,std::bit_cast<unsigned short>(value)); }
+template <pod_crc_type_t<4> T> unsigned int crc32c( unsigned int crc0, T value ){ return _mm_crc32_u32(crc0,std::bit_cast<unsigned int>(value)); }
+template <pod_crc_type_t<8> T> unsigned int crc32c( unsigned int crc0, T value ){ return _mm_crc32_u64(crc0,std::bit_cast<unsigned __int64>(value)); }
+#endif
 
 #ifdef __msvc__
 inline bool is_utf8( const char* s )

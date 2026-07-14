@@ -24,7 +24,7 @@
 #if __has_include("gxfilesystem.h")
 	#include "gxfilesystem.h"
 #endif
-#if __has_include(<nmmintrin.h>)
+#if (defined(_M_X64)||defined(__LP64__))&&__has_include(<nmmintrin.h>)
 	#include <nmmintrin.h>
 #endif
 
@@ -177,7 +177,7 @@ __noinline unsigned int crc32c_hw( unsigned int crc0, const void* ptr, size_t si
 	return uint32_t(~c);
 }
 inline bool __has_sse42(){ static bool b=false; if(!b){int r[4]={};__cpuid(r,1);b=(((r[2]>>20)&1)==1);} return b; }
-inline unsigned int crc32c( unsigned int crc0, const void* ptr, size_t size ){ static unsigned int(*pcrc32c)(unsigned int,const void*,size_t)=__has_sse42()?crc32c_hw:crc32<0x82f63b78UL>; return ptr&&size?pcrc32c(crc0,ptr,size):crc0; }
+inline unsigned int crc32c( unsigned int crc0, const void* ptr, size_t size ){ static bool has_sse42=__has_sse42(); if(!ptr||!size) return crc0; return has_sse42?crc32c_hw(crc0,ptr,size):crc32<0x82f63b78UL>(crc0,ptr,size); }
 #else
 inline unsigned int crc32c( unsigned int crc0, const void* ptr, size_t size ){ return ptr&&size?crc32<0x82f63b78UL>(crc0,ptr,size):crc0; }
 #endif
