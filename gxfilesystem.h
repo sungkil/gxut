@@ -195,7 +195,7 @@ struct path : public path_t
 	const char* slash() const { return __strdup(to_slash().c_str()); }
 	const char* as( path base="" ) const { return absolute(base).slash(); } // absolute slash
 	const char* rs( path from="" ) const { return relative(from).slash(); } // relative slash
-	const char* auto_quote() const { if(!*_data||(_data[0]=='\"'&&_data[strlen(_data)-1]=='\"')) return c_str(); auto* t=__strbuf(capacity); size_t l=strlen(_data); memcpy(t,_data,l*sizeof(value_type)); if(t[l]==' '||t[l]=='\t'||t[l]=='\n') t[l]=0; if(t[0]==' '||t[0]=='\t'||t[0]=='\n') t++; if(t[0]!='-'&&!strpbrk(t," \t\n|&<>")) return c_str(); path p; p[0]='\"'; memcpy(p._data+1, _data, l*sizeof(value_type)); p[l+1]='\"'; p[l+2]=0; return __strdup(p.c_str()); }
+	const char* auto_quote() const { static constexpr char q='\"'; if(!*_data) return _data; size_t l=strlen(_data); if(_data[0]==q&&_data[l-1]==q) return _data; value_type* t=strncpy(__strbuf(l+2)+1,_data,l);t[l]=0; if(auto b=t[l-1];b==' '||b=='\t'||b=='\n') t[--l]=0; if(auto f=t[0];f==' '||f=='\t'||f=='\n'){ t++; l--; } if(strpbrk(t," \t\n|&<>")){t[l]=q;t[l+1]=0;*(--t)=q;} return t; }
 
 	// shell operations
 	bool copy_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()||dst.empty()) return false; if(dst.is_dir()||__is_separator(dst.back())) dst=dst.append_slash()+name(); dst.dir().mkdir(); if(dst.exists()&&overwrite){ if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } return bool(CopyFileW( atow(c_str()), atow(dst.c_str()), overwrite?FALSE:TRUE)); }
