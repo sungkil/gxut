@@ -77,8 +77,14 @@ __noinline bool updater::fetch()
 	if(inet::is_offline()) return false;
 
 	// fetch index first
-	wget(server_dir+"index.txt",cache.index); // try to download index; still may return false for cache
-	if(!cache.index.exists()) return false; // no index found
+	path cache_lastfailure = cache.index+".lastfailure";
+	if(cache_lastfailure.exists()&&(now()-cache_lastfailure.mtime())<time_offset(0,1)) return false; // do not check failed update too frequently
+	if(!wget(server_dir+"index.txt",cache.index)||!cache.index.exists())
+	{
+		if(!cache_lastfailure.exists()) fclose(cache_lastfailure.fopen("w")); cache_lastfailure.utime(now());
+		return false; // try to download index; still may return false for cache
+	}
+	if(cache_lastfailure.exists()) cache_lastfailure.delete_file(); // delete failure check when updating index well
 
 	// read indices
 	std::map<string,time_t> indices;
