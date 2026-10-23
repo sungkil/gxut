@@ -335,7 +335,7 @@ inline HWND find_window( const char* name_filter_or_class )
 //*************************************
 // create process
 __noinline int redirect_process( const char* app, const char* args=nullptr,
-	uint* count=nullptr, DWORD priority=NORMAL_PRIORITY_CLASS )
+	uint* count=nullptr, DWORD priority=NORMAL_PRIORITY_CLASS, bool include_stderr=false, string* output_buffer=nullptr )
 {
 	#pragma warning( disable: 6248 ) // Setting a SECURITY_DESCRIPTOR's DACL to NULL will result in an unprotected object.
 	SECURITY_DESCRIPTOR sd; InitializeSecurityDescriptor(&sd,SECURITY_DESCRIPTOR_REVISION); SetSecurityDescriptorDacl(&sd,true,NULL,false);
@@ -357,34 +357,42 @@ __noinline int redirect_process( const char* app, const char* args=nullptr,
 	STARTUPINFOW si={sizeof(si)};
 	si.dwFlags		= STARTF_USESHOWWINDOW;
 	si.wShowWindow	= SW_HIDE;
-	si.hStdError	= stdout_write;
+	si.hStdError	= include_stderr?stdout_write:GetStdHandle(STD_ERROR_HANDLE);
 	si.hStdOutput	= stdout_write;
 	si.hStdInput	= INVALID_HANDLE_VALUE;
 	si.dwFlags		= si.dwFlags|STARTF_USESTDHANDLES;
 
 	// create process and wait if necessary
-	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,build_cmdline(app,args),0,0,TRUE,priority,0,0,&si,&pi )||!pi.hProcess||!pi.hThread){ printf("%s\n",os::get_last_error()); return -1; }
+	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,build_cmdline(app,args),0,0,TRUE,priority|CREATE_NO_WINDOW,0,0,&si,&pi )||!pi.hProcess||!pi.hThread){ printf("%s\n",os::get_last_error()); return -1; }
+	safe_close( stdout_write );
 
 	static char* buff=nullptr; static size_t blen=0;
 	DWORD n_avail=0,  exit=0, n_read=0, read_count=0;
 	while( PeekNamedPipe( stdout_read, nullptr, 0, nullptr, &n_avail, nullptr ))
 	{
-		GetExitCodeProcess(pi.hProcess,&exit); if(exit!=STILL_ACTIVE) break;
-		if(n_avail==0){ Sleep(1); continue; }
-		if(blen<n_avail){ char* buff1=(char*)realloc(buff,((blen=n_avail)+1)*sizeof(char)); if(buff1) buff=buff1; }
-		if(!buff){ printf("%s(): null buff\n",__func__); break; }
-		if(!ReadFile(stdout_read, buff, n_avail, &n_read, nullptr)) return -1; if(n_read==0) continue;
-		buff[n_read]=0; printf(read_count==0?ltrim(buff):buff);
+		GetExitCodeProcess(pi.hProcess,&exit);
+		if(n_avail==0){ if(exit!=STILL_ACTIVE) break; Sleep(1); continue; }
+		if(blen<n_avail){ char* buff1=(char*)realloc(buff,(n_avail+1)*sizeof(char)); if(!buff1) break; buff=buff1; blen=n_avail; } if(!buff){ printf("%s(): null buff\n",__func__); break; }
+		if(!ReadFile(stdout_read, buff, n_avail, &n_read, nullptr)) break; if(n_read==0) continue; buff[n_read]=0;
+		if(output_buffer)	output_buffer->append(buff,n_read);
+		else				printf("%s",read_count==0?ltrim(buff):buff);
 		read_count += n_read;
 	}
 
+	WaitForSingleObject(pi.hProcess,1024);
+	GetExitCodeProcess(pi.hProcess,&exit);
 	safe_close( pi.hThread );
 	safe_close( pi.hProcess );
 	safe_close( stdout_read );
-	safe_close( stdout_write );
 
 	if(count) *count = read_count;
 	return exit;
+}
+
+template <> __noinline string read_process<true>( string cmd, int* exit_code )
+{
+	string r; int ecode=redirect_process( nullptr, cmd.c_str(), nullptr, NORMAL_PRIORITY_CLASS, false, &r ); if(exit_code) *exit_code = ecode;
+	return (0==ecode)?r:"";
 }
 
 #ifdef _INC_SHELLAPI

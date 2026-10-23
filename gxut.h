@@ -950,6 +950,7 @@ __noinline const char* get_last_error( DWORD error=0 )
 	snprintf(buff,4096,"%s (code=%x)",s,uint(error));LocalFree(s);return buff;
 }
 
+template <bool hide_console=false>
 __noinline string read_process( string cmd, int* exit_code=nullptr )
 {
 	FILE* pp = popen(cmd.c_str(),"rb"); if(!pp) return "";
