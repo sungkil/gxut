@@ -482,7 +482,7 @@ __noinline const wchar_t* normalize_string( const wchar_t* s )
 }
 
 // common unnecesary unicode symbols to common ansi
-__noinline const wchar_t* unicode_symbols_to_ansi( const wchar_t* str )
+__noinline const wchar_t* escape_unicode_symbols( const wchar_t* str )
 {
 	wchar_t* b=__strdup(str);
 	static std::map<int,wchar_t> lut =
@@ -498,6 +498,12 @@ __noinline const wchar_t* unicode_symbols_to_ansi( const wchar_t* str )
 	{ auto it=lut.find(b[k]); if(it!=lut.end()) b[k]=it->second; }
 
 	return b;
+}
+
+__noinline const char* escape_unicode_symbols( const char* s )
+{
+	if(!s||!*s) return s;
+	return wtoa(escape_unicode_symbols(atow(s)));
 }
 
 template <class T> __noinline const T* auto_quote( const T* _Src )
