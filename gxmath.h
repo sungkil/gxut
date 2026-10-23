@@ -609,7 +609,9 @@ template <class T> __forceinline tmat4<T> outerProduct( const tvec4<T>& v0, cons
 template <class T, class X, class Y> T clamp( T v, X vmin, Y vmax ){ return v<T(vmin)?T(vmin):v>T(vmax)?T(vmax):v; }
 template <class X, class T=float> __forceinline T radians( X f ){ return f*pi_v<T>/T(180.0); }
 template <class X, class T=float> __forceinline T degrees( X f ){ return f*T(180.0)/pi_v<T>; }
-template <class X, class T=float> __forceinline T round( X f, int digits ){ T m=T(pow(10.0,digits)); return round(f*m)/m; }
+template <class X, class T=float> __forceinline T round( X f, int digits ){ T m=digits==0?1:T(pow(10.0,digits)); return ::round(f*m)/m; }
+__forceinline double round( double f, int digits ){ double m=digits==0?1:double(pow(10.0,digits)); return ::round(f*m)/m; }
+__forceinline long double round( long double f, int digits ){ long double m=digits==0?1:long double(pow(10.0,digits)); return ::round(f*m)/m; }
 __forceinline float fract( float f ){ return float(f-floor(f)); }
 template <floating_point T> __forceinline float  mix( float v1, float v2, T t ){ return v1*(1.0f-float(t))+v2*float(t); }
 template <floating_point T> __forceinline double mix( double v1, double v2, T t ){ return v1*(1.0-double(t))+v2*double(t); }
@@ -642,8 +644,9 @@ template <template<typename...> class V, floating_point T, floating_point U> req
 template <template<typename...> class V, floating_point T, floating_point U> requires tvec<V>||tmat<V> V<T> mix( const V<T>& y1, const V<T>& y2, U t ){ V<T> v; for(int k=0;k<V<T>::N;k++) v[k]=y1[k]*(-T(t)+1.0f)+y2[k]*T(t); return v; }
 __forceinline vec3 reflect( const vec3& I, const vec3& N ){ return I-N*dot(I,N)*2.0f; }	// I: incident vector, N: normal
 __forceinline vec3 refract( const vec3& I, const vec3& N, float eta /* = n0/n1 */ ){ float d = dot(I,N); float k = 1.0f-eta*eta*(1.0f-d*d); return k<0.0f?0.0f:(I*eta-N*(eta*d+sqrtf(k))); } // I: incident vector, N: normal
-__TVEC__ __forceinline V<T> smoothstep( T edge0, T edge1, V<T> t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*(3.0f-t*2.0f); }
-__TVEC__ __forceinline V<T> smootherstep( T edge0, T edge1, V<T> t ){	t=saturate((t-edge0)/(edge1-edge0)); return t*t*t*(6.0f*t*t-15.0f*t+10.0f); }
+__TVEC__ __forceinline V<T> smoothstep( T edge0, T edge1, V<T> t ){ t=saturate((t-edge0)/(edge1-edge0)); return t*t*(3.0f-t*2.0f); }
+__TVEC__ __forceinline V<T> smootherstep( T edge0, T edge1, V<T> t ){ t=saturate((t-edge0)/(edge1-edge0)); return t*t*t*(6.0f*t*t-15.0f*t+10.0f); }
+__TVEC__ __forceinline V<T> round( V<T> v, int digits ){ for(size_t k=0;k<V<T>::N;k++) v[k]=::round<T,T>(v[k],digits); return v; }
 
 // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_shading_language_packing.txt
 // GLSL-like bit manipulation functions
