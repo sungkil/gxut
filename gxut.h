@@ -132,7 +132,6 @@ inline int __cdecl vsnprintf( char* const _Buffer, size_t const _BufferCount, ch
 inline int __cdecl vswprintf( wchar_t* const _Buffer, size_t const _BufferCount, wchar_t const* const _Format, va_list _ArgList ){ int const _Result = __stdio_common_vswprintf( _CRT_INTERNAL_LOCAL_PRINTF_OPTIONS, _Buffer, _BufferCount, _Format, NULL, _ArgList); return _Result < 0 ? -1 : _Result; }
 inline int __cdecl vsscanf( char const* const _Buffer, char const* const _Format, va_list _ArgList ){ return __stdio_common_vsscanf( _CRT_INTERNAL_LOCAL_SCANF_OPTIONS|_CRT_INTERNAL_SCANF_SECURECRT, _Buffer, (size_t)-1, _Format, NULL, _ArgList); }
 inline int __cdecl sscanf( char const* const _Buffer, char const* const _Format, ... ){ int _Result; va_list _ArgList; __crt_va_start(_ArgList, _Format); _Result = __stdio_common_vsscanf( _CRT_INTERNAL_LOCAL_SCANF_OPTIONS, _Buffer, (size_t)-1, _Format, NULL, _ArgList); return _Result; }
-inline int __cdecl puts( char const* _Buffer ){ return fputs(_Buffer,stdout); }
 #endif
 // a safer alternative to fscanf (dangerous with newlines): sscanf() after fgets()
 inline const char* __cdecl fgetsf( FILE* const _Stream, const char* fmt, ... ){ if(!_Stream) return nullptr; static thread_local char* buff=(char*)malloc((1<<14)+1); if(!fgets(buff,(1<<14),_Stream)) return nullptr; if(!*buff) return buff; va_list a; va_start(a, fmt); int r=vsscanf(buff, fmt, a); va_end(a); return buff; }
@@ -506,11 +505,14 @@ inline const wchar_t*	vformat( __printf_format_string__ const wchar_t* const fmt
 inline const char*		__attribute__((format(printf,1,2))) format( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); size_t len=size_t(vsnprintf(0,0,fmt,a)); char* buffer=__strbuf(len); vsnprintf(buffer,len+1,fmt,a); va_end(a); return buffer; }
 inline const wchar_t*	format( __printf_format_string__ const wchar_t* fmt, ... ){ va_list a; va_start(a,fmt); size_t len=size_t(vswprintf(0,0,fmt,a)); wchar_t* bufferW=__strbuf<wchar_t>(len); vswprintf(bufferW,len+1,fmt,a); va_end(a); return bufferW; }
 
+// shortcuts to stderr
+inline int eprintf( __printf_format_string__ const char* fmt, ...  ){ va_list a; va_start(a,fmt); const char* m=vformat(fmt,a); va_end(a); return fputs(m,stderr); }
+inline int eputs( const char* s ){ return fputs(s,stderr); }
+
 // unified error/warn handling
 inline string& __get_global_error_buffer__(){ static string buffer; return buffer; }
 inline const char* error(){ return __get_global_error_buffer__().c_str(); }
 inline bool error( const char* fmt, ... ){ auto& e=__get_global_error_buffer__(); va_list a; va_start(a,fmt); e=vformat(fmt,a); va_end(a); if(e.back()!='\n') e+='\n'; return false; }
-inline bool eprintf( const char* err=nullptr ){ error(err); printf(error()); return false; }
 inline std::set<string>& __get_global_oncef_buffer__(){ static std::set<string> s; return s; }
 inline int oncef( const char* fmt, ... ){ va_list a; va_start(a,fmt); const char* m=vformat(fmt,a); va_end(a); auto& s=__get_global_oncef_buffer__(); if(s.find(m)!=s.end()) return 0; s.emplace(m); return printf(m); }
 
