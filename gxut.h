@@ -506,8 +506,12 @@ inline const char*		__attribute__((format(printf,1,2))) format( __printf_format_
 inline const wchar_t*	format( __printf_format_string__ const wchar_t* fmt, ... ){ va_list a; va_start(a,fmt); size_t len=size_t(vswprintf(0,0,fmt,a)); wchar_t* bufferW=__strbuf<wchar_t>(len); vswprintf(bufferW,len+1,fmt,a); va_end(a); return bufferW; }
 
 // shortcuts to stderr
+#ifdef _NO_CRT_STDIO_INLINE
+inline int eprintf( __printf_format_string__ const char* fmt, ...  );
+#else
 inline int eprintf( __printf_format_string__ const char* fmt, ...  ){ va_list a; va_start(a,fmt); const char* m=vformat(fmt,a); va_end(a); return fputs(m,stderr); }
 inline int eputs( const char* s ){ return fputs(s,stderr); }
+#endif
 
 // unified error/warn handling
 inline string& __get_global_error_buffer__(){ static string buffer; return buffer; }
