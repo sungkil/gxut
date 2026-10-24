@@ -956,15 +956,6 @@ __noinline const char* get_last_error( DWORD error=0 )
 	snprintf(buff,4096,"%s (code=%x)",s,uint(error));LocalFree(s);return buff;
 }
 
-template <bool hide_console=false>
-__noinline string read_process( string cmd, int* exit_code=nullptr )
-{
-	FILE* pp = popen(cmd.c_str(),"rb"); if(!pp) return "";
-	vector<char> v; v.reserve(1024); char buff[64]={}; size_t n=0; while( (n=fread(buff,1,sizeof(buff),pp)) ) v.insert(v.end(),buff,buff+n); v.emplace_back(0);
-	bool b_eof=feof(pp); int r=pclose(pp); if(exit_code) *exit_code=r; if(!b_eof) printf("%s(%s): broken pipe\n", __func__, cmd.c_str() );
-	return std::move(string(v.data()));
-}
-
 #ifdef __msvc__
 __noinline wchar_t* build_cmdline( const char* app, const char* args )
 {
@@ -995,8 +986,26 @@ __noinline wchar_t* build_cmdline( const char* app, const char* args )
 __noinline bool create_process( const char* app, const char* args=nullptr, bool wait=true, bool windowed=false, DWORD creation_flags=NORMAL_PRIORITY_CLASS )
 {
 	STARTUPINFOW si={sizeof(si)}; si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=windowed?SW_SHOW:SW_HIDE;
-	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,build_cmdline(app,args),0,0,FALSE,creation_flags,0,0,&si,&pi)||!pi.hProcess||!pi.hThread){ printf( "%s(%s,%s): failed to create process\n", __func__, app?app:"", args?args:"" ); return false; }
-	if(!wait) return true; WaitForSingleObject(pi.hProcess,INFINITE); DWORD ecode=0; if(!GetExitCodeProcess(pi.hProcess,&ecode)) ecode=EXIT_FAILURE; CloseHandle(pi.hThread); CloseHandle(pi.hProcess); return ecode==0;
+	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,build_cmdline(app,args),0,0,FALSE,creation_flags|(windowed?0:CREATE_NO_WINDOW),0,0,&si,&pi)||!pi.hProcess||!pi.hThread){ printf( "%s(%s,%s): failed to create process\n", __func__, app?app:"", args?args:"" ); return false; }
+	if(!wait){ CloseHandle(pi.hThread); CloseHandle(pi.hProcess); return true; } WaitForSingleObject(pi.hProcess,INFINITE); DWORD ecode=0; if(!GetExitCodeProcess(pi.hProcess,&ecode)) ecode=EXIT_FAILURE; CloseHandle(pi.hThread); CloseHandle(pi.hProcess); return ecode==0;
+}
+
+struct read_process_output_t
+{
+	int code=1; vector<char> buffer;
+	size_t size() const { auto l=buffer.size(); return l>=2?l-2:0; }
+	const void* data() const { return buffer.data(); }
+	const char* c_str() const { return buffer.data(); }
+	operator bool() const { return code==0; }
+};
+
+__noinline read_process_output_t read_process( const string& cmd )
+{
+	FILE* pp = popen(cmd.c_str(),"rb"); if(!pp){ eprintf("%s(): failed to popen \"%s\"\n",__func__,cmd.c_str()); return {}; }
+	read_process_output_t output; auto& v=output.buffer; v.reserve(256);
+	char buff[256]={}; size_t n=0; while( (n=fread(buff,1,sizeof(buff),pp)) ) v.insert(v.end(),buff,buff+n);
+	bool e=ferror(pp)!=0||!feof(pp); output.code=pclose(pp); if(e){ output.code=1; eprintf("%s: broken pipe or errors in %s\n", __func__, cmd.c_str() ); }
+	v.resize(v.size()+2,0); return output;
 }
 
 __noinline bool kill_process( string_view process_name, bool quiet=true )

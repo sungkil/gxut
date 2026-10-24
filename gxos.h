@@ -134,7 +134,7 @@ __noinline vector<std::pair<uint,string>> list_process( const char* app_name=nul
 {
 	string cmd= "tasklist /FO:csv";
 	if(app_name&&*app_name) cmd += format(" /FI \"ImageName eq %s\"",app_name );
-	string r = read_process(cmd.c_str());
+	auto r = read_process(cmd);
 	vector<std::pair<uint,string>> v; v.reserve(32);
 	char *ctx=0,*token=strtok_s(__strdup(r.c_str()),"\r\n",&ctx); // skip the first line
 	for(token=strtok_s(0,"\r\n",&ctx);token;token=strtok_s(0,"\r\n",&ctx))
@@ -333,10 +333,18 @@ inline HWND find_window( const char* name_filter_or_class )
 }
 
 //*************************************
-// create process
-__noinline int redirect_process( const char* app, const char* args=nullptr,
-	uint* count=nullptr, DWORD priority=NORMAL_PRIORITY_CLASS, bool include_stderr=false, string* output_buffer=nullptr )
+// advanced read_process
+struct read_process_info_t
 {
+	int (*callback)( const char* chunk, size_t count ) = nullptr;
+	bool show_window = false, read_stderr = false;
+	ulong priority = NORMAL_PRIORITY_CLASS;
+};
+
+__noinline read_process_output_t read_process( const string& cmd, const read_process_info_t& info )
+{
+	if(cmd.empty()){ printf("%s(): empty cmd\n",__func__); return {}; }
+
 	#pragma warning( disable: 6248 ) // Setting a SECURITY_DESCRIPTOR's DACL to NULL will result in an unprotected object.
 	SECURITY_DESCRIPTOR sd; InitializeSecurityDescriptor(&sd,SECURITY_DESCRIPTOR_REVISION); SetSecurityDescriptorDacl(&sd,true,NULL,false);
 	SECURITY_ATTRIBUTES sa={sizeof(SECURITY_ATTRIBUTES),&sd,TRUE/*inheritance*/};
@@ -344,55 +352,47 @@ __noinline int redirect_process( const char* app, const char* args=nullptr,
 
 	constexpr int REDIR_BUFFER_SIZE = 1<<24; // 16 MB should be enough for buffering; otherwise, stdout will not be written no more, which printf hangs
 	HANDLE stdout_read=INVALID_HANDLE_VALUE, stdout_write=INVALID_HANDLE_VALUE;	// parent process's stdout read handle, child process' stdout write handle
-	if(!CreatePipe( &stdout_read, &stdout_write, &sa, REDIR_BUFFER_SIZE )){ printf( "[redir] CreatePipe(stdout) failed: %s\n", os::get_last_error() ); return -1; }
-	if(stdout_read==INVALID_HANDLE_VALUE||stdout_write==INVALID_HANDLE_VALUE){ printf( "[redir] CreatePipe(stdout) failed: %s\n", os::get_last_error() ); return -1; }
-	if(!SetHandleInformation(stdout_read,HANDLE_FLAG_INHERIT,0)){ printf( "[redir] SetHandleInformation() failed: %s\n", os::get_last_error() ); return -1; }
-
-	// additional configuration for non-buffered IO
-	setvbuf( stdout, nullptr, _IONBF, 0 );	// absolutely needed
-	setvbuf( stderr, nullptr, _IONBF, 0 );	// absolutely needed
-	std::ios::sync_with_stdio();
+	if(!CreatePipe( &stdout_read, &stdout_write, &sa, REDIR_BUFFER_SIZE )){ printf( "%s(): CreatePipe(stdout) failed: %s\n", __func__, os::get_last_error() ); return {}; }
+	if(stdout_read==INVALID_HANDLE_VALUE||stdout_write==INVALID_HANDLE_VALUE){ printf( "%s(): CreatePipe(stdout) failed: %s\n", __func__, os::get_last_error() ); safe_close(stdout_read); safe_close(stdout_write); return {}; }
+	if(!SetHandleInformation(stdout_read,HANDLE_FLAG_INHERIT,0)){ printf( "%s(): SetHandleInformation() failed: %s\n",  __func__, os::get_last_error() ); safe_close(stdout_read); safe_close(stdout_write); return {}; }
 
 	// override startup attributes
 	STARTUPINFOW si={sizeof(si)};
 	si.dwFlags		= STARTF_USESHOWWINDOW;
-	si.wShowWindow	= SW_HIDE;
-	si.hStdError	= include_stderr?stdout_write:GetStdHandle(STD_ERROR_HANDLE);
+	si.wShowWindow	= info.show_window?SW_SHOW:SW_HIDE;
+	si.hStdError	= info.read_stderr?stdout_write:GetStdHandle(STD_ERROR_HANDLE);
 	si.hStdOutput	= stdout_write;
 	si.hStdInput	= INVALID_HANDLE_VALUE;
 	si.dwFlags		= si.dwFlags|STARTF_USESTDHANDLES;
 
 	// create process and wait if necessary
-	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,build_cmdline(app,args),0,0,TRUE,priority|CREATE_NO_WINDOW,0,0,&si,&pi )||!pi.hProcess||!pi.hThread){ printf("%s\n",os::get_last_error()); return -1; }
+	DWORD flag = info.priority|(!info.show_window?CREATE_NO_WINDOW:0);
+	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,__strdup<wchar_t,char>(cmd.c_str()),0,0,TRUE,flag,0,0,&si,&pi )||!pi.hProcess||!pi.hThread){ printf("%s(): %s\n",__func__,os::get_last_error()); safe_close(pi.hThread); safe_close(pi.hProcess); safe_close(stdout_read); safe_close(stdout_write); return {}; }
 	safe_close( stdout_write );
 
-	static char* buff=nullptr; static size_t blen=0;
-	DWORD n_avail=0,  exit=0, n_read=0, read_count=0;
+	read_process_output_t output = {};
+	char* buff=nullptr; size_t blen=0;
+	DWORD n_avail=0, ecode=0, n_read=0;
 	while( PeekNamedPipe( stdout_read, nullptr, 0, nullptr, &n_avail, nullptr ))
 	{
-		GetExitCodeProcess(pi.hProcess,&exit);
-		if(n_avail==0){ if(exit!=STILL_ACTIVE) break; Sleep(1); continue; }
-		if(blen<n_avail){ char* buff1=(char*)realloc(buff,(n_avail+1)*sizeof(char)); if(!buff1) break; buff=buff1; blen=n_avail; } if(!buff){ printf("%s(): null buff\n",__func__); break; }
+		GetExitCodeProcess(pi.hProcess,&ecode);
+		if(n_avail==0){ if(ecode!=STILL_ACTIVE) break; Sleep(1); continue; }
+		if(blen<n_avail){ char* buff1=(char*)realloc(buff,(n_avail+1)*sizeof(char)); if(!buff1) break; buff=buff1; blen=n_avail; } if(!buff){ printf("%s(): null buffer\n",__func__); break; }
 		if(!ReadFile(stdout_read, buff, n_avail, &n_read, nullptr)) break; if(n_read==0) continue; buff[n_read]=0;
-		if(output_buffer)	output_buffer->append(buff,n_read);
-		else				printf("%s",read_count==0?ltrim(buff):buff);
-		read_count += n_read;
+		output.buffer.insert(output.buffer.end(),buff,buff+n_read);
+		if(info.callback) info.callback(buff,n_read);
 	}
 
-	WaitForSingleObject(pi.hProcess,1024);
-	GetExitCodeProcess(pi.hProcess,&exit);
+	WaitForSingleObject(pi.hProcess,INFINITE);
+	GetExitCodeProcess(pi.hProcess,&ecode);
 	safe_close( pi.hThread );
 	safe_close( pi.hProcess );
 	safe_close( stdout_read );
+	if(buff){ free(buff); buff=nullptr; blen=0; }
 
-	if(count) *count = read_count;
-	return exit;
-}
-
-template <> __noinline string read_process<true>( string cmd, int* exit_code )
-{
-	string r; int ecode=redirect_process( nullptr, cmd.c_str(), nullptr, NORMAL_PRIORITY_CLASS, false, &r ); if(exit_code) *exit_code = ecode;
-	return (0==ecode)?r:"";
+	output.code = ecode;
+	output.buffer.insert(output.buffer.end(),{0,0});
+	return output;
 }
 
 #ifdef _INC_SHELLAPI
