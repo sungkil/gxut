@@ -983,10 +983,10 @@ __noinline wchar_t* build_cmdline( const char* app, const char* args )
 }
 
 // additional creation flags: CREATE_NO_WINDOW (hide console output), CREATE_NEW_CONSOLE
-__noinline bool create_process( const char* app, const char* args=nullptr, bool wait=true, bool windowed=false, DWORD creation_flags=NORMAL_PRIORITY_CLASS )
+__noinline bool create_process( const char* app, const char* args=nullptr, bool wait=true, bool windowed=false, DWORD creation_flags=NORMAL_PRIORITY_CLASS, bool hide_console_window=false )
 {
 	STARTUPINFOW si={sizeof(si)}; si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=windowed?SW_SHOW:SW_HIDE;
-	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,build_cmdline(app,args),0,0,FALSE,creation_flags|(windowed?0:CREATE_NO_WINDOW),0,0,&si,&pi)||!pi.hProcess||!pi.hThread){ printf( "%s(%s,%s): failed to create process\n", __func__, app?app:"", args?args:"" ); return false; }
+	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,build_cmdline(app,args),0,0,FALSE,creation_flags|(hide_console_window?CREATE_NO_WINDOW:0),0,0,&si,&pi)||!pi.hProcess||!pi.hThread){ printf( "%s(%s,%s): failed to create process\n", __func__, app?app:"", args?args:"" ); return false; }
 	if(!wait){ CloseHandle(pi.hThread); CloseHandle(pi.hProcess); return true; } WaitForSingleObject(pi.hProcess,INFINITE); DWORD ecode=0; if(!GetExitCodeProcess(pi.hProcess,&ecode)) ecode=EXIT_FAILURE; CloseHandle(pi.hThread); CloseHandle(pi.hProcess); return ecode==0;
 }
 
