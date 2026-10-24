@@ -993,10 +993,12 @@ __noinline bool create_process( const char* app, const char* args=nullptr, bool 
 struct read_process_output_t
 {
 	int code=1; vector<char> buffer;
+	bool empty() const { return buffer.size()<2; }
 	size_t size() const { auto l=buffer.size(); return l>=2?l-2:0; }
 	const void* data() const { return buffer.data(); }
 	const char* c_str() const { return buffer.data(); }
 	operator bool() const { return code==0; }
+	operator string() const { return string(buffer.data(),size()); }
 };
 
 __noinline read_process_output_t read_process( const string& cmd )
