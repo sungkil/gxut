@@ -130,7 +130,7 @@ __noinline bool updater::open()
 {
 	if(!cache.dst.exists()||cache.dst.mtime()<=dst.mtime()) return false;
 	if(!mbox.confirm("Found a new update. Would you like to update the app?")) return false;
-	return os::create_process( nullptr, format("%s --update %s",auto_quote(cache.dst.c_str()),auto_quote(dst.canonical().c_str())), false );
+	return cache.dst.create_process( format("--update %s",auto_quote(dst.canonical().c_str())), {.wait=false} );
 }
 
 __noinline bool update( string name="", path dst_path="" )

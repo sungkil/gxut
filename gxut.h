@@ -405,7 +405,7 @@ template <pod_crc_type_t<8> T> unsigned int crc32c( unsigned int crc0, T value )
 #endif
 
 #ifdef __msvc__
-inline bool is_utf8( const char* s )
+__noinline bool isutf8( const char* s )
 {
 	if(!s||!*s) return true; const unsigned char* b=(const unsigned char*)s;
 	const unsigned char* end=b+strlen(s); while(b<end)
@@ -424,14 +424,13 @@ inline bool is_utf8( const char* s )
 	}
 	return true;
 }
-
-inline const wchar_t* atow( const char* a ){ if(!a) return nullptr; if(!*a) return L""; uint cp=is_utf8(a)?CP_UTF8:0; int l=MultiByteToWideChar(cp,0,a,-1,0,0); wchar_t* w=__strbuf<wchar_t>(l); MultiByteToWideChar(cp,0,a,-1,w,l); w[l+1]=0; return w; }
-inline const char* wtoa( const wchar_t* w ){ if(!w) return nullptr; if(!*w) return ""; int l=WideCharToMultiByte(0,0,w,-1,0,0,0,0); char* a=__strbuf(l); WideCharToMultiByte(0,0,w,-1,a,l,0,0); a[l+1]=0; return a; }
-inline string wtos( const wchar_t* w ){ if(!w||!*w) return ""; int l=WideCharToMultiByte(0,0,w,-1,0,0,0,0); char* a=__strbuf(l); WideCharToMultiByte(0,0,w,-1,a,l,0,0); a[l+1]=0; return a; }
-inline const char* atoa( const char* src, uint src_cp, uint dst_cp ){ if(!src) return nullptr; if(!*src) return ""; if(src_cp==dst_cp) return __strdup(src); int l=MultiByteToWideChar(src_cp,0,src,-1,0,0); wchar_t* w=__strbuf<wchar_t>(l); MultiByteToWideChar(src_cp,0,src,-1,w,l); l=WideCharToMultiByte(dst_cp,0,w,-1,0,0,0,0); char* a=__strbuf(l); WideCharToMultiByte(dst_cp,0,w,-1,a,l,0,0); a[l+1]=0; return a; }
+inline const wchar_t* atow( const char* a, uint cp=-1 ){ if(!a) return nullptr; if(!*a) return L""; if(cp==-1){cp=isutf8(a)?CP_UTF8:0;} int l=MultiByteToWideChar(cp,0,a,-1,0,0); wchar_t* w=__strbuf<wchar_t>(l); MultiByteToWideChar(cp,0,a,-1,w,l); w[l+1]=0; return w; }
+template<uint cp=0> const char* wtoa( const wchar_t* w ){ if(!w) return nullptr; if(!*w) return ""; int l=WideCharToMultiByte(cp,0,w,-1,0,0,0,0); char* a=__strbuf(l); WideCharToMultiByte(cp,0,w,-1,a,l,0,0); a[l+1]=0; return a; }
+template<uint cp=0> string wtos( const wchar_t* w ){ if(!w||!*w) return ""; int l=WideCharToMultiByte(cp,0,w,-1,0,0,0,0); char* a=__strbuf(l); WideCharToMultiByte(cp,0,w,-1,a,l,0,0); a[l+1]=0; return a; }
+template<uint cp=CP_UTF8> const char* atoa( const char* src ){ if(!src) return nullptr; if(!*src) return ""; uint cp0=isutf8(src)?CP_UTF8:0; if(cp0==cp) return __strdup(src); return wtoa<cp>(atow(src,cp0)); }
 inline bool ismbs( const char* s ){ if(!s||!*s) return false; for(int k=0,kn=int(strlen(s));k<kn;k++,s++) if(*s<0)return true; return false; }
-inline bool is_korean_cp( unsigned cp, bool syllable_only=true ){ if(cp>=0xAC00&&cp<=0xD7A3) return true; if(syllable_only) return false; return (cp>=0x1100&&cp<=0x11FF)||(cp>=0x3131&&cp<=0x318E)||(cp>=0xA960&&cp<=0xA97F)||(cp>=0xD7B0&&cp<=0xD7FF)||(cp>=0xFFA0&&cp<=0xFFDC); }
-inline bool has_korean( const char* s, bool syllable_only=true ){ if(!s||!*s) return false; if(!is_utf8(s)) s=atoa(s,0,CP_UTF8); const unsigned char* p=(const unsigned char*)s, *e=p+strlen(s); while(p<e){ unsigned char a=*p; if(a<0x80){ p++; continue; } if(a>=0xE1&&a<=0xEF&&e-p>=3&&(p[1]&0xC0)==0x80&&(p[2]&0xC0)==0x80){ unsigned cp=((a&0x0F)<<12)|((p[1]&0x3F)<<6)|(p[2]&0x3F); if(is_korean_cp(cp,syllable_only)) return true; p+=3; continue; } p++; } return false; }
+template<bool syllable_only=true> bool iskor( unsigned c ){ if(c>=0xAC00&&c<=0xD7A3) return true; if constexpr(syllable_only) return false; return (c>=0x1100&&c<=0x11FF)||(c>=0x3131&&c<=0x318E)||(c>=0xA960&&c<=0xA97F)||(c>=0xD7B0&&c<=0xD7FF)||(c>=0xFFA0&&c<=0xFFDC); }
+template<bool syllable_only=true> bool strkor( const char* s ){ if(!s||!*s) return false; s=atoa<CP_UTF8>(s); const unsigned char* p=(const unsigned char*)s, *e=p+strlen(s); while(p<e){ unsigned char a=*p; if(a<0x80){ p++; continue; } if(a>=0xE1&&a<=0xEF&&e-p>=3&&(p[1]&0xC0)==0x80&&(p[2]&0xC0)==0x80){ unsigned c = ((a&0x0F)<<12)|((p[1]&0x3F)<<6)|(p[2]&0x3F); if(iskor<syllable_only>(c)) return true; p+=3; continue; } p++; } return false; }
 #else
 inline const wchar_t* atow( const char* a ){ if(!a) return nullptr; if(!*a) return L""; const char* p=a; size_t l=mbsrtowcs(0,&p,0,0); wchar_t* b=__strbuf<wchar_t>(l); mbstate_t s={}; mbsrtowcs(b,&p,l+1,&s); b[l+1]=0; return b; }
 inline const char* wtoa( const wchar_t* w ){ if(!w) return nullptr; if(!*w) return ""; const wchar_t* p=w; size_t l=wcsrtombs(0,&p,0,0); char* b=__strbuf(l); mbstate_t s={}; wcsrtombs(b,&p,l+1,&s); b[l+1]=0; return b; }
@@ -623,6 +622,7 @@ struct path_t
 	path_t() noexcept { __alloc(); memset(_data+capacity,0,sizeof(attrib_t)); }
 	path_t( const path_t& p ) noexcept { strcpy(__alloc(),p._data); memcpy(_data+capacity,p._data+capacity,sizeof(attrib_t)); }
 	path_t( path_t&& p ) noexcept { _data=p._data; p._data=nullptr; } // cache moves as well
+	path_t( std::nullptr_t nil ) noexcept : path_t() {}
 	path_t( const value_type* s ) noexcept : path_t() { if(s&&*s) strcpy(_data,s); }
 	path_t( const string_type& s ) noexcept : path_t() { strcpy(_data,s.c_str()); }
 	path_t( string_view_type s ) noexcept : path_t() { size_t l=s.size(); if(l) memcpy(_data,s.data(),l*sizeof(value_type)); _data[l]=0; }
@@ -960,7 +960,7 @@ __noinline const char* get_last_error( DWORD error=0 )
 __noinline wchar_t* build_cmdline( const char* app, const char* args )
 {
 	// allocate buffers
-	size_t za=app?strlen(app):0, zg=args?strlen(args):0;
+	size_t za=app&&*app?strlen(app):0, zg=args&&*args?strlen(args):0;
 	vector<char> va(1024,0), vb(1024,0), vc(1024,0); { size_t z=za; if(zg>z) z=zg; z=z<<1; if(va.size()<z){ va.resize(z,0); vb.resize(z,0); vc.resize(z,0); } }
 	char *a=va.data(), *b=vb.data(), *c=vc.data();
 
@@ -982,12 +982,19 @@ __noinline wchar_t* build_cmdline( const char* app, const char* args )
 	strcpy(c,app); return (wchar_t*)(atow(zg?strcat(strcat(c," "),args):c));
 }
 
-// additional creation flags: CREATE_NO_WINDOW (hide console output), CREATE_NEW_CONSOLE
-__noinline bool create_process( const char* app, const char* args=nullptr, bool wait=true, bool windowed=false, DWORD creation_flags=NORMAL_PRIORITY_CLASS, bool hide_console_window=false )
+template <bool gui=false>
+struct create_process_info_t
 {
-	STARTUPINFOW si={sizeof(si)}; si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=windowed?SW_SHOW:SW_HIDE;
-	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,build_cmdline(app,args),0,0,FALSE,creation_flags|(hide_console_window?CREATE_NO_WINDOW:0),0,0,&si,&pi)||!pi.hProcess||!pi.hThread){ printf( "%s(%s,%s): failed to create process\n", __func__, app?app:"", args?args:"" ); return false; }
-	if(!wait){ CloseHandle(pi.hThread); CloseHandle(pi.hProcess); return true; } WaitForSingleObject(pi.hProcess,INFINITE); DWORD ecode=0; if(!GetExitCodeProcess(pi.hProcess,&ecode)) ecode=EXIT_FAILURE; CloseHandle(pi.hThread); CloseHandle(pi.hProcess); return ecode==0;
+	bool wait=!gui, window=gui; path_t app; /*often changes*/ ulong priority=NORMAL_PRIORITY_CLASS; bool hide_console=true; // rarely changes
+	ulong flag() const { return priority|(hide_console?CREATE_NO_WINDOW:0); }
+};
+
+template <bool gui=false> __noinline bool create_process( const string& args, create_process_info_t<gui> info={} )
+{
+	STARTUPINFOW si={sizeof(si)}; si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=info.window?SW_SHOW:SW_HIDE;
+	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,build_cmdline(info.app.c_str(),args.c_str()),0,0,FALSE,info.flag(),0,0,&si,&pi)||!pi.hProcess||!pi.hThread){ printf( "%s(%s,%s): failed to create process\n", __func__, info.app.c_str(), args.c_str() ); return false; }
+	bool r=true; if(info.wait){ if(WAIT_OBJECT_0!=WaitForSingleObject(pi.hProcess,INFINITE)) r=false; else {DWORD e=0;r=GetExitCodeProcess(pi.hProcess,&e)&&EXIT_SUCCESS==e;}}
+	CloseHandle(pi.hThread); CloseHandle(pi.hProcess); return r;
 }
 
 struct read_process_output_t
@@ -1027,7 +1034,7 @@ namespace dpi
 #endif
 
 // message box wrappers
-__noinline bool host_box( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); auto* m=vformat(fmt,a); va_end(a); return os::create_process(nullptr,format("msg * \"%s\"",m),false,true); }
+__noinline bool host_box( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); auto* m=vformat(fmt,a); va_end(a); return os::create_process<true>(format("msg * \"%s\"",m)); }
 #define build_msg() va_list a;va_start(a,fmt);auto* msg=vformat(fmt,a);va_end(a)
 struct mbox_t
 {

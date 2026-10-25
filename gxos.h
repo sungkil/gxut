@@ -334,11 +334,10 @@ inline HWND find_window( const char* name_filter_or_class )
 
 //*************************************
 // advanced read_process
-struct read_process_info_t
+struct read_process_info_t : public create_process_info_t<false>
 {
 	int (*callback)( const char* chunk, size_t count ) = nullptr;
-	bool show_window = false, read_stderr = false;
-	ulong priority = NORMAL_PRIORITY_CLASS;
+	bool read_stderr = false;
 };
 
 __noinline read_process_output_t read_process( const string& cmd, const read_process_info_t& info )
@@ -359,15 +358,14 @@ __noinline read_process_output_t read_process( const string& cmd, const read_pro
 	// override startup attributes
 	STARTUPINFOW si={sizeof(si)};
 	si.dwFlags		= STARTF_USESHOWWINDOW;
-	si.wShowWindow	= info.show_window?SW_SHOW:SW_HIDE;
+	si.wShowWindow	= info.window?SW_SHOW:SW_HIDE;
 	si.hStdError	= info.read_stderr?stdout_write:GetStdHandle(STD_ERROR_HANDLE);
 	si.hStdOutput	= stdout_write;
 	si.hStdInput	= INVALID_HANDLE_VALUE;
 	si.dwFlags		= si.dwFlags|STARTF_USESTDHANDLES;
 
 	// create process and wait if necessary
-	DWORD flag = info.priority|(!info.show_window?CREATE_NO_WINDOW:0);
-	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,__strdup<wchar_t,char>(cmd.c_str()),0,0,TRUE,flag,0,0,&si,&pi )||!pi.hProcess||!pi.hThread){ printf("%s(): %s\n",__func__,os::get_last_error()); safe_close(pi.hThread); safe_close(pi.hProcess); safe_close(stdout_read); safe_close(stdout_write); return {}; }
+	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,__strdup<wchar_t,char>(cmd.c_str()),0,0,TRUE,info.flag(),0,0,&si,&pi )||!pi.hProcess||!pi.hThread){ printf("%s(): %s\n",__func__,os::get_last_error()); safe_close(pi.hThread); safe_close(pi.hProcess); safe_close(stdout_read); safe_close(stdout_write); return {}; }
 	safe_close( stdout_write );
 
 	read_process_output_t output = {};

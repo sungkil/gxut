@@ -68,6 +68,7 @@ struct path : public path_t
 	path( path_t&& p ) noexcept : path_t(std::forward<path_t&&>(p)){}
 	path( const path& p ) noexcept : path_t(reinterpret_cast<const path_t&>(p)){}
 	path( path&& p ) noexcept { _data=p._data; p._data=nullptr; } // cache moves as well
+	path( std::nullptr_t nil ) noexcept : path_t() {}
 	path( const wchar_t* s ) noexcept : path_t() { if(s&&*s) strcpy(_data,wtoa(s)); }
 	path( const wstring& s ) noexcept : path_t() { if(!s.empty()) strcpy(_data,wtoa(s.c_str())); }
 	path( wstring&& s ) noexcept : path_t() { if(!s.empty()) strcpy(_data,wtoa(s.c_str())); }
@@ -219,6 +220,9 @@ struct path : public path_t
 	// additional time functions
 	FILETIME mfiletime() const;
 	const char* mtimestamp() const { if(!exists()) return ""; struct tm t; _gmtime64_s(&t,&(__attrib().st_mtime)); char* buff=__strbuf(256);sprintf(buff,"%04d%02d%02d%02d%02d%02d",t.tm_year+1900,t.tm_mon+1,t.tm_mday,t.tm_hour,t.tm_min,t.tm_sec);return buff; }
+
+	// process-related
+	template <bool gui=false> bool create_process( const string& args="", os::create_process_info_t<gui> info={} ) const { path p=*this; if(!exists()&&!((p=env::where(p)).exists())) return false; info.app=*this; return os::create_process(args,info); }
 
 	// file access: void (rb/wb), char (r/w), wchar_t (r/w,ccs=UTF-8)
 	FILE* fopen( const char* mode, bool utf8=false ) const;
