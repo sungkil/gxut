@@ -425,12 +425,12 @@ __noinline bool isutf8( const char* s )
 	return true;
 }
 inline const wchar_t* atow( const char* a, uint cp=-1 ){ if(!a) return nullptr; if(!*a) return L""; if(cp==-1){cp=isutf8(a)?CP_UTF8:0;} int l=MultiByteToWideChar(cp,0,a,-1,0,0); wchar_t* w=__strbuf<wchar_t>(l); MultiByteToWideChar(cp,0,a,-1,w,l); w[l+1]=0; return w; }
-template<uint cp=0> const char* wtoa( const wchar_t* w ){ if(!w) return nullptr; if(!*w) return ""; int l=WideCharToMultiByte(cp,0,w,-1,0,0,0,0); char* a=__strbuf(l); WideCharToMultiByte(cp,0,w,-1,a,l,0,0); a[l+1]=0; return a; }
-template<uint cp=0> string wtos( const wchar_t* w ){ if(!w||!*w) return ""; int l=WideCharToMultiByte(cp,0,w,-1,0,0,0,0); char* a=__strbuf(l); WideCharToMultiByte(cp,0,w,-1,a,l,0,0); a[l+1]=0; return a; }
-template<uint cp=CP_UTF8> const char* atoa( const char* src ){ if(!src) return nullptr; if(!*src) return ""; uint cp0=isutf8(src)?CP_UTF8:0; if(cp0==cp) return __strdup(src); return wtoa<cp>(atow(src,cp0)); }
+inline const char* wtoa( const wchar_t* w, uint cp=0 ){ if(!w) return nullptr; if(!*w) return ""; int l=WideCharToMultiByte(cp,0,w,-1,0,0,0,0); char* a=__strbuf(l); WideCharToMultiByte(cp,0,w,-1,a,l,0,0); a[l+1]=0; return a; }
+inline string wtos( const wchar_t* w, uint cp=0 ){ if(!w||!*w) return ""; int l=WideCharToMultiByte(cp,0,w,-1,0,0,0,0); char* a=__strbuf(l); WideCharToMultiByte(cp,0,w,-1,a,l,0,0); a[l+1]=0; return a; }
+inline const char* iconv( const char* src, uint dst_cp, uint src_cp=-1 ){ if(!src||!*src) return src; if(src_cp==(-1)) src_cp=isutf8(src)?CP_UTF8:0; if(src_cp==dst_cp) return __strdup(src); return wtoa(atow(src,src_cp),dst_cp); }
+inline const char* atoutf8( const char* src ){ return iconv( src, CP_UTF8, -1 ); }
+inline const char* atombs( const char* src ){ return iconv( src, 0, -1 ); }
 inline bool ismbs( const char* s ){ if(!s||!*s) return false; for(int k=0,kn=int(strlen(s));k<kn;k++,s++) if(*s<0)return true; return false; }
-template<bool syllable_only=true> bool iskor( unsigned c ){ if(c>=0xAC00&&c<=0xD7A3) return true; if constexpr(syllable_only) return false; return (c>=0x1100&&c<=0x11FF)||(c>=0x3131&&c<=0x318E)||(c>=0xA960&&c<=0xA97F)||(c>=0xD7B0&&c<=0xD7FF)||(c>=0xFFA0&&c<=0xFFDC); }
-template<bool syllable_only=true> bool strkor( const char* s ){ if(!s||!*s) return false; s=atoa<CP_UTF8>(s); const unsigned char* p=(const unsigned char*)s, *e=p+strlen(s); while(p<e){ unsigned char a=*p; if(a<0x80){ p++; continue; } if(a>=0xE1&&a<=0xEF&&e-p>=3&&(p[1]&0xC0)==0x80&&(p[2]&0xC0)==0x80){ unsigned c = ((a&0x0F)<<12)|((p[1]&0x3F)<<6)|(p[2]&0x3F); if(iskor<syllable_only>(c)) return true; p+=3; continue; } p++; } return false; }
 #else
 inline const wchar_t* atow( const char* a ){ if(!a) return nullptr; if(!*a) return L""; const char* p=a; size_t l=mbsrtowcs(0,&p,0,0); wchar_t* b=__strbuf<wchar_t>(l); mbstate_t s={}; mbsrtowcs(b,&p,l+1,&s); b[l+1]=0; return b; }
 inline const char* wtoa( const wchar_t* w ){ if(!w) return nullptr; if(!*w) return ""; const wchar_t* p=w; size_t l=wcsrtombs(0,&p,0,0); char* b=__strbuf(l); mbstate_t s={}; wcsrtombs(b,&p,l+1,&s); b[l+1]=0; return b; }

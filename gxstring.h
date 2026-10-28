@@ -475,10 +475,29 @@ __noinline const wchar_t* normalize_string( const wchar_t* s )
 {
 	if(is_normalized_string(s)) return __strdup(s);
 	int sl=int(wcslen(s)); int dl=NormalizeString(NormalizationC,s,sl+1,nullptr,0);
-	wchar_t* d=__strbuf<wchar_t>(dl+1);
-	NormalizeString(NormalizationC,s,sl+1,d,dl+1);
-	d[dl]=0; // make sure null-terminated for dst
+	wchar_t* d=__strbuf<wchar_t>(dl+1); NormalizeString(NormalizationC,s,sl+1,d,dl+1); d[dl]=0; // make sure null-terminated for dst
 	return d;
+}
+
+__noinline const wchar_t* normalize_nfkc( const wchar_t* s )
+{
+	if(!s||!*s) return s; int l=int(wcslen(s)); int n=NormalizeString(NormalizationKC,s,l+1,nullptr,0); if(n<=0) return s;
+	wchar_t* r=__strbuf<wchar_t>(n+1); if(NormalizeString(NormalizationKC,s,l+1,r,n+1)<=0) return s; r[n]=0; return r;
+}
+
+// detect koreans
+template<bool syllable_only=true>
+bool iskor( unsigned c )
+{
+	if(c>=0xAC00&&c<=0xD7A3) return true; if constexpr(syllable_only) return false;
+	return (c>=0x1100&&c<=0x11FF)||(c>=0x3131&&c<=0x318E)||(c>=0xA960&&c<=0xA97F)||(c>=0xD7B0&&c<=0xD7FF)||(c>=0xFFA0&&c<=0xFFDC);
+}
+
+template<bool syllable_only=true> bool strkor( const char* s )
+{
+	if(!s||!*s) return false;
+	s=wtoa(normalize_nfkc(atow(s)),CP_UTF8);
+	const unsigned char* p=(const unsigned char*)s, *e=p+strlen(s); while(p<e){ unsigned char a=*p; if(a<0x80){ p++; continue; } if(a>=0xE1&&a<=0xEF&&e-p>=3&&(p[1]&0xC0)==0x80&&(p[2]&0xC0)==0x80){ unsigned c = ((a&0x0F)<<12)|((p[1]&0x3F)<<6)|(p[2]&0x3F); if(iskor<syllable_only>(c)) return true; p+=3; continue; } p++; } return false;
 }
 
 // common unnecesary unicode symbols to common ansi
