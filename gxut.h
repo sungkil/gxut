@@ -1045,6 +1045,7 @@ struct mbox_t
 	bool error( __printf_format_string__ const char* fmt, ... ){ build_msg(); MessageBoxA(_owner,msg,("%s: error",_title.c_str()),MB_OK|MB_ICONERROR|MB_SYSTEMMODAL); return false; }
 	bool confirm( __printf_format_string__ const char* fmt, ... ){ build_msg(); return IDYES==MessageBoxA(_owner,msg,_title.c_str(),MB_YESNO|MB_ICONQUESTION|MB_SYSTEMMODAL); }
 	void operator()( __printf_format_string__ const char* fmt, ... ){ build_msg(); MessageBoxA(_owner,msg,_title.c_str(),MB_OK|MB_ICONINFORMATION|MB_SYSTEMMODAL); }
+	void operator()( __printf_format_string__ const wchar_t* fmt, ... ){ build_msg(); MessageBoxW(_owner,msg,atow(_title.c_str()),MB_OK|MB_ICONINFORMATION|MB_SYSTEMMODAL); }
 protected:
 	HWND	_owner=nullptr;
 	string	_title=exe::name();

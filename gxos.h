@@ -340,7 +340,7 @@ struct read_process_info_t : public create_process_info_t<false>
 	bool read_stderr = false;
 };
 
-__noinline read_process_output_t read_process( const string& cmd, const read_process_info_t& info )
+__noinline read_process_output_t read_process( const wstring& cmd, const read_process_info_t& info )
 {
 	if(cmd.empty()){ printf("%s(): empty cmd\n",__func__); return {}; }
 
@@ -365,7 +365,7 @@ __noinline read_process_output_t read_process( const string& cmd, const read_pro
 	si.dwFlags		= si.dwFlags|STARTF_USESTDHANDLES;
 
 	// create process and wait if necessary
-	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,__strdup<wchar_t,char>(cmd.c_str()),0,0,TRUE,info.flag(),0,0,&si,&pi )||!pi.hProcess||!pi.hThread){ printf("%s(): %s\n",__func__,os::get_last_error()); safe_close(pi.hThread); safe_close(pi.hProcess); safe_close(stdout_read); safe_close(stdout_write); return {}; }
+	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,__strdup(cmd.c_str()),0,0,TRUE,info.flag(),0,0,&si,&pi )||!pi.hProcess||!pi.hThread){ printf("%s(): %s\n",__func__,os::get_last_error()); safe_close(pi.hThread); safe_close(pi.hProcess); safe_close(stdout_read); safe_close(stdout_write); return {}; }
 	safe_close( stdout_write );
 
 	read_process_output_t output = {};
@@ -392,6 +392,8 @@ __noinline read_process_output_t read_process( const string& cmd, const read_pro
 	output.buffer.insert(output.buffer.end(),{0,0});
 	return output;
 }
+
+__noinline read_process_output_t read_process( const string& cmd, const read_process_info_t& info ){ return read_process(atow(cmd.c_str()),info); }
 
 #ifdef _INC_SHELLAPI
 __noinline bool runas( const char* app, const char* args=nullptr, bool wait=true, bool windowed=false )
