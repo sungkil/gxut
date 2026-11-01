@@ -386,7 +386,7 @@ __noinline void path::__canonicalize() const
 	if(len==2&&_data[1]==':'){ _data[len++]=preferred_separator; _data[len]=0; } // root correction
 	if(!strstr(_data,"\\.\\")&&!strstr(_data,"\\..\\")&&!strstr(_data,"/./")&&!strstr(_data,"/../")) return; // trivial return
 	value_type* ds; while((ds=(value_type*)strstr(_data+1,"\\\\"))) memmove(ds+1,ds+2,((len--)-(ds-_data)-1)*sizeof(value_type)); // correct multiple backslashes, except the beginning of unc path
-	if(is_absolute()){ auto* r=_fullpath(_data,(const value_type*)memcpy(__strbuf(capacity),_data,sizeof(value_type)*(len+1)),capacity); return; }
+	if(is_absolute()){ _fullpath(_data,(const value_type*)memcpy(__strbuf(capacity),_data,sizeof(value_type)*(len+1)),capacity); return; }
 
 	// flags to check
 	bool b_trailing_backslash = __is_separator(_data[len-1]);

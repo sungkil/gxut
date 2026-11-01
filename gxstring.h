@@ -493,6 +493,13 @@ bool iskor( unsigned c )
 	return (c>=0x1100&&c<=0x11FF)||(c>=0x3131&&c<=0x318E)||(c>=0xA960&&c<=0xA97F)||(c>=0xD7B0&&c<=0xD7FF)||(c>=0xFFA0&&c<=0xFFDC);
 }
 
+template<bool syllable_only=true> bool strkor( const wchar_t* w )
+{
+	if(!w||!*w) return false;
+	const char* s=wtoa(normalize_nfkc(w),CP_UTF8);
+	const unsigned char* p=(const unsigned char*)s, *e=p+strlen(s); while(p<e){ unsigned char a=*p; if(a<0x80){ p++; continue; } if(a>=0xE1&&a<=0xEF&&e-p>=3&&(p[1]&0xC0)==0x80&&(p[2]&0xC0)==0x80){ unsigned c = ((a&0x0F)<<12)|((p[1]&0x3F)<<6)|(p[2]&0x3F); if(iskor<syllable_only>(c)) return true; p+=3; continue; } p++; } return false;
+}
+
 template<bool syllable_only=true> bool strkor( const char* s )
 {
 	if(!s||!*s) return false;

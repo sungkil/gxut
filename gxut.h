@@ -430,6 +430,7 @@ inline string wtos( const wchar_t* w, uint cp=0 ){ if(!w||!*w) return ""; int l=
 inline const char* iconv( const char* src, uint dst_cp, uint src_cp=-1 ){ if(!src||!*src) return src; if(src_cp==(-1)) src_cp=isutf8(src)?CP_UTF8:0; if(src_cp==dst_cp) return __strdup(src); return wtoa(atow(src,src_cp),dst_cp); }
 inline const char* atoutf8( const char* src ){ return iconv( src, CP_UTF8, -1 ); }
 inline const char* atombs( const char* src ){ return iconv( src, 0, -1 ); }
+inline const char* wtoutf8( const wchar_t* src ){ return wtoa(src,CP_UTF8); }
 inline bool ismbs( const char* s ){ if(!s||!*s) return false; for(int k=0,kn=int(strlen(s));k<kn;k++,s++) if(*s<0)return true; return false; }
 #else
 inline const wchar_t* atow( const char* a ){ if(!a) return nullptr; if(!*a) return L""; const char* p=a; size_t l=mbsrtowcs(0,&p,0,0); wchar_t* b=__strbuf<wchar_t>(l); mbstate_t s={}; mbsrtowcs(b,&p,l+1,&s); b[l+1]=0; return b; }
@@ -567,31 +568,42 @@ inline const char* dirname( const char* path )
 	for(int k=l-1,kn=(isalpha(s[0])&&s[1]==':')?2:0;k>=kn;k--){ if(s[k]=='/'||s[k]=='\\'){ s[k>kn?k:k+1]=0; return s; } }
 	return ".";
 }
+inline const char* absolute_path( const char* path ){ return !path||!*path?path:_fullpath(__strbuf(PATH_MAX),path,PATH_MAX); }
+inline const wchar_t* absolute_path( const wchar_t* path ){ return !path||!*path?path:_wfullpath(__strbuf<wchar_t>(PATH_MAX),path,PATH_MAX); }
 #elif defined __gcc__
 inline int mkdir( const char* path ){ return mkdir(path,0776); }
 #endif
 
 // path decomposition
-struct __pathinfo { char *dir=nullptr, *stem=nullptr, *x=nullptr; };
-__noinline __pathinfo __split_path( const char* path, bool b_dir, bool b_stem, bool b_extension )
-{
 #ifdef __msvc__
+template <class T=char> struct pathinfo_t { T *dir=nullptr, *stem=nullptr, *x=nullptr; };
+__noinline pathinfo_t<wchar_t> split_path( const wchar_t* path, bool b_dir, bool b_stem, bool b_extension )
+{
 	size_t dl = b_dir?PATH_MAX:0;		wchar_t* d=dl?__strbuf<wchar_t>(dl):0;
 	size_t il = b_dir?_MAX_DIR:0;		wchar_t* i=il?__strbuf<wchar_t>(il):0;
 	size_t sl = b_stem?_MAX_FNAME:0;	wchar_t* s=sl?__strbuf<wchar_t>(sl):0;
 	size_t xl = b_extension?_MAX_EXT:0;	wchar_t* x=xl?__strbuf<wchar_t>(xl):0;
-	_wsplitpath_s(atow(path),d,dl,i,il,s,sl,x,xl);
-	d=d&&i?strcat(d,i):d?d:i;
-	return __pathinfo{d?(char*)wtoa(d):0,s?(char*)wtoa(s):0,x?(char*)wtoa(x):0};
+	_wsplitpath_s(path,d,dl,i,il,s,sl,x,xl);
+	d=d&&i?wcscat(d,i):d?d:i;
+	return pathinfo_t<wchar_t>{d,s,x};
+}
+__noinline pathinfo_t<char> split_path( const char* path, bool b_dir, bool b_stem, bool b_extension )
+{
+	auto i = split_path(atow(path),b_dir,b_stem,b_extension);
+	return pathinfo_t<char>{i.dir?(char*)wtoa(i.dir):0,i.stem?(char*)wtoa(i.stem):0,i.x?(char*)wtoa(i.x):0};
+}
 #elif defined __gcc__
+struct pathinfo_t { char *dir=nullptr, *stem=nullptr, *x=nullptr; };
+__noinline pathinfo_t split_path( const char* path, bool b_dir, bool b_stem, bool b_extension )
+{
 	size_t l=strlen(path);
-	if(path[l-1]=='/'||path[l-1]=='\\') return __pathinfo{b_dir?__strdup(path):(char*)"",0,0}; // trailing slash means just a directory
+	if(path[l-1]=='/'||path[l-1]=='\\') return pathinfo_t{b_dir?__strdup(path):(char*)"",0,0}; // trailing slash means just a directory
 	const char* d = b_dir?__strdup(dirname((char*)__strdup(path))):nullptr; string b = basename((char*)__strdup(path));
 	const char* s = b_stem?__strdup(fs::path(b.c_str()).stem().c_str()):nullptr;
 	const char* x = b_extension?__strdup(fs::path(b.c_str()).extension().c_str()):nullptr;
-	return __pathinfo{(char*)d,(char*)s,(char*)x};
-#endif
+	return pathinfo_t{(char*)d,(char*)s,(char*)x};
 }
+#endif
 
 //*************************************
 namespace exe {
@@ -601,8 +613,8 @@ inline const char* path(){		static char e[PATH_MAX+1]={}; if(*e) return e; GetMo
 #elif defined(__gcc__)
 inline const char* path(){		static char e[PATH_MAX+1]={}; if(*e) return e; if(readlink("/proc/self/exe",e,sizeof(e)-1)>0) return ""; return e; }
 #endif
-inline const char* dir(){		static char d[PATH_MAX+1]={}; if(*d) return d; return strcpy(d,__split_path(path(),true,false,false).dir); }
-inline const char* name( bool ext=false ){ static char t[PATH_MAX+1]={}, f[PATH_MAX+1]={}; if(!ext&&*t) return t; else if(ext&&*f) return f; auto i=__split_path(path(),false,true,ext); return ext?strcat(strcpy(f,i.stem),i.x):strcpy(t,i.stem); }
+inline const char* dir(){		static char d[PATH_MAX+1]={}; if(*d) return d; return strcpy(d,split_path(path(),true,false,false).dir); }
+inline const char* name( bool ext=false ){ static char t[PATH_MAX+1]={}, f[PATH_MAX+1]={}; if(!ext&&*t) return t; else if(ext&&*f) return f; auto i=split_path(path(),false,true,ext); return ext?strcat(strcpy(f,i.stem),i.x):strcpy(t,i.stem); }
 //*************************************
 } // end namespace exe
 //*************************************
@@ -727,15 +739,15 @@ struct path_t
 	path_t relative( path_t from="" ) const;
 	path_t absolute( path_t base="" ) const;
 #ifdef __msvc__
-	path_t dir()		const { if(empty()) return ""; if(is_unc()){ path_t r=unc_root(); size_t rl=r.size(); if(size()<=rl+1){ if(!__is_separator(r._data[rl-1])){ r._data[rl]=preferred_separator; r._data[rl+1]=0; } return r; } } const char* d=__split_path(_data,true,false,false).dir; return (d&&*d)?d:string(".")+preferred_separator; }
+	path_t dir()		const { if(empty()) return ""; if(is_unc()){ path_t r=unc_root(); size_t rl=r.size(); if(size()<=rl+1){ if(!__is_separator(r._data[rl-1])){ r._data[rl]=preferred_separator; r._data[rl+1]=0; } return r; } } const char* d=split_path(_data,true,false,false).dir; return (d&&*d)?d:string(".")+preferred_separator; }
 	path_t dirname()	const { return strpbrk(_data,"/\\")?dir().rtrim_slash().filename():""; }
-	path_t filename()	const { auto s=__split_path(_data,false,true,true); if(!s.x||!*s.x) return s.stem; return strcat(strcpy(__strbuf(capacity),s.stem),s.x); }
-	path_t stem()		const { return __split_path(_data,false,true,false).stem; } // filename without extension
-	path_t stem2()		const { auto s=__split_path(_data,false,true,false); return !strchr(s.stem,'.')?s.stem:__split_path(s.stem,false,true,false).stem; } // stem without double extension; i.e., equivalent to stem().stem()
-	path_t extension()	const { auto s=__split_path(_data,false,false,true); return *s.x=='.'?s.x+1:""; }
-	path_t extension2()	const { auto s=__split_path(_data,false,true,true); if(*s.x!='.') return ""; if(!strchr(s.stem,'.')) return s.x+1; auto t=__split_path(s.stem,false,false,true); if(t.x[1]==0) return s.x+1; return strcat(strcpy(__strbuf(capacity),t.x+1),s.x); } // double extension (e.g., .{ext}.{ext})
+	path_t filename()	const { auto s=split_path(_data,false,true,true); if(!s.x||!*s.x) return s.stem; return strcat(strcpy(__strbuf(capacity),s.stem),s.x); }
+	path_t stem()		const { return split_path(_data,false,true,false).stem; } // filename without extension
+	path_t stem2()		const { auto s=split_path(_data,false,true,false); return !strchr(s.stem,'.')?s.stem:split_path(s.stem,false,true,false).stem; } // stem without double extension; i.e., equivalent to stem().stem()
+	path_t extension()	const { auto s=split_path(_data,false,false,true); return *s.x=='.'?s.x+1:""; }
+	path_t extension2()	const { auto s=split_path(_data,false,true,true); if(*s.x!='.') return ""; if(!strchr(s.stem,'.')) return s.x+1; auto t=split_path(s.stem,false,false,true); if(t.x[1]==0) return s.x+1; return strcat(strcpy(__strbuf(capacity),t.x+1),s.x); } // double extension (e.g., .{ext}.{ext})
 	path_t parent()		const { return dir().rtrim_slash().dir(); }
-	path_t remove_extension() const { auto s=__split_path(_data,true,true,false); return s.dir?strcat(strcpy(__strbuf(capacity),s.dir),s.stem):s.stem; }
+	path_t remove_extension() const { auto s=split_path(_data,true,true,false); return s.dir?strcat(strcpy(__strbuf(capacity),s.dir),s.stem):s.stem; }
 	path_t replace_extension( path_t x ) const { if(x.empty()) return *this; return remove_extension()+(x[0]=='.'?x._data:"."s+x._data); }
 #elif defined(__gcc__)
 	path_t dir()		const { if(empty()) return ""; return fs::path(_data).remove_filename().c_str(); }
