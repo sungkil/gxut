@@ -292,13 +292,13 @@ template <class T> T*& safe_delete( T*& p ){ if(p) delete p; return p=nullptr; }
 // pointer type with size: waiting for a C++ standard for proposal P0901R3 (std::sized_ptr_t)
 template <class T=void> struct sized_ptr_t
 {
-	T* ptr=nullptr; size_t size=0; const bool auto_free=false;
+	T* ptr=nullptr; size_t size=0; bool auto_free=false;
 	~sized_ptr_t(){ if(auto_free) safe_free(ptr); } sized_ptr_t()=default;
-	sized_ptr_t( const sized_ptr_t& other ) noexcept {memcpy(&ptr,&other.ptr,sizeof(*this));if(other.auto_free)const_cast<bool&>(auto_free)=false;}
-	sized_ptr_t( sized_ptr_t&& other ) noexcept {memcpy(&ptr,&other.ptr,sizeof(*this));memset(&other.ptr,0,sizeof(other));}
+	sized_ptr_t( const sized_ptr_t& other ) noexcept : ptr(other.ptr),size(other.size),auto_free(false){}
+	sized_ptr_t( sized_ptr_t&& other ) noexcept : ptr(other.ptr),size(other.size),auto_free(other.auto_free){ other.ptr=nullptr; other.size=0; other.auto_free=false; }
 	sized_ptr_t( T* ptr, size_t size, bool autofree=false ):auto_free(autofree){this->ptr=ptr;this->size=size;}
-	sized_ptr_t& operator=( sized_ptr_t&& other ){memcpy(&ptr,&other.ptr,sizeof(*this));memset(&other.ptr,0,sizeof(other));return *this;}
-	sized_ptr_t& operator=( const sized_ptr_t& other ){memcpy(&ptr,&other.ptr,sizeof(*this));if(other.auto_free)const_cast<bool&>(auto_free)=false;return *this;}
+	sized_ptr_t& operator=( sized_ptr_t&& other ){ if(this==&other) return *this; if(auto_free) safe_free(ptr); ptr=other.ptr; size=other.size; auto_free=other.auto_free; other.ptr=nullptr; other.size=0; other.auto_free=false; return *this; }
+	sized_ptr_t& operator=( const sized_ptr_t& other ){ if(this==&other) return *this; if(auto_free) safe_free(ptr); ptr=other.ptr; size=other.size; auto_free=false; return *this; }
 	operator T* (){return ptr;} operator const T* () const {return ptr;} T* operator->(){return ptr;} const T* operator->() const {return ptr;}
 };
 
@@ -306,7 +306,7 @@ template <class T=void> struct sized_ptr_t
 template <class T> struct pptr_t { T** pptr=nullptr; pptr_t()=default; pptr_t( T*& ptr ):pptr(&ptr){} pptr_t( const T*& ptr ):pptr(&const_cast<T*&>(ptr)){} pptr_t( T** _pptr ):pptr(_pptr){} pptr_t( const T** _pptr ):pptr((T**)_pptr){} pptr_t& operator=( T*& ptr ){ pptr=&ptr; return *this; } pptr_t& operator=( const T*& ptr ){ pptr=&const_cast<T*&>(ptr); return *this; } pptr_t& operator=( T** _pptr ){ pptr=_pptr; return *this; } pptr_t& operator=( const T** _pptr ){ pptr=(T**)_pptr; return *this; } T* operator->(){ return pptr?*pptr:nullptr; } const T* operator->() const { return pptr?*pptr:nullptr; } operator T*(){ return pptr?*pptr:nullptr; } operator const T*() const { return pptr?*pptr:nullptr; } T* ptr(){ return pptr?*pptr:nullptr; } const T* ptr() const { return pptr?*pptr:nullptr; } };
 
 // shared circular string buffers
-template <class T=char> __forceinline T* __strbuf( size_t len ){ static thread_local T* C[1<<12]={}; static thread_local unsigned int cid=0; cid=cid%(sizeof(C)/sizeof(C[0])); C[cid]=(T*)(C[cid]?realloc(C[cid],sizeof(T)*(len+2)):malloc(sizeof(T)*(len+2))); if(C[cid]){ C[cid][0]=C[cid][len]=C[cid][len+1]=0; } return C[cid++]; } // add one more char for convenience
+template <class T=char> __forceinline T* __strbuf( size_t len ){ static thread_local T* C[1<<12]={}; static thread_local unsigned int cid=0; cid=cid%(sizeof(C)/sizeof(C[0])); T* p=(T*)(C[cid]?realloc(C[cid],sizeof(T)*(len+2)):malloc(sizeof(T)*(len+2))); if(!p) return nullptr; C[cid]=p; if(C[cid]){ C[cid][0]=C[cid][len]=C[cid][len+1]=0; } return C[cid++]; } // add one more char for convenience
 template <class T=char> __forceinline T* __strdup( const T* s, size_t len ){ T* d=__strbuf<T>(size_t(len)); size_t k=0; while(k<len&&*s) d[k++]=*(s++); d[k]=d[k+1]=0; return d; }
 template <class T=char> __forceinline T* __strdup( const T* s ){ const T* t=s; while(*t) t++; return __strdup<T>(s,t-s); }
 
@@ -370,12 +370,11 @@ namespace cpu {
 __noinline const uint4 info( unsigned int level, bool extended=false )
 {
 	static vector<uint4> i[2]; // basic, extended
-	auto& v = i[extended?1:0]; if(!v.empty()) return v[level];
-	uint kn = __get_function_count(extended); if(kn<4){ return uint4{}; } v.resize(kn);
-	for( unsigned int k=0; k<kn; k++ ) v[k]=__get_cpu_id(k,extended);
+	auto& v=i[extended?1:0]; uint kn=__get_function_count(extended); if(level>kn) return uint4{};
+	if(v.empty()){ v.resize(size_t(kn)+1); for(uint k=0;k<=kn;k++) v[k]=__get_cpu_id(k,extended); }
 	return v[level];
 }
-__noinline const char* vendor(){ static uint4 s={}; if(!s.x){ auto v=info(0); s.x=v.y; s.y=v.z; s.z=v.w; } return (const char*)&s.x; }
+__noinline const char* vendor(){ static uint4 s={}; if(!s.x){ auto v=info(0); s.x=v.y; s.y=v.w; s.z=v.z; } return (const char*)&s.x; }
 __noinline const char* brand(){ static uint4 s[4]={}; if(s[0].x) return (const char*)&s[0]; s[0]=info(2,true); s[1]=info(3,true); s[2]=info(4,true); return (const char*)&s[0]; }
 __noinline bool has_sse42(){ return ((info(1).z>>20)&1)==1; }
 
@@ -388,10 +387,10 @@ template <unsigned int poly=0x82f63b78UL> // defaulted to crc32c; zlib/deflate u
 __noinline unsigned int crc32( unsigned int crc0, const void* ptr, size_t size )
 {
 	if(!ptr||!size){ return crc0; }
-	static unsigned* t[4]={}; if(!t[0]){ for(int k=0;k<4;k++) t[k]=(unsigned*) malloc(sizeof(unsigned)*256); for(int k=0;k<256;k++){ unsigned v=k; for( unsigned j=0;j<8;j++) v=v&1?poly^(v>>1):v>>1; t[0][k]=v; } for(int k=0;k<256;k++){ unsigned v=t[0][k]; for(int j=1;j<4;j++) t[j][k]=v=t[0][v&0xff]^(v>>8); } }
+	static const auto t=[](){ std::array<std::array<unsigned,256>,4> t{}; for(unsigned k=0;k<256;k++){ unsigned v=k; for(unsigned j=0;j<8;j++) v=v&1?poly^(v>>1):v>>1; t[0][k]=v; } for(unsigned k=0;k<256;k++){ unsigned v=t[0][k]; for(unsigned j=1;j<4;j++) t[j][k]=v=t[0][v&0xff]^(v>>8); } return t; }();
 	unsigned c = ~crc0; const unsigned char* b=(const unsigned char*)ptr;
 	for(;size&&(ptrdiff_t(b)&7);size--,b++) c=t[0][(c^(*b))&0xff]^(c>>8); // move forward to the 8-byte aligned boundary
-	for(;size>=4;size-=4,b+=4){c^=*(unsigned*)b;c=t[3][(c>>0)&0xff]^t[2][(c>>8)&0xff]^t[1][(c>>16)&0xff]^t[0][(c>>24)&0xff]; }
+	for(;size>=4;size-=4,b+=4){ unsigned v; memcpy(&v,b,sizeof(v)); c^=v;c=t[3][(c>>0)&0xff]^t[2][(c>>8)&0xff]^t[1][(c>>16)&0xff]^t[0][(c>>24)&0xff]; }
 	for(;size;size--,b++)c=t[0][(c^(*b))&0xff]^(c>>8);
 	return ~c;
 }
@@ -500,10 +499,10 @@ inline const wchar_t* stristr( const wchar_t* _Str1, const wchar_t* _Str2 ){ ret
 #endif
 
 // format and printf replacement
-inline const char*		vformat( __printf_format_string__ const char* fmt, va_list a ){ size_t len=size_t(vsnprintf(0,0,fmt,a)); char* buffer=__strbuf(len); vsnprintf(buffer,len+1,fmt,a); return buffer; }
-inline const wchar_t*	vformat( __printf_format_string__ const wchar_t* const fmt, va_list a ){ size_t len=size_t(vswprintf(0,0,fmt,a)); wchar_t* bufferW=__strbuf<wchar_t>(len); vswprintf(bufferW,len+1,fmt,a); return bufferW; }
-inline const char*		__attribute__((format(printf,1,2))) format( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); size_t len=size_t(vsnprintf(0,0,fmt,a)); char* buffer=__strbuf(len); vsnprintf(buffer,len+1,fmt,a); va_end(a); return buffer; }
-inline const wchar_t*	format( __printf_format_string__ const wchar_t* fmt, ... ){ va_list a; va_start(a,fmt); size_t len=size_t(vswprintf(0,0,fmt,a)); wchar_t* bufferW=__strbuf<wchar_t>(len); vswprintf(bufferW,len+1,fmt,a); va_end(a); return bufferW; }
+inline const char*		vformat( __printf_format_string__ const char* fmt, va_list a ){ va_list b; va_copy(b,a); size_t len=size_t(vsnprintf(0,0,fmt,b)); va_end(b); char* buffer=__strbuf(len); vsnprintf(buffer,len+1,fmt,a); return buffer; }
+inline const wchar_t*	vformat( __printf_format_string__ const wchar_t* const fmt, va_list a ){ va_list b; va_copy(b,a); size_t len=size_t(vswprintf(0,0,fmt,b)); va_end(b); wchar_t* bufferW=__strbuf<wchar_t>(len); vswprintf(bufferW,len+1,fmt,a); return bufferW; }
+inline const char*		__attribute__((format(printf,1,2))) format( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); va_list b; va_copy(b,a); size_t len=size_t(vsnprintf(0,0,fmt,b)); va_end(b); char* buffer=__strbuf(len); vsnprintf(buffer,len+1,fmt,a); va_end(a); return buffer; }
+inline const wchar_t*	format( __printf_format_string__ const wchar_t* fmt, ... ){ va_list a; va_start(a,fmt); va_list b; va_copy(b,a); size_t len=size_t(vswprintf(0,0,fmt,b)); va_end(b); wchar_t* bufferW=__strbuf<wchar_t>(len); vswprintf(bufferW,len+1,fmt,a); va_end(a); return bufferW; }
 
 // shortcuts to stderr
 #ifdef _NO_CRT_STDIO_INLINE
@@ -516,7 +515,7 @@ inline int eputs( const char* s ){ return fputs(s,stderr); }
 // unified error/warn handling
 inline string& __get_global_error_buffer__(){ static string buffer; return buffer; }
 inline const char* error(){ return __get_global_error_buffer__().c_str(); }
-inline bool error( const char* fmt, ... ){ auto& e=__get_global_error_buffer__(); va_list a; va_start(a,fmt); e=vformat(fmt,a); va_end(a); if(e.back()!='\n') e+='\n'; return false; }
+inline bool error( const char* fmt, ... ){ auto& e=__get_global_error_buffer__(); va_list a; va_start(a,fmt); e=vformat(fmt,a); va_end(a); if(e.empty()||e.back()!='\n') e+='\n'; return false; }
 inline std::set<string>& __get_global_oncef_buffer__(){ static std::set<string> s; return s; }
 inline int oncef( const char* fmt, ... ){ va_list a; va_start(a,fmt); const char* m=vformat(fmt,a); va_end(a); auto& s=__get_global_oncef_buffer__(); if(s.find(m)!=s.end()) return 0; s.emplace(m); return printf(m); }
 
@@ -527,8 +526,8 @@ inline const char* tovarname( const char* src, bool to_upper=false, bool allow_f
 inline const char* tovarname( const wchar_t* src, bool to_upper=false, bool allow_first_numeric=false ){ return tovarname(wtoa(src),to_upper,allow_first_numeric); }
 
 // string function for path
-#define __add_separator(src,sep) size_t l=src.size(); if(l==0)return __strdup(src.data()); char* s=strcpy(__strbuf(l+1),src.data()); if(src[l-1]!='/'&&src[l-1]!='\\'){s[l]=sep;s[l+1]=0;} return s
-#define __to_separator(src,sep) char* s=(char*)__strdup(src.data()); if(!s||!*s) return s; for(auto* p=s;*p;p++) if(*p=='/'||*p=='\\') *p=sep; return s
+#define __add_separator(src,sep) size_t l=src.size(); char* s=__strdup(src.data(),l); if(l&&src[l-1]!='/'&&src[l-1]!='\\'){s[l]=sep;s[l+1]=0;} return s
+#define __to_separator(src,sep) char* s=__strdup(src.data(),src.size()); if(!s||!*s) return s; for(auto* p=s;*p;p++) if(*p=='/'||*p=='\\') *p=sep; return s
 inline const char* append_slash( string_view src ){ __add_separator(src,preferred_separator); }
 inline const char* to_backslash( string_view src ){ __to_separator(src,'\\'); }
 inline const char* to_slash( string_view src ){ __to_separator(src,'/'); }
@@ -611,7 +610,7 @@ namespace exe {
 #ifdef __msvc__
 inline const char* path(){		static char e[PATH_MAX+1]={}; if(*e) return e; GetModuleFileNameA(nullptr,e,sizeof(e)-1); return e; }
 #elif defined(__gcc__)
-inline const char* path(){		static char e[PATH_MAX+1]={}; if(*e) return e; if(readlink("/proc/self/exe",e,sizeof(e)-1)>0) return ""; return e; }
+inline const char* path(){		static char e[PATH_MAX+1]={}; if(*e) return e; ssize_t n=readlink("/proc/self/exe",e,sizeof(e)-1); if(n<0) return ""; e[n]=0; return e; }
 #endif
 inline const char* dir(){		static char d[PATH_MAX+1]={}; if(*d) return d; return strcpy(d,split_path(path(),true,false,false).dir); }
 inline const char* name( bool ext=false ){ static char t[PATH_MAX+1]={}, f[PATH_MAX+1]={}; if(!ext&&*t) return t; else if(ext&&*f) return f; auto i=split_path(path(),false,true,ext); return ext?strcat(strcpy(f,i.stem),i.x):strcpy(t,i.stem); }
@@ -632,12 +631,12 @@ struct path_t
 	// destructor/constuctors
 	~path_t() noexcept { if(!_data) return; free(_data); _data=nullptr; }
 	path_t() noexcept { __alloc(); memset(_data+capacity,0,sizeof(attrib_t)); }
-	path_t( const path_t& p ) noexcept { strcpy(__alloc(),p._data); memcpy(_data+capacity,p._data+capacity,sizeof(attrib_t)); }
+	path_t( const path_t& p ) noexcept : path_t(){ if(p._data){ strcpy(_data,p._data); memcpy(_data+capacity,p._data+capacity,sizeof(attrib_t)); }}
 	path_t( path_t&& p ) noexcept { _data=p._data; p._data=nullptr; } // cache moves as well
 	path_t( std::nullptr_t nil ) noexcept : path_t() {}
 	path_t( const value_type* s ) noexcept : path_t() { if(s&&*s) strcpy(_data,s); }
 	path_t( const string_type& s ) noexcept : path_t() { strcpy(_data,s.c_str()); }
-	path_t( string_view_type s ) noexcept : path_t() { size_t l=s.size(); if(l) memcpy(_data,s.data(),l*sizeof(value_type)); _data[l]=0; }
+	path_t( string_view_type s ) noexcept : path_t() { size_t l=std::min(s.size(),size_t(capacity-1)); if(l) memcpy(_data,s.data(),l); _data[l]=0; }
 
 	// operator overloading: casting and conversion
 	value_type* data(){ return _data; }
@@ -646,11 +645,11 @@ struct path_t
 	operator string_view_type () const { return string_view_type{_data,size()}; }
 
 	// operator overloading: assignment
-	path_t& operator=( const path_t& p ) noexcept { strcpy(_data,p._data); memcpy(_data+capacity,p._data+capacity,sizeof(attrib_t)); return *this; }
-	path_t& operator=( path_t&& p ) noexcept { if(_data) free(_data); _data=p._data; p._data=nullptr; return *this; }
-	path_t& operator=( const value_type* s ) noexcept { if(s&&*s) strcpy(_data,s); return *this; }
+	path_t& operator=( const path_t& p ) noexcept { if(this==&p) return *this; if(!_data) __alloc(); if(p._data){ strcpy(_data,p._data); memcpy(_data+capacity,p._data+capacity,sizeof(attrib_t)); } else clear(); return *this; }
+	path_t& operator=( path_t&& p ) noexcept { if(this==&p) return *this; if(_data) free(_data); _data=p._data; p._data=nullptr; return *this; }
+	path_t& operator=( const value_type* s ) noexcept { if(s) strcpy(_data,s); return *this; }
 	path_t& operator=( const string_type& s ) noexcept { strcpy(_data,s.c_str()); return *this; }
-	path_t& operator=( string_view_type s ) noexcept{ strcpy(_data,s.data()); return *this; }
+	path_t& operator=( string_view_type s ) noexcept { size_t l=std::min(s.size(),size_t(capacity-1)); memmove(_data,s.data(),l); _data[l]=0; return *this; }
 	path_t& operator=( value_type c ){ _data[0]=c; _data[1]=0; return *this; }
 
 	// operator overloading: concatenations
@@ -665,10 +664,10 @@ struct path_t
 	path_t operator/( string_view_type s ) const { return append_slash()+path_t(s).ltrim_slash(); }
 	path_t operator/( value_type c ) const { return append_slash()+c; }
 	path_t& operator+=( const path_t& p ){ return operator+=(p._data); }
-	path_t& operator+=( const value_type* s ){ strcpy(end(),s+((s[0]=='.'&&s[2]&&__is_separator(s[1]))?2:0)); return *this; }
+	path_t& operator+=( const value_type* s ){ if(!s) return *this; size_t off=(s[0]=='.'&&s[1]&&s[2]&&__is_separator(s[1]))?2:0; string t=s+off; size_t l=size(), n=std::min(t.size(),size_t(capacity-1)-std::min(l,size_t(capacity-1))); memcpy(_data+l,t.data(),n); _data[l+n]=0; return *this; }
 	path_t& operator+=( const string_type& s ){ return operator+=(s.c_str()); }
-	path_t& operator+=( string_view_type s ){ return operator+=(s.data()); }
-	path_t& operator+=( value_type c ){ size_t l=strlen(_data); _data[l]=c; _data[l+1]=0; return *this; }
+	path_t& operator+=( string_view_type s ){ return operator+=(string(s).c_str()); }
+	path_t& operator+=( value_type c ){ size_t l=size(); if(l>=capacity-1) return *this; _data[l]=c; _data[l+1]=0; return *this; }
 	path_t& operator/=( const path_t& p ){ return *this=operator/(p); }
 	path_t& operator/=( const value_type* s ){ return *this=operator/(s); }
 	path_t& operator/=( const string_type& s ){ return *this=operator/(s); }
@@ -683,11 +682,11 @@ struct path_t
 	__forceinline bool operator==( const path_t& p ) const { return stricmp(_data,p._data)==0; }
 	__forceinline bool operator==( const value_type* s ) const { return stricmp(_data,s)==0; }
 	__forceinline bool operator==( const string_type& p ) const { return stricmp(_data,p.c_str())==0; }
-	__forceinline bool operator==( string_view_type p ) const { return stricmp(_data,p.data())==0; }
+	__forceinline bool operator==( string_view_type p ) const { return size()==p.size()&&strnicmp(_data,p.data(),p.size())==0; }
 	__forceinline bool operator!=( const path_t& p ) const { return stricmp(_data,p._data)!=0; }
 	__forceinline bool operator!=( const value_type* s ) const { return stricmp(_data,s)!=0; }
 	__forceinline bool operator!=( const string_type& p ) const { return stricmp(_data,p.c_str())!=0; }
-	__forceinline bool operator!=( string_view_type p ) const { return stricmp(_data,p.data())!=0; }
+	__forceinline bool operator!=( string_view_type p ) const { return !operator==(p); }
 
 	// iterators
 	iterator begin(){ return _data; }
@@ -781,7 +780,7 @@ protected:
 	const attrib_t&	__attrib() const { auto* a=(attrib_t*)(_data+capacity); if(!*_data||0!=stat64(_data,a)) memset(a,0,sizeof(attrib_t)); return *a; } // stat64()==ENOENT: not found; stat64()==EINVAL: invalid parameter
 	static __forceinline bool __is_separator( value_type c ){ return c=='/'||c=='\\'; }
 	static __forceinline path_t __to_separator( path_t p, value_type sep=preferred_separator ){ value_type* t=p._data; if(!*t) return p; size_t l=p.size(); for(size_t k=0; k<l; k++, t++) if(__is_separator(*t)) *t=sep; return p; }
-	static __forceinline path_t __append_separator( path_t p, value_type sep=preferred_separator ){ value_type* t=p._data; if(!*t) return p; size_t l=p.size(); if(!__is_separator(t[l-1])){t[l]=sep;t[l+1]=0;} return p; }
+	static __forceinline path_t __append_separator( path_t p, value_type sep=preferred_separator ){ value_type* t=p._data; if(!*t) return p; size_t l=p.size(); if(l<capacity-1&&!__is_separator(t[l-1])){t[l]=sep;t[l+1]=0;} return p; }
 
 	// friend class/function definitions
 #if __has_include("gxfilesystem.h") && !defined(__gcc__) && !defined __NO_PATHIMPL__
@@ -804,7 +803,7 @@ __noinline bool path_t::mkdir() const
 	if(empty()) return false; if(exists()) return true;
 	auto v = to_preferred().dir().ancestors(); if(v.empty()) return false;
 	auto bl = v.back().size();
-	if(is_unc()){ auto r=unc_root(); size_t rl=r.size();if(bl<=rl+1){v.pop_back();bl=v.back().size();}if(bl<=rl+1)v.pop_back(); }
+	if(is_unc()){ auto r=unc_root(); size_t rl=r.size();if(bl<=rl+1){v.pop_back();if(v.empty()) return false;bl=v.back().size();}if(bl<=rl+1)v.pop_back(); }
 	else if(bl<=3){ if(v.back()[1]==':')v.pop_back();else if(bl<=1)v.pop_back(); }
 	for( auto it=v.rbegin(); it!=v.rend(); it++ ){ if(!it->exists()&&::mkdir(it->_data)!=0) return false; }
 	return true;
@@ -815,7 +814,7 @@ __noinline string path_t::key() const
 	if(empty()) return "";
 	size_t l=size(); char* d=__strbuf(l);
 	size_t n=0; for(size_t k=0;k<l; k++){ char c=_data[k]; if(c==':'||c==' ') continue; if(!__is_separator(c)) d[n++]=::tolower(c); else if(n>0&&d[n-1]!='.') d[n++]='.'; }
-	d[(d[n-1]=='.')?(n-1):n]=0; return d;
+	d[n&&d[n-1]=='.'?(n-1):n]=0; return d;
 }
 
 __noinline path_t path_t::absolute( path_t base ) const
@@ -827,7 +826,7 @@ __noinline path_t path_t::absolute( path_t base ) const
 	// do not directly return for non-canonicalized path
 	return _fullpath(__strbuf(capacity),(base.empty()||is_absolute())?_data:(base/_data)._data,capacity);
 #elif defined __gcc__
-	path_t p; if(!base.empty()&&is_absolute()) p=base.append_slash();
+	path_t p=(!base.empty()&&!is_absolute())?base.append_slash():path_t("");
 	path_t r; return realpath((p/_data).c_str(),r.data())?r:"";
 #endif
 }
@@ -843,11 +842,11 @@ __noinline path_t path_t::relative( path_t from ) const
 	vector<char*> vt; vt.reserve(8); for(char *c=0,*k=strtok_s(dt._data,"\\/",&c); k; k=strtok_s(0,"\\/",&c)) vt.emplace_back(k);
 
 	// traverse across different directory levels
-	size_t f=0,t=0,zf=vf.size(),zt=vt.size(),l=0; path_t p; auto* r=p._data;
+	size_t f=0,t=0,zf=vf.size(),zt=vt.size(); path_t p; auto* r=p._data;
 	for(;f<zf&&t<zt;f++,t++){ if(stricmp(vf[f],vt[t])!=0) break; }
-	for(;f<zf;f++,r+=3){r[0]=r[1]='.';r[2]=preferred_separator;}
-	for(;t<zt;t++){strncpy(r,vt[t],l=strlen(vt[t]));r[l]=preferred_separator;r+=l+1;}
-	*r=0; return __is_separator(back())?p:p+filename();
+	for(;f<zf;f++){if(size_t(r-p._data)+3>=capacity) return ""; *r++='.'; *r++='.'; *r++=preferred_separator; }
+	for(;t<zt;t++){size_t l=strlen(vt[t]);if(size_t(r-p._data)+l+1>=capacity) return ""; memcpy(r,vt[t],l); r+=l; *r++=preferred_separator; }
+	*r=0; if(__is_separator(back())) return p; path_t name=filename(); if(p.size()+name.size()>=capacity) return ""; return p+name;
 }
 
 #ifdef __msvc__
@@ -911,7 +910,11 @@ __noinline const char* get( const char* key )
 __noinline bool put( const char* key, const char* value )
 {
 	if(!key||!*key||!value||!*value) return false;
-	return 0==putenv((char*)((string(key)+"="+value).c_str()));
+#ifdef __msvc__
+	return 0==putenv((string(key)+"="+value).c_str());
+#else
+	return 0==setenv(key,value,1);
+#endif
 }
 
 __noinline vector<path_t> paths()
@@ -978,6 +981,7 @@ __noinline wchar_t* build_cmdline( const char* app, const char* args )
 
 	// append extension to app
 	if(za&&!path_t(app).exists()&&path_t(app).extension().empty()){ path_t e=env::where(app); if(!e.empty()){ app=__strdup((path_t(app).is_absolute()?e:e.filename()).c_str()); za=strlen(app); } }
+	size_t need=za+zg+4; if(va.size()<need){ va.resize(need); vb.resize(need); vc.resize(need); } a=va.data(); b=vb.data(); c=vc.data();
 
 	// auto_quote app
 	constexpr char q='\"'; if(za&&(*app!=q||app[za-1]!=q)&&strpbrk(app," '\t|&<>")){ memcpy(a+1,app,za); a[0]=a[za+1]=q;a[za+2]=0; app=__strdup(a); }
@@ -986,7 +990,7 @@ __noinline wchar_t* build_cmdline( const char* app, const char* args )
 	if(!za&&zg&&*args!=q)
 	{
 		path_t t=strtok((char*)to_backslash(args)," \t\r\n");
-		if(!t.exists()&&t.extension().empty()){ path_t e=env::where(t); if(!e.empty()&&!e.extension().empty()){ strcpy(b,e.filename().c_str()); size_t zt=t.size(); if(args[zt]) strcat(b,args+zt); args=__strdup(b); } }
+		if(!t.exists()&&t.extension().empty()){ path_t e=env::where(t); if(!e.empty()&&!e.extension().empty()){ string s=e.filename().c_str(); s+=args+t.size(); args=__strdup(s.c_str()); } }
 	}
 
 	// build cmdline, which should also embed app path
@@ -1031,7 +1035,7 @@ __noinline read_process_output_t read_process( const string& cmd )
 
 __noinline bool kill_process( string_view process_name, bool quiet=true )
 {
-	string cmd = format("taskkill /f /t /im %s", process_name.data());
+	string cmd = format("taskkill /f /t /im %.*s",int(process_name.size()),process_name.data());
 	if(quiet) cmd += " 1>nul 2>&1";
 	return 0==system(cmd.c_str());
 }
@@ -1054,7 +1058,7 @@ struct mbox_t
 	mbox_t owner( HWND hwnd ){ mbox_t t=*this; if(hwnd) t._owner=hwnd; return t; }
 	mbox_t title( const char* title ){ mbox_t t=*this; if(title) t._title=title; return t; }
 	void warning( __printf_format_string__ const char* fmt, ... ){ build_msg(); MessageBoxA(_owner,msg,format("%s: warning",_title.c_str()),MB_OK|MB_ICONWARNING|MB_SYSTEMMODAL); }
-	bool error( __printf_format_string__ const char* fmt, ... ){ build_msg(); MessageBoxA(_owner,msg,("%s: error",_title.c_str()),MB_OK|MB_ICONERROR|MB_SYSTEMMODAL); return false; }
+	bool error( __printf_format_string__ const char* fmt, ... ){ build_msg(); MessageBoxA(_owner,msg,format("%s: error",_title.c_str()),MB_OK|MB_ICONERROR|MB_SYSTEMMODAL); return false; }
 	bool confirm( __printf_format_string__ const char* fmt, ... ){ build_msg(); return IDYES==MessageBoxA(_owner,msg,_title.c_str(),MB_YESNO|MB_ICONQUESTION|MB_SYSTEMMODAL); }
 	void operator()( __printf_format_string__ const char* fmt, ... ){ build_msg(); MessageBoxA(_owner,msg,_title.c_str(),MB_OK|MB_ICONINFORMATION|MB_SYSTEMMODAL); }
 	void operator()( __printf_format_string__ const wchar_t* fmt, ... ){ build_msg(); MessageBoxW(_owner,msg,atow(_title.c_str()),MB_OK|MB_ICONINFORMATION|MB_SYSTEMMODAL); }
@@ -1145,13 +1149,15 @@ struct image
 	const char*		file_path=nullptr;	// can be filled when loaded from a file
 
 	image() = default;
+	image( const image& ) = delete;
+	image& operator=( const image& ) = delete;
 	image( int width, int height, int depth=8, int channels=3, unsigned align=4 ){ this->width=width; this->height=height; this->depth=depth; this->channels=channels; const_cast<unsigned&>(this->align)=align; data=(decltype(data))malloc(size()); }
 	virtual ~image(){ if(data) free(data); data=nullptr; if(file_path) free((void*)file_path); file_path=nullptr; }
 
 	inline unsigned int stride( int channel=0 ) const { bool i420=fcc==I420||fcc==YV12||fcc==IYUV; unsigned int bpp=(fcc==YUY2)?2:(i420||fcc==NV12)?1:channels; uint r=(depth>>3)*bpp*width; if(align<2) return r; return (((i420&&channel)?(r>>1):r)+align-1)&(~(align-1)); }
-	inline unsigned int size() const { bool i420=fcc==I420||fcc==YV12||fcc==IYUV; return height*(i420?(stride()+stride(1)):fcc==NV12?(stride()+stride(1)/2):stride()); }
+	inline unsigned int size() const { bool i420=fcc==I420||fcc==YV12||fcc==IYUV; return i420?stride()*height+2*stride(1)*((height+1)/2):fcc==NV12?stride()*height+stride(1)*((height+1)/2):stride()*height; }
 	template <class T> T* ptr( int y=0, int x=0, bool vflip=false ){ return ((T*)(data+stride()*(vflip?height-1-y:y)))+x; } // works only for RGB
-	template <class T> T* plane( int channel=0 ){ unsigned char* p=data; int c=channel; if(c){ p+=stride()*height; if((fcc==I420||fcc==YV12||fcc==IYUV)&&c>1) p+=stride(1)*height/2; } return (T*)p; }
+	template <class T> T* plane( int channel=0 ){ unsigned char* p=data; int c=channel; if(c){ p+=stride()*height; if((fcc==I420||fcc==YV12||fcc==IYUV)&&c>1) p+=stride(1)*(height+1)/2; } return (T*)p; }
 
 	// fourcc; YUY2==YUYV, I420==YU12==IYUV (YUV420P), YV12 (YVU420P), NV12 (YUV420SP)
 	enum fcc_t { RGB=0, YUY2='2yuy', YUYV='vyuy', I420='024i', YU12=I420, IYUV='vuyi', YV12='21vy', NV12='21vn' };
@@ -1160,7 +1166,7 @@ struct image
 struct image_header : public image
 {
 	image_header() = default;
-	image_header( int width, int height, int depth=8, int channels=3, unsigned align=4, void* data=nullptr ){ this->width=width; this->height=height; this->depth=depth; this->channels=channels; const_cast<unsigned&>(this->align)=align; if(data) data=(decltype(data))data; }
+	image_header( int width, int height, int depth=8, int channels=3, unsigned align=4, void* data=nullptr ){ this->width=width; this->height=height; this->depth=depth; this->channels=channels; const_cast<unsigned&>(this->align)=align; if(data) this->data=(decltype(this->data))data; }
 	~image_header(){ data=nullptr; }
 };
 

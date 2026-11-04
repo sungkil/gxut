@@ -77,7 +77,7 @@ inline uint64_t	   atoull( const char* a ){ char* e=nullptr;uint64_t v=strtoull(
 
 // comma separation for size_t
 template <std::unsigned_integral T> inline const char* tocomma( T u ){ uint64_t t=uint64_t(u); const char* a=format("%llu",t); if(u<1000) return a; size_t l=strlen(a); vector<char> v(a,a+l+1); for(uint k=((l%3)?(l%3):3);k<l;k+=4,l++) v.emplace(v.begin()+k,','); return __strdup(v.data()); }
-template <std::signed_integral T> inline const char* tocomma( T i ){ const char* s=tocomma(uint64_t(abs(i))); return i<0?format("-%s",s):s; }
+template <std::signed_integral T> inline const char* tocomma( T i ){ uint64_t u=i<0?uint64_t(-(i+1))+1:uint64_t(i); const char* s=tocomma(u); return i<0?format("-%s",s):s; }
 
 // user types to string
 inline const char* itoa( const int2& v ){ return format("%d %d",v.x,v.y); }
@@ -316,7 +316,7 @@ template <class T> const T* rtrim( const T* src, const T* delims=__whitespaces<T
 template <class T> const T* rtrim( const T* src, T delim )
 {
 	if(!src||!src[0]) return (const T*)L"";
-	int l=int(strlen(src)); const T* d=src+l-1; for(int k=l-1;*d==delim&&k>=0;k--,d--);
+	int l=int(strlen(src)); const T* d=src+l-1; for(int k=l-1;k>=0&&*d==delim;k--,d--);
 	return __strdup(src,d-src+1);
 }
 
@@ -335,7 +335,7 @@ template <class T> const T* trim( const T* src, T delim )
 {
 	if(!src||!src[0]) return (const T*)L"";
 	while(*src&&*src==delim){ src++; } if(!src[0]) return (const T*)L"";
-	int l=int(strlen(src)); const T* d=src+l-1; for(int k=l-1;*d==delim&&k>=0;k--,d--);
+	int l=int(strlen(src)); const T* d=src+l-1; for(int k=l-1;k>=0&&*d==delim;k--,d--);
 	return __strdup(src,d-src+1);
 }
 
@@ -351,9 +351,10 @@ template <class T> T* itrim( T* src, const T* delims=__whitespaces<T>() )
 template <class T> const T* trim_comment( const T* src, const char* marker="#" )
 {
 	if(!src||!src[0]) return (const T*)L"";
-	size_t slen=strlen(src),clen=strlen(marker),sc=slen-clen+1;
+	if(!marker||!*marker) return __strdup(src);
+	size_t slen=strlen(src),clen=strlen(marker);
 	T* buff=__strdup(src,slen); const char* cs=marker;
-	bool cpp=false;for(int k=0;k<clen-1;k++){if(cs[k]!='/'||cs[k+1]!='/')continue;cpp=true;break;} // detect double slashes
+	bool cpp=false;for(size_t k=0;k<clen-1;k++){if(cs[k]!='/'||cs[k+1]!='/')continue;cpp=true;break;} // detect double slashes
 	for(size_t k=0;k<slen;k++)
 	{
 		T s=buff[k];
@@ -361,7 +362,8 @@ template <class T> const T* trim_comment( const T* src, const char* marker="#" )
 		{
 			if(s!=cs[j]) continue;
 			if(cs[j]!='/'||!cpp) break;
-			if(j<clen-1&&k<slen-1&&buff[k+1]=='/') break;
+			if(j>0&&cs[j-1]=='/') continue;
+			if(j<clen-1&&cs[j+1]=='/'&&k<slen-1&&buff[k+1]=='/') break;
 		}
 		if(j<clen){buff[slen=k]=0;break;}
 	}
@@ -406,7 +408,7 @@ explode_conservative( const T* src, T delim )
 template <class T> __noinline const T* substr( const T* _Src, int _Pos, int _Count=0 )
 {
 	static const T* nullstr=(T*)L""; if(!_Src||!*_Src) return nullstr;
-	size_t l = strlen(_Src); if(_Pos<0) _Pos+=int(l); if(_Pos>=int(l)) return nullstr; if(_Count<=0) _Count+=int(l);
+	size_t l = strlen(_Src); if(_Pos<0) _Pos+=int(l); if(_Pos<0||_Pos>=int(l)) return nullstr; if(_Count<=0) _Count+=int(l);
 	return __strdup(_Src+_Pos,size_t(_Pos)+_Count<=l?size_t(_Count):size_t(l-_Pos));
 }
 
@@ -450,7 +452,7 @@ template <class T> __noinline const T* str_escape( const T* _Src )
 template <class T> __noinline const T* str_remove_tokens( const T* _Src, const T* _Tokens )
 {
 	if(!_Src||!_Tokens) return (const T*)L"";
-	int l=int(strlen(_Src)), m=int(strlen(_Tokens)); if(!l||!m) return (const T*)L"";
+	int l=int(strlen(_Src)), m=int(strlen(_Tokens)); if(!l) return (const T*)L""; if(!m) return __strdup(_Src);
 	T *dst=__strbuf(l), *d=dst; const T *s=_Src;
 	for(int k=0;k<l;k++,s++){ bool t=false; for(int j=0;j<m;j++)if(*s==_Tokens[j]){t=true;break;} if(t) continue; *(d++)=*s; }
 	*d=0; return dst;
@@ -520,10 +522,10 @@ __noinline const wchar_t* escape_unicode_symbols( const wchar_t* str )
 		{0x201C,L'\"'},	{0x201D,L'\"'},	{0x2033,L'\"'},
 	};
 
-	for( size_t k=0, kn=wcslen(b); k<kn; k++ )
-	{ auto it=lut.find(b[k]); if(it!=lut.end()) b[k]=it->second; }
+	for( size_t k=0, kn=wcslen(b); k<kn; k++ ){ auto it=lut.find(b[k]); if(it!=lut.end()) b[k]=it->second; }
 
-	return b;
+	// remove redundant symbols
+	return str_replace( b, L"\xEF\xBF\xBD", L"" );
 }
 
 __noinline const char* escape_unicode_symbols( const char* s )
@@ -550,7 +552,8 @@ template <class T> __noinline T strlcss( const vector<T>& v ) // longest common 
 		auto& b=v[k];
 		int bl=int(b.size()); if(bl==0) return T();
 		int al=int(a.size()), l=al<bl?al:bl;
-		int j=0; for( ; j<l; j++ ){ if(a[j]!=b[j]) break; } a[j]=0;
+		int j=0; for( ; j<l; j++ ){ if(a[j]!=b[j]) break; }
+		a.resize(j);
 	}
 	return a;
 }

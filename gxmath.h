@@ -57,11 +57,11 @@ constexpr float pi2 = pi2_v<float>;
 // half-precision float and conversion
 #ifndef __GXMATH_NO_HALF__
 #define __GXMATH_HALF__
-struct half { unsigned short mantissa:10,exponent:5,sign:1; __forceinline operator float() const; };	// IEEE 754-2008 half-precision (16-bit) floating-point storage. // https://github.com/HeliumProject/Helium/blob/master/Math/Float16.cpp
-__forceinline float	htof( half value ){ struct _float32_t {uint mantissa:23,exponent:8,sign:1;}; _float32_t result={};result.sign = value.sign;uint exponent=value.exponent,mantissa=value.mantissa; if(exponent==31){result.exponent=255;result.mantissa=0;} else if(exponent==0&&mantissa==0){result.exponent=0;result.mantissa=0;} else if(exponent==0){uint mantissa_shift=10-static_cast<uint>(log2(float(mantissa)));result.exponent=127-(15-1)-mantissa_shift;result.mantissa=mantissa<<(mantissa_shift+23-10);} else{result.exponent=127-15+exponent;result.mantissa=static_cast<uint>(value.mantissa)<<(23-10);} return reinterpret_cast<float&>(result); }
+struct half { unsigned short mantissa:10,exponent:5,sign:1; __forceinline operator float() const; }; // IEEE 754-2008 half-precision (16-bit) floating-point storage. // https://github.com/HeliumProject/Helium/blob/master/Math/Float16.cpp
+__forceinline float	htof( half value ){ struct _float32_t {uint mantissa:23,exponent:8,sign:1;}; _float32_t result={};result.sign = value.sign;uint exponent=value.exponent,mantissa=value.mantissa; if(exponent==31){result.exponent=255;result.mantissa=mantissa<<13;} else if(exponent==0&&mantissa==0){result.exponent=0;result.mantissa=0;} else if(exponent==0){uint mantissa_shift=9-static_cast<uint>(log2(float(mantissa)));result.exponent=126-14-mantissa_shift;result.mantissa=(mantissa<<(mantissa_shift+14))&0x7fffff;} else{result.exponent=127-15+exponent;result.mantissa=static_cast<uint>(value.mantissa)<<(23-10);} return reinterpret_cast<float&>(result); }
 __forceinline half::operator float() const {return htof(*this);}
 __forceinline float* htof( const half* ph, float* pf, size_t nElements, size_t float_stride=1 ){ if(pf==nullptr||ph==nullptr||nElements==0) return pf; float* pf0=pf; for( size_t k=0; k < nElements; k++, ph++, pf+=float_stride ) *pf=htof(*ph); return pf0; }
-__forceinline half ftoh( float f ){ struct _float32_t {uint mantissa:23,exponent:8,sign:1;}; _float32_t value=reinterpret_cast<_float32_t&>(f);half result={};result.sign=value.sign; uint exponent=value.exponent; if(exponent==255){result.exponent=31;result.mantissa=0;} else if(exponent<127-15+1){uint mantissa=(1<<23)|value.mantissa; uint mantissa_shift=(23-10)+(127-15+1)-exponent;result.exponent=0;result.mantissa=static_cast<ushort>(mantissa>>mantissa_shift);} else if(exponent>127+(31-15-1)){result.exponent=31-1;result.mantissa=1023;} else {result.exponent=static_cast<ushort>(127-15+exponent);result.mantissa=static_cast<ushort>(value.mantissa>>(23-10));} return result; }
+__forceinline half ftoh( float f ){ struct _float32_t {uint mantissa:23,exponent:8,sign:1;}; _float32_t value=reinterpret_cast<_float32_t&>(f);half result={};result.sign=value.sign; uint exponent=value.exponent; if(exponent==255){result.exponent=31;result.mantissa=value.mantissa?(value.mantissa>>13)|0x200:0;} else if(exponent<127-15+1){uint mantissa=(exponent?1u<<23:0)|value.mantissa; uint mantissa_shift=(23-10)+(127-15+1)-exponent;result.exponent=0;result.mantissa=mantissa_shift>=32?0:static_cast<ushort>(mantissa>>mantissa_shift);} else if(exponent>127+(31-15-1)){result.exponent=31-1;result.mantissa=1023;} else {result.exponent=static_cast<ushort>(127-15+exponent);result.mantissa=static_cast<ushort>(value.mantissa>>(23-10));} return result; }
 __forceinline half* ftoh( const float* pf, half* ph, size_t nElements, size_t half_stride=1 ){ if(pf==nullptr||ph==nullptr||nElements==0) return ph; half* ph0=ph; for( size_t k=0; k < nElements; k++, pf++, ph+=half_stride ) *ph=ftoh(*pf); return ph0; }
 using half2	= tarray2<half>; using half3 = tarray3<half>; using half4 = tarray4<half>;
 #endif
@@ -340,7 +340,8 @@ struct imat
 
 	using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t;
 	static constexpr size_t size(){ return N; }
-	constexpr iterator begin() const { return iterator(this); } constexpr iterator end() const { return iterator(this)+N; }
+	constexpr iterator begin(){ return iterator(this); } constexpr iterator end(){ return iterator(this)+N; }
+	constexpr const_iterator begin() const { return (const T*)this; } constexpr const_iterator end() const { return (const T*)this+N; }
 	__forceinline operator T*(){ return (T*)this; } __forceinline operator const T*() const { return (T*)this; }
 	__forceinline T* data(){ return (T*)this; } __forceinline const T* data() const { return (T*)this; }
 
@@ -392,7 +393,7 @@ struct imat
 // common matrix implemenetations
 #define __default_matrix_impl(M,W,dim) \
 	static constexpr int D=dim; static constexpr int N=dim*dim;\
-	using B=imat<M,W,T,dim>; using V=W<T>; using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t;\
+	using B=imat<M,W,T,dim>; using V=W<T>; using value_type=T; using iterator=T*; using const_iterator=const T*; using reference=T&; using const_reference=const T&; using size_type=size_t;\
 	using B::operator=; using B::operator==; using B::operator!=; using B::operator+; using B::operator-; using B::operator*; using B::operator/; using B::operator+=; using B::operator-=; using B::operator*=; using B::operator/=;\
 	using B::size; using B::begin; using B::end; using B::data; using B::rvec; using B::identity; using B::diag; using B::trace;\
 	__forceinline M( const M& m )=default;
@@ -444,8 +445,8 @@ template <floating_point T> struct tmat3 : public imat<tmat3,tvec3,T,3>
 	__forceinline tmat3 transpose() const { return {_00,_01,_02,_10,_11,_12,_20,_21,_22 }; }
 
 	// determinant/inverse
-	__forceinline double det() const { return _00*double(_11*_22-_12*_21) + _01*double(_12*_20-_10*_22) + _02*double(_10*_21-_11*_20); }
-	__forceinline tmat3 inverse() const { double d=1/det(); return { (_11*_22-_21*_12)*d,(_12*_20-_10*_22)*d,(_10*_21-_20*_11)*d,(_02*_21-_01*_22)*d,(_00*_22-_02*_20)*d,(_20*_01-_00*_21)*d,(_01*_12-_02*_11)*d,(_10*_02-_00*_12)*d,(_00*_11-_10*_01)*d }; }
+	__forceinline double det() const { return _00*(double(_11)*_22-double(_12)*_21) + _01*(double(_12)*_20-double(_10)*_22) + _02*(double(_10)*_21-double(_11)*_20); }
+	__forceinline tmat3 inverse() const { double d=1/det(); return { (double(_11)*_22-double(_21)*_12)*d, (double(_12)*_20-double(_10)*_22)*d, (double(_10)*_21-double(_20)*_11)*d, (double(_02)*_21-double(_01)*_22)*d, (double(_00)*_22-double(_02)*_20)*d, (double(_20)*_01-double(_00)*_21)*d, (double(_01)*_12-double(_02)*_11)*d, (double(_10)*_02-double(_00)*_12)*d, (double(_00)*_11-double(_10)*_01)*d }; }
 
 	// row-major 2D transformations in 3D homogeneous coordinate system
 	template <class X, class Y > __forceinline static tmat3 translate( X x, Y y ){ tmat3 m; m._02=T(x); m._12=T(y); return m; }
@@ -464,10 +465,11 @@ template <floating_point T> struct tmat3 : public imat<tmat3,tvec3,T,3>
 template <floating_point T>
 __noinline tmat3<T> tmat3<T>::rotate( const V& from, const V& to )
 {
-	vec3 f=from.normalize(), t=to.normalize();
-	T d=T(f.dot(t)); if(d>T(0.999999)) return tmat3<T>(); else if(d<T(-0.999999)) return scale(-1,-1,-1);
+	V f=from.normalize(), t=to.normalize();
+	T d=T(f.dot(t)); if(d>T(0.999999)) return tmat3<T>();
+	else if(d<T(-0.999999)){ V axis=abs(f.x)<abs(f.y)?V(1,0,0):V(0,1,0); return rotate(f.cross(axis).normalize(),pi_v<T>); }
 	V n=f.cross(t); T l=T(n.length());
-	return rotate(n/l, asin(l));
+	return rotate(n/l, atan2(l,d));
 }
 
 template <floating_point T>
@@ -499,7 +501,7 @@ template <floating_point T> struct tmat4 : public imat<tmat4,tvec4,T,4>
 	__forceinline tmat4( V3 c0, V3 c1, V3 c2 ){ cvec[0]=V(c0,0);cvec[1]=V(c1,0);cvec[2]=V(c2,0);cvec[3]=V(0,0,0,1); }
 
 	// assignment operator
-	__forceinline tmat4& operator=( const M3& m ){ cvec[0]=vec4(m.cvec[0],0); cvec[1]=vec4(m.cvec[1],0); cvec[2]=vec4(m.cvec[2],0); cvec[3]=vec4(0,0,0,1); return *this; }
+	__forceinline tmat4& operator=( const M3& m ){ cvec[0]=V(m.cvec[0],0); cvec[1]=V(m.cvec[1],0); cvec[2]=V(m.cvec[2],0); cvec[3]=V(0,0,0,1); return *this; }
 
 	// casting operators
 	__forceinline operator M2() const { return {_00,_10,_01,_11}; }
@@ -507,7 +509,7 @@ template <floating_point T> struct tmat4 : public imat<tmat4,tvec4,T,4>
 
 	// multiplication operators
 	__forceinline V3 operator*( const V3& v ) const	{ return cvec[0].xyz*v.x+cvec[1].xyz*v.y+cvec[2].xyz*v.z+cvec[3].xyz; }
-	friend __forceinline vec3 mul( const tmat4& m, const V3& v ){ return m*v; }
+	friend __forceinline V3 mul( const tmat4& m, const V3& v ){ return m*v; }
 
 	// transpose
 	__forceinline tmat4 transpose() const { return {_00,_01,_02,_03,_10,_11,_12,_13,_20,_21,_22,_23,_30,_31,_32,_33}; }
@@ -526,12 +528,12 @@ template <floating_point T> struct tmat4 : public imat<tmat4,tvec4,T,4>
 	__forceinline static tmat4 rotate( const V3& axis, T angle ){ return M3::rotate(axis,angle); }
 
 	__forceinline static tmat4 look_at( const V3& eye, const V3& center, const V3& up ){ return look_to(eye,center-eye,up); }
-	__forceinline static tmat4 look_at_inverse( const V3& eye, const V3& center, const V3& up ){ look_to_inverse(eye,center-eye,up); }
+	__forceinline static tmat4 look_at_inverse( const V3& eye, const V3& center, const V3& up ){ return look_to_inverse(eye,center-eye,up); }
 	__forceinline static tmat4 look_to( const V3& eye, const V3& dir, const V3& up ){ V3 n=-dir.normalize(), u=(up.cross(n)).normalize(), v=n.cross(u); tmat4 m; m._00=u.x;m._01=u.y;m._02=u.z; m._03=-u.dot(eye); m._10=v.x;m._11=v.y;m._12=v.z; m._13=-v.dot(eye); m._20=n.x;m._21=n.y;m._22=n.z; m._23=-n.dot(eye); return m; }
 	__forceinline static tmat4 look_to_inverse( const V3& eye, const V3& dir, const V3& up ){ V3 n=-dir.normalize(), u=(up.cross(n)).normalize(), v=n.cross(u); return tmat4(u,v,n,eye); }
-	__forceinline static tmat4 perspective( T fovy, T aspect, T dn, T df ){ if(fovy>pi_v<T>) fovy*=pi_v<T>/T(180.0); /* autofix for fov in degrees */ tmat4 m; m._11=T(1.0/tanf(fovy*0.5)); m._00=m._11/aspect; m._22=(dn+df)/(dn-df); m._23=2.0f*dn*df/(dn-df); m._32=T(-1.0); m._33=0; return m; }
+	__forceinline static tmat4 perspective( T fovy, T aspect, T dn, T df ){ if(fovy>pi_v<T>) fovy*=pi_v<T>/T(180.0); /* autofix for fov in degrees */ tmat4 m; m._11=T(1.0/tan(double(fovy)*0.5)); m._00=m._11/aspect; m._22=(dn+df)/(dn-df); m._23=T(2.0)*dn*df/(dn-df); m._32=T(-1.0); m._33=0; return m; }
 	__forceinline static tmat4 perspective_off_center( T left, T right, T top, T bottom, T dn, T df ){ tmat4 m; m._00=T(2.0)*dn/(right-left); m._11=T(2.0)*dn/(top-bottom); m._02=(right+left)/(right-left); m._12=(top+bottom)/(top-bottom); m._22=(dn+df)/(dn-df); m._23=T(2.0)*dn*df/(dn-df); m._32=T(-1.0); m._33=0; return m; }
-	__forceinline static tmat4 ortho( T width, T height, T dn, T df ){ tmat4 m; m._00=T(2.0)/width; m._11=T(2.0)/height; m._22=2.0f/(dn-df); m._23=(dn+df)/(dn-df); return m; }
+	__forceinline static tmat4 ortho( T width, T height, T dn, T df ){ tmat4 m; m._00=T(2.0)/width; m._11=T(2.0)/height; m._22=T(2.0)/(dn-df); m._23=(dn+df)/(dn-df); return m; }
 	__forceinline static tmat4 ortho_off_center( T left, T right, T top, T bottom, T dn, T df ){ tmat4 m=ortho( right-left, top-bottom, dn, df ); m._03=(left+right)/(left-right); m._13=(bottom+top)/(bottom-top); return m; }
 
 	// viewport, lookat inferred from view matrix
@@ -548,10 +550,10 @@ template <floating_point T> struct tmat4 : public imat<tmat4,tvec4,T,4>
 protected:
 	dvec4 _xdet() const // support function for det() and inverse()
 	{
-		return {double(_30*_21-_20*_31)*_12+double(_10*_31-_30*_11)*_22+double(_20*_11-_10*_21)*_32,
-				double(_20*_31-_30*_21)*_02+double(_30*_01-_00*_31)*_22+double(_00*_21-_20*_01)*_32,
-				double(_30*_11-_10*_31)*_02+double(_00*_31-_30*_01)*_12+double(_10*_01-_00*_11)*_32,
-				double(_10*_21-_20*_11)*_02+double(_20*_01-_00*_21)*_12+double(_00*_11-_10*_01)*_22};
+		return {(double(_30)*_21-double(_20)*_31)*_12+(double(_10)*_31-double(_30)*_11)*_22+(double(_20)*_11-double(_10)*_21)*_32,
+				(double(_20)*_31-double(_30)*_21)*_02+(double(_30)*_01-double(_00)*_31)*_22+(double(_00)*_21-double(_20)*_01)*_32,
+				(double(_30)*_11-double(_10)*_31)*_02+(double(_00)*_31-double(_30)*_01)*_12+(double(_10)*_01-double(_00)*_11)*_32,
+				(double(_10)*_21-double(_20)*_11)*_02+(double(_20)*_01-double(_00)*_21)*_12+(double(_00)*_11-double(_10)*_01)*_22 };
 	}
 };
 
@@ -560,20 +562,20 @@ __noinline tmat4<T> tmat4<T>::inverse() const
 {
 	dvec4 x=_xdet();
 	tmat4<double> d; // work in higher precision
-	d._00=double(_21*_32-_31*_22)*_13 + double(_31*_12-_11*_32)*_23 + double(_11*_22-_21*_12)*_33;
-	d._01=double(_31*_22-_21*_32)*_03 + double(_01*_32-_31*_02)*_23 + double(_21*_02-_01*_22)*_33;
-	d._02=double(_11*_32-_31*_12)*_03 + double(_31*_02-_01*_32)*_13 + double(_01*_12-_11*_02)*_33;
-	d._03=double(_21*_12-_11*_22)*_03 + double(_01*_22-_21*_02)*_13 + double(_11*_02-_01*_12)*_23;
-	d._10=double(_30*_22-_20*_32)*_13 + double(_10*_32-_30*_12)*_23 + double(_20*_12-_10*_22)*_33;
-	d._11=double(_20*_32-_30*_22)*_03 + double(_30*_02-_00*_32)*_23 + double(_00*_22-_20*_02)*_33;
-	d._12=double(_30*_12-_10*_32)*_03 + double(_00*_32-_30*_02)*_13 + double(_10*_02-_00*_12)*_33;
-	d._13=double(_10*_22-_20*_12)*_03 + double(_20*_02-_00*_22)*_13 + double(_00*_12-_10*_02)*_23;
-	d._20=double(_20*_31-_30*_21)*_13 + double(_30*_11-_10*_31)*_23 + double(_10*_21-_20*_11)*_33;
-	d._21=double(_30*_21-_20*_31)*_03 + double(_00*_31-_30*_01)*_23 + double(_20*_01-_00*_21)*_33;
-	d._22=double(_10*_31-_30*_11)*_03 + double(_30*_01-_00*_31)*_13 + double(_00*_11-_10*_01)*_33;
-	d._23=double(_20*_11-_10*_21)*_03 + double(_00*_21-_20*_01)*_13 + double(_10*_01-_00*_11)*_23;
+	d._00=(double(_21)*_32-double(_31)*_22)*_13 + (double(_31)*_12-double(_11)*_32)*_23 + (double(_11)*_22-double(_21)*_12)*_33;
+	d._01=(double(_31)*_22-double(_21)*_32)*_03 + (double(_01)*_32-double(_31)*_02)*_23 + (double(_21)*_02-double(_01)*_22)*_33;
+	d._02=(double(_11)*_32-double(_31)*_12)*_03 + (double(_31)*_02-double(_01)*_32)*_13 + (double(_01)*_12-double(_11)*_02)*_33;
+	d._03=(double(_21)*_12-double(_11)*_22)*_03 + (double(_01)*_22-double(_21)*_02)*_13 + (double(_11)*_02-double(_01)*_12)*_23;
+	d._10=(double(_30)*_22-double(_20)*_32)*_13 + (double(_10)*_32-double(_30)*_12)*_23 + (double(_20)*_12-double(_10)*_22)*_33;
+	d._11=(double(_20)*_32-double(_30)*_22)*_03 + (double(_30)*_02-double(_00)*_32)*_23 + (double(_00)*_22-double(_20)*_02)*_33;
+	d._12=(double(_30)*_12-double(_10)*_32)*_03 + (double(_00)*_32-double(_30)*_02)*_13 + (double(_10)*_02-double(_00)*_12)*_33;
+	d._13=(double(_10)*_22-double(_20)*_12)*_03 + (double(_20)*_02-double(_00)*_22)*_13 + (double(_00)*_12-double(_10)*_02)*_23;
+	d._20=(double(_20)*_31-double(_30)*_21)*_13 + (double(_30)*_11-double(_10)*_31)*_23 + (double(_10)*_21-double(_20)*_11)*_33;
+	d._21=(double(_30)*_21-double(_20)*_31)*_03 + (double(_00)*_31-double(_30)*_01)*_23 + (double(_20)*_01-double(_00)*_21)*_33;
+	d._22=(double(_10)*_31-double(_30)*_11)*_03 + (double(_30)*_01-double(_00)*_31)*_13 + (double(_00)*_11-double(_10)*_01)*_33;
+	d._23=(double(_20)*_11-double(_10)*_21)*_03 + (double(_00)*_21-double(_20)*_01)*_13 + (double(_10)*_01-double(_00)*_11)*_23;
 	d._30=x.x; d._31=x.y; d._32=x.z; d._33=x.w;
-	T s=T(1)/vec4(_03,_13,_23,_33).dot(x);
+	double s=1.0/dvec4(_03,_13,_23,_33).dot(x);
 	tmat4<T> m; for( int k=0;k<N;k++) (&m._00)[k]=(&d._00)[k]*s;
 	return m;
 }
@@ -611,7 +613,7 @@ template <class X, class T=float> __forceinline T radians( X f ){ return f*pi_v<
 template <class X, class T=float> __forceinline T degrees( X f ){ return f*T(180.0)/pi_v<T>; }
 template <class X, class T=float> __forceinline T round( X f, int digits ){ T m=digits==0?1:T(pow(10.0,digits)); return ::round(f*m)/m; }
 __forceinline double round( double f, int digits ){ double m=digits==0?1:double(pow(10.0,digits)); return ::round(f*m)/m; }
-__forceinline long double round( long double f, int digits ){ long double m=digits==0?1:long double(pow(10.0,digits)); return ::round(f*m)/m; }
+__forceinline long double round( long double f, int digits ){ long double m=digits==0?1:powl(10.0L,digits); return ::round(f*m)/m; }
 __forceinline float fract( float f ){ return float(f-floor(f)); }
 template <floating_point T> __forceinline float  mix( float v1, float v2, T t ){ return v1*(1.0f-float(t))+v2*float(t); }
 template <floating_point T> __forceinline double mix( double v1, double v2, T t ){ return v1*(1.0-double(t))+v2*double(t); }
@@ -668,7 +670,7 @@ __forceinline uint  floatBitsToUint( float f ){ return reinterpret_cast<uint&>(f
 __forceinline int   floatBitsToInt( float f ){ return reinterpret_cast<int&>(f); }
 __forceinline float intBitsToFloat( int i ){ return reinterpret_cast<float&>(i); }
 __forceinline float uintBitsToFloat( uint u ){ return reinterpret_cast<float&>(u); }
-__forceinline uint  bitfieldExtract( uint  u, int offset, int bits ){ return (u>>offset)&(~(0xffffffff<<bits)); }
+__forceinline uint  bitfieldExtract( uint  u, int offset, int bits ){ if(offset<0||offset>=32||bits<=0) return 0; bits=std::min(bits,32-offset); return (u>>offset)&uint((uint64_t(1)<<bits)-1); }
 __forceinline uvec2 bitfieldExtract( uvec2 u, int offset, int bits ){ return uvec2{bitfieldExtract(u.x,offset,bits),bitfieldExtract(u.y,offset,bits)}; }
 __forceinline uvec3 bitfieldExtract( uvec3 u, int offset, int bits ){ return uvec3{bitfieldExtract(u.x,offset,bits),bitfieldExtract(u.y,offset,bits),bitfieldExtract(u.z,offset,bits)}; }
 __forceinline uvec4 bitfieldExtract( uvec4 u, int offset, int bits ){ return uvec4{bitfieldExtract(u.x,offset,bits),bitfieldExtract(u.y,offset,bits),bitfieldExtract(u.z,offset,bits),bitfieldExtract(u.w,offset,bits)}; }
@@ -689,20 +691,20 @@ __forceinline vec3 vec2BitsToNormVec3( vec2 v )
 }
 
 // general math utility functions
-template <class X, class T=float> __forceinline T triangle_area( tvec2<X> a, tvec2<X> b, tvec2<X> c ){ return T(abs(a.x*b.y+b.x*c.y+c.x*a.y-a.x*c.y-c.x*b.y-b.x*a.y))*T(0.5); }
+template <class X, class T=float> __forceinline T triangle_area( tvec2<X> a, tvec2<X> b, tvec2<X> c ){ return T(abs(double(a.x)*b.y+double(b.x)*c.y+double(c.x)*a.y-double(a.x)*c.y-double(c.x)*b.y-double(b.x)*a.y)*0.5); }
 template <class T> __forceinline tvec2<T> minmax( const tvec2<T>& a, const tvec2<T>& b ){ return tvec2<T>(a.x<b.x?a.x:b.x,a.y>b.y?a.y:b.y); }
-template <std::integral T> __forceinline bool ispot( T i ){ return (uint(i)&(uint(i)-1))==0; } // http://en.wikipedia.org/wiki/Power_of_two
-template <std::integral T> __forceinline uint nextpot( T n ){ int m=int(n)-1; for( uint k=1; k<uint(sizeof(int))*8; k<<=1 ) m=m|m>>k; return m+1; }	// closest (equal or larger) power-of-two
-template <std::integral T> __forceinline uint nextsqrt( T n ){ return uint(ceil(sqrt(double(n)))+0.001); } // root of closest (equal or larger) square
-template <std::integral T> __forceinline uint nextsquare( T n ){ uint r=nextsqrt(n); return r*r; } // closest (equal or larger) square
-template <std::integral T> __forceinline uint miplevels( T width, T height=1 ){ uint l=0; uint s=width>height?width:height; while(s){s=s>>1;l++;} return l; }
+template <std::integral T> __forceinline bool ispot( T i ){ return i>0&&(i&(i-1))==0; } // http://en.wikipedia.org/wiki/Power_of_two
+template <std::integral T> __forceinline T nextpot( T i ){ if constexpr(std::is_signed_v<T>){ using U=std::make_unsigned_t<T>; return i<0?T(U(0)-std::bit_ceil(U(0)-U(i))):T(std::bit_ceil(U(i))); } else return std::bit_ceil(i); } // closest (equal or larger) power-of-two
+template <std::integral T> __forceinline uint nextsqrt( T n ){ uint r=uint(ceil(sqrt(double(n)))); while(uint64_t(r)*r<uint64_t(n)) r++; while(r&&uint64_t(r-1)*(r-1)>=uint64_t(n)) r--; return r; } // root of closest (equal or larger) square
+template <std::integral T> __forceinline uint64_t nextsquare( T n ){ uint64_t r=nextsqrt(n); return r*r; } // closest (equal or larger) square
+template <std::integral T> __forceinline uint miplevels( T width, T height=1 ){ uint l=0; T s=width>height?width:height; while(s){s=s>>1;l++;} return l; }
 __forceinline uint bitswap( uint n ){ n=((n&0x55555555)<<1)|((n&0xaaaaaaaa)>>1); n=((n&0x33333333)<<2)|((n&0xcccccccc)>>2); n=((n&0x0f0f0f0f)<<4)|((n&0xf0f0f0f0)>>4); n=((n&0x00ff00ff)<<8)|((n&0xff00ff00)>>8); return (n<<16)|(n>>16); }
-__forceinline float rsqrt( float x ){ float y=0.5f*x; int i=*(int*)&x; i=0x5F375A86-(i>>1); x=*(float*)&i; x=x*(1.5f-y*x*x); x=x*(1.5f-y*x*x); return x; }						// Quake3's Fast InvSqrt(): 1/sqrt(x): magic number changed from 0x5f3759df to 0x5F375A86 for more accuracy; 2 iteration has quite good accuracy
-__forceinline double rsqrt( double x ){ double y=0.5*x; int64_t i=*(int64_t*)&x; i=0x5FE6EB50C7B537A9-(i>>1); x=*(double*)&i; x=x*(1.5-y*x*x); x=x*(1.5-y*x*x); return x; }		// Quake3's Fast InvSqrt(): 1/sqrt(x): 64-bit magic number (0x5FE6EB50C7B537A9) used; 2 iteration has quite good accuracy
+__forceinline float rsqrt( float x ){ float y=0.5f*x; int i=std::bit_cast<int>(x); i=0x5F375A86-(i>>1); x=std::bit_cast<float>(i); x=x*(1.5f-y*x*x); x=x*(1.5f-y*x*x); return x; }						// Quake3's Fast InvSqrt(): 1/sqrt(x): magic number changed from 0x5f3759df to 0x5F375A86 for more accuracy; 2 iteration has quite good accuracy
+__forceinline double rsqrt( double x ){ double y=0.5*x; int64_t i=std::bit_cast<int64_t>(x); i=0x5FE6EB50C7B537A9-(i>>1); x=std::bit_cast<double>(i); x=x*(1.5-y*x*x); x=x*(1.5-y*x*x); return x; }		// Quake3's Fast InvSqrt(): 1/sqrt(x): 64-bit magic number (0x5FE6EB50C7B537A9) used; 2 iteration has quite good accuracy
 
 // viewport helpers
-__forceinline ivec4 effective_viewport( int width, int height, double aspect_to_keep ){ int w=int(height*aspect_to_keep), h=int(width/aspect_to_keep); if((width*h)==(height*w)) return ivec4{0,0,width,height}; return width>w?ivec4{(width-w)/2,0,w,height}:ivec4{0,(height-h)/2,width,h}; }
-__forceinline ivec4 effective_viewport( int width, int height, int width_to_keep, int height_to_keep ){ return (width*height_to_keep)==(height*width_to_keep)?ivec4{0,0,width,height}:effective_viewport(width,height,width_to_keep/double(height_to_keep)); }
+__forceinline ivec4 effective_viewport( int width, int height, double aspect_to_keep ){ int w=int(height*aspect_to_keep), h=int(width/aspect_to_keep); if(int64_t(width)*h==int64_t(height)*w) return ivec4{0,0,width,height}; return width>w?ivec4{(width-w)/2,0,w,height}:ivec4{0,(height-h)/2,width,h}; }
+__forceinline ivec4 effective_viewport( int width, int height, int width_to_keep, int height_to_keep ){	return int64_t(width)*height_to_keep==int64_t(height)*width_to_keep?ivec4{0,0,width,height}:effective_viewport(width,height,width_to_keep/double(height_to_keep)); }
 __forceinline ivec4 effective_viewport( int width, int height, ivec2 aspect_to_keep ){ return effective_viewport(width,height,aspect_to_keep.x,aspect_to_keep.y); }
 __forceinline ivec4 effective_viewport( ivec2 size, double aspect_to_keep ){ return effective_viewport(size.x,size.y,aspect_to_keep); }
 __forceinline ivec4 effective_viewport( ivec2 size, int width_to_keep, int height_to_keep ){ return effective_viewport(size.x,size.y,width_to_keep,height_to_keep); }
@@ -796,8 +798,8 @@ __forceinline vec3	prand3( float fmin, float fmax ){ return prand3()*(fmax-fmin)
 __forceinline vec4	prand4( float fmin, float fmax ){ return prand4()*(fmax-fmin)+fmin; }
 
 // xorshift-based random number generator: https://en.wikipedia.org/wiki/Xorshift
-__forceinline uint  xorshift32( uint& x ){ x^=x<<13;x^=x>>17;x^=x<<5;return x; }
-__forceinline float xrand(  uint& x ){ return float(x=xorshift32(x))*2.3283064e-10f; }
+__forceinline uint  xorshift32( uint& x ){ if(!x) x=0x9E3779B9u; x^=x<<13;x^=x>>17;x^=x<<5;return x; }
+__forceinline float xrand(  uint& x ){ return float(xorshift32(x)>>8)*0x1p-24f; }
 __forceinline vec2  xrand2( uint& x ){ return vec2(xrand(x),xrand(x)); }
 __forceinline vec3  xrand3( uint& x ){ return vec3(xrand(x),xrand(x),xrand(x)); }
 __forceinline vec4  xrand4( uint& x ){ return vec4(xrand(x),xrand(x),xrand(x),xrand(x)); }
@@ -807,17 +809,8 @@ __forceinline vec3  xrand3( uint& x, float fmin, float fmax ){ return xrand3(x)*
 __forceinline vec4  xrand4( uint& x, float fmin, float fmax ){ return xrand4(x)*(fmax-fmin)+fmin; }
 
 // alternative wrappers for deprecated std::random_shuffle
-template <class RandomIt>
-void random_shuffle( RandomIt first, RandomIt last, uint seed=0 ){ std::mt19937 e=seed?std::mt19937(seed):std::mt19937(std::random_device()()); std::shuffle(first,last,e); }
-
-template <class T=uint>
-vector<T> random_shuffle_indices( size_t count, uint seed=0 )
-{
-	vector<T> v; v.resize(count);
-	std::iota( v.begin(), v.end(), 0 );
-	random_shuffle( v.begin(), v.end(), seed );
-	return v;
-}
+template <class RandomIt> void random_shuffle( RandomIt first, RandomIt last, std::optional<uint> seed=std::nullopt ){ std::mt19937 e(seed?*seed:std::random_device{}()); std::shuffle(first,last,e); }
+template <class T=uint> vector<T> random_shuffle_indices( size_t count, uint seed=0 ){ vector<T> v; v.resize(count); std::iota( v.begin(), v.end(), 0 ); random_shuffle( v.begin(), v.end(), seed ); return v; }
 
 // early declaration for fundamental types for computer graphics
 struct vertex { vec3 pos; vec3 norm; vec2 tex; }; // default vertex layout

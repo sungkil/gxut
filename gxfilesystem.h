@@ -41,7 +41,7 @@ __noinline bool iglob( const T* str, size_t slen, const T* pattern, size_t plen 
 	int n=int(slen?slen:strlen(str)), m=int(plen?plen:strlen(pattern)); if(m==0) return n==0;
 	int i,j,t,p; for(i=0,j=0,t=-1,p=-1;i<n;)
 	{
-		if(tolower(str[i])==tolower(pattern[j])||(j<m&&pattern[j]==q)){i++;j++;}
+		if(j<m&&(tolower(str[i])==tolower(pattern[j])||pattern[j]==q)){i++;j++;}
 		else if(j<m&&pattern[j]==a){t=i;p=j;j++;}
 		else if(p!=-1){j=p+1;i=t+1;t++;}
 		else return false;
@@ -153,17 +153,17 @@ struct path : public path_t
 	bool is_hidden() const {	if(!*_data) return false; auto a=wattrib(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_HIDDEN)!=0; }
 	bool is_system() const {	if(!*_data) return false; auto a=wattrib(); return a!=INVALID_FILE_ATTRIBUTES&&(a&FILE_ATTRIBUTE_SYSTEM)!=0; }
 	bool is_junction() const;
-	void set_hidden( bool h ) const {	if(!*_data) return; auto a=wattrib(); if(a!=INVALID_FILE_ATTRIBUTES) SetFileAttributesA(_data,a=h?(a|FILE_ATTRIBUTE_HIDDEN):(a^FILE_ATTRIBUTE_HIDDEN)); }
-	void set_readonly( bool r ) const {	if(!*_data) return; auto a=wattrib(); if(a!=INVALID_FILE_ATTRIBUTES) SetFileAttributesA(_data,a=r?(a|FILE_ATTRIBUTE_READONLY):(a^FILE_ATTRIBUTE_READONLY)); }
-	void set_system( bool s ) const {	if(!*_data) return; auto a=wattrib(); if(a!=INVALID_FILE_ATTRIBUTES) SetFileAttributesA(_data,a=s?(a|FILE_ATTRIBUTE_SYSTEM):(a^FILE_ATTRIBUTE_SYSTEM)); }
-	path junction() const;
+	void set_hidden( bool h ) const {	if(!*_data) return; auto a=wattrib(); if(a!=INVALID_FILE_ATTRIBUTES) SetFileAttributesA(_data,a=h?(a|FILE_ATTRIBUTE_HIDDEN):(a&~FILE_ATTRIBUTE_HIDDEN)); }
+	void set_readonly( bool r ) const {	if(!*_data) return; auto a=wattrib(); if(a!=INVALID_FILE_ATTRIBUTES) SetFileAttributesA(_data,a=r?(a|FILE_ATTRIBUTE_READONLY):(a&~FILE_ATTRIBUTE_READONLY)); }
+	void set_system( bool s ) const {	if(!*_data) return; auto a=wattrib(); if(a!=INVALID_FILE_ATTRIBUTES) SetFileAttributesA(_data,a=s?(a|FILE_ATTRIBUTE_SYSTEM):(a&~FILE_ATTRIBUTE_SYSTEM)); }
 
 	// path structure query
 	bool is_drive()		const {	if(!*_data) return false; size_t l=size(); return l<4&&l>1&&_data[1]==':'; } // backslash-less drive fails with st_mode
 	bool is_synology() const {	return is_ssh()&&strstr(_data,":\\volume")!=nullptr||strstr(_data,":/volume")!=nullptr; }
-	bool is_subdir( const path& ancestor ) const { return strnicmp(_data,ancestor._data,ancestor.size())==0; } // do not check existence
+	bool is_subdir( const path& ancestor ) const { size_t n=ancestor.size(); return n&&strnicmp(_data,ancestor._data,n)==0; } // do not check existence
 	path canonical() const { if(is_pipe()) return *this; if(is_remote()) return to_slash(); path p(*this); p.__canonicalize(); return p; } // not necessarily absolute: return relative path as well
 	path reparse() const; // get normalized path of files in junction directories
+	path junction() const;
 
 	// extended attribute query
 	bool is_binary_file() const	{ FILE* f=fopen("rb"); if(!f) return false; char b[4096]; while(1){ size_t n=::fread(b,1,sizeof(b),f); if(!n) break; if(memchr(b,0,n)){fclose(f);return true;}} fclose(f); return false; }
@@ -222,7 +222,7 @@ struct path : public path_t
 	const char* mtimestamp() const { if(!exists()) return ""; struct tm t; _gmtime64_s(&t,&(__attrib().st_mtime)); char* buff=__strbuf(256);sprintf(buff,"%04d%02d%02d%02d%02d%02d",t.tm_year+1900,t.tm_mon+1,t.tm_mday,t.tm_hour,t.tm_min,t.tm_sec);return buff; }
 
 	// process-related
-	template <bool gui=false> bool create_process( const string& args="", os::create_process_info_t<gui> info={} ) const { path p=*this; if(!exists()&&!((p=env::where(p)).exists())) return false; info.app=*this; return os::create_process(args,info); }
+	template <bool gui=false> bool create_process( const string& args="", os::create_process_info_t<gui> info={} ) const { path p=*this; if(!exists()&&!((p=env::where(p)).exists())) return false; info.app=p; return os::create_process(args,info); }
 
 	// file access: void (rb/wb), char (r/w), wchar_t (r/w,ccs=UTF-8)
 	FILE* fopen( const char* mode, bool utf8=false ) const;
@@ -353,7 +353,7 @@ __noinline void path::__scan_recursive( const wchar_t* _dir, path::__scan_t& si 
 			if(si.glob.l){if(si.b.glob?!iglob(f,fl,si.glob.pattern,si.glob.l):wcsistr(f,fl,si.glob.pattern,si.glob.l)==nullptr)continue;}
 			wcsncpy(p,f,fl); p[fl]=0; si.result.emplace_back(dir);
 		}
-		if(!si.b.recursive) continue; // directories
+		if(!si.b.recursive||(fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)==0) continue; // directories
 		size_t fl=wcslen(f); memcpy(p,f,sizeof(wchar_t)*fl); p[fl]=preferred_separator; p[fl+1]=0; sdir.emplace_back(dir);
 	}
 	FindClose(h);
@@ -371,7 +371,7 @@ __noinline void path::__subdirs_recursive( const wchar_t* _dir, path::__scan_t& 
 		if(f[0]==L'.'){ if(!f[1]||(f[1]==L'.'&&f[2]==0)||memcmp(f+1,L"git",sizeof(wchar_t)*4)==0) continue; } // skip ., .., .git
 		size_t fl=wcslen(f); wcsncpy(p,f,fl); p[fl]=preferred_separator; p[fl+1]=0;
 		if(si.glob.l==0) si.result.emplace_back(dir);
-		else if(!si.b.glob){ if(iglob(f,fl,si.glob.pattern,si.glob.l)) si.result.emplace_back(dir); }
+		else if(si.b.glob){ if(iglob(f,fl,si.glob.pattern,si.glob.l)) si.result.emplace_back(dir); }
 		else if(wcsistr(f, fl, si.glob.pattern, si.glob.l)) si.result.emplace_back(dir);
 		if(si.b.recursive) __subdirs_recursive(dir, si);
 	}
