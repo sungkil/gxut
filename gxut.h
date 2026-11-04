@@ -698,10 +698,11 @@ struct path_t
 	value_type& back(){ size_t l=size(); return l?_data[l-1]:_data[0]; }
 	const value_type& back() const { size_t l=size(); return l?_data[l-1]:_data[0]; }
 
-	// data queries
+	// data queries and resize
 	__forceinline void clear() const { _data[0]=0; memset(_data+capacity,0,sizeof(attrib_t)); }
 	__forceinline bool empty() const { return _data[0]==0; }
 	__forceinline size_t size() const { return strlen(_data); }
+	__forceinline void resize( size_t size ){ _data[size]=0; }
 
 	// separator opertions
 	path_t to_slash()		const { return __to_separator(*this,'/'); }
