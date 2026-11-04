@@ -702,7 +702,7 @@ struct path_t
 	__forceinline void clear() const { _data[0]=0; memset(_data+capacity,0,sizeof(attrib_t)); }
 	__forceinline bool empty() const { return _data[0]==0; }
 	__forceinline size_t size() const { return strlen(_data); }
-	__forceinline void resize( size_t size ){ _data[size]=0; }
+	__forceinline void resize( size_t size ){ _data[size<capacity?size:capacity]=0; }
 
 	// separator opertions
 	path_t to_slash()		const { return __to_separator(*this,'/'); }
