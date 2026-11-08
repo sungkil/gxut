@@ -54,8 +54,8 @@ struct sampler_t : public isampler_t
 	uint crc;		// crc32c to detect the change of samples
 	uint index=0;	// index for sequential sampling
 
-	sampler_t(){ _data.reserve(4096); } // reserve up to 4K samples by default
-	sampler_t( size_t size, bool b_resample=true ){ _data.reserve(4096); _data.resize(const_cast<uint&>(n)=uint(size)); if(b_resample) resample(); }
+	sampler_t():sampler_t(1){} // reserve up to 4K samples by default
+	sampler_t( size_t size, bool b_resample=true ){ _data.reserve(4096); _data.resize(const_cast<uint&>(n)=uint(size)); if(b_resample) resample(); else crc=~crc32(0,&model,sizeof(isampler_t)); }
 
 	bool		dirty() const { return crc!=crc32(0,&model,sizeof(isampler_t)); }
 	iterator	data() const { return _data.data(); }
@@ -66,7 +66,7 @@ struct sampler_t : public isampler_t
 	reference	operator[]( ptrdiff_t i ) const { return _data[i%n]; }
 	reference	at( ptrdiff_t i ) const { return _data[i%n]; }
 	void		rewind(){ index=0; }
-	reference	operator++(){ return _data[(++index)%n]; }						// prefix increment
+	reference	operator++(){ index=(++index)%n; return _data[index]; }			// prefix increment
 	reference	operator++(int){ uint i=index; index=(++index)%n; return _data[i]; }	// postfix increment
 
 	void		resize( size_t size ){ _data.resize(const_cast<uint&>(n)=uint(size)); resample(); }
@@ -96,7 +96,7 @@ __noinline vec2 halton( uint index, uint p2=3 )
 
 __noinline vec3 halton3( uint index, uint p2=7, uint p3=11 )
 {
-	static const float ip3=1/float(p3);
+	const float ip3=1/float(p3);
 	uint a,kk=index;float z=0;for(float p=ip3;kk;p*=ip3,kk/=p3) if(a=kk%p3) z+=float(a)*p;
 	return vec3(halton(index,p2),z);
 }
@@ -147,9 +147,9 @@ __noinline ::path_t _poisson_disk_cache_t::path( uint count, bool circular, uint
 __noinline bool _poisson_disk_cache_t::load( vector<vec2>& v, uint count, bool circular, uint seed )
 {
 	auto cache_path = path(count,circular,seed); if(!cache_path.exists()) return false;
-	if(cache_path.file_size()!=sizeof(vec4)*count) return false;
+	if(cache_path.file_size()!=sizeof(vec2)*count) return false;
 	FILE* fp = fopen(cache_path.c_str(),"rb"); if(!fp) return false;
-	size_t read_count = fread( v.data(), sizeof(vec2), count, fp);
+	v.resize(count); size_t read_count=fread(v.data(),sizeof(vec2),count,fp);
 	fclose(fp);
 	return read_count==count;
 }
@@ -218,6 +218,7 @@ __noinline vector<vec2> poisson_disk( uint _count, bool circular, uint seed )
 {
 	vector<vec2> v;
 	if(_poisson_disk_cache_t::load(v,_count,circular,seed)) return v;
+	sprand(seed);
 
 	int			count = _count;
 	bridson_t	b(circular);
@@ -265,6 +266,7 @@ __noinline vector<vec2> poisson_disk( uint _count, bool circular, uint seed )
 
 __noinline uint sampler_t::resample()
 {
+	if(empty()){ crc=crc32(0,&model,sizeof(isampler_t)); rewind(); return 0; }
 	if(surface==CYLINDER&&model!=HALTON){ printf("[Sampler] cylindrical sampling supports only Halton sequences\n" ); return 0; }
 	bool b_circular = surface==CIRCLE||surface==COSHEMI||surface==CYLINDER;
 
@@ -330,7 +332,7 @@ inline void sampler_t::_reshape( vec4* v, surface_t dst )
 		if(model==POISSON){ for(uint k=0; k<n; k++){ auto& s=v[k].xy; s=s*2.0f-1.0f; } }
 		else if(model==HAMMERSLEY||model==HALTON){ for(uint k=0;k<n;k++) v[k].xy=square_to_circle_concentric(v[k].xy); }
 		else { for(uint k=0;k<n;k++) v[k].xy=square_to_circle(v[k].xy); }
-		if(dst==COSHEMI) for(uint k=0;k<n;k++) v[k].z = sqrt(1.0f-v[k].xy.length());
+		if(dst==COSHEMI) for(uint k=0;k<n;k++) v[k].z = sqrt(1.0f-v[k].xy.length2());
 	}
 	else if(dst==HEMISPHERE)
 	{
@@ -359,6 +361,11 @@ inline void sampler_t::_make_centered()
 	dvec3 m=dvec3(0,0,0); vec4* v=_data.data(); for(size_t k=0;k<n;k++) m+=dvec3(v[k].x,v[k].y,v[k].z); m/=double(n);
 	vec3 f=vec3(float(-m.x),float(-m.y),float(-m.z));
 	for(size_t k=0,kn=size();k<kn;k++)v[k].xyz+=f;
+	if(surface==CIRCLE)
+	{
+		float r2=1.0f; for(size_t k=0,kn=size();k<kn;k++) r2=max(r2,v[k].xy.length2());
+		if(r2>1.0f){ float r=1.0f/sqrtf(r2); for(size_t k=0,kn=size();k<kn;k++) v[k].xy*=r; }
+	}
 }
 
 #endif // __GX_SAMPLER_H__
