@@ -487,6 +487,12 @@ __noinline const wchar_t* normalize_nfkc( const wchar_t* s )
 	wchar_t* r=__strbuf<wchar_t>(n+1); if(NormalizeString(NormalizationKC,s,l+1,r,n+1)<=0) return s; r[n]=0; return r;
 }
 
+__noinline const wchar_t* normalize_nfc( const wchar_t* s )
+{
+	if(!s||!*s) return s; int l=int(wcslen(s)); int n=NormalizeString(NormalizationC,s,l+1,nullptr,0); if(n<=0) return s;
+	wchar_t* r=__strbuf<wchar_t>(n+1); if(NormalizeString(NormalizationC,s,l+1,r,n+1)<=0) return s; r[n]=0; return r;
+}
+
 // detect koreans
 template<bool syllable_only=true>
 bool iskor( unsigned c )
