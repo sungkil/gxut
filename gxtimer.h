@@ -23,6 +23,7 @@
 #endif
 
 #include <chrono>
+#include <thread>
 using namespace std::chrono_literals;
 
 //*************************************
@@ -47,19 +48,18 @@ protected:
 
 inline void usleep( long long us )
 {
-#if defined(__msvc__)&&__has_include(<winsock2.h>) // use higher-precision select() when available
-	struct ws2select_t
+#ifdef __msvc__
+	if(us<=0) return;
+	struct waitable_timer_t
 	{
-		HMODULE hdll=nullptr;
-		int(*pf_select)(int,void*,void*,void*,void*)=nullptr;
-		ws2select_t(){ hdll=LoadLibraryA("WS2_32.dll"); if(!hdll) return; pf_select=(decltype(pf_select))GetProcAddress(hdll,"select"); if(!pf_select) printf("ws2usleep_t::select()==nullptr\n"); }
-		~ws2select_t(){ if(hdll) FreeLibrary(hdll); }
-		bool select( int usec ){ if(!pf_select)return false;struct{long tv_sec,tv_usec;}t={usec/1000000,usec%1000000};pf_select(0,0,0,0,&t);return true; }
+		HANDLE h=nullptr;
+		waitable_timer_t(){ h=CreateWaitableTimerExW(nullptr,nullptr,CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,TIMER_MODIFY_STATE|SYNCHRONIZE); if(!h) h=CreateWaitableTimerW(nullptr,FALSE,nullptr); }
+		~waitable_timer_t(){ if(h) CloseHandle(h); }
+		bool sleep( long long us ){ if(!h) return false; LARGE_INTEGER t; t.QuadPart=-us*10; return SetWaitableTimer(h,&t,0,nullptr,nullptr,FALSE)&&WaitForSingleObject(h,INFINITE)==WAIT_OBJECT_0; }
 	};
-	static ws2select_t ws2; if(ws2.select(us)) return;
-#elif defined __gcc__
-	std::this_thread::sleep_for(std::chrono::microseconds(us)); // actually, this doesn't work well due to too much context switch overhead
+	static thread_local waitable_timer_t t; if(t.sleep(us)) return;
 #endif
+	std::this_thread::sleep_for(std::chrono::microseconds(us));
 }
 
 inline void sleep( long long ms ){ usleep(ms*1000); }
