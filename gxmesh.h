@@ -270,7 +270,7 @@ struct stereo_t
 	uint		model = 0;			// stereo-rendering model
 	float		ipd = 64.0f;		// inter-pupil distance for stereoscopy: 6.4 cm = men's average
 	camera_t	left, right;		// left, right cameras
-	void		update( const camera& c ){ if(!model) return; float s=0.5f*ipd, o=s*c.dnear/c.df, t=c.dnear*tanf(0.5f*c.fovy*(c.fovy<pi?1.0f:pi/180.0f)), R=t*c.aspect; vec3 stereo_dir = normalize(cross(c.dir,c.up))*s; auto& l=left; memcpy(&l,&c,sizeof(l)); l.eye-=stereo_dir; l.dir-=stereo_dir; l.view_matrix=mat4::look_to(l.eye,l.dir,l.up); l.projection_matrix=mat4::perspective_off_center(-R+o,R+o,t,-t,c.dnear,c.dfar); auto& r=right; memcpy(&r,&c,sizeof(r)); r.eye+=stereo_dir; r.dir+=stereo_dir; r.view_matrix=mat4::look_to(r.eye,r.dir,r.up); r.projection_matrix=mat4::perspective_off_center(-R-o,R-o,t,-t,c.dnear,c.dfar);}
+	void		update( const camera& c ){ if(!model) return; float s=0.5f*ipd, o=s*c.dnear/c.df, t=c.dnear*tanf(0.5f*c.fovy*(c.fovy<pi?1.0f:pi/180.0f)), R=t*c.aspect; vec3 stereo_dir = normalize(cross(c.dir,c.up))*s; auto& l=left; memcpy(&l,&c,sizeof(l)); l.eye-=stereo_dir; l.view_matrix=mat4::look_to(l.eye,l.dir,l.up); l.projection_matrix=mat4::perspective_off_center(-R+o,R+o,t,-t,c.dnear,c.dfar); auto& r=right; memcpy(&r,&c,sizeof(r)); r.eye+=stereo_dir; r.view_matrix=mat4::look_to(r.eye,r.dir,r.up); r.projection_matrix=mat4::perspective_off_center(-R-o,R-o,t,-t,c.dnear,c.dfar);}
 };
 
 // utilities for camera
@@ -428,8 +428,8 @@ struct object
 		iterator operator++(int){ auto self=*this; index++; return self; }
 		reference operator*();
 		pointer operator->();
-		const reference operator*() const { return operator*(); }
-		const pointer operator->() const { return operator->(); }
+		const reference operator*() const { return const_cast<iterator*>(this)->operator*(); }
+		const pointer operator->() const { return const_cast<iterator*>(this)->operator->(); }
 		bool operator==( const iterator& rhs ) const { return memcmp(this,&rhs,sizeof(*this))==0; }
 		bool operator!=( const iterator& rhs ) const { return memcmp(this,&rhs,sizeof(*this))!=0; }
 
@@ -439,11 +439,11 @@ struct object
 	};
 
 	// iterators
-	iterator begin(){return iterator(root,ID);}			const iterator begin() const { return begin(); }
-	iterator end(){return iterator(root,ID,size());}	const iterator end() const { return end(); }
-	geometry& front();									const geometry& front() const { return front(); }
-	geometry& back();									const geometry& back() const { return back(); }
-	geometry& operator[]( size_t i );					const geometry& operator[] ( size_t i ) const { return operator[](i); }
+	iterator begin(){return iterator(root,ID);}			const iterator begin() const { return const_cast<object*>(this)->begin(); }
+	iterator end(){return iterator(root,ID,size());}	const iterator end() const { return const_cast<object*>(this)->end(); }
+	geometry& front();									const geometry& front() const { return const_cast<object*>(this)->front(); }
+	geometry& back();									const geometry& back() const { return const_cast<object*>(this)->back(); }
+	geometry& operator[]( size_t i );					const geometry& operator[] ( size_t i ) const { return const_cast<object*>(this)->operator[](i); }
 };
 
 //*************************************
@@ -556,14 +556,14 @@ inline geometry* object::create_geometry( const geometry& other )
 {
 	auto& v = root->geometries; uint gid=uint(v.size());
 	v.emplace_back(other);
-	auto* g=&v.back(); g->ID=gid; geometries.emplace_back(gid); return g;
+	auto* g=&v.back(); g->ID=gid; g->root=root; g->object_index=ID; geometries.emplace_back(gid); return g;
 }
 
 inline object::iterator::reference object::iterator::operator*(){ auto g=root->objects[parent].geometries[index]; return root->geometries[g]; }
 inline object::iterator::pointer object::iterator::operator->(){ auto g=root->objects[parent].geometries[index]; return &root->geometries[g]; }
 inline geometry& object::front(){ return root->geometries[geometries.front()]; }
 inline geometry& object::back(){ return root->geometries[geometries.back()]; }
-inline geometry& object::operator[]( size_t i ){ return root->geometries[i]; }
+inline geometry& object::operator[]( size_t i ){ return root->geometries[geometries[i]]; }
 
 // late implementations for mesh
 __noinline void mesh::update_bound( bool b_recalc_tris )
@@ -667,7 +667,7 @@ __noinline mesh* mesh::create_proxy( bool double_sided, bool quads )
 	strcpy(proxy->file_path, file_path);
 
 	// copy objects and correct mesh pointers to proxy
-	for(auto& o:proxy->objects=objects) o.root = proxy;
+	for(auto& o:proxy->objects=objects){ o.root=proxy; o.geometries.clear(); }
 
 	// vertex/index definitions of a default box
 	const auto corners = bbox(-1.0f,1.0f).corners();
@@ -700,10 +700,11 @@ __noinline void mesh::update_proxy()
 
 	for(auto& g : geometries)
 	{
-		proxy->geometries[g.ID].mtx = g.mtx;
+		proxy->geometries[g.ID].mtx = g.mtx; proxy->geometries[g.ID].box = g.box;
 		mat4 m = mat4::translate(g.box.center())*mat4::scale(g.box.size()*0.5f);
 		for( uint k=0; k<8; k++ ){ auto& v = proxy->vertices[size_t(8llu*g.ID+k)]; v.pos = (m*vec4(v.norm,1.0f)).xyz; }
 	}
+	proxy->update_bound();
 }
 
 inline void mesh::dump_binary( const char* _dir )
@@ -712,8 +713,8 @@ inline void mesh::dump_binary( const char* _dir )
 	path_t dir = path_t(_dir).append_slash(); if(!dir.exists()) dir.mkdir();
 	path_t vertex_bin_path = dir + path_t(file_path).stem2() + ".vertex.bin";
 	path_t index_bin_path = dir + path_t(file_path).stem2() + ".index.bin";
-	FILE* fp = fopen(vertex_bin_path.c_str(),"wb"); fwrite(&vertices[0], sizeof(vertex), vertices.size(), fp); fclose(fp);
-	fp = fopen(index_bin_path.c_str(),"wb");  fwrite(&indices[0], sizeof(uint), indices.size(), fp); fclose(fp);
+	FILE* fp = fopen(vertex_bin_path.c_str(),"wb"); if(!fp) return; fwrite(&vertices[0], sizeof(vertex), vertices.size(), fp); fclose(fp);
+	fp = fopen(index_bin_path.c_str(),"wb"); if(!fp) return; fwrite(&indices[0], sizeof(uint), indices.size(), fp); fclose(fp);
 }
 
 #if defined(__GX_OPENGL_H__)&&!defined(__GX_MESH_OPENGL_IMPL__)
