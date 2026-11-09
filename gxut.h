@@ -836,7 +836,7 @@ __noinline path_t path_t::relative( path_t from ) const
 {
 	if(empty()||is_pipe()||is_ssh()||is_remote()||is_relative()) return *this;
 	path_t df=from.empty()?cwd():from.append_slash().absolute(); if(tolower(df[0])!=tolower(_data[0])) return *this; // different drive
-	path_t dt=dir().absolute();
+	path_t dt=dir().append_slash().absolute();
 
 	// explode directories to their pointers without costly copy
 	vector<char*> vf; vf.reserve(8); for(char *c=0,*k=strtok_s(df._data,"\\/",&c); k; k=strtok_s(0,"\\/",&c)) vf.emplace_back(k);
