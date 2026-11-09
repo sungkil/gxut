@@ -43,7 +43,7 @@ inline path get_capture_directory(){ return env("REX_CAPTURE_DIR"); }
 inline image* load_image( const char* file_path, bool vflip=true, bool force_rgb=true, bool use_cache=false ){ static auto rex_load_image = get_proc_address<decltype(&load_image)>("rex_load_image"); return rex_load_image( file_path, vflip, force_rgb, use_cache ); }
 inline image* load_image_header( const char* file_path ){ static auto rex_load_image_header = get_proc_address<decltype(&load_image_header)>("rex_load_image_header"); return rex_load_image_header( file_path ); }
 inline image* load_image_from_memory( void* ptr, size_t size, bool vflip=true, bool force_rgb=true ){ static auto rex_load_image_from_memory = get_proc_address<decltype(&load_image_from_memory)>("rex_load_image_from_memory"); return rex_load_image_from_memory( ptr, size, vflip, force_rgb ); }
-inline void   save_image( const char* file_path, image* pimage, bool vflip=true, bool force_rgb=false, int quality=95 ){ static auto rex_save_image = get_proc_address<decltype(&save_image)>("rex_save_image"); if(pimage) rex_save_image( file_path, pimage, vflip, force_rgb, quality ); }
+inline bool   save_image( const char* file_path, image* pimage, bool vflip=true, bool force_rgb=false, int quality=95 ){ static auto rex_save_image = get_proc_address<decltype(&save_image)>("rex_save_image"); return pimage?rex_save_image( file_path, pimage, vflip, force_rgb, quality ):false; }
 inline image* copy_image( image* src, image* dst, bool vflip=false ){ static auto rex_copy_image = get_proc_address<decltype(&copy_image)>("rex_copy_image"); return rex_copy_image(src,dst,vflip); }
 inline image* resize_image( image* src, image* dst ){ static auto rex_resize_image = get_proc_address<decltype(&resize_image)>("rex_resize_image"); return src&&dst?rex_resize_image(src,dst):nullptr; }
 inline image* vflip_image( image* src, image* dst ){ return copy_image(src,dst,true); }
@@ -119,10 +119,10 @@ struct shared_t
 
 	static shared_t& instance();
 	~shared_t(){ data.clear(); }
-	void clear(){ for(auto it=data.begin();it!=data.end();){ if(it->second.persistent) it++; it=data.erase(it); } }
-	template <class T> T&	set( const char* name, T& v, bool persistent=true ){ data.emplace(std::pair{name,var(v,name,persistent)}); return v; }
+	void clear(){ for(auto it=data.begin();it!=data.end();){ if(it->second.persistent) it++; else it=data.erase(it); } }
+	template <class T> T&	set( const char* name, T& v, bool persistent=true ){ data.insert_or_assign(name,var(v,name,persistent)); return v; }
 	template <class T> T*	get( const char* name ){ return (T*)get_impl(name,typeid(T),sizeof(T),false).ptr; }
-	template <class T> void set_function( const char* name, T func, bool persistent=true ){ data.emplace(std::pair{name,var{typeid(T),func,sizeof(void*),name,persistent}}); }
+	template <class T> void set_function( const char* name, T func, bool persistent=true ){ data.insert_or_assign(name,var{typeid(T),func,sizeof(void*),name,persistent}); }
 	template <class T> T	get_function( const char* name ){ return (T)get_impl(name,typeid(T),sizeof(void*),false).ptr; }
 
 protected:
