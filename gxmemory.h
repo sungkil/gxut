@@ -34,7 +34,7 @@ struct mem_t : sized_ptr_t<void>
 	__forceinline mem_t( size_t Size, const void* Ptr=nullptr ){ ptr=(void*)Ptr; size=Size; }
 	virtual ~mem_t(){}
 	__forceinline void* alloc( size_t _size, ptrdiff_t elems=1 ){ return ptr=malloc(size=_size*elems); }
-	__forceinline void free(){ if(ptr) ::free(ptr); size=0; }
+	__forceinline void free(){ if(ptr) ::free(ptr); ptr=nullptr; size=0; }
 	__forceinline void* cpy( void* src, size_t _size ){ return memcpy(ptr,src,_size); }
 	__forceinline void* dup( void* src, size_t _size ){ ptr=malloc(size=_size); if(ptr) memcpy(ptr,src,_size); return ptr; }
 	__forceinline int cmp( void* src, size_t _size ){ return memcmp(ptr,src,_size); }
@@ -51,7 +51,7 @@ template <class T,bool readonly=false> struct mmap // memory-mapped file (simila
 	size_t	size=0;
 
 	mmap( size_t n ):size(n){ size_t s=size*sizeof(T); hFileMap=CreateFileMappingW( INVALID_HANDLE_VALUE /* use pagefile */, nullptr, PAGE_READWRITE, DWORD(s>>32), DWORD(s&0xffffffff), _uname() ); }
-	mmap( const char* file_path){ struct _stat st={}; if(access(file_path,0)!=0) return; _stat(file_path,&st); size_t file_size=st.st_size; size=file_size/sizeof(T); if(file_size==0) return; hFile=CreateFileW(atow(file_path),GENERIC_READ|(readonly?0:GENERIC_WRITE), FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_RANDOM_ACCESS, nullptr); if(hFile==INVALID_HANDLE_VALUE){size=0;return;} size_t memsize=sizeof(T)*size; hFileMap=CreateFileMappingW(hFile,nullptr,readonly?PAGE_READONLY:PAGE_READWRITE,DWORD(uint64_t(memsize)>>32),DWORD(memsize&0xffffffff),nullptr); if(hFileMap==INVALID_HANDLE_VALUE){size=0;CloseHandle(hFile);hFile=nullptr;return;} }
+	mmap( const char* file_path ){ struct _stat st={}; if(access(file_path,0)!=0) return; _stat(file_path,&st); size_t file_size=st.st_size; size=file_size/sizeof(T); if(file_size==0) return; hFile=CreateFileW(atow(file_path),GENERIC_READ|(readonly?0:GENERIC_WRITE), FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_RANDOM_ACCESS, nullptr); if(hFile==INVALID_HANDLE_VALUE){size=0;return;} size_t memsize=sizeof(T)*size; hFileMap=CreateFileMappingW(hFile,nullptr,readonly?PAGE_READONLY:PAGE_READWRITE,DWORD(uint64_t(memsize)>>32),DWORD(memsize&0xffffffff),nullptr); if(hFileMap==INVALID_HANDLE_VALUE){size=0;CloseHandle(hFile);hFile=nullptr;return;} }
 	virtual ~mmap(){ if(!empty()&&ptr){ FlushViewOfFile(ptr,0); UnmapViewOfFile(ptr); ptr=nullptr; } if(hFileMap!=INVALID_HANDLE_VALUE) CloseHandle(hFileMap); hFileMap=INVALID_HANDLE_VALUE; if(hFile!=INVALID_HANDLE_VALUE) CloseHandle(hFile); hFile=INVALID_HANDLE_VALUE; }
 	bool empty() const { return hFile==INVALID_HANDLE_VALUE||hFileMap==INVALID_HANDLE_VALUE||size==0; }
 	T* map( size_t offset=0, size_t n=0 ){ if(empty()) return nullptr; size_t s=offset*sizeof(T); return ptr=(T*)MapViewOfFile(hFileMap,FILE_MAP_READ|(readonly?0:FILE_MAP_WRITE),DWORD(uint64_t(s)>>32),DWORD(s&0xffffffff),(n?n:size)*sizeof(T)); }
@@ -103,11 +103,13 @@ inline bool is_7zip_signature( void* ptr, size_t size=0 )
 inline bool is_zip_signature( void* ptr, size_t size=0 )
 {
 	static constexpr unsigned char pk[]		= {0x50,0x4b,0x03,0x04};
+	static constexpr unsigned char pkempty[]= {0x50,0x4b,0x05,0x06};
 	static constexpr unsigned char pklite[]	= {0x50,0x4B,0x4C,0x49,0x54,0x45};
 	static constexpr unsigned char pksfx[]	= {0x50,0x4B,0x53,0x70,0x58};
 	static constexpr unsigned char winzip[]	= {0x57,0x69,0x6E,0x5A,0x69,0x70};
 	if(size&&size<6) return false;
 	if(memcmp(ptr,pk,sizeof(pk))==0)			return true;
+	if(memcmp(ptr,pkempty,sizeof(pkempty))==0)	return true;
 	if(memcmp(ptr,pklite,sizeof(pklite))==0)	return true;
 	if(memcmp(ptr,pksfx,sizeof(pksfx))==0)		return true;
 	if(memcmp(ptr,winzip,sizeof(winzip))==0)	return true;
@@ -183,13 +185,13 @@ inline unsigned int crc32c( unsigned int crc0, const void* ptr, size_t size ){ r
 #endif
 inline unsigned int crc32c( unsigned int crc0, const sized_ptr_t<void>& p ){ return p.ptr&&p.size?crc32c(crc0,(const void*)p.ptr,p.size):crc0; }
 inline unsigned int crc32c( unsigned int crc0, const char* s ){ return s&&*s?crc32c(crc0,(const void*)s,strlen(s)):crc0; }
-inline unsigned int crc32c( unsigned int crc0, const wchar_t* s ){ return s&&*s?crc32c(crc0,(const void*)s,wcslen(s)):crc0; }
+inline unsigned int crc32c( unsigned int crc0, const wchar_t* s ){ return s&&*s?crc32c(crc0,(const void*)s,wcslen(s)*sizeof(wchar_t)):crc0; }
 inline unsigned int crc32c( unsigned int crc0, const string& s ){ return s.empty()?crc0:crc32c(crc0,(const void*)s.c_str(),s.size()); }
 inline unsigned int crc32c( unsigned int crc0, const wstring& s ){ return s.empty()?crc0:crc32c(crc0,(const void*)s.c_str(), s.size()*sizeof(wchar_t)); }
 template <class T> inline unsigned int crc32c( unsigned int crc0, const vector<T>& v ){ return v.empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
 template <class T> inline unsigned int crc32c( unsigned int crc0, const vector<T>* v ){ return !v||v->empty()?crc0:crc32c(crc0,v->data(),v->size()*sizeof(T)); }
 template <class T, size_t N> inline unsigned int crc32c( unsigned int crc0, const array<T,N>& v ){ return v.empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
-template <class T, size_t N> inline unsigned int crc32c( unsigned int crc0, const array<T,N>* v ){ return !v||v->empty()?crc0:crc32c(crc0,v.data(),v.size()*sizeof(T)); }
+template <class T, size_t N> inline unsigned int crc32c( unsigned int crc0, const array<T,N>* v ){ return !v||v->empty()?crc0:crc32c(crc0,v->data(),v->size()*sizeof(T)); }
 
 inline unsigned int crc32c( const void* ptr, size_t size ){ return crc32c(0,ptr,size); }
 inline unsigned int crc32c( const sized_ptr_t<void>& p ){ return crc32c(0,p); }
@@ -200,8 +202,8 @@ inline unsigned int crc32c(	const wstring& s ){ return crc32c(0,s); }
 
 template <class T> inline unsigned int crc32c( const vector<T>& v ){ return crc32c<T>(0,v); }
 template <class T> inline unsigned int crc32c( const vector<T>* v ){ return crc32c<T>(0,v); }
-template <class T, size_t N> inline unsigned int crc32c( const array<T,N>& v ){ return crc32c<T,N>(v); }
-template <class T, size_t N> inline unsigned int crc32c( const array<T,N>* v ){ return crc32c<T,N>(v); }
+template <class T, size_t N> inline unsigned int crc32c( const array<T,N>& v ){ return crc32c<T,N>(0,v); }
+template <class T, size_t N> inline unsigned int crc32c( const array<T,N>* v ){ return crc32c<T,N>(0,v); }
 
 //***********************************************
 // MD5 implementation
@@ -212,7 +214,7 @@ struct md5
 	explicit md5(string str):md5(str.c_str(),str.size()){}
 	md5(const void* ptr, size_t size){ if(ptr&&size) update(ptr,size); }
 	md5(sized_ptr_t<void> p):md5(p.ptr,p.size){}
-	const char* c_str() const { static char buff[64]; unsigned char* u=(unsigned char*)&digest; char* c=buff; for(int k=0;k<16;k++,u++,c+=2)sprintf(c,"%02x",*u); buff[32]=0; return buff; }
+	const char* c_str() const { char* buff=__strbuf(32); unsigned char* u=(unsigned char*)&digest; char* c=buff; for(int k=0;k<16;k++,u++,c+=2)sprintf(c,"%02x",*u); buff[32]=0; return buff; }
 	operator uint4() const { return digest; }
 
 private:
@@ -253,7 +255,7 @@ __noinline const void* md5::body( const unsigned char* data, size_t size )
 
 __noinline void md5::update( const void* data, size_t size )
 {
-	static unsigned char buffer[64];
+	unsigned char buffer[64];
 	uint32_t lo=0, hi=0, lo0=lo, available, used;
 	if((lo=(lo0+size)&0x1fffffff)<lo0)hi++;hi+=uint32_t(size)>>29;
 	used=lo0&0x3f;
@@ -308,14 +310,18 @@ __noinline const char* __encoding_table()
 
 __noinline const char* __decoding_table()
 {
-	static char t[256]={}; if(*t) return t;
-	for(int k=0;k<256;k++)t[k]=char(-1);
-	int v=0;
-	for(char k='A';k<='Z';k++)t[k]=v++;
-	for(char k='a';k<='z';k++)t[k]=v++;
-	for(char k='0';k<='9';k++)t[k]=v++;
-	t['+']=62;t['/']=63;
-	return t;
+	static const auto t=[]()
+	{
+		array<char,256> t={};
+		for(int k=0;k<256;k++)t[k]=char(-1);
+		int v=0;
+		for(char k='A';k<='Z';k++)t[k]=v++;
+		for(char k='a';k<='z';k++)t[k]=v++;
+		for(char k='0';k<='9';k++)t[k]=v++;
+		t['+']=62;t['/']=63;
+		return t;
+	}();
+	return t.data();
 }
 
 __noinline string encode( const void* ptr, size_t size )
