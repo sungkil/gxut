@@ -192,7 +192,7 @@ __noinline ray gen_primary_ray( camera_t* cam, float x, float y )	// (x,y) in [0
 __noinline bool intersect( ray r, vec3 v0, vec3 v1, vec3 v2, isect& h )
 {
 	// http://geomalgorithms.com/a06-_intersect-2.html#intersect3D_RayTriangle
-	vec3 u=v1-v0, v=v2-v0, n=u.cross(v); if(n.length2()<0.000001f) return false;	// degenerate case: non-triangle
+	vec3 u=v1-v0, v=v2-v0, n=u.cross(v); float nl=n.length(); if(nl==0) return false; n/=nl;	// degenerate case: non-triangle
 	float b=dot(n,r.dir); if(b>-0.000001f) return false;							// skip backfaces or rays lying on the plane
 	float t=dot(n,v0-r.pos)/b; if(t<r.t||t>r.tfar) return false;					// out of range of [tnear,tfar]
 	vec3 ipos=r.pos+r.dir*t, w=ipos-v0;
@@ -203,7 +203,7 @@ __noinline bool intersect( ray r, vec3 v0, vec3 v1, vec3 v2, isect& h )
 	float bt=(uv*wu-uu*wv)/D; if(bt<0||bs+bt>1.0f)	return false;
 
 	h.pos = ipos;
-	h.norm = normalize(n);
+	h.norm = n;
 	h.tc = vec2(bs, bt); // temporaily store texcoord
 	h.t = t;
 	h.tfar = t;
@@ -288,6 +288,7 @@ __noinline bool geometry::intersect( ray r, isect& h ) const
 		const vertex& v0=V[i.x], &v1=V[i.y], &v2=V[i.z];
 		vec3 bc=vec3(1-h.tc.x-h.tc.y,h.tc);
 		h.vnorm=v0.norm*bc.x+v1.norm*bc.y+v2.norm*bc.z;
+		if(h.vnorm.length2()>0) h.vnorm=normalize(mat3(mtx)*h.vnorm);
 		h.tc=v0.tex*bc.x+v1.tex*bc.y+v2.tex*bc.z;
 	}
 
@@ -335,6 +336,7 @@ __noinline vector<area_light_t> find_area_lights( mesh* p_mesh )
 	auto& indices = p_mesh->indices;
 	for( const auto& g : p_mesh->geometries )
 	{
+		if(g.material_index>=p_mesh->materials.size()) continue;
 		const auto& m = p_mesh->materials[g.material_index]; if(m.bsdf!=BSDF_EMISSIVE) continue;
 		if(g.count!=6){ printf("%s(%s): no support other than two-triangle quads\n", __func__, g.name() ); continue; }
 
@@ -346,14 +348,14 @@ __noinline vector<area_light_t> find_area_lights( mesh* p_mesh )
 		if(isolated.x<0||isolated.y<0){ printf("%s(%s): no isolated vertices found\n", __func__, g.name() ); continue; }
 
 		// take the min index as the origin
-		vec3 o = vertices[shared.x].pos;
-		vec3 u = vertices[isolated.x].pos-o;
-		vec3 v = vertices[isolated.y].pos-o;
+		vec3 o = g.mtx*vertices[shared.x].pos;
+		vec3 u = g.mtx*vertices[isolated.x].pos-o;
+		vec3 v = g.mtx*vertices[isolated.y].pos-o;
 		vec3 n = normalize(cross(u,v));
 
 		// find the first normal
-		vec3 a0 = vertices[indices[g.first_index+1]].pos-vertices[indices[g.first_index]].pos;
-		vec3 b0 = vertices[indices[g.first_index+2]].pos-vertices[indices[g.first_index]].pos;
+		vec3 a0 = mat3(g.mtx)*(vertices[indices[g.first_index+1]].pos-vertices[indices[g.first_index]].pos);
+		vec3 b0 = mat3(g.mtx)*(vertices[indices[g.first_index+2]].pos-vertices[indices[g.first_index]].pos);
 		vec3 n0 = cross(a0,b0);
 
 		// take the correct isolated indices by comparing normals
@@ -386,8 +388,8 @@ __noinline bool clip_line( vec2 p, vec2 q, vec2 lb, vec2 rt, vec2* p1=nullptr, v
 		else if(v.x==0 && v.y<0) return true;
 	}
 
-	if(p1&&t.x > 0.0f) *p1 = lerp(p, q, t.x);		// new p
-	if(q1&&t.y < 1.0f) *q1 = lerp(p, q, t.y);		// new q
+	if(p1) *p1 = lerp(p, q, t.x);		// new p
+	if(q1) *q1 = lerp(p, q, t.y);		// new q
 	return false;
 }
 
