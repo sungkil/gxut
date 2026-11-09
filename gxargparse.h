@@ -37,18 +37,19 @@ namespace gx { namespace argparse {
 struct argument_t
 {
 	argument_t& add_help( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); vector<char> buff(vsnprintf(0,0,fmt,a)+1); vsnprintf(&buff[0],buff.size(),fmt,a); va_end(a); shelp=trim(&buff[0],"\n"); return *this; }
-	argument_t& set_default( const char* v ){ parsed.value=atow(v); return *this; }
+	argument_t& set_default( const char* v ){ parsed.value=sdefault=atow(v); return *this; }
 	argument_t& set_optional(){ optional=true; return *this; }
 
 protected:
 	string		name;
 	string		shelp;
+	wstring		sdefault;
 	bool		optional=false;
 	struct parsed_t { wstring value; void clear(){ value.clear(); } } parsed;
 
 	friend struct parser_t;
 	bool value_exists() const { return !parsed.value.empty(); }
-	void clear(){ parsed.clear(); } // clear values
+	void clear(){ parsed.clear(); parsed.value=sdefault; } // clear values
 };
 
 struct option_t
@@ -61,7 +62,7 @@ struct option_t
 	option_t& set_bool(){ return add_subarg({"true","false","0","1"}); }
 	option_t& add_help( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); vector<char> buff(vsnprintf(0,0,fmt,a)+1); vsnprintf(&buff[0],buff.size(),fmt,a); shelp=trim(&buff[0],"\n"); va_end(a); return *this; }
 	option_t& add_break( int count=1 ){ break_count+=count; return* this; }
-	option_t& set_default( const char* arg ){ parsed.value=atow(arg); return *this; }
+	option_t& set_default( const char* arg ){ parsed.value=sdefault=atow(arg); return *this; }
 	option_t& set_hidden(){ hidden=true; return *this; }
 
 protected:
@@ -78,6 +79,7 @@ protected:
 
 	struct lless { bool operator()(const string& a,const string& b)const{return a.size()!=b.size()?a.size()<b.size():stricmp(a.c_str(),b.c_str())<0;}};
 	std::set<string,lless>	names;				// multiple names allowed for a single option
+	wstring					sdefault;
 	string					shelp;				// help string
 	bool					hidden=false;		// hide in usage()
 	int						break_count=0;		// post-line breaks
@@ -158,7 +160,7 @@ struct parser_t
 	template <>					vector<wstring> get_values( const string& name ) const;
 
 	// error handling, debugging
-	bool exit( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); const char* w=vformat(fmt,a); va_end(a); char msg[2048]; snprintf( msg, 2048, "[%s] %s\nUse -h option to see usage.\n", name(), trim(w,"\n") ); fprintf( stdout, msg ); return false; }
+	bool exit( __printf_format_string__ const char* fmt, ... ){ va_list a; va_start(a,fmt); const char* w=vformat(fmt,a); va_end(a); char msg[2048]; snprintf( msg, 2048, "[%s] %s\nUse -h option to see usage.\n", name(), trim(w,"\n") ); fprintf( stdout, "%s", msg ); return false; }
 	void dump();
 
 protected:
@@ -369,6 +371,8 @@ inline bool parser_t::parse( int argc, wchar_t* argv[], bool b_validate )
 		}
 	}
 
+	if(option_needs_subarg) return exit( "sub-argument for option '%s' is missing", option_needs_subarg->name() );
+
 	// validate
 	return !b_validate || validate();
 }
@@ -394,7 +398,7 @@ inline bool parser_t::validate()
 	for( auto* o : options )
 	{
 		if(o->empty()||!o->subarg_count) continue;
-		if(o->parsed.instance==0&&!o->parsed.value.empty()) o->parsed.instance=1; // apply default argument
+		if(o->parsed.instance==0&&!o->sdefault.empty()){ o->parsed.value=o->sdefault; o->parsed.instance=1; } // apply default argument
 		if(o->parsed.instance>0&&o->parsed.value.empty()) return exit( "option [%s]: subarg not exists.", o->name() );
 	}
 
@@ -508,8 +512,16 @@ inline const char* parser_t::rebuild_arguments( int argc, wchar_t* argv[] )
 	static wstring a; a.clear();
 	for( int k=1; k < argc; k++ )
 	{
-		bool ws=wcschr(argv[k],L' ')||wcschr(argv[k],L'\t');
-		if(k>1) a+=L" "; if(ws) a+=L"\""; a += argv[k]; if(ws) a+=L"\"";
+		bool ws=!argv[k][0]||wcspbrk(argv[k],L" \t\"")!=nullptr;
+		if(k>1) a+=L" "; if(ws) a+=L"\"";
+		size_t n=0;
+		for(const wchar_t* p=argv[k]; *p; p++)
+		{
+			if(*p==L'\\'){ n++; continue; }
+			a.append(*p==L'"'?n*2+1:n,L'\\'); n=0;
+			a+=*p;
+		}
+		a.append(ws?n*2:n,L'\\'); if(ws) a+=L"\"";
 	}
 	return wtoa(a.c_str());
 }
@@ -520,8 +532,16 @@ inline const char* parser_t::rebuild_arguments( int argc, char* argv[] )
 	static string a; a.clear();
 	for( int k=1; k < argc; k++ )
 	{
-		bool ws=strpbrk(argv[k]," \t")!=nullptr;
-		if(k>1) a+=" "; if(ws) a+="\""; a += argv[k]; if(ws) a+="\"";
+		bool ws=!argv[k][0]||strpbrk(argv[k]," \t\"")!=nullptr;
+		if(k>1) a+=" "; if(ws) a+="\"";
+		size_t n=0;
+		for(const char* p=argv[k]; *p; p++)
+		{
+			if(*p=='\\'){ n++; continue; }
+			a.append(*p=='"'?n*2+1:n,'\\'); n=0;
+			a+=*p;
+		}
+		a.append(ws?n*2:n,'\\'); if(ws) a+="\"";
 	}
 	return a.c_str();
 }
