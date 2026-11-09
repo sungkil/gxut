@@ -112,10 +112,11 @@ inline font_engine::font_engine( image* table0, int ty, int row, bool vflip ):vf
 		uchar4* d = table->ptr<uchar4>(y,0,vflip_table);
 		for( int x=0; x<w; x++, d++ )
 		{
-			uchar3 s = *table0->ptr<uchar3>((row*h+y)*ty/TY,x*ty/TY);
+			int t=(y/TY)*NX+x/TY; if(t>=count) continue;
+			uchar3 s = *table0->ptr<uchar3>(row*ty+(y%TY)*ty/TY,t*ty+(x%TY)*ty/TY);
 			uchar r=s.x, g=s.y, b=s.z;
 			*d = (r==255&&g==255&&b==255)?uchar4{0,0,0,0}:uchar4{r,g,b,uchar(r||g||b?255:0)};
-			char_map[N0+x/ty].wide=b_wide;
+			char_map[N0+t].wide=b_wide;
 		}
 	}
 }
@@ -125,7 +126,7 @@ inline image* font_engine::resize_table( int count )
 	ivec2 size = ivec2(TY,TY)*ivec2(NX,(int(count)+NX-1)/NX);
 	if(table&&table->height>=uint(size.y)) return table;
 	image* t = new image( size.x, size.y, 8, 4 ); if(!t) return nullptr;
-	memset(t->data,0,t->size()); if(table){memcpy(t->data,table->data,table->size());safe_delete(table);}
+	memset(t->data,0,t->size()); if(table){size_t offset=vflip_table?size_t(t->height-table->height)*t->stride():0;memcpy(t->data+offset,table->data,table->size());safe_delete(table);}
 	return table = t;
 }
 
@@ -203,6 +204,7 @@ inline bool font_engine::update( const wchar_t* str )
 	begin_raster( &hBitmap0, &hFont0 );
 	for( auto c : dirty_chars )
 	{
+		if(char_map.find(c)!=char_map.end()) continue;
 		char_map[c].index = uint(char_map.size());
 		char_map[c].wide = raster(c);
 		resize_table( int(char_map.size()) );
