@@ -517,7 +517,7 @@ inline string& __get_global_error_buffer__(){ static string buffer; return buffe
 inline const char* error(){ return __get_global_error_buffer__().c_str(); }
 inline bool error( const char* fmt, ... ){ auto& e=__get_global_error_buffer__(); va_list a; va_start(a,fmt); e=vformat(fmt,a); va_end(a); if(e.empty()||e.back()!='\n') e+='\n'; return false; }
 inline std::set<string>& __get_global_oncef_buffer__(){ static std::set<string> s; return s; }
-inline int oncef( const char* fmt, ... ){ va_list a; va_start(a,fmt); const char* m=vformat(fmt,a); va_end(a); auto& s=__get_global_oncef_buffer__(); if(s.find(m)!=s.end()) return 0; s.emplace(m); return printf(m); }
+inline int oncef( const char* fmt, ... ){ va_list a; va_start(a,fmt); const char* m=vformat(fmt,a); va_end(a); auto& s=__get_global_oncef_buffer__(); if(s.find(m)!=s.end()) return 0; s.emplace(m); return printf("%s",m); }
 
 // case conversion
 template <class T> const T* tolower( const T* src ){ return strlwr(__strdup(src)); }
@@ -1086,7 +1086,7 @@ __noinline bool create_process( const char* app, const char* args=nullptr, bool 
 // within-app shared pointer, which requires setting in app
 template <class T> struct named_shared_t
 {
-	named_shared_t( string name="named_shared<"s+string(typeid(T).name())+">"s ){ mapping=OpenFileMappingA(FILE_MAP_ALL_ACCESS,0,name.c_str()); if(!mapping||mapping==INVALID_HANDLE_VALUE){mapping=CreateFileMappingA(INVALID_HANDLE_VALUE,0,PAGE_READWRITE,0,sizeof(void*),name.c_str()); if(!mapping||mapping==INVALID_HANDLE_VALUE){ printf("%s::mapping==INVALID_HANDLE_VALUE\n",name.c_str()); return; }} view=(decltype(view))MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(view)); }
+	named_shared_t( string name="named_shared<"s+string(typeid(T).name())+">"s ){ name+=format(".%lu",GetCurrentProcessId()); mapping=OpenFileMappingA(FILE_MAP_ALL_ACCESS,0,name.c_str()); if(!mapping||mapping==INVALID_HANDLE_VALUE){mapping=CreateFileMappingA(INVALID_HANDLE_VALUE,0,PAGE_READWRITE,0,sizeof(void*),name.c_str()); if(!mapping||mapping==INVALID_HANDLE_VALUE){ printf("%s::mapping==INVALID_HANDLE_VALUE\n",name.c_str()); return; }} view=(decltype(view))MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(view)); }
 	~named_shared_t(){ if(view){ UnmapViewOfFile(view); view=nullptr; } safe_close(mapping); }
 	operator T*&(){ return *view; }		operator const T*&() const { return *view; }
 	T*& operator->(){ return *view; }	const T*& operator->() const { return *view; }
@@ -1129,7 +1129,7 @@ struct dll_t
 	template <class F> F* get_proc_address( const char* name, F*& p ) const { return hdll==nullptr?p=nullptr:p=(F*)GetProcAddress(hdll,name); }
 	[[nodiscard]] void* get_proc_address( const char* name ) const { if(!hdll) return nullptr; auto j=cache.find(name); return j!=cache.end()?j->second:(const_cast<decltype(cache)&>(cache)[name]=GetProcAddress(hdll,name)); }
 	template <class F> [[nodiscard]] auto get_proc_address( const char* name ) const { return hdll?proc_t<F>{reinterpret_cast<typename proc_t<F>::type>(get_proc_address(name))}:proc_t<F>{}; }
-	const char* file_path(){ static char f[_MAX_PATH]={}; wchar_t w[_MAX_PATH]={}; if(hdll) GetModuleFileNameW(hdll,w,_MAX_PATH); return strcpy(f,wtoa(w)); }
+	const char* file_path(){ static string f; wchar_t w[_MAX_PATH]={}; if(hdll) GetModuleFileNameW(hdll,w,_MAX_PATH); f=wtoa(w); return f.c_str(); }
 protected:
 	std::map<string,void*> cache;
 };
@@ -1155,10 +1155,10 @@ struct image
 	image( int width, int height, int depth=8, int channels=3, unsigned align=4 ){ this->width=width; this->height=height; this->depth=depth; this->channels=channels; const_cast<unsigned&>(this->align)=align; data=(decltype(data))malloc(size()); }
 	virtual ~image(){ if(data) free(data); data=nullptr; if(file_path) free((void*)file_path); file_path=nullptr; }
 
-	inline unsigned int stride( int channel=0 ) const { bool i420=fcc==I420||fcc==YV12||fcc==IYUV; unsigned int bpp=(fcc==YUY2)?2:(i420||fcc==NV12)?1:channels; uint r=(depth>>3)*bpp*width; if(align<2) return r; return (((i420&&channel)?(r>>1):r)+align-1)&(~(align-1)); }
+	inline unsigned int stride( int channel=0 ) const { bool i420=fcc==I420||fcc==YV12||fcc==IYUV; unsigned int bpp=(fcc==YUY2||fcc==YUYV)?2:(i420||fcc==NV12)?1:channels; uint r=(depth>>3)*bpp*((i420&&channel)?((width+1)/2):width); if(align<2) return r; return (r+align-1)&(~(align-1)); }
 	inline unsigned int size() const { bool i420=fcc==I420||fcc==YV12||fcc==IYUV; return i420?stride()*height+2*stride(1)*((height+1)/2):fcc==NV12?stride()*height+stride(1)*((height+1)/2):stride()*height; }
 	template <class T> T* ptr( int y=0, int x=0, bool vflip=false ){ return ((T*)(data+stride()*(vflip?height-1-y:y)))+x; } // works only for RGB
-	template <class T> T* plane( int channel=0 ){ unsigned char* p=data; int c=channel; if(c){ p+=stride()*height; if((fcc==I420||fcc==YV12||fcc==IYUV)&&c>1) p+=stride(1)*(height+1)/2; } return (T*)p; }
+	template <class T> T* plane( int channel=0 ){ unsigned char* p=data; int c=channel; if(c){ p+=stride()*height; if((fcc==I420||fcc==YV12||fcc==IYUV)&&c>1) p+=stride(1)*((height+1)/2); } return (T*)p; }
 
 	// fourcc; YUY2==YUYV, I420==YU12==IYUV (YUV420P), YV12 (YVU420P), NV12 (YUV420SP)
 	enum fcc_t { RGB=0, YUY2='2yuy', YUYV='vyuy', I420='024i', YU12=I420, IYUV='vuyi', YV12='21vy', NV12='21vn' };
