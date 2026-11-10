@@ -258,7 +258,7 @@ namespace fast
 	{
 		while(*str==' '||*str=='\t'||*str=='\n'||*str=='\r')str++; // skip leading white spaces
 		bool neg=false; if(*str=='-'){neg=true;str++;} else if(*str=='+')str++; // sign
-		int i=0;for(;;str++){uint d=static_cast<uint>(*str)-'0';if(d>9)break;i=i*10+d;} double v=double(i); // integers
+		double v=0;for(;;str++){uint d=static_cast<uint>(*str)-'0';if(d>9)break;v=v*10+d;} // integers
 		if(*str=='.'){double f=0.1;str++;for(;;str++,f*=0.1){uint d=static_cast<uint>(*str)-'0';if(d>9)break;v+=d*f;}} // fractions
 		if(*str!='e'&&*str!='E') return neg?-v:v; // early return for non-exponent float
 		bool eng=false; str++; if(*str=='-'){eng=true;str++;} else if(*str=='+') str++; // exponent sign
@@ -401,7 +401,7 @@ __noinline vector<std::basic_string<T>>
 explode_conservative( const T* src, T delim )
 {
 	vector<std::basic_string<T>> v; if(!src||!*src) return v; v.reserve(32);
-	for(const T *s=src,*e=s;*s&&*e;s=e+1){for(e=s;*e!=delim&&*e;e++){}; v.emplace_back(e>s?__strdup<T>(s,size_t(e-s)):(const T*)L""); }
+	for(const T *s=src,*e=s;*s;s=e+1){for(e=s;*e!=delim&&*e;e++){}; v.emplace_back(e>s?__strdup<T>(s,size_t(e-s)):(const T*)L""); if(!*e) break; }
 	return v;
 }
 

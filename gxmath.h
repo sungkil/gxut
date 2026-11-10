@@ -338,7 +338,7 @@ struct imat
 	static constexpr int D = _D;
 	static constexpr int N = _D*_D;
 
-	using value_type=T; using iterator=T*; using const_iterator=const iterator; using reference=T&; using const_reference=const T&; using size_type=size_t;
+	using value_type=T; using iterator=T*; using const_iterator=const T*; using reference=T&; using const_reference=const T&; using size_type=size_t;
 	static constexpr size_t size(){ return N; }
 	constexpr iterator begin(){ return iterator(this); } constexpr iterator end(){ return iterator(this)+N; }
 	constexpr const_iterator begin() const { return (const T*)this; } constexpr const_iterator end() const { return (const T*)this+N; }
@@ -366,7 +366,7 @@ struct imat
 	__forceinline M operator+( const M& m ) const { M t=*((M*)this); t+=m; return reinterpret_cast<M&>(t); }
 	__forceinline M operator-( const M& m ) const { M t=*((M*)this); t-=m; return reinterpret_cast<M&>(t); }
 	__forceinline M operator*( const M& m ) const { M t=*((M*)this); t*=m; return reinterpret_cast<M&>(t); }
-	__forceinline M operator/( T f ) const { M t=*this; t/=f; return reinterpret_cast<M&>(t); }
+	__forceinline M operator/( T f ) const { M t=*((const M*)this); t/=f; return reinterpret_cast<M&>(t); }
 
 	// compound assignment operators
 	__forceinline M& operator+=( const M& m ){ for(int k=0;k<D;k++) (*this)[k]+=m[k]; return reinterpret_cast<M&>(*this); }
@@ -642,8 +642,8 @@ __forceinline vec3 fma( vec3 a, vec3 b, vec3 c ){ return vec3(fma(a.x,b.x,c.x),f
 __forceinline vec4 fma( vec4 a, vec4 b, vec4 c ){ return vec4(fma(a.x,b.x,c.x),fma(a.y,b.y,c.y),fma(a.z,b.z,c.z),fma(a.w,b.w,c.w)); }
 __TVEC__ __forceinline V<T> lerp( const V<T>& y1, const V<T>& y2, const V<T>& t ){ return y1*(-t+1.0f)+y2*t; }
 __TVEC__ __forceinline V<T> mix( const V<T>& y1, const V<T>& y2, const V<T>& t ){ return y1*(-t+1.0f)+y2*t; }
-template <template<typename...> class V, floating_point T, floating_point U> requires tvec<V>||tmat<V> V<T> lerp( const V<T>& y1, const V<T>& y2, U t ){ V<T> v; for(int k=0;k<V<T>::N;k++) v[k]=y1[k]*(-T(t)+1.0f)+y2[k]*T(t); return v; }
-template <template<typename...> class V, floating_point T, floating_point U> requires tvec<V>||tmat<V> V<T> mix( const V<T>& y1, const V<T>& y2, U t ){ V<T> v; for(int k=0;k<V<T>::N;k++) v[k]=y1[k]*(-T(t)+1.0f)+y2[k]*T(t); return v; }
+template <template<typename...> class V, floating_point T, floating_point U> requires tvec<V>||tmat<V> V<T> lerp( const V<T>& y1, const V<T>& y2, U t ){ V<T> v; for(int k=0;k<V<T>::N;k++) v.begin()[k]=y1.begin()[k]*(-T(t)+1.0f)+y2.begin()[k]*T(t); return v; }
+template <template<typename...> class V, floating_point T, floating_point U> requires tvec<V>||tmat<V> V<T> mix( const V<T>& y1, const V<T>& y2, U t ){ V<T> v; for(int k=0;k<V<T>::N;k++) v.begin()[k]=y1.begin()[k]*(-T(t)+1.0f)+y2.begin()[k]*T(t); return v; }
 __forceinline vec3 reflect( const vec3& I, const vec3& N ){ return I-N*dot(I,N)*2.0f; }	// I: incident vector, N: normal
 __forceinline vec3 refract( const vec3& I, const vec3& N, float eta /* = n0/n1 */ ){ float d = dot(I,N); float k = 1.0f-eta*eta*(1.0f-d*d); return k<0.0f?0.0f:(I*eta-N*(eta*d+sqrtf(k))); } // I: incident vector, N: normal
 __TVEC__ __forceinline V<T> smoothstep( T edge0, T edge1, V<T> t ){ t=saturate((t-edge0)/(edge1-edge0)); return t*t*(3.0f-t*2.0f); }

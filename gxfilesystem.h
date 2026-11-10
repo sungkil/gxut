@@ -67,7 +67,7 @@ struct path : public path_t
 	path( const path_t& p ) noexcept : path_t(p){}
 	path( path_t&& p ) noexcept : path_t(std::forward<path_t&&>(p)){}
 	path( const path& p ) noexcept : path_t(reinterpret_cast<const path_t&>(p)){}
-	path( path&& p ) noexcept { _data=p._data; p._data=nullptr; } // cache moves as well
+	path( path&& p ) noexcept : path_t(std::forward<path_t&&>(p)){} // cache moves as well
 	path( std::nullptr_t nil ) noexcept : path_t() {}
 	path( const wchar_t* s ) noexcept : path_t() { if(s&&*s) strcpy(_data,wtoa(s)); }
 	path( const wstring& s ) noexcept : path_t() { if(!s.empty()) strcpy(_data,wtoa(s.c_str())); }
@@ -94,10 +94,10 @@ struct path : public path_t
 	path operator/( string_view_type s ) const { return append_slash()+path(s).ltrim_slash(); }
 	path operator/( value_type c ) const { return append_slash()+c; }
 	path& operator+=( const path& p ){ return reinterpret_cast<path&>(operator+=(reinterpret_cast<const path_t&>(p))); }
-	path& operator+=( const value_type* s ){ strcpy(end(),s+((s[0]=='.'&&s[2]&&__is_separator(s[1]))?2:0)); return *this; }
+	path& operator+=( const value_type* s ){ __super::operator+=(s); return *this; }
 	path& operator+=( const string_type& s ){ return operator+=(s.c_str()); }
-	path& operator+=( string_view_type s ){ return operator+=(s.data()); }
-	path& operator+=( value_type c ){ size_t l=strlen(_data); _data[l]=c; _data[l+1]=0; return *this; }
+	path& operator+=( string_view_type s ){ __super::operator+=(s); return *this; }
+	path& operator+=( value_type c ){ __super::operator+=(c); return *this; }
 	path& operator/=( const path& p ){ return reinterpret_cast<path&>(operator/=(reinterpret_cast<const path_t&>(p))); }
 	path& operator/=( const value_type* s ){ return *this=operator/(s); }
 	path& operator/=( const string_type& s ){ return *this=operator/(s); }
@@ -107,29 +107,29 @@ struct path : public path_t
 	bool operator!=( const path& p ) const { return stricmp(_data,p._data)!=0; }
 
 	// operator overloading: assignment
-	path& operator=( const path_t& p ) noexcept { strcpy(_data,p._data); memcpy(_data+capacity,p._data+capacity,sizeof(attrib_t)); return *this; }
-	path& operator=( path_t&& p ) noexcept { if(_data) free(_data); _data=p._data; p._data=nullptr; return *this; }
-	path& operator=( const value_type* s ) noexcept { if(s&&*s) strcpy(_data,s); return *this; }
-	path& operator=( const string_type& s ) noexcept { strcpy(_data,s.c_str()); return *this; }
-	path& operator=( string_view_type s ) noexcept{ strcpy(_data,s.data()); return *this; }
+	path& operator=( const path_t& p ) noexcept { __super::operator=(p); return *this; }
+	path& operator=( path_t&& p ) noexcept { __super::operator=(std::forward<path_t&&>(p)); return *this; }
+	path& operator=( const value_type* s ) noexcept { if(s){ if(!_data) __alloc(); memmove(_data,s,strlen(s)+1); } return *this; }
+	path& operator=( const string_type& s ) noexcept { return operator=(s.c_str()); }
+	path& operator=( string_view_type s ) noexcept{ if(!_data) __alloc(); __super::operator=(s); return *this; }
 	path& operator=( value_type c ){ _data[0]=c; _data[1]=0; return *this; }
 
 	bool operator<( const path& p ) const { return strcmplogical(_data,p._data)<0; }
 	bool operator<( const value_type* s ) const { return strcmplogical(_data,s)<0; }
 	bool operator<( const string_type& s ) const { return strcmplogical(_data,s.c_str())<0; }
-	bool operator<( string_view_type s ) const { return strcmplogical(_data,s.data())<0; }
+	bool operator<( string_view_type s ) const { return strcmplogical(_data,string_type(s).c_str())<0; }
 	bool operator>( const path& p ) const { return strcmplogical(_data,p._data)>0; }
 	bool operator>( const value_type* s ) const { return strcmplogical(_data,s)>0; }
 	bool operator>( const string_type& s ) const { return strcmplogical(_data,s.c_str())>0; }
-	bool operator>( string_view_type s ) const { return strcmplogical(_data,s.data())>0; }
+	bool operator>( string_view_type s ) const { return strcmplogical(_data,string_type(s).c_str())>0; }
 	bool operator<=( const path& p ) const { return strcmplogical(_data,p._data)<=0; }
 	bool operator<=( const value_type* s ) const { return strcmplogical(_data,s)<=0; }
 	bool operator<=( const string_type& s ) const { return strcmplogical(_data,s.c_str())<=0; }
-	bool operator<=( string_view_type s ) const { return strcmplogical(_data,s.data())<=0; }
+	bool operator<=( string_view_type s ) const { return strcmplogical(_data,string_type(s).c_str())<=0; }
 	bool operator>=( const path& p ) const { return strcmplogical(_data,p._data)>=0; }
 	bool operator>=( const value_type* s ) const { return strcmplogical(_data,s)>=0; }
 	bool operator>=( const string_type& s ) const { return strcmplogical(_data,s.c_str())>=0; }
-	bool operator>=( string_view_type s ) const { return strcmplogical(_data,s.data())>=0; }
+	bool operator>=( string_view_type s ) const { return strcmplogical(_data,string_type(s).c_str())>=0; }
 
 	// separator opertions
 	path to_slash()			const { return __super::to_slash(); }
@@ -160,7 +160,7 @@ struct path : public path_t
 	// path structure query
 	bool is_drive()		const {	if(!*_data) return false; size_t l=size(); return l<4&&l>1&&_data[1]==':'; } // backslash-less drive fails with st_mode
 	bool is_synology() const {	return is_ssh()&&strstr(_data,":\\volume")!=nullptr||strstr(_data,":/volume")!=nullptr; }
-	bool is_subdir( const path& ancestor ) const { size_t n=ancestor.size(); return n&&strnicmp(_data,ancestor._data,n)==0; } // do not check existence
+	bool is_subdir( const path& ancestor ) const { size_t n=ancestor.size(); return n&&strnicmp(_data,ancestor._data,n)==0&&(size()==n||__is_separator(ancestor._data[n-1])||__is_separator(_data[n])); } // do not check existence
 	path canonical() const { if(is_pipe()) return *this; if(is_remote()) return to_slash(); path p(*this); p.__canonicalize(); return p; } // not necessarily absolute: return relative path as well
 	path reparse() const; // get normalized path of files in junction directories
 	path junction() const;
@@ -207,11 +207,11 @@ struct path : public path_t
 	bool delete_dir() const { if(!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); rmdir(_data); return true; }
 	bool rmdir() const { return delete_dir(); }
 #else
-	bool delete_file( bool b_undo=false ) const { if(!*_data||!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=FOF_FILESONLY|FOF_SILENT|FOF_NOCONFIRMATION|(b_undo?FOF_ALLOWUNDO:0); fop.pFrom=atow(to_preferred().c_str()); return SHFileOperationW(&fop)==0;}
+	bool delete_file( bool b_undo=false ) const { if(!*_data||!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=FOF_FILESONLY|FOF_SILENT|FOF_NOCONFIRMATION|(b_undo?FOF_ALLOWUNDO:0); fop.pFrom=atow(to_preferred().c_str()); return SHFileOperationW(&fop)==0&&!fop.fAnyOperationsAborted;}
 	bool rmfile( bool b_undo=false ) const { return delete_file(b_undo); }
-	bool delete_dir( bool b_undo=true ) const { if(!*_data||!exists()||!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=FOF_SILENT|FOF_NOCONFIRMATION|(b_undo?FOF_ALLOWUNDO:0); fop.pFrom=atow(to_preferred().c_str()); return SHFileOperationW(&fop)==0;}
+	bool delete_dir( bool b_undo=true ) const { if(!*_data||!exists()||!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=FOF_SILENT|FOF_NOCONFIRMATION|(b_undo?FOF_ALLOWUNDO:0); fop.pFrom=atow(to_preferred().c_str()); return SHFileOperationW(&fop)==0&&!fop.fAnyOperationsAborted;}
 	bool rmdir( bool b_undo=true ) const { return delete_dir(b_undo); }
-	bool copy_dir( path dst, bool overwrite=true ) const { if(!*_data||!exists()||!is_dir()) return false; value_type* from=__strbuf(capacity);snprintf(from,capacity,"%s\\*\0",_data);dst[dst.size()+1]=0; SHFILEOPSTRUCTW fop={};fop.wFunc=FO_COPY;fop.fFlags=FOF_ALLOWUNDO|FOF_SILENT|(overwrite?FOF_NOCONFIRMATION:0); fop.pFrom=atow(path(from).to_preferred().c_str()); fop.pTo=atow(dst.to_preferred().c_str()); return SHFileOperationW(&fop)==0; }
+	bool copy_dir( path dst, bool overwrite=true ) const { if(!*_data||!exists()||!is_dir()) return false; value_type* from=__strbuf(capacity);snprintf(from,capacity,"%s\\*\0",_data);dst[dst.size()+1]=0; SHFILEOPSTRUCTW fop={};fop.wFunc=FO_COPY;fop.fFlags=FOF_ALLOWUNDO|FOF_SILENT|(overwrite?FOF_NOCONFIRMATION:0); fop.pFrom=atow(path(from).to_preferred().c_str()); fop.pTo=atow(dst.to_preferred().c_str()); return SHFileOperationW(&fop)==0&&!fop.fAnyOperationsAborted; }
 	bool move_dir( path dst ) const { return !*_data||!exists()||!is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(atow(_data),atow(dst._data))!=0 : !copy_dir(dst,true) ? false: rmdir(); }
 	bool open( const char* args=nullptr, bool b_show_window=true ) const { if(!*_data||!exists()) return false; auto r=ShellExecuteW(GetDesktopWindow(),L"Open",atow(auto_quote()), args?atow(args):nullptr, nullptr, b_show_window?SW_SHOWNORMAL:SW_HIDE); return ((INT_PTR)r)>32; }
 	bool open_dir() const { if(!*_data||!exists()) return false; auto r=ShellExecuteW(GetDesktopWindow(),L"Open",L"explorer.exe",is_dir()?atow(auto_quote()):(L"/select,"s+atow(auto_quote())).c_str(),nullptr,SW_SHOWNORMAL);return ((INT_PTR)r)>32; }
@@ -343,7 +343,7 @@ __noinline void path::__scan_recursive( const wchar_t* _dir, path::__scan_t& si 
 	WIN32_FIND_DATAW fd={}; HANDLE h=FindFirstFileExW(dir,FindExInfoBasic/*minimal(faster)*/,&fd,FindExSearchNameMatch,0,FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
 	wchar_t *f=fd.cFileName, *p=dir+dl; auto* e=si.ext.v; dir[dl]=0; // revert wildcard
 	vector<wstring> sdir; if(si.b.recursive) sdir.reserve(32);
-	while(FindNextFileW(h,&fd)) // skip directly first '.'
+	do // include the first result as well
 	{
 		if(f[0]==L'.'){ if(!f[1]||(f[1]==L'.'&&f[2]==0)||memcmp(f+1,L"git",sizeof(wchar_t)*4)==0) continue; } // skip ., .., .git
 		if(f[0]==L'~'&&f[1]==L'$') continue; // skip temporary files
@@ -355,7 +355,7 @@ __noinline void path::__scan_recursive( const wchar_t* _dir, path::__scan_t& si 
 		}
 		if(!si.b.recursive||(fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)==0) continue; // directories
 		size_t fl=wcslen(f); memcpy(p,f,sizeof(wchar_t)*fl); p[fl]=preferred_separator; p[fl+1]=0; sdir.emplace_back(dir);
-	}
+	} while(FindNextFileW(h,&fd));
 	FindClose(h);
 	for(auto& c:sdir) __scan_recursive(c.c_str(), si);
 }
@@ -365,7 +365,7 @@ __noinline void path::__subdirs_recursive( const wchar_t* _dir, path::__scan_t& 
 	size_t dl=wcslen(_dir); wchar_t dir[capacity]={}; wcsncpy(dir,_dir,dl); wcscpy(dir+dl,L"*.*"); // append wildcard for search
 	WIN32_FIND_DATAW fd={}; HANDLE h=FindFirstFileExW(dir,FindExInfoBasic/*minimal(faster)*/,&fd,FindExSearchNameMatch,0,FIND_FIRST_EX_LARGE_FETCH); if(h==INVALID_HANDLE_VALUE) return;
 	wchar_t *f=fd.cFileName, *p=dir+dl; auto* e=si.ext.v; dir[dl]=0; // revert wildcard
-	while(FindNextFileW(h,&fd)) // skip directly first '.'
+	do // include the first result as well
 	{
 		if((fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)==0) continue; // skip files
 		if(f[0]==L'.'){ if(!f[1]||(f[1]==L'.'&&f[2]==0)||memcmp(f+1,L"git",sizeof(wchar_t)*4)==0) continue; } // skip ., .., .git
@@ -374,7 +374,7 @@ __noinline void path::__subdirs_recursive( const wchar_t* _dir, path::__scan_t& 
 		else if(si.b.glob){ if(iglob(f,fl,si.glob.pattern,si.glob.l)) si.result.emplace_back(dir); }
 		else if(wcsistr(f, fl, si.glob.pattern, si.glob.l)) si.result.emplace_back(dir);
 		if(si.b.recursive) __subdirs_recursive(dir, si);
-	}
+	} while(FindNextFileW(h,&fd));
 	FindClose(h);
 }
 
