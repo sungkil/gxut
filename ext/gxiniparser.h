@@ -102,7 +102,7 @@ __noinline void parser_t::read_line( wchar_t* line, wchar_t* sec )
 		auto* t=itrim(b); b=eol?0:itrim(e+1);
 
 		int l=int(wcslen(t)); if(l<2) continue;
-		if(t[0]==L'['){ wcscpy(sec,itrim(t+1)); continue; } // assign section
+		if(t[0]==L'['){ wcsncpy(sec,itrim(t+1),511); sec[511]=0; continue; } // assign section
 		wchar_t* v=0; for(int k=0;k<l;k++)if(t[k]==L'='){t[k]=0;v=t+k+1;break;} t=itrim(t); if(!*t) continue;
 		snprintf(seckey,std::extent<decltype(seckey)>::value,"%s:%s",wtoa(sec),v?wtoa(t):"");
 		get_or_create_entry(seckey)->value=v?wtoa(itrim(v)):wtoa(t);
@@ -114,7 +114,7 @@ __noinline bool parser_t::load( const wchar_t* source )
 	if(!source) return false;
 	auto_lock_t lock(cs);
 	for(auto& it:dic){if(it.second!=nullptr){delete it.second;}} dic.clear(); // clear dictionary and buffer
-	wchar_t sec[512]; for( auto& buff: explode( source, L"\r\n" ) ) read_line( (wchar_t*)buff.c_str(), sec ); // read lines
+	wchar_t sec[512]={}; for( auto& buff: explode( source, L"\r\n" ) ) read_line( (wchar_t*)buff.c_str(), sec ); // read lines
 	return true;
 }
 

@@ -1,4 +1,4 @@
-﻿#ifndef __GX_STBIMAGE__
+#ifndef __GX_STBIMAGE__
 #define __GX_STBIMAGE__
 
 #if __has_include("gxut.h")
@@ -46,17 +46,9 @@ __noinline image* load_image( path file_path, bool vflip=true, bool force_rgb=tr
 	stbi_set_flip_vertically_on_load(vflip?1:0);
 	stbi_uc* data = stbi_load( file_path.c_str(), &w, &h, &c, force_rgb?3:0); if(!data) return nullptr;
 
-	image* i = new image_header(w,h,8,c);
-	if(i->stride()==(w*c)) // already 4-byte alinged
-	{
-		i->data = data;
-	}
-	else // apply 4-byte alignment
-	{
-		i->data = (uchar*)malloc(i->size());
-		for( int y=0; y<h; y++ ) memcpy( i->ptr<uchar>(y), data+y*w*c, w*c );
-		stbi_image_free(data);
-	}
+	image* i = new image(w,h,8,force_rgb?3:c);
+	for( int y=0; y<h; y++ ) memcpy(i->ptr<uchar>(y),data+size_t(y)*w*i->channels,size_t(w)*i->channels);
+	stbi_image_free(data);
 
 	return i;
 }
@@ -79,7 +71,7 @@ __noinline bool save_image( image* i, path file_path, bool vflip=true, bool rgb_
 		for( int y=0; y<h; y++ )
 		{
 			uchar *s=i->ptr<uchar>(y), *d=t+dr*y;
-			if(!rgb_to_bgr) memcpy(d,s,dr);
+			if(!rgb_to_bgr||c<3) memcpy(d,s,dr);
 			else for( int x=0; x<w; x++, s+=c, d+=c ){ d[0]=s[2]; if(c==1) continue; d[1]=s[1]; d[2]=s[0]; if(c==3) continue; d[3]=s[3]; }
 		}
 		output = { t, dr };

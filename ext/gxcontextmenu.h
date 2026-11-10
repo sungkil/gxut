@@ -50,7 +50,7 @@ template <HKEY root>
 registry_t::datum_t* registry_t::get_or_create_datum( string subkey )
 {
 	subkey=str_replace(subkey.c_str(),"/","\\");
-	for( auto* d : data ) if(stricmp(d->subkey.c_str(),subkey.c_str())==0) return d;
+	for( auto* d : data ) if(stricmp(d->section.c_str(),wtoa(os::reg::key_t<root>(subkey.c_str()).c_str()))==0) return d;
 	auto* d = new datum_t(subkey); d->section = wtoa(os::reg::key_t<root>(subkey.c_str()).c_str());
 	data.emplace_back(d);
 	return d;
@@ -60,7 +60,7 @@ template <HKEY root>
 registry_t::datum_t* registry_t::remove_datum( string subkey )
 {
 	subkey=str_replace(subkey.c_str(),"/","\\");
-	for( auto* d : data ) if(stricmp(d->subkey.c_str(),subkey.c_str())==0) return d;
+	for( auto* d : data ) if(stricmp(d->section.c_str(),wtoa(os::reg::key_t<root>(subkey.c_str()).c_str(false)))==0) return d;
 	auto* d = new datum_t(subkey); d->section = wtoa(os::reg::key_t<root>(subkey.c_str()).c_str(false));
 	data.emplace_back(d);
 	return d;
@@ -169,7 +169,7 @@ inline bool registry_t::install( bool b_dry )
 	}
 
 	printf("____________________\n\n");
-	printf(trim(dump().c_str()));
+	printf("%s",trim(dump().c_str()));
 	printf("\n____________________\n\n");
 
 	if(b_dry) return true;

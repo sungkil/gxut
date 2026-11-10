@@ -72,7 +72,7 @@ __noinline gl::MemoryObject* gxCreateMemoryObject( const char* name, void* handl
 	// [CAUTION] memory size should be larger than actual size (e.g., 2 times or 1M bytes)
 	glImportMemoryWin32HandleEXT( ID, GLuint64(size+(1<<20)), handle_type, handle );
 	GLenum e1=glGetError(); // current error
-	if(e1!=GL_NO_ERROR&&e1!=e0){ printf("%s(%s): error %s\n", __func__, "name", gxGetErrorString(e1)); return nullptr; }
+	if(e1!=GL_NO_ERROR&&e1!=e0){ printf("%s(%s): error %s\n", __func__, "name", gxGetErrorString(e1)); glDeleteMemoryObjectsEXT(1,&ID); return nullptr; }
 
 	// create an instance
 	return new gl::MemoryObject(ID,name);
@@ -96,7 +96,7 @@ __noinline gl::Texture* gxCreateTexture2DFromMemory( const char* name, GLsizei w
 
 	// allocate storage: at this point, lock is not needed
 	GLenum e0 = glGetError(); // previous error from others
-	glTextureStorageMem2DEXT( ID, 1, GL_RGBA8, width, height, memory_object, 0 );
+	glTextureStorageMem2DEXT( ID, 1, internal_format, width, height, memory_object, 0 );
 	GLenum e1 = glGetError(); // texture error
 	if(e1!=GL_NO_ERROR&&e1!=e0){ printf( "%s(%s): error %s\n", __func__, name, 	gxGetErrorString(e1) ); delete texture; return nullptr; }
 

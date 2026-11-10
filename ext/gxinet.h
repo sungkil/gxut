@@ -54,8 +54,8 @@ __noinline ipv4_t get_registered_ip_address()
 __noinline bool is_offline()
 {
 	static bool i=false, b=true; if(i) return b; i=true; // defaulted to offline
-	HRESULT hr0=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED|COINIT_DISABLE_OLE1DDE); if(FAILED(hr0)) return b;
-	INetworkListManager* nlm=nullptr; if(FAILED(CoCreateInstance(CLSID_NetworkListManager,0,CLSCTX_ALL,IID_PPV_ARGS(&nlm)))) return b;
+	HRESULT hr0=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED|COINIT_DISABLE_OLE1DDE); if(FAILED(hr0)&&hr0!=RPC_E_CHANGED_MODE) return b;
+	INetworkListManager* nlm=nullptr; if(FAILED(CoCreateInstance(CLSID_NetworkListManager,0,CLSCTX_ALL,IID_PPV_ARGS(&nlm)))){ if(SUCCEEDED(hr0)) CoUninitialize(); return b; }
 	VARIANT_BOOL c=VARIANT_FALSE; auto hr1=nlm->get_IsConnectedToInternet(&c);safe_release(nlm);
 	if(hr0!=RPC_E_CHANGED_MODE) CoUninitialize();
 	return b=(FAILED(hr1)||c!=VARIANT_TRUE);
@@ -69,7 +69,7 @@ __noinline bool ping( const char* ip, unsigned short port, int timeout_ms=100 )
 	sockaddr_in a; a.sin_family=AF_INET; a.sin_port=htons(port); a.sin_addr.s_addr=inet_addr(ip);
 	connect(s,(sockaddr*)&a,sizeof(a));
 	fd_set wset; FD_ZERO(&wset); FD_SET(s,&wset);
-	timeval tv={}; tv.tv_usec=timeout_ms*1000;
+	timeval tv={}; tv.tv_sec=timeout_ms/1000; tv.tv_usec=(timeout_ms%1000)*1000;
 	int r=select(0,NULL,&wset,NULL,&tv ); if(r<=0){ closesocket(s); return false; }
 	int e=0, l=sizeof(e); getsockopt(s,SOL_SOCKET,SO_ERROR,(char*)&e,&l); closesocket(s);
 	return e==0;
@@ -94,6 +94,9 @@ __noinline bool wget( string remote_url, path local_path )
 	if(!WinHttpSendRequest(r,0,0,0,0,0,0)){ printf("%s(%s): unable to send request\n",__func__,remote_url.c_str()); return false; }
 	if(!WinHttpReceiveResponse(r,0)){ printf("%s(%s): unable to receive response\n",__func__,remote_url.c_str()); return false; }
 
+	DWORD status=0, status_size=sizeof(status);
+	if(!WinHttpQueryHeaders(r,WINHTTP_QUERY_STATUS_CODE|WINHTTP_QUERY_FLAG_NUMBER,0,&status,&status_size,0)||status<200||status>=300) return false;
+
 	SYSTEMTIME st={}; DWORD z=sizeof(SYSTEMTIME);
 	BOOL q=WinHttpQueryHeaders(r,WINHTTP_QUERY_LAST_MODIFIED|WINHTTP_QUERY_FLAG_SYSTEMTIME,0,&st,&z,0); if(!q){ printf("%s(%s): unable to query headers\n",__func__,remote_url.c_str()); return false; }
 	if(st.wYear==0){ printf("%s(%s): last modified time not exists\n",__func__,remote_url.c_str()); return false; }
@@ -101,14 +104,16 @@ __noinline bool wget( string remote_url, path local_path )
 
 	if(!local_path.dir().exists()) local_path.dir().mkdir();
 	FILE* fp=fopen(local_path.c_str(),"wb"); if(!fp){ printf("%s(%s): unable to open %s\n",__func__,remote_url.c_str(), local_path.to_slash().c_str()); return false; }
-	const size_t capacity=1<<16; static void* buffer = malloc(capacity);
-	DWORD bytes_read=0;
-	while(WinHttpQueryDataAvailable(r,&z)&&z>0)
+	const size_t capacity=1<<16; vector<char> storage(capacity); void* buffer=storage.data();
+	DWORD bytes_read=0; bool success=true;
+	while(true)
 	{
-		if(!WinHttpReadData(r,buffer,z<capacity?z:capacity,&bytes_read)){ printf("%s(%s): unable to read data\n",__func__,remote_url.c_str()); break; }
-		if(bytes_read==0) break; fwrite(buffer,1,bytes_read,fp);
+		if(!WinHttpQueryDataAvailable(r,&z)){ success=false; break; } if(!z) break;
+		if(!WinHttpReadData(r,buffer,z<capacity?z:capacity,&bytes_read)){ printf("%s(%s): unable to read data\n",__func__,remote_url.c_str()); success=false; break; }
+		if(bytes_read==0){ success=false; break; } if(fwrite(buffer,1,bytes_read,fp)!=bytes_read){ success=false; break; }
 	}
-	fclose(fp);
+	if(fclose(fp)!=0) success=false;
+	if(!success){ DeleteFileW(atow(local_path.c_str())); return false; }
 	if(!local_path.exists()) return false; // write failed
 	local_path.utime(t);
 	return true;

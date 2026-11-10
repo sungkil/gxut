@@ -258,9 +258,8 @@ path obj::decompress( const path& file_path )
 __forceinline uint get_or_create_vertex( char* str )
 {
 	ivec3 key={};
-	key.x=obj::atoi(str); while(*str!='/'&&*str) str++;str++;
-	key.y=obj::atoi(str); while(*str!='/'&&*str) str++;str++;
-	key.z=obj::atoi(str);
+	key.x=obj::atoi(str);
+	if(*str=='/'){ str++; key.y=obj::atoi(str); if(*str=='/'){ str++; key.z=obj::atoi(str); } }
 
 	if(key.x<0) key.x += int(obj::pos.size());
 	if(key.y<0) key.y += int(obj::tex.size());

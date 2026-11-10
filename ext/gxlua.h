@@ -120,6 +120,7 @@ struct lua_state_t
 	bool pcall( const char* func_name, int nargs, int nresults=LUA_MULTRET )
 	{
 		if(!get_global(func_name)){ printf( "unable to find function %s\n", func_name ); return false; }
+		lua_insert(L,-1-nargs);
 		if(!pcall(nargs,nresults)){ printf( "script fails: %s\n", error() ); return false; }
 		return true;
 	}

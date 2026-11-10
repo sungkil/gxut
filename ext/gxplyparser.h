@@ -68,7 +68,7 @@ __noinline ply_t* load( path ply_path )
 	while(fgets(buff,sizeof(buff),fp))
 	{
 		auto v = explode(tolower(trim(buff))," \t\r\n");
-		auto tag=std::move(v.front());
+		if(v.empty()) continue; auto tag=std::move(v.front());
 		if(stricmp(tag.c_str(),"comment")==0) continue; // bypass comments
 		if(stricmp(tag.c_str(),"end_header")==0) break;
 		if(v.size()<3) continue;
@@ -103,7 +103,7 @@ __noinline ply_t* load( path ply_path )
 		else { printf("%s(%s): unknown tag %s\n",__func__,ply_path.c_str(),tag.c_str()); return nullptr; }
 	}
 
-	// now create ply
+	if(properties.empty()||!b_format_binary) return nullptr;
 	ply_t* ptr = new ply_t();
 	ptr->format.binary = b_format_binary;
 	ptr->face.count = face_count;
@@ -124,7 +124,8 @@ __noinline ply_t* load( path ply_path )
 			uint count = atou(w.front().c_str());
 			if(w.size()!=count+1){ printf("%s(%s): list indices (%zd) != %d\n", __func__,ply_path.c_str(),w.size()-1,count); return safe_delete(ptr); }
 			if(!ptr->face.per_face_count) ptr->face.per_face_count=count;
-			uint4 i; for( size_t j=1; j<count; j++ ) i[j-1]=atou(w[j].c_str());
+			if(count>4) return safe_delete(ptr);
+			uint4 i={}; for( size_t j=1; j<=count; j++ ) i[j-1]=atou(w[j].c_str());
 			ptr->face.data.emplace_back(i);
 		}
 		if(ptr->face.data.size()!=ptr->face.count){ printf( "%s(%s): faces.size(%d)!=face_count(%d)\n",__func__,ply_path.c_str(),int(ptr->face.data.size()),int(ptr->face.count)); return safe_delete(ptr); }

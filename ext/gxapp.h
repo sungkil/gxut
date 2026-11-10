@@ -81,7 +81,7 @@ __noinline bool updater::fetch()
 	if(cache_lastfailure.exists()&&(now()-cache_lastfailure.mtime())<time_offset(0,1)) return false; // do not check failed update too frequently
 	if(!wget(server_dir+"index.txt",cache.index)||!cache.index.exists())
 	{
-		if(!cache_lastfailure.exists()) fclose(cache_lastfailure.fopen("w")); cache_lastfailure.utime(now());
+		if(!cache_lastfailure.exists()){ FILE* fp=cache_lastfailure.fopen("w"); if(fp) fclose(fp); } cache_lastfailure.utime(now());
 		return false; // try to download index; still may return false for cache
 	}
 	if(cache_lastfailure.exists()) cache_lastfailure.delete_file(); // delete failure check when updating index well
@@ -114,7 +114,7 @@ __noinline bool updater::fetch()
 	if(b_zip) // try to extract the app from zip/7z
 	{
 		izip_t* z = load_zip(cache.src); if(!z){ printf( "[update] unable to load %s\n",cache.src.to_slash().c_str()); return false; }
-		if(z->entries.empty()){ printf( "[update] no entries in %s\n",cache.src.to_slash().c_str()); return false; }
+		if(z->entries.empty()){ printf( "[update] no entries in %s\n",cache.src.to_slash().c_str()); safe_delete(z); return false; }
 		for(auto& e:z->entries )
 		{
 			path d1=cache.dst.dir()+e.name; if(d1.exists()&&FileTimeToTime(e.mtime)<=d1.mtime()) continue;

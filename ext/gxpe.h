@@ -69,8 +69,9 @@ __noinline image_t load_image( const char* file_path )
 
 	// load dependency
 	static const nocase::set<string> system_dll_set = { "kernel32.dll", "shell32.dll", "user32.dll", "gdi32.dll", /* d3d10.dll, D3DCOMPILER_47.dll, VCOMP140.dll(OpenMP), vulkan-1.dll, OpenCL.dll */ }; // other common but need-to-check dlls
+	if(!optional_header.DataDirectory[1].VirtualAddress){ ImageUnload(ptr); return i; }
 	vector<string> v; PIMAGE_IMPORT_DESCRIPTOR importDesc= (PIMAGE_IMPORT_DESCRIPTOR) __rva_name(optional_header.DataDirectory[1].VirtualAddress,file_header,ptr->MappedAddress);
-	for( ; importDesc->TimeDateStamp||importDesc->Name; importDesc++ )
+	for( ; importDesc&&(importDesc->TimeDateStamp||importDesc->Name); importDesc++ )
 	{
 		const char* name = __rva_name( importDesc->Name, file_header, ptr->MappedAddress );
 		if(system_dll_set.find(name)!=system_dll_set.end()) continue; // bypass system dlls

@@ -44,7 +44,7 @@ struct binary_cache
 	operator FILE* () const { return fp; }
 	path zip_path(){ return _file_path.empty()?"":_file_path+".zip"; }
 	int writef( __printf_format_string__ const char* fmt, ... ){ if(!fp) return EOF; va_list a; va_start(a,fmt); int r=_vfprintf_l(fp,fmt,NULL,a); va_end(a); return r; }
-	int getsf( const char* fmt, ... ){ if(!fp) return EOF; static char* buff=(char*)malloc((1<<14)+1); fgets(buff,(1<<14),fp); va_list a; va_start(a,fmt); int r=vsscanf(buff,fmt,a); va_end(a); return r; }
+	int getsf( const char* fmt, ... ){ if(!fp) return EOF; static char* buff=(char*)malloc((1<<14)+1); if(!fgets(buff,(1<<14),fp)) return EOF; va_list a; va_start(a,fmt); int r=vsscanf(buff,fmt,a); va_end(a); return r; }
 	bool write( void* ptr, size_t size ){ if(!fp) return false; return size==fwrite(ptr,1,size,fp); }
 	bool read( void* ptr, size_t size ){ if(!fp) return false; return size==fread(ptr,1,size,fp); }
 
@@ -79,8 +79,9 @@ __noinline bool binary_cache<zip>::open( bool read )
 		if(zip&&zpath.exists()&&!decompress()) return false;
 		if(!_file_path.exists()) return false;
 		fp = fopen(_file_path.c_str(),"rb");
-		uint s=0; fread(&s,sizeof(s),1,fp);
-		if(!fp||sig!=s){ if(fp){ fclose(fp); fp=nullptr; } if(zpath.exists()) unlink(_file_path.c_str()); return false; }
+		if(!fp) return false;
+		uint s=0; size_t count=fread(&s,sizeof(s),1,fp);
+		if(count!=1||sig!=s){ if(fp){ fclose(fp); fp=nullptr; } if(zpath.exists()) unlink(_file_path.c_str()); return false; }
 	}
 	else
 	{

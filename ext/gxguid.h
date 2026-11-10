@@ -47,7 +47,7 @@ struct guid_t : public GUID
 
 	static bool is_guid( const char* s, const char* hex=nullptr ){ return s&&strlen(hex?hex:__to_hex(s))==32; }
 protected:
-	static const char* __to_hex( const char* s ){ if(!s) return nullptr; auto* h = __strbuf(32); size_t j=0; for(size_t k=0,kn=strlen(s);k<kn;k++,s++) if(*s&&isalnum(*s)) h[j++]=*s; return j==32?h:""; }
+	static const char* __to_hex( const char* s ){ if(!s) return nullptr; auto* h = __strbuf(32); size_t j=0; for(size_t k=0,kn=strlen(s);k<kn;k++,s++) if(*s&&isalnum((unsigned char)*s)){ if(!isxdigit((unsigned char)*s)||j>=32) return ""; h[j++]=*s; } return j==32?h:""; }
 };
 
 #endif // __GX_GUID_H__
