@@ -338,13 +338,12 @@ inline HWND find_window( const char* name_filter_or_class )
 // advanced read_process
 struct read_process_info_t : public create_process_info_t<false>
 {
-	int (*callback)( const char* chunk, size_t count ) = nullptr;
-	bool read_stderr = false;
+	int (*callback)( const char* chunk, size_t count, bool b_stderr ) = nullptr;
 };
 
 __noinline read_process_output_t read_process( const wstring& cmd, const read_process_info_t& info )
 {
-	if(cmd.empty()){ printf("%s(): empty cmd\n",__func__); return {}; }
+	if(cmd.empty()){ eprintf("%s(): empty cmd\n",__func__); return {}; }
 
 	#pragma warning( disable: 6248 ) // Setting a SECURITY_DESCRIPTOR's DACL to NULL will result in an unprotected object.
 	SECURITY_DESCRIPTOR sd; InitializeSecurityDescriptor(&sd,SECURITY_DESCRIPTOR_REVISION); SetSecurityDescriptorDacl(&sd,true,NULL,false);
@@ -353,44 +352,81 @@ __noinline read_process_output_t read_process( const wstring& cmd, const read_pr
 
 	constexpr int REDIR_BUFFER_SIZE = 1<<24; // 16 MB should be enough for buffering; otherwise, stdout will not be written no more, which printf hangs
 	HANDLE stdout_read=INVALID_HANDLE_VALUE, stdout_write=INVALID_HANDLE_VALUE;	// parent process's stdout read handle, child process' stdout write handle
-	if(!CreatePipe( &stdout_read, &stdout_write, &sa, REDIR_BUFFER_SIZE )){ printf( "%s(): CreatePipe(stdout) failed: %s\n", __func__, os::get_last_error() ); return {}; }
-	if(stdout_read==INVALID_HANDLE_VALUE||stdout_write==INVALID_HANDLE_VALUE){ printf( "%s(): CreatePipe(stdout) failed: %s\n", __func__, os::get_last_error() ); safe_close(stdout_read); safe_close(stdout_write); return {}; }
-	if(!SetHandleInformation(stdout_read,HANDLE_FLAG_INHERIT,0)){ printf( "%s(): SetHandleInformation() failed: %s\n",  __func__, os::get_last_error() ); safe_close(stdout_read); safe_close(stdout_write); return {}; }
+	if(!CreatePipe( &stdout_read, &stdout_write, &sa, REDIR_BUFFER_SIZE )){ eprintf( "%s(): CreatePipe(stdout) failed: %s\n", __func__, os::get_last_error() ); return {}; }
+	if(stdout_read==INVALID_HANDLE_VALUE||stdout_write==INVALID_HANDLE_VALUE){ eprintf( "%s(): CreatePipe(stdout) failed: %s\n", __func__, os::get_last_error() ); safe_close(stdout_read); safe_close(stdout_write); return {}; }
+	if(!SetHandleInformation(stdout_read,HANDLE_FLAG_INHERIT,0)){ eprintf( "%s(): SetHandleInformation() failed: %s\n",  __func__, os::get_last_error() ); safe_close(stdout_read); safe_close(stdout_write); return {}; }
+	HANDLE stderr_read=INVALID_HANDLE_VALUE, stderr_write=INVALID_HANDLE_VALUE;
+	if(!CreatePipe( &stderr_read, &stderr_write, &sa, REDIR_BUFFER_SIZE) ){ eprintf("%s(): CreatePipe(stderr) failed: %s\n", __func__, os::get_last_error()); safe_close(stdout_read); safe_close(stdout_write); return {}; }
+	if(stderr_read==INVALID_HANDLE_VALUE || stderr_write==INVALID_HANDLE_VALUE){ eprintf("%s(): CreatePipe(stderr) failed: %s\n", __func__, os::get_last_error()); safe_close(stdout_read); safe_close(stdout_write); safe_close(stderr_read); safe_close(stderr_write); return {}; }
+	if(!SetHandleInformation(stderr_read, HANDLE_FLAG_INHERIT, 0)){ eprintf("%s(): SetHandleInformation(stderr) failed: %s\n", __func__, os::get_last_error()); safe_close(stdout_read); safe_close(stdout_write); safe_close(stderr_read); safe_close(stderr_write); return {}; }
 
 	// override startup attributes
 	STARTUPINFOW si={sizeof(si)};
 	si.dwFlags		= STARTF_USESHOWWINDOW;
 	si.wShowWindow	= info.window?SW_SHOW:SW_HIDE;
-	si.hStdError	= info.read_stderr?stdout_write:GetStdHandle(STD_ERROR_HANDLE);
 	si.hStdOutput	= stdout_write;
+	si.hStdError	= stderr_write; //info.read_stderr?stdout_write:GetStdHandle(STD_ERROR_HANDLE);
 	si.hStdInput	= INVALID_HANDLE_VALUE;
 	si.dwFlags		= si.dwFlags|STARTF_USESTDHANDLES;
 
 	// create process and wait if necessary
-	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,__strdup(cmd.c_str()),0,0,TRUE,info.flag(),0,0,&si,&pi )||!pi.hProcess||!pi.hThread){ printf("%s(): %s\n",__func__,os::get_last_error()); safe_close(pi.hThread); safe_close(pi.hProcess); safe_close(stdout_read); safe_close(stdout_write); return {}; }
+	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,__strdup(cmd.c_str()),0,0,TRUE,info.flag(),0,0,&si,&pi )||!pi.hProcess||!pi.hThread){ eprintf("%s(): %s\n",__func__,os::get_last_error()); safe_close(pi.hThread); safe_close(pi.hProcess); safe_close(stdout_read); safe_close(stdout_write); safe_close(stderr_read); safe_close(stderr_write); return {}; }
 	safe_close( stdout_write );
+	safe_close( stderr_write );
 
 	read_process_output_t output = {};
 	char* buff=nullptr; size_t blen=0;
-	DWORD n_avail=0, ecode=0, n_read=0;
-	while( PeekNamedPipe( stdout_read, nullptr, 0, nullptr, &n_avail, nullptr ))
+	DWORD ecode=0, pipe_error=0;
+	bool stdout_open=true, stderr_open=true, buffer_failed=false;
+
+	auto read_pipe = [&]( HANDLE pipe, bool b_stderr, bool& opened )
 	{
-		GetExitCodeProcess(pi.hProcess,&ecode);
-		if(n_avail==0){ if(ecode!=STILL_ACTIVE) break; Sleep(1); continue; }
-		if(blen<n_avail){ char* buff1=(char*)realloc(buff,(n_avail+1)*sizeof(char)); if(!buff1) break; buff=buff1; blen=n_avail; } if(!buff){ printf("%s(): null buffer\n",__func__); break; }
-		if(!ReadFile(stdout_read, buff, n_avail, &n_read, nullptr)) break; if(n_read==0) continue; buff[n_read]=0;
-		output.buffer.insert(output.buffer.end(),buff,buff+n_read);
-		if(info.callback) info.callback(buff,n_read);
+		DWORD n_avail=0, n_read=0;
+		if(!PeekNamedPipe(pipe, nullptr, 0, nullptr, &n_avail, nullptr)){ DWORD e=GetLastError(); opened=false; if(e!=ERROR_BROKEN_PIPE) pipe_error=e; return false; } if(n_avail==0) return false;
+		if(blen<n_avail){ char* buff1=(char*)realloc(buff, size_t(n_avail)+1); if(!buff1){ buffer_failed=true; return false; } buff=buff1; blen=n_avail; }
+		if(!ReadFile(pipe, buff, n_avail, &n_read, nullptr)){ DWORD e=GetLastError(); opened=false; if(e!=ERROR_BROKEN_PIPE) pipe_error=e; return false; }
+		if(n_read==0) return false; buff[n_read]=0;
+		if(!b_stderr) output.buffer.insert(output.buffer.end(), buff, buff+n_read);
+		if(info.callback) info.callback(buff, n_read, b_stderr);
+		return true;
+	};
+
+	while( stdout_open || stderr_open )
+	{
+		DWORD state=WaitForSingleObject(pi.hProcess,0);
+		if(state==WAIT_FAILED){ pipe_error=GetLastError(); break; }
+		bool received=false;
+		if(stdout_open)	received |= read_pipe(stdout_read, false, stdout_open);	if(buffer_failed||pipe_error) break;
+		if(stderr_open)	received |= read_pipe(stderr_read, true, stderr_open);	if(buffer_failed||pipe_error) break;
+		if(!received){ if(state==WAIT_OBJECT_0) break; Sleep(1); }
+	}
+	if(buff){ free(buff); buff=nullptr; blen=0; }
+
+	if(buffer_failed||pipe_error)
+	{
+		if(buffer_failed) eprintf("%s(): buffer allocation failed\n",__func__);
+		else eprintf("%s(): pipe operation failed: %lu\n",__func__,pipe_error);
+		safe_close(stdout_read); safe_close(stderr_read);
+		if(!TerminateProcess(pi.hProcess,1))
+		{
+			eprintf("%s(): TerminateProcess() failed: %s\n",__func__,os::get_last_error());
+			safe_close(pi.hThread); safe_close(pi.hProcess);
+			output.code=1;
+			output.buffer.insert(output.buffer.end(),{0,0});
+			return output;
+		}
 	}
 
-	WaitForSingleObject(pi.hProcess,INFINITE);
-	GetExitCodeProcess(pi.hProcess,&ecode);
+	DWORD state=WaitForSingleObject(pi.hProcess,INFINITE);
+	if(state!=WAIT_OBJECT_0){ if(!pipe_error) pipe_error=GetLastError(); }
+	else if(!GetExitCodeProcess(pi.hProcess,&ecode)){ if(!pipe_error) pipe_error=GetLastError(); }
+
 	safe_close( pi.hThread );
 	safe_close( pi.hProcess );
 	safe_close( stdout_read );
-	if(buff){ free(buff); buff=nullptr; blen=0; }
+	safe_close( stderr_read );
 
-	output.code = ecode;
+	output.code = (buffer_failed||pipe_error)?1:ecode;
 	output.buffer.insert(output.buffer.end(),{0,0});
 	return output;
 }
