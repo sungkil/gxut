@@ -275,7 +275,7 @@ struct explorer_t
 		if(!dir||!*dir||!path_t(dir).exists()) return;
 		HWND foreground_window = GetForegroundWindow(); // retrieve current foreground window
 		explorer_t e;
-		for( HWND hChild=::GetWindow(::GetWindow(::GetDesktopWindow(), GW_CHILD),GW_HWNDFIRST); hChild!=nullptr; hChild=::GetWindow(hChild, GW_HWNDNEXT) )
+		for( HWND hChild=GetTopWindow(GetDesktopWindow()); hChild!=nullptr; hChild=::GetWindow(hChild, GW_HWNDNEXT) )
 		{
 			wchar_t buff[1024]; GetClassNameW(hChild, buff, MAX_PATH); if(wcsicmp(buff, L"CabinetWClass")!=0&&wcsicmp(buff,L"ExplorWClass")!=0) continue;
 			path_t fold_path = e.get_folder_path(hChild);
