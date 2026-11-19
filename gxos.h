@@ -51,102 +51,106 @@ inline DWORD current_process()
 	return curr_pid;
 }
 
-inline const vector<DWORD>& enum_process_indices()
+inline path get_process_name( DWORD pid )
 {
-	static vector<DWORD> pids(4096);
-	DWORD cb_needed, npids;
+	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ,FALSE,pid); if(!hProcess) return {};
+	HMODULE hMod; DWORD cbNeeded; if(!EnumProcessModules(hProcess,&hMod,sizeof(hMod),&cbNeeded)){ CloseHandle(hProcess); return {}; }
+	array<wchar_t,PATH_MAX*4> buff={}; GetModuleBaseNameW(hProcess,hMod,buff.data(),DWORD(buff.size())); CloseHandle(hProcess);
+	return buff[0]?path(buff.data()):path();
+}
 
-	if(!EnumProcesses( &pids[0], DWORD(pids.size())*sizeof(DWORD), &cb_needed)){ pids.clear(); return pids; }
-	for( npids=cb_needed/sizeof(DWORD); npids>=pids.size(); npids=cb_needed/sizeof(DWORD) )
+inline path get_process_path( DWORD pid )
+{
+	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ,FALSE,pid); if(!hProcess) return {};
+	HMODULE hMod; DWORD cbNeeded; if(!EnumProcessModules(hProcess,&hMod,sizeof(hMod),&cbNeeded)){ CloseHandle(hProcess); return {}; }
+	array<wchar_t,PATH_MAX*4> buff={}; GetModuleFileNameExW(hProcess,hMod,buff.data(),DWORD(buff.size())); CloseHandle(hProcess);
+	return buff[0]?path(buff.data()):path();
+}
+
+inline vector<PROCESSENTRY32W> get_process_snapshot( const wchar_t* filename=nullptr, size_t max_count=0xffffffff )
+{
+	static thread_local const DWORD curr_pid = GetCurrentProcessId();
+	static thread_local vector<PROCESSENTRY32W> snapshot; if(snapshot.capacity()<1) snapshot.reserve(512); snapshot.clear();
+	HANDLE hSnapShot=CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0); if(hSnapShot==INVALID_HANDLE_VALUE) return {};
+	PROCESSENTRY32W e={.dwSize=sizeof(PROCESSENTRY32W)};
+	for(BOOL h=Process32FirstW(hSnapShot,&e); h; h=Process32NextW(hSnapShot,&e))
 	{
-		pids.resize(2llu*npids);
-		if(!EnumProcesses( &pids[0], DWORD(pids.size())*sizeof(DWORD), &cb_needed)){ pids.clear(); return pids; }
+		if(e.th32ProcessID==curr_pid) continue;
+		if(filename&&*filename&&wcsicmp(e.szExeFile,filename)!=0) continue;
+		snapshot.emplace_back(e); if(snapshot.size()>=max_count) break;
 	}
-	pids.resize(npids);
-	return pids;
+	CloseHandle(hSnapShot);
+	return snapshot;
 }
 
-inline const char* get_process_path( DWORD pid )
+__noinline vector<DWORD> find_process( path name_or_path, size_t max_count=0xffffffff )
 {
-	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ,FALSE,pid); if(!hProcess) return "";
-	HMODULE hMod; DWORD cbNeeded; if(!EnumProcessModules(hProcess,&hMod,sizeof(hMod),&cbNeeded)){ CloseHandle(hProcess); return ""; }
-	array<wchar_t,4096> buff={}; GetModuleFileNameExW(hProcess,hMod,buff.data(),DWORD(buff.size())); CloseHandle(hProcess);
-	return buff[0]?wtoa(buff.data()):"";
-}
-
-inline const char* get_process_name( DWORD pid )
-{
-	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ,FALSE,pid); if(!hProcess) return "";
-	HMODULE hMod; DWORD cbNeeded; if(!EnumProcessModules(hProcess,&hMod,sizeof(hMod),&cbNeeded)){ CloseHandle(hProcess); return ""; }
-	array<wchar_t,4096> buff={}; GetModuleBaseNameW(hProcess,hMod,buff.data(),DWORD(buff.size())); CloseHandle(hProcess);
-	return buff[0]?wtoa(buff.data()):"";
-}
-
-__noinline vector<DWORD> find_process( const char* name_or_path )
-{
-	vector<DWORD> v;
-	static wchar_t buff[4096];
-	static DWORD curr_pid = GetCurrentProcessId();
-	for( auto pid : enum_process_indices() )
+	path name = name_or_path.filename();
+	bool babs = name_or_path.is_absolute(); if(babs) name_or_path=name_or_path.canonical();
+	vector<DWORD> v; for( auto&& e : get_process_snapshot(atow(name.c_str()),max_count) )
 	{
-		HMODULE hMod; DWORD cbNeeded;
-		HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ,FALSE,pid); if(!hProcess) continue;
-		if(!EnumProcessModules(hProcess,&hMod,sizeof(hMod),&cbNeeded)){ CloseHandle(hProcess); continue; }
-		GetModuleBaseNameW(hProcess,hMod,buff,sizeof(buff)/sizeof(buff[0]) );
-		if(wcsicmp(buff,atow(name_or_path))==0&&pid!=curr_pid) v.push_back(pid);
-		GetModuleFileNameExW(hProcess,hMod,buff,sizeof(buff)/sizeof(buff[0]) );
-		if(wcsicmp(buff,atow(name_or_path))==0&&pid!=curr_pid) v.push_back(pid);
-		CloseHandle(hProcess);
+		if(babs&&get_process_path(e.th32ProcessID)!=name_or_path) continue;
+		v.push_back(e.th32ProcessID);
 	}
 	return v;
+}
+
+inline bool process_exists( path name_or_path )
+{
+	return !find_process(name_or_path,1).empty();
+}
+
+inline vector<DWORD> get_process_indices()
+{
+	static thread_local const DWORD curr_pid = GetCurrentProcessId();
+	static thread_local vector<DWORD> v(512);
+	DWORD r, n; if(!EnumProcesses( v.data(), DWORD(v.size())*sizeof(DWORD), &r)) return {};
+	for( n=r/sizeof(DWORD); n>=v.size(); n=r/sizeof(DWORD) )
+	{
+		v.resize(n*2llu);
+		if(!EnumProcesses( v.data(), DWORD(v.size())*sizeof(DWORD), &r)) return {};
+	}
+	vector<DWORD> t; t.reserve(v.size());
+	for( uint k=0; k<n; k++ ) if(v[k]!=curr_pid) t.emplace_back(v[k]);
+	return t;
 }
 
 inline bool process_exists( uint pid )
 {
-#ifdef _INC_TOOLHELP32
-	PROCESSENTRY32 entry={}; entry.dwSize =sizeof(decltype(entry));
-	HANDLE hSnapShot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0); if(hSnapShot==INVALID_HANDLE_VALUE) return false;
-	BOOL hRes=Process32First( hSnapShot,&entry ); for(; hRes; hRes=Process32Next(hSnapShot,&entry) ) if(entry.th32ProcessID==pid) break;
-	CloseHandle(hSnapShot);
-	return hRes==TRUE;
-#else
-	for( auto p : enum_process_indices() )
-		if(p==pid) return true;
+	for( auto p : get_process_indices() ) if(p==pid) return true;
 	return false;
-#endif
 }
 
-inline bool process_exists( const char* file_path )
+inline vector<HWND> enum_windows( const char* filter=nullptr )
 {
-	if(!file_path||!*file_path) return false;
-#ifdef _INC_TOOLHELP32
-	PROCESSENTRY32 entry={}; entry.dwSize =sizeof(decltype(entry));
-	HANDLE hSnapShot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0); if(hSnapShot==INVALID_HANDLE_VALUE) return false;
-	string target=file_path;
-	BOOL hRes=Process32First( hSnapShot,&entry ); for(; hRes; hRes=Process32Next(hSnapShot,&entry) ) if(stricmp(target.c_str(),get_process_path(entry.th32ProcessID))==0) break;
-	CloseHandle(hSnapShot);
-	return hRes==TRUE;
-#else
-	auto v = std::move(find_process(file_path));
-	return !v.empty();
-#endif
-}
-
-__noinline vector<std::pair<uint,string>> list_process( const char* app_name=nullptr )
-{
-	string cmd= "tasklist /FO:csv";
-	if(app_name&&*app_name) cmd += format(" /FI \"ImageName eq %s\"",app_name );
-	auto r = read_process(cmd);
-	vector<std::pair<uint,string>> v; v.reserve(32);
-	char *ctx=0,*token=strtok_s(__strdup(r.c_str()),"\r\n",&ctx); // skip the first line
-	for(token=strtok_s(0,"\r\n",&ctx);token;token=strtok_s(0,"\r\n",&ctx))
+	struct params { vector<HWND> v; const char* filter=nullptr; };
+	auto __enum_windows_proc = []( HWND hwnd , LPARAM pParams )->BOOL
 	{
-		char *c=0,*t=strtok_s(__strdup(token),",",&c);
-		string name = t?string(t).substr(1,int(strlen(t))-2):""; if(name.empty()) continue;
-		t=strtok_s(0,",",&c); uint pid = t?uint(atoi(string(t).substr(1,strlen(t)-2).c_str())):-1; if(pid==0||pid==-1) continue;
-		v.emplace_back( pid, name );
+		params* p = ((params*)pParams);
+		if(p->filter){ wchar_t buff[4096]; GetWindowTextW(hwnd,buff,4096); if(!strstr(wtoa(buff),p->filter)) return TRUE; }
+		p->v.emplace_back(hwnd); return TRUE;
+	};
+	params p; p.filter=filter;
+	EnumWindows(__enum_windows_proc,(LPARAM)(&p));
+	return p.v;
+}
+
+inline vector<HWND> find_windows( const string& class_or_pattern, uint max_count=0xffffffff )
+{
+	const wchar_t* wcop = class_or_pattern.empty()?nullptr:atow(class_or_pattern.c_str());
+	wchar_t buff[1024]; vector<HWND> v; for( HWND h=GetTopWindow(GetDesktopWindow()); h!=nullptr; h=GetWindow(h, GW_HWNDNEXT) )
+	{
+		if(!wcop){ v.emplace_back(h);	if(v.size()>=max_count) break; continue; }
+		GetClassNameW(h,buff,1024);		if(wcsicmp(buff,wcop)==0){ v.emplace_back(h); if(v.size()>=max_count) break; continue; }
+		GetWindowTextW(h,buff,1024);	if(wcsistr(buff,wcop)){ v.emplace_back(h); if(v.size()>=max_count) break; }
 	}
 	return v;
+}
+
+inline HWND find_window( const string& class_or_pattern )
+{
+	auto v=find_windows( class_or_pattern, 1 );
+	return v.empty()?nullptr:v.front();
 }
 
 //*************************************
@@ -306,32 +310,6 @@ inline mutex_t::mutex_t( const char* name, int wait_time ):wait_counter(wait_tim
 	close()=CreateMutexW(0,FALSE,atow(name)); DWORD e=GetLastError();
 	for(uint k=0,kn=wait_counter;k<kn&&e==ERROR_ALREADY_EXISTS;k++){ close()=CreateMutexW(0,FALSE,atow(name));e=GetLastError(); Sleep(10); }
 	if(e==ERROR_ALREADY_EXISTS) close();
-}
-
-inline vector<HWND> enum_windows( const char* filter=nullptr )
-{
-	struct params { vector<HWND> v; const char* filter=nullptr; };
-	auto __enum_windows_proc = []( HWND hwnd , LPARAM pParams )->BOOL
-	{
-		params* p = ((params*)pParams);
-		if(p->filter){ wchar_t buff[4096]; GetWindowTextW(hwnd,buff,4096); if(!strstr(wtoa(buff),p->filter)) return TRUE; }
-		p->v.emplace_back(hwnd); return TRUE;
-	};
-	params p; p.filter=filter;
-	EnumWindows(__enum_windows_proc,(LPARAM)(&p));
-	return p.v;
-}
-
-inline HWND find_window( const char* name_filter_or_class )
-{
-	HWND h = GetTopWindow(GetDesktopWindow());
-	for(; h!=nullptr; h=GetWindow(h, GW_HWNDNEXT))
-	{
-		wchar_t buff[4096];
-		GetWindowTextW(h,buff,4096);	if(strstr(wtoa(buff),name_filter_or_class)) return h;
-		GetClassNameW(h,buff,4096);		if(stricmp(wtoa(buff),name_filter_or_class)==0) return h;
-	}
-	return nullptr;
 }
 
 //*************************************
