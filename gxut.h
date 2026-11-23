@@ -1002,8 +1002,8 @@ __noinline wchar_t* build_cmdline( const char* app, const char* args )
 template <bool gui=false>
 struct create_process_info_t
 {
-	bool wait=!gui, window=gui; path_t app; /*often changes*/ ulong priority=NORMAL_PRIORITY_CLASS; bool hide_console=false; // rarely changes
-	ulong flag() const { return priority|(hide_console?CREATE_NO_WINDOW:0); }
+	bool wait=!gui, window=gui, detached=false; path_t app; /*often changes*/ ulong priority=NORMAL_PRIORITY_CLASS; bool hide_console=false; // rarely changes
+	ulong flag() const { return priority|(hide_console?CREATE_NO_WINDOW:0)|(detached?DETACHED_PROCESS:0); }
 };
 
 template <bool gui=false> __noinline bool create_process( const string& args, create_process_info_t<gui> info={} )
