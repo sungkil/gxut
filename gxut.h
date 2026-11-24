@@ -1002,15 +1002,15 @@ __noinline wchar_t* build_cmdline( const char* app, const char* args )
 template <bool gui=false>
 struct create_process_info_t
 {
-	bool wait=!gui, window=gui, detached=false; path_t app; /*often changes*/ ulong priority=NORMAL_PRIORITY_CLASS; bool hide_console=false; // rarely changes
+	bool windowed=gui, detached=false; path_t app; /*often changes*/ ulong priority=NORMAL_PRIORITY_CLASS; bool hide_console=false; // rarely changes
 	ulong flag() const { return priority|(hide_console?CREATE_NO_WINDOW:0)|(detached?DETACHED_PROCESS:0); }
 };
 
-template <bool gui=false> __noinline bool create_process( const string& args, create_process_info_t<gui> info={} )
+template <bool gui=false> __noinline bool create_process( const string& args, bool wait=!gui, create_process_info_t<gui> info={} )
 {
-	STARTUPINFOW si={sizeof(si)}; si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=info.window?SW_SHOW:SW_HIDE;
+	STARTUPINFOW si={sizeof(si)}; si.dwFlags=STARTF_USESHOWWINDOW; si.wShowWindow=info.windowed?SW_SHOW:SW_HIDE;
 	PROCESS_INFORMATION pi={}; if(!CreateProcessW(0,build_cmdline(info.app.c_str(),args.c_str()),0,0,FALSE,info.flag(),0,0,&si,&pi)||!pi.hProcess||!pi.hThread){ printf( "%s(%s,%s): failed to create process\n", __func__, info.app.c_str(), args.c_str() ); return false; }
-	bool r=true; if(info.wait){ if(WAIT_OBJECT_0!=WaitForSingleObject(pi.hProcess,INFINITE)) r=false; else {DWORD e=0;r=GetExitCodeProcess(pi.hProcess,&e)&&EXIT_SUCCESS==e;}}
+	bool r=true; if(wait){ if(WAIT_OBJECT_0!=WaitForSingleObject(pi.hProcess,INFINITE)) r=false; else {DWORD e=0;r=GetExitCodeProcess(pi.hProcess,&e)&&EXIT_SUCCESS==e;}}
 	CloseHandle(pi.hThread); CloseHandle(pi.hProcess); return r;
 }
 

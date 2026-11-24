@@ -341,7 +341,7 @@ __noinline read_process_output_t read_process( const wstring& cmd, const read_pr
 	// override startup attributes
 	STARTUPINFOW si={sizeof(si)};
 	si.dwFlags		= STARTF_USESHOWWINDOW;
-	si.wShowWindow	= info.window?SW_SHOW:SW_HIDE;
+	si.wShowWindow	= info.windowed?SW_SHOW:SW_HIDE;
 	si.hStdOutput	= stdout_write;
 	si.hStdError	= stderr_write; //info.read_stderr?stdout_write:GetStdHandle(STD_ERROR_HANDLE);
 	si.hStdInput	= INVALID_HANDLE_VALUE;

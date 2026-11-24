@@ -222,7 +222,7 @@ struct path : public path_t
 	const char* mtimestamp() const { if(!exists()) return ""; struct tm t; _gmtime64_s(&t,&(__attrib().st_mtime)); char* buff=__strbuf(256);sprintf(buff,"%04d%02d%02d%02d%02d%02d",t.tm_year+1900,t.tm_mon+1,t.tm_mday,t.tm_hour,t.tm_min,t.tm_sec);return buff; }
 
 	// process-related
-	template <bool gui=false> bool create_process( const string& args="", os::create_process_info_t<gui> info={} ) const { path p=*this; if(!exists()&&!((p=env::where(p)).exists())) return false; info.app=p; return os::create_process(args,info); }
+	template <bool gui=false> bool create_process( const string& args="", bool wait=!gui, os::create_process_info_t<gui> info={} ) const { path p=*this; if(!exists()&&!((p=env::where(p)).exists())) return false; info.app=p; return os::create_process<gui>(args,wait,info); }
 
 	// file access: void (rb/wb), char (r/w), wchar_t (r/w,ccs=UTF-8)
 	FILE* fopen( const char* mode, bool utf8=false ) const;
