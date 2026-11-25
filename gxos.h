@@ -441,7 +441,7 @@ __noinline bool runas( const char* app, const char* args=nullptr, bool wait=true
 inline namespace console {
 //*************************************
 inline const char* title(){ static wchar_t buff[MAX_PATH+1]; GetConsoleTitleW(buff,MAX_PATH); return wtoa(buff); }
-inline DWORD get_console_process(){ DWORD console; GetWindowThreadProcessId(GetConsoleWindow(),&console); return console; }
+inline DWORD get_console_process(){ HWND w=GetConsoleWindow(); if(!w) return 0; DWORD console=0; return GetWindowThreadProcessId(w,&console)?console:0; }
 inline bool has_parent(){ return GetCurrentProcessId()!=get_console_process(); }
 inline void setnobuf(){ setbuf(stdout,0);setbuf(stderr,0);setvbuf(stdout,nullptr,_IONBF,0); }
 static auto get_default_color(){ static WORD c=0; if(!c){ HANDLE h=GetStdHandle(STD_OUTPUT_HANDLE); if(h!=INVALID_HANDLE_VALUE){CONSOLE_SCREEN_BUFFER_INFO csbi;GetConsoleScreenBufferInfo(h,&csbi);c=csbi.wAttributes; } } return c; } // usually 7
