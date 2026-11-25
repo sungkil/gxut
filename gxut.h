@@ -509,7 +509,6 @@ inline const wchar_t*	format( __printf_format_string__ const wchar_t* fmt, ... )
 inline int eprintf( __printf_format_string__ const char* fmt, ...  );
 #else
 inline int eprintf( __printf_format_string__ const char* fmt, ...  ){ va_list a; va_start(a,fmt); const char* m=vformat(fmt,a); va_end(a); return fputs(m,stderr); }
-inline int eputs( const char* s ){ return fputs(s,stderr); }
 #endif
 
 // unified error/warn handling
