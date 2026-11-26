@@ -26,8 +26,13 @@
 #pragma pop_macro("__GXUT_EXCLUDE_HEADERS__")
 #endif
 
-#if defined __msvc__ && __has_include(<shellapi.h>)
-	#include <shellapi.h>
+#ifdef __msvc__
+	#if __has_include(<shellapi.h>)
+		#include <shellapi.h>
+	#endif
+	#if __has_include(<ShlObj.h>)
+		#include <ShlObj.h>
+	#endif
 #endif
 
 // early definitions
@@ -198,18 +203,29 @@ struct path : public path_t
 	const char* rs( path from="" ) const { return relative(from).slash(); } // relative slash
 	const char* auto_quote() const { static constexpr char q='\"'; if(!*_data) return _data; size_t l=strlen(_data); if(_data[0]==q&&_data[l-1]==q) return _data; value_type* t=strncpy(__strbuf(l+2)+1,_data,l);t[l]=0; if(auto b=t[l-1];b==' '||b=='\t'||b=='\n') t[--l]=0; if(auto f=t[0];f==' '||f=='\t'||f=='\n'){ t++; l--; } if(strpbrk(t," \t\n|&<>")){t[l]=q;t[l+1]=0;*(--t)=q;} return t; }
 
+	// shell notifications
+#ifdef _SHLOBJ_H_
+	void notify( LONG event ) const // file: SHCNE_CREATE, SHCNE_DELETE, SHCNE_RENAMEITEM, dir: SHCNE_UPDATEDIR, SHCNE_MKDIR, SHCNE_RMDIR, SHCNE_RENAMEFOLDER
+	{
+		if(!exists()) return; if(is_dir()&&event!=SHCNE_UPDATEDIR&&event!=SHCNE_MKDIR&&event!=SHCNE_RMDIR&&event!=SHCNE_RENAMEFOLDER){ eprintf("path(%s).%s(): unsupported event (%u) for directory\n",_data,__func__,event); return; } else if(event!=SHCNE_CREATE&&event!=SHCNE_DELETE&&event!=SHCNE_RENAMEITEM){ eprintf("path(%s).%s(): unsupported event (%u) for file\n",_data,__func__,event); return; }
+		SHChangeNotify(event,SHCNF_PATHA|SHCNF_FLUSHNOWAIT,_data,nullptr); if(path j=junction();!j.empty()) SHChangeNotify(event,SHCNF_PATHA|SHCNF_FLUSHNOWAIT,j._data,nullptr);
+	}
+#endif
+
 	// shell operations
-	bool copy_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()||dst.empty()) return false; if(dst.is_dir()||__is_separator(dst.back())) dst=dst.append_slash()+name(); dst.dir().mkdir(); if(dst.exists()&&overwrite){ if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } return bool(CopyFileW( atow(c_str()), atow(dst.c_str()), overwrite?FALSE:TRUE)); }
-	bool move_file( path dst ) const { return !*_data||!dst._data||is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(atow(_data),atow(dst._data))!=0 : !copy_file(dst,true) ? false: rmfile(); }
 #ifndef _INC_SHELLAPI
+	bool copy_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()||dst.empty()) return false; if(dst.is_dir()||__is_separator(dst.back())) dst=dst.append_slash()+name(); dst.dir().mkdir(); if(dst.exists()){ if(!overwrite) return false; if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } return bool(CopyFileW( atow(c_str()), atow(dst.c_str()), overwrite?FALSE:TRUE)); }
+	bool move_file( path dst ) const { return !*_data||!dst._data||is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(atow(_data),atow(dst._data))!=0 : !copy_file(dst,true) ? false: rmfile(); }
 	bool delete_file() const { if(!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); return DeleteFileW(_data)==TRUE; }
 	bool rmfile() const { return delete_file(); }
 	bool delete_dir() const { if(!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); rmdir(_data); return true; }
 	bool rmdir() const { return delete_dir(); }
 #else
-	bool delete_file( bool b_undo=false ) const { if(!*_data||!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=FOF_FILESONLY|FOF_SILENT|FOF_NOCONFIRMATION|(b_undo?FOF_ALLOWUNDO:0); fop.pFrom=atow(to_preferred().c_str()); return SHFileOperationW(&fop)==0&&!fop.fAnyOperationsAborted;}
+	bool copy_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()||dst.empty()) return false; if(dst.is_dir()||__is_separator(dst.back())) dst=dst.append_slash()+name(); if(dst.is_dir()) return false; dst.dir().mkdir(); if(dst.exists()){ if(!overwrite) return false; if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } SHFILEOPSTRUCTW fop = {}; fop.wFunc = FO_COPY; fop.fFlags = FOF_NO_CONNECTED_ELEMENTS|FOF_FILESONLY|FOF_ALLOWUNDO|FOF_SIMPLEPROGRESS|(overwrite?FOF_NOCONFIRMATION:0); fop.pFrom=atow(to_preferred().c_str()); fop.pTo=atow(dst.to_preferred().c_str()); return 0==SHFileOperationW(&fop)&&!fop.fAnyOperationsAborted; }
+	bool move_file( path dst, bool overwrite=true ) const { if(!exists()||is_dir()||dst.empty()) return false; if(dst.is_dir()||__is_separator(dst.back())) dst=dst.append_slash()+name(); if(dst.is_dir()) return false; dst.dir().mkdir(); if(dst.exists()){ if(!overwrite) return false; if(dst.is_hidden()) dst.set_hidden(false); if(dst.is_readonly()) dst.set_readonly(false); } SHFILEOPSTRUCTW fop = {}; fop.wFunc = dir()==dst.dir()&&!dst.exists()?FO_RENAME:FO_MOVE; fop.fFlags = FOF_NO_CONNECTED_ELEMENTS|FOF_FILESONLY|FOF_ALLOWUNDO|FOF_SIMPLEPROGRESS|(overwrite?FOF_NOCONFIRMATION:0); fop.pFrom=atow(to_preferred().c_str()); fop.pTo=atow(dst.to_preferred().c_str()); return 0==SHFileOperationW(&fop)&&!fop.fAnyOperationsAborted; }
+	bool delete_file( bool b_undo=false ) const { if(!*_data||!exists()||is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=FOF_FILESONLY|FOF_SILENT|FOF_NOCONFIRMATION|(b_undo?FOF_ALLOWUNDO:0); fop.pFrom=atow(to_preferred().c_str()); return SHFileOperationW(&fop)==0&&!fop.fAnyOperationsAborted; }
 	bool rmfile( bool b_undo=false ) const { return delete_file(b_undo); }
-	bool delete_dir( bool b_undo=true ) const { if(!*_data||!exists()||!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=FOF_SILENT|FOF_NOCONFIRMATION|(b_undo?FOF_ALLOWUNDO:0); fop.pFrom=atow(to_preferred().c_str()); return SHFileOperationW(&fop)==0&&!fop.fAnyOperationsAborted;}
+	bool delete_dir( bool b_undo=true ) const { if(!*_data||!exists()||!is_dir()) return false; if(is_hidden()) set_hidden(false); if(is_readonly()) set_readonly(false); SHFILEOPSTRUCTW fop={};fop.wFunc=FO_DELETE;fop.fFlags=FOF_SILENT|FOF_NOCONFIRMATION|(b_undo?FOF_ALLOWUNDO:0); fop.pFrom=atow(to_preferred().c_str()); return SHFileOperationW(&fop)==0&&!fop.fAnyOperationsAborted; }
 	bool rmdir( bool b_undo=true ) const { return delete_dir(b_undo); }
 	bool copy_dir( path dst, bool overwrite=true ) const { if(!*_data||!exists()||!is_dir()) return false; value_type* from=__strbuf(capacity);snprintf(from,capacity,"%s\\*\0",_data);dst[dst.size()+1]=0; SHFILEOPSTRUCTW fop={};fop.wFunc=FO_COPY;fop.fFlags=FOF_ALLOWUNDO|FOF_SILENT|(overwrite?FOF_NOCONFIRMATION:0); fop.pFrom=atow(path(from).to_preferred().c_str()); fop.pTo=atow(dst.to_preferred().c_str()); return SHFileOperationW(&fop)==0&&!fop.fAnyOperationsAborted; }
 	bool move_dir( path dst ) const { return !*_data||!exists()||!is_dir()?false:(drive()==dst.drive()&&!dst.exists()) ? MoveFileW(atow(_data),atow(dst._data))!=0 : !copy_dir(dst,true) ? false: rmdir(); }
