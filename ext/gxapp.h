@@ -139,7 +139,7 @@ __noinline bool update( string name="", path dst_path="" )
 	{
 		path src1=path(exe::path());
 		path dst1=__wargv[2]; if(!dst1.exists()) return false;
-		int k=0,kn=1024; for(;k<kn;k++){ if(os::process_exists(dst1.c_str())) break; Sleep(10); } // wait for dst1 closes
+		int k=0,kn=1024; for(;k<kn;k++){ if(!os::process_exists(dst1.c_str())) break; Sleep(10); } // wait for dst1 closes
 		if(k==kn) return ebox("Unable to update, since %s is still alive.\n", dst1.rs());
 		if(!src1.copy_file(dst1)) return ebox("failed to update from %s to %s\n",src1.rs(),dst1.rs());
 		mbox("%s is updated well\n", dst1.rs()); return true;
